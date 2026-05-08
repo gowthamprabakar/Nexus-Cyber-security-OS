@@ -7,10 +7,22 @@ license = { file = "../../LICENSE-APACHE" }
 dependencies = [
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
+    "cryptography>=43.0.0",
+    "structlog>=24.4.0",
+    "click>=8.1.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3.0", "pytest-asyncio>=0.24.0", "pytest-cov>=5.0.0"]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "hypothesis>=6.112.0",
+    "freezegun>=1.5.0",
+]
+
+[project.scripts]
+charter = "charter.cli:main"
 
 [build-system]
 requires = ["hatchling"]
