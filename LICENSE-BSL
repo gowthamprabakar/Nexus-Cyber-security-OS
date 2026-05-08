@@ -1,0 +1,16 @@
+Business Source License 1.1
+
+Licensor: Nexus Cyber, Inc.
+
+Licensed Work: Nexus Cyber OS — proprietary packages
+   (everything outside packages/charter and packages/eval-framework)
+
+Additional Use Grant: You may use the Licensed Work in non-production environments
+   for evaluation, internal R&D, and academic purposes. Production use requires a
+   commercial license from Nexus Cyber, Inc.
+
+Change Date: Four years from the date the Licensed Work is published.
+
+Change License: Apache License, Version 2.0
+
+For the full Business Source License text, see https://mariadb.com/bsl11/

@@ -1,0 +1,24 @@
+# Default owners — every change requires founder + tech lead review until team scales
+*                                       @founder @tech-lead
+
+# Charter is the most sensitive code in the repo
+/packages/charter/                      @founder @tech-lead @ai-agent-eng
+/packages/eval-framework/               @founder @tech-lead @ai-agent-eng
+
+# Detection content
+/packages/agents/                       @detection-eng @ai-agent-eng
+/packages/content-packs/                @compliance-eng @threat-intel
+
+# Edge runtime
+/packages/edge/                         @platform-eng
+
+# Console
+/packages/console/                      @frontend-eng
+
+# Infrastructure
+/.github/                               @devops-eng @tech-lead
+/docker/                                @devops-eng
+
+# Docs
+/docs/                                  @tech-writer
+/docs/architecture/                     @tech-writer @tech-lead
