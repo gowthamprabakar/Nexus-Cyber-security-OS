@@ -60,4 +60,5 @@ class BudgetEnvelope:
         return self._used[dimension]
 
     def remaining(self, dimension: str) -> float:
-        return getattr(self, dimension) - self._used[dimension]
+        limit: float = getattr(self, dimension)
+        return limit - self._used[dimension]
