@@ -1,0 +1,22 @@
+schema_version: '0.1'
+delegation_id: 01J7M3X9Z1K8RPVQNH2T8DBHFZ
+source_agent: supervisor
+target_agent: hello_world
+customer_id: cust_demo
+task: 'Greet the human'
+required_outputs:
+  - greeting.txt
+budget:
+  llm_calls: 5
+  tokens: 500
+  wall_clock_sec: 30
+  cloud_api_calls: 5
+  mb_written: 1
+permitted_tools:
+  - echo
+completion_condition: 'greeting.txt exists'
+escalation_rules: []
+workspace: /tmp/nexus-demo/workspaces/cust_demo/hello_world/01J7M3X9Z1K8RPVQNH2T8DBHFZ/
+persistent_root: /tmp/nexus-demo/persistent/cust_demo/hello_world/
+created_at: 2026-05-08T12:00:00Z
+expires_at: 2026-05-08T12:30:00Z
