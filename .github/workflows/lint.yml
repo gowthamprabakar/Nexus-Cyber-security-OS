@@ -46,4 +46,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.work'
-      - run: go vet ./...
+      - name: go vet (skip if no modules)
+        run: |
+          if [ -n "$(find packages -name '*.go' -not -path '*/.*' 2>/dev/null | head -1)" ]; then
+            go vet ./...
+          else
+            echo "No Go files yet — skipping go vet"
+          fi
+        shell: bash
