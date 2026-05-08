@@ -1,0 +1,45 @@
+# Node
+node_modules/
+*.log
+.pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Go
+/bin/
+/pkg/
+*.test
+*.out
+go.work.sum
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Local infra
+docker/.data/

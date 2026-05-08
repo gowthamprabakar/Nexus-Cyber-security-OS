@@ -1,0 +1,13 @@
+* text=auto eol=lf
+*.py text diff=python
+*.go text diff=golang
+*.ts text
+*.tsx text
+*.md text diff=markdown
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
