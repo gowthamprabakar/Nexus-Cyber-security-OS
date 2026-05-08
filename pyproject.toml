@@ -47,6 +47,10 @@ files = [
     "packages/shared/src",
 ]
 
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 python_files = "test_*.py"
