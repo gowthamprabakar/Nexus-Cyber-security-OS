@@ -20,7 +20,7 @@ target-version = "py312"
 extend-exclude = [".venv", "dist", "build", ".turbo"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF", "S"]
 ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
