@@ -2,6 +2,7 @@
   "name": "nexus-cyber-os",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Nexus Cyber OS — autonomous cloud security platform",
   "packageManager": "pnpm@9.10.0",
   "engines": {
