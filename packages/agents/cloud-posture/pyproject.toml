@@ -1,15 +1,38 @@
 [project]
 name = "nexus-cloud-posture"
 version = "0.1.0"
-description = "Nexus Cloud Posture Agent skeleton"
+description = "Nexus Cloud Posture Agent — CSPM detection across AWS via Prowler + boto3"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
 dependencies = [
+    "nexus-charter",
+    "anthropic>=0.36.0",
+    "boto3>=1.35.0",
+    "botocore>=1.35.0",
     "pydantic>=2.9.0",
+    "pyyaml>=6.0.2",
+    "neo4j>=5.24.0",
+    "structlog>=24.4.0",
+    "click>=8.1.0",
+    "tenacity>=9.0.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3.0", "pytest-cov>=5.0.0"]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "moto>=5.0.0",
+    "responses>=0.25.0",
+    "types-PyYAML>=6.0.0",
+]
+
+[project.scripts]
+cloud-posture = "cloud_posture.cli:main"
+
+[tool.uv.sources]
+nexus-charter = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
