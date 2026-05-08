@@ -14,6 +14,12 @@ members = [
     "packages/shared",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.11.0",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -43,4 +49,4 @@ testpaths = ["packages"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-ra --strict-markers --strict-config -p no:cacheprovider"
+addopts = "-ra --strict-markers --strict-config -p no:cacheprovider --import-mode=importlib"

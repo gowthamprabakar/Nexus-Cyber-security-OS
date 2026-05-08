@@ -1,6 +1,6 @@
 {
   "*.{js,jsx,ts,tsx}": ["eslint --fix", "prettier --write"],
-  "*.py": ["ruff check --fix", "ruff format"],
+  "*.py": [".venv/bin/ruff check --fix", ".venv/bin/ruff format"],
   "*.go": ["gofmt -w", "go vet"],
   "*.{json,md,yml,yaml}": ["prettier --write"]
 }
