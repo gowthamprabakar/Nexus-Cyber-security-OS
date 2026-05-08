@@ -1,0 +1,29 @@
+schema_version: '0.1'
+delegation_id: 01J7M3X9Z1K8RPVQNH2T8DBHFZ
+source_agent: supervisor
+target_agent: cloud_posture
+customer_id: cust_acme_001
+task: 'Scan AWS account 111122223333 for public S3 buckets'
+required_outputs:
+  - findings.json
+  - summary.md
+budget:
+  llm_calls: 20
+  tokens: 50000
+  wall_clock_sec: 60
+  cloud_api_calls: 200
+  mb_written: 50
+permitted_tools:
+  - prowler_scan
+  - aws_s3_describe
+  - neo4j_write
+completion_condition: 'findings.json exists AND summary.md exists'
+escalation_rules:
+  - condition: budget_exhausted
+    target: supervisor
+  - condition: tool_unavailable
+    target: human_oncall
+workspace: /workspaces/cust_acme_001/cloud_posture/01J7M3X9Z1K8RPVQNH2T8DBHFZ/
+persistent_root: /persistent/cust_acme_001/cloud_posture/
+created_at: 2026-05-08T10:00:00Z
+expires_at: 2026-05-08T10:05:00Z
