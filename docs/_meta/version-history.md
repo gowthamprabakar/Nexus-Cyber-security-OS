@@ -19,3 +19,4 @@
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 6: customer-scoped Neo4j async knowledge-graph writer (UNWIND-batched relations)                          | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 6.5: schemas.py refactored to OCSF v1.3 Compliance Finding (class_uid 2003) typing layer per ADR-004      | F.3       |
 | 2026-05-09 | shared         | 0.1.0   | py.typed marker so mypy strict resolves cross-package types                                                        | F.3       |
+| 2026-05-09 | docs/\_meta    | —       | system-readiness.md — Phase 1a Week 2 snapshot: 110 tests, 9/16 F.3 tasks shipped, weighted Wiz coverage ~1.25%    | F.3       |
