@@ -14,6 +14,40 @@
 
 ---
 
+## Execution status (as of 2026-05-09)
+
+This plan grew three new tasks during execution to absorb the architectural decisions captured in ADR-003 / ADR-004 / ADR-005. Half-task numbering (`X.5`) is used so the original numbering of downstream tasks is preserved. Order of execution:
+
+```
+1 → 2 → 3 → 4 → 4.5 → 5 → 5.5 (NEW) → 6 → 6.5 (NEW) → 7 → 8 → 8.5 (NEW) → 9 → 10 → 11 → 12 → 13 → 14 → 15
+```
+
+| Task | Status     | Commit    | Notes                                                             |
+| ---- | ---------- | --------- | ----------------------------------------------------------------- |
+| 1    | ✅ done    | `aa2886a` | deps                                                              |
+| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)          |
+| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)      |
+| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                     |
+| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                       |
+| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                   |
+| 5.5  | 🟡 queued  | —         | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
+| 6    | ⬜ pending | —         | Neo4j KG writer (thin)                                            |
+| 6.5  | 🟡 queued  | —         | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
+| 7    | ⬜ pending | —         | Findings → Markdown summarizer (consumes OCSF envelope)           |
+| 8    | ⬜ pending | —         | NLAH (domain brain)                                               |
+| 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003) |
+| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic  |
+| 10   | ⬜ pending | —         | Cloud Posture agent driver                                        |
+| 11   | ⬜ pending | —         | LocalStack integration test                                       |
+| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                              |
+| 13   | ⬜ pending | —         | CLI                                                               |
+| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                     |
+| 15   | ⬜ pending | —         | README + ADR                                                      |
+
+ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
+
+---
+
 ## File Structure
 
 ```
@@ -680,6 +714,21 @@ git commit -m "feat(cloud-posture): AWS S3 describe tools (list_buckets, describ
 
 ---
 
+### Task 4.5: Async tool wrapper refactor (per ADR-005) — ✅ DONE (`3f9a26d`)
+
+**Files modified:** `packages/agents/cloud-posture/src/cloud_posture/tools/prowler.py`, `tools/aws_s3.py`, `tests/test_prowler.py`, `tests/test_aws_s3.py`
+
+Inserted because Tasks 3 and 4 shipped sync-by-default (`subprocess.run`, sync `boto3`). Per [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md), every tool wrapper must be async-by-default before agent #1 sets a precedent the other 17 agents inherit.
+
+- [x] **Step 1: Convert `tools/prowler.py`** — `subprocess.run` → `asyncio.create_subprocess_exec`; `timeout: float` enforced via `asyncio.wait_for` with `proc.kill()` + `await proc.wait()` on timeout; raise `ProwlerError` from `TimeoutError`.
+- [x] **Step 2: Convert `tools/aws_s3.py`** — public `async def list_buckets` / `describe_bucket` delegate to sync helpers via `asyncio.to_thread` (boto3 has no native async; ADR-005 rejects `aioboto3` for Phase 1a).
+- [x] **Step 3: Convert tests to `@pytest.mark.asyncio`** — Prowler tests patch `asyncio.create_subprocess_exec` with `AsyncMock` returning a mock `Process`. S3 tests use `with mock_aws():` context manager (moto's decorator clobbers coroutine functions).
+- [x] **Step 4: New timeout test for Prowler** — exercises `proc.kill()` path on `asyncio.wait_for` timeout.
+- [x] **Step 5: Verify** — 13/13 tests pass; ruff + mypy strict clean.
+- [x] **Step 6: Commit** — `refactor(cloud-posture): async tool wrappers per adr-005` at `3f9a26d`.
+
+---
+
 ### Task 5: AWS IAM analyzer tool
 
 **Files:** Create `packages/agents/cloud-posture/src/cloud_posture/tools/aws_iam.py`, `tests/test_aws_iam.py`
@@ -831,6 +880,32 @@ git commit -m "feat(cloud-posture): IAM analyzer (list_users_without_mfa, list_a
 
 ---
 
+### Task 5.5: Fabric scaffolding + OCSF envelope helpers (per ADR-004) — 🟡 NEW
+
+**Files:** Create `packages/shared/src/shared/fabric/__init__.py`, `subjects.py`, `envelope.py`, `correlation.py`. Tests under `packages/shared/tests/`.
+
+**Why now (between Tasks 5 and 6):** Task 6 (Neo4j KG writer) and Task 7 (Findings → Markdown) both want to attach a `correlation_id` and emit OCSF-shaped findings. Building the Neo4j writer first against the per-agent `Finding` model just creates rework when Task 6.5 swaps in the OCSF typing layer. The fabric scaffolding is one small package that unblocks both.
+
+**Scope (Phase 1a slice — _not_ the full fabric):**
+
+- `subjects.py` — pure functions that build subject names. `findings_subject(tenant_id, asset_arn) -> "findings.tenant.<tid>.asset.<arn-hash>"`, `audit_subject(tenant_id) -> ...`, etc. No NATS dependency.
+- `envelope.py` — small dataclass `NexusEnvelope { correlation_id, tenant_id, agent_id, nlah_version, model_pin, charter_invocation_id }` + helpers `wrap_ocsf(ocsf_event, envelope) -> dict` and `unwrap_ocsf(dict) -> (ocsf_event, envelope)`. OCSF v1.3 base-event keys handled as `dict[str, Any]` (no upstream dep needed for the slice).
+- `correlation.py` — `new_correlation_id() -> str` (ULID); `current_correlation_id() -> str | None` (contextvar); `with correlation_scope(cid)` context manager.
+- **Deferred to a later plan:** the actual NATS JetStream client. We codify the schema and the IDs now; the broker connection can wait until E.2 / control-plane builds the consumer side. For now consumers will get an in-process `FabricStub` for tests.
+
+**Steps:**
+
+- [ ] **Step 1: Add `ulid-py>=1.1.0` to `packages/shared/pyproject.toml`** (transitive: standard libs only otherwise).
+- [ ] **Step 2: Write failing tests** — `test_subjects.py` (round-trip a few subject builders, assert tenancy escaping), `test_envelope.py` (wrap then unwrap returns equal payload; missing required key raises), `test_correlation.py` (contextvar isolation per asyncio task; new_correlation_id is unique + lexically sortable).
+- [ ] **Step 3: Run failure** — `ImportError`s expected.
+- [ ] **Step 4: Implement** all four files.
+- [ ] **Step 5: Tests pass** — target ≥ 8 passing tests for the slice.
+- [ ] **Step 6: Commit** — `feat(shared): fabric scaffolding (subjects, envelope, correlation) per adr-004`.
+
+**Acceptance:** `from shared.fabric import new_correlation_id, wrap_ocsf, findings_subject` works from `cloud-posture` and from any future agent. No NATS client in this task.
+
+---
+
 ### Task 6: Neo4j knowledge-graph writer (thin)
 
 **Files:** Create `packages/agents/cloud-posture/src/cloud_posture/tools/neo4j_kg.py`, `tests/test_neo4j_kg.py`
@@ -964,6 +1039,32 @@ Expected: 2 passed.
 git add packages/agents/cloud-posture/src/cloud_posture/tools/neo4j_kg.py packages/agents/cloud-posture/tests/test_neo4j_kg.py
 git commit -m "feat(cloud-posture): customer-scoped Neo4j knowledge-graph writer"
 ```
+
+---
+
+### Task 6.5: Refactor `schemas.py` to OCSF typing layer (per ADR-004) — 🟡 NEW
+
+**Files:** Modify `packages/agents/cloud-posture/src/cloud_posture/schemas.py`, `tests/test_schemas.py`. Touches no other code today (schemas only consumed in tests).
+
+**Why now (between Tasks 6 and 7):** Task 7 (Markdown summarizer) is the first piece that consumes `Finding` objects beyond the schema's own tests. If summarizer ships against the per-agent Pydantic model, we re-write summarizer + every downstream consumer when [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) lands the OCSF wire format. Doing the refactor here pays the cost once.
+
+**Scope:**
+
+- Map our existing `Severity` enum to OCSF `severity_id` (1=info, 2=low, 3=medium, 4=high, 5=critical, 6=fatal — we collapse fatal→critical).
+- Pick the OCSF class for cloud-posture findings: **OCSF v1.3 class `2003 — Compliance Finding`** (category `Findings`). Rationale: cloud-posture findings are config-policy violations, which OCSF models explicitly. Investigation Agent later uses `2004 — Detection Finding`.
+- New typed wrapper `class CloudPostureFinding` over `dict[str, Any]` (the raw OCSF payload), exposing typed accessors for the fields we care about: `severity`, `finding_id`, `resource_arn`, `rule_id`, `compliance_impacts`, `nexus_envelope`.
+- Builder: `build_finding(prowler_raw, *, tenant_id, agent_id, nlah_version, model_pin, charter_invocation_id) -> CloudPostureFinding` — handles Prowler-OCSF → Nexus-OCSF translation (mostly key-renames + envelope attachment).
+- Keep the `finding_id` regex enforcement we already have (`<rule>:<resource>:<hash>`).
+
+**Steps:**
+
+- [ ] **Step 1: Write failing tests** — round-trip a Prowler-OCSF finding through `build_finding` and assert: severity is correctly mapped, `nexus_envelope` is attached, `finding_id` regex still enforced, downstream `to_dict()` produces a valid OCSF v1.3-shaped payload.
+- [ ] **Step 2: Run failure**.
+- [ ] **Step 3: Refactor** — replace `Finding` model with `CloudPostureFinding` wrapper; preserve the existing `Severity` enum and `FindingsReport` aggregate; route Prowler → CloudPostureFinding through `build_finding`.
+- [ ] **Step 4: Tests pass** — preserve existing 4 schema tests + add ≥ 3 new for the OCSF mapping.
+- [ ] **Step 5: Commit** — `refactor(cloud-posture): schemas as ocsf typing layer per adr-004`.
+
+**Acceptance:** Schema tests + smoke + Prowler tests + S3 tests + IAM tests all still pass. No new external deps (OCSF v1.3 is encoded as `dict[str, Any]` per ADR-004 — no upstream `ocsf-lib-py` until that lib stabilizes).
 
 ---
 
@@ -1127,7 +1228,7 @@ git commit -m "feat(cloud-posture): findings → markdown summarizer with severi
 
 - [ ] **Step 1: Create `nlah/README.md` (the canonical NLAH)**
 
-````markdown
+```markdown
 # Cloud Posture Agent — NLAH
 
 You are the Cloud Posture Agent of Nexus Cyber OS. Your job is to find cloud-configuration issues that increase risk for the customer.
@@ -1186,11 +1287,11 @@ See `nlah/examples/`.
 - Multi-account orchestration (deferred to D.1+ when control plane lands).
 - Continuous scanning (this NLAH is invoked once per contract; the scheduler triggers re-runs).
 - Remediation (handled by Remediation Agent — A.1).
-````
+```
 
 - [ ] **Step 2: Create `nlah/tools.md`**
 
-````markdown
+```markdown
 # Tools available to Cloud Posture Agent
 
 ## `prowler_scan(account_id, region, output_dir, min_severity?)`
@@ -1223,7 +1324,7 @@ Upserts an asset node in the customer's knowledge graph.
 ## `kg_upsert_finding(finding_id, rule_id, severity, affected_arns)`
 
 Upserts a finding node and `(:Finding)-[:AFFECTS]->(:Asset)` edges.
-````
+```
 
 - [ ] **Step 3: Create `nlah/examples/public_s3_finding.md`**
 
@@ -1256,16 +1357,23 @@ Call `aws_s3_describe(bucket="acme-public", region="us-east-1")`. Inspect `acl` 
   "severity": "high",
   "title": "S3 bucket 'acme-public' allows public read",
   "description": "Bucket has an ACL granting READ to AllUsers.",
-  "affected": [{
-    "cloud": "aws",
-    "account_id": "111122223333",
-    "region": "us-east-1",
-    "resource_type": "aws_s3_bucket",
-    "resource_id": "acme-public",
-    "arn": "arn:aws:s3:::acme-public"
-  }],
+  "affected": [
+    {
+      "cloud": "aws",
+      "account_id": "111122223333",
+      "region": "us-east-1",
+      "resource_type": "aws_s3_bucket",
+      "resource_id": "acme-public",
+      "arn": "arn:aws:s3:::acme-public"
+    }
+  ],
   "evidence": {
-    "acl": [{"Grantee": {"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}, "Permission": "READ"}],
+    "acl": [
+      {
+        "Grantee": { "URI": "http://acs.amazonaws.com/groups/global/AllUsers" },
+        "Permission": "READ"
+      }
+    ],
     "public_access_block": null
   }
 }
@@ -1292,16 +1400,18 @@ Prowler may not flag this if it's customer-managed. Use `aws_iam_list_admin_poli
   "severity": "critical",
   "title": "Customer-managed policy 'TooBroad' grants Action=* Resource=*",
   "description": "Any principal attached to this policy has admin equivalence.",
-  "affected": [{
-    "cloud": "aws",
-    "account_id": "111122223333",
-    "region": "us-east-1",
-    "resource_type": "aws_iam_policy",
-    "resource_id": "TooBroad",
-    "arn": "arn:aws:iam::111122223333:policy/TooBroad"
-  }],
+  "affected": [
+    {
+      "cloud": "aws",
+      "account_id": "111122223333",
+      "region": "us-east-1",
+      "resource_type": "aws_iam_policy",
+      "resource_id": "TooBroad",
+      "arn": "arn:aws:iam::111122223333:policy/TooBroad"
+    }
+  ],
   "evidence": {
-    "document": {"Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]}
+    "document": { "Statement": [{ "Effect": "Allow", "Action": "*", "Resource": "*" }] }
   }
 }
 ```
@@ -1414,9 +1524,57 @@ git commit -m "feat(cloud-posture): NLAH (domain brain) + tools reference + few-
 
 ---
 
+### Task 8.5: `charter.llm` — `LLMProvider` interface + `AnthropicProvider` (per ADR-003) — 🟡 NEW
+
+**Files:** Create `packages/charter/src/charter/llm.py`, `packages/charter/tests/test_llm.py`.
+
+**Why now (between Tasks 8 and 9):** Task 9 currently reads "_LLM client wrapper (Anthropic) with retry_" inside the cloud-posture package. Per [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) every agent talks to LLMs through a tier-pinned interface defined in `packages/charter`, never importing `anthropic` directly. Task 9 is rewritten downstream to consume `charter.llm.LLMProvider`; Task 8.5 puts the interface in place first.
+
+**Scope:**
+
+- `class ModelTier(StrEnum)` — `FRONTIER`, `WORKHORSE`, `EDGE`.
+- `@dataclass class ToolSchema` — name, description, JSON-Schema `input_schema`, allowed-tier hint.
+- `@dataclass class LLMResponse` — `text: str`, `stop_reason: str`, `usage: TokenUsage`, `tool_calls: list[ToolCall]`, `model_pin: str`, `provider_id: str`.
+- `class LLMProvider(Protocol)`:
+
+  ```python
+  async def complete(
+      self, prompt: str, system: str | None,
+      max_tokens: int, temperature: float = 0.0,
+      stop: list[str] | None = None,
+      tools: list[ToolSchema] | None = None,
+      model_pin: str,
+  ) -> LLMResponse: ...
+
+  @property
+  def provider_id(self) -> str: ...
+
+  @property
+  def model_class(self) -> ModelTier: ...
+  ```
+
+- `class AnthropicProvider` (initial implementation): wraps `anthropic.AsyncAnthropic`, retries 5xx + 429 with exponential backoff via `tenacity`, enforces `model_pin` is non-empty, audits the call (writes `llm_call_started/completed` events through the charter audit chain when invoked inside a `Charter` context).
+- `class FakeLLMProvider` (test double in same module, not exported): returns canned responses; used by Task 9 unit tests + downstream agent tests.
+- **Deferred:** `VLLMProvider`, `OllamaProvider`, multi-provider routing, eval-parity gate. Phase 1b–2 work, captured in P0.7 expansion (per ADR-003 references).
+
+**Steps:**
+
+- [ ] **Step 1: Write failing tests** — `LLMProvider` is a `runtime_checkable` Protocol; `FakeLLMProvider` satisfies it; `AnthropicProvider` raises on empty `model_pin`; tenacity retry triggers on simulated 429; `model_class` returns the tier set by the constructor.
+- [ ] **Step 2: Run failure**.
+- [ ] **Step 3: Implement** — Protocol + dataclasses + AnthropicProvider + FakeLLMProvider. Mark `LLMProvider` `@runtime_checkable`.
+- [ ] **Step 4: Tests pass** — target ≥ 6 tests.
+- [ ] **Step 5: Audit-chain integration** — when called inside an active `Charter` context (detected via the existing context manager's contextvar from F.1), emit `llm_call_started` and `llm_call_completed` audit entries that include `provider_id`, `model_pin`, prompt-token + completion-token counts. No emission outside a charter context.
+- [ ] **Step 6: Commit** — `feat(charter): llmprovider interface and anthropicprovider per adr-003`.
+
+**Acceptance:** `from charter.llm import LLMProvider, ModelTier, AnthropicProvider, FakeLLMProvider` works. cloud-posture's Task 9 is rewritten to depend on `charter.llm`, not `anthropic`.
+
+---
+
 ### Task 9: LLM client wrapper (Anthropic) with retry
 
 **Files:** Create `llm.py`, `tests/test_llm.py`
+
+> **Delta from original plan (per [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) / Task 8.5):** This wrapper does **not** `import anthropic`. It depends on `charter.llm.LLMProvider` and `AnthropicProvider`. The cloud-posture-local `llm.py` becomes a thin agent-side adapter: it picks a tier (`workhorse` for cloud-posture's per-finding NLAH execution, `frontier` for synthesis paths if any), constructs the right `LLMProvider`, and exposes the same `LLMResponse` surface to the agent driver (Task 10). The tenacity retry block stays here only if it adds agent-specific behavior beyond what `AnthropicProvider` already does; otherwise drop it. Update the `Step 1: Write failing tests` block accordingly when this task is reached — the mock target is `charter.llm.AnthropicProvider`, not `anthropic.Anthropic`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -2709,7 +2867,7 @@ This runbook validates the Cloud Posture Agent against a **real AWS dev account*
    source_agent: supervisor
    target_agent: cloud_posture
    customer_id: cust_dev_smoke
-   task: "Scan AWS dev account us-east-1 (smoke run)"
+   task: 'Scan AWS dev account us-east-1 (smoke run)'
    required_outputs: [findings.json, summary.md]
    budget:
      llm_calls: 5
@@ -2877,6 +3035,7 @@ Business Source License 1.1. Production use requires a commercial license.
 Phase 1 ships 18 agents. Building each from scratch wastes effort and produces drift. We need ONE canonical implementation that defines the pattern, then 17 derivations.
 
 Three plausible "first" agents:
+
 1. Cloud Posture (CSPM)
 2. Vulnerability (CVE scanning via Trivy)
 3. Identity (CIEM, custom permission simulator)
@@ -2888,6 +3047,7 @@ Cloud Posture is the reference. The other 17 follow this template.
 ## Consequences
 
 ### Positive
+
 - **Simplest tool surface** (~7 tools) — engineers learn the pattern without fighting domain complexity.
 - **Highest-value Day-1** — every customer in every vertical needs CSPM.
 - **Mature OSS foundation** — Prowler is battle-tested and widely understood.
@@ -2895,17 +3055,21 @@ Cloud Posture is the reference. The other 17 follow this template.
 - **Clear schemas** — findings have well-defined shapes.
 
 ### Negative
+
 - Some patterns won't generalize 1:1 (Investigation needs sub-agent orchestration; Curiosity is reactive-not-scheduled). Mitigation: ADRs per agent that document deltas from the Cloud Posture template.
 
 ### Neutral
+
 - The 10-case eval suite is a starting point. Phase 1 target: 100 cases. Adding cases is incremental work in the same structure.
 
 ## Alternatives considered
 
 ### Alt 1: Vulnerability first
+
 - Why rejected: requires a working asset graph + EPSS feed, which adds dependencies before the pattern is stable.
 
 ### Alt 2: Identity first
+
 - Why rejected: custom permission simulator is significant Phase 1 work; not a clean reference.
 
 ## References
@@ -3027,6 +3191,7 @@ Expected: `Audit valid: True, entries: <some count ≥ 4>`.
 ## Self-Review
 
 **Spec coverage:**
+
 - ✓ NLAH (domain brain) authored — Task 8
 - ✓ Prowler integration — Task 3
 - ✓ AWS S3 + IAM tools — Tasks 4, 5
@@ -3043,12 +3208,14 @@ Expected: `Audit valid: True, entries: <some count ≥ 4>`.
 **Placeholder scan:** none. Every step has full code.
 
 **Type / name consistency:**
+
 - `ProwlerResult.raw_findings` (Task 3) → fed to `_finding_from_prowler` (Task 10) — keys match (`CheckID`, `Severity`, `ResourceArn`, `ResourceType`, `Region`, `AccountId`, `StatusExtended`).
 - `Finding.finding_id` regex enforced in Task 2; agent code generates IDs in Task 10 matching that regex.
 - Tool names registered in `build_registry` (Task 10) match `permitted_tools` in eval contract (Task 12), unit-test contract (Task 10), integration contract (Task 11), and smoke runbook (Task 14): `prowler_scan`, `aws_s3_list_buckets`, `aws_s3_describe`, `aws_iam_list_users_without_mfa`, `aws_iam_list_admin_policies`, `kg_upsert_asset`, `kg_upsert_finding`.
 - `KnowledgeGraphWriter` constructor signature (`driver`, `customer_id`) matches usage in `build_registry` and unit tests.
 
 **Gaps / explicit deferrals (acceptable):**
+
 - LLM is wired but not exercised in the v0.1 reference flow (we deterministically build findings from tool outputs). LLM-driven enrichment moves to D.13 (Synthesis Agent) which owns customer-facing narrative across agents. This was a deliberate choice to keep the reference simple.
 - Eval suite is 10 cases; Phase 1 target is 100. Adding cases is the same YAML structure — no new infra.
 - `_eval_local.py` is a stand-in for the F.2 `eval-framework` package. F.2 will subsume this with a richer runner (parallel, comparison, CI integration); migration is mechanical.
@@ -3056,6 +3223,7 @@ Expected: `Audit valid: True, entries: <some count ≥ 4>`.
 - The `account_id` and `region` are hardcoded in `agent.run` for v0.1 reference. Production version parses these from `contract.task` via a small NL parser (Phase 1b).
 
 **Coverage of the larger goal (the "reference for 17 more agents") — what generalizes:**
+
 1. Package layout: `nlah/` + `src/<agent>/{schemas,tools/*,agent.py,_eval_local.py,cli.py}` + `eval/cases/*.yaml` + `runbooks/`
 2. Tool wrapping pattern: subprocess (Prowler), boto3 read-only, custom analyzer
 3. Charter integration: `build_registry()` returning a `ToolRegistry`, then `with Charter(contract, tools=registry) as ctx`

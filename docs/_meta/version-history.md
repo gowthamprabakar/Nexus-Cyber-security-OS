@@ -12,3 +12,6 @@
 | 2026-05-09 | docs/decisions | —       | ADR-003 LLM provider strategy (tiered + abstracted + sovereign-capable)                                            | F.3       |
 | 2026-05-09 | docs/decisions | —       | ADR-004 fabric layer (NATS JetStream, five buses, OCSF on the wire)                                                | F.3       |
 | 2026-05-09 | docs/decisions | —       | ADR-005 async-by-default tool wrapper convention                                                                   | F.3       |
+| 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 4.5: async refactor of Prowler + S3 wrappers (per ADR-005)                                                | F.3       |
+| 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 5: AWS IAM analyzer (list_users_without_mfa, list_admin_policies)                                         | F.3       |
+| 2026-05-09 | docs/plans     | —       | F.3 plan amended: status header + Tasks 4.5/5.5/6.5/8.5 inserted; Task 9 delta added (consume `charter.llm`)       | F.3       |
