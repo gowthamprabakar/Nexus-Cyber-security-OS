@@ -36,7 +36,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)            |
 | 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader            |
 | 8.5  | ✅ done    | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
-| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic                          |
+| 9    | ✅ done    | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
 | 10   | ⬜ pending | —         | Cloud Posture agent driver                                                                |
 | 11   | ⬜ pending | —         | LocalStack integration test                                                               |
 | 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                                      |
@@ -1613,7 +1613,16 @@ git commit -m "feat(cloud-posture): NLAH (domain brain) + tools reference + few-
 
 ---
 
-### Task 9: LLM client wrapper (Anthropic) with retry
+### Task 9: LLM adapter (provider-neutral; consumes `charter.llm`) — ✅ DONE (`b02e332`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **No `tenacity` retry block in `cloud_posture.llm`.** Retry lives inside the concrete providers in charter (`AnthropicProvider`, `OpenAICompatibleProvider`). The agent-side wrapper is purely a config → provider factory.
+- **Five providers covered** by the single `LLMConfig.provider` value: `"anthropic"`, `"openai"`, `"openai-compatible"`, `"vllm-local"`, `"ollama"`. Per [ADR-006](../../_meta/decisions/ADR-006-openai-compatible-provider.md) the last four all reduce to `OpenAICompatibleProvider`; the wrapper picks the right convenience constructor.
+- **`config_from_env(env)`** reads `NEXUS_LLM_PROVIDER` / `MODEL_PIN` / `TIER` / `BASE_URL` / `API_KEY` / `PROVIDER_ID` / `MAX_RETRIES`. SDK-native env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) still work as fallback when `NEXUS_LLM_API_KEY` is unset — caller doesn't have to set both.
+- **Deferred SDK imports.** A deployment that uses only Anthropic doesn't pay the import cost of the OpenAI SDK and vice versa. The `from charter.llm_anthropic import …` lives inside the matching `if` branch of `make_provider`.
+- **Charter gained a `py.typed` marker** so cloud-posture's strict mypy resolves the cross-package imports without `import-untyped` warnings.
+- **19 tests** (5 per-provider success paths, 4 negative paths, 7 env-loading paths, 2 round-trip + sanity). Plan budgeted ≥ 5.
 
 **Files:** Create `llm.py`, `tests/test_llm.py`
 

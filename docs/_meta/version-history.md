@@ -25,3 +25,5 @@
 | 2026-05-09 | charter        | 0.1.0   | F.3 Task 8.5: LLMProvider Protocol + AnthropicProvider per ADR-003; current_charter() contextvar                   | F.3       |
 | 2026-05-09 | docs/decisions | —       | ADR-006 — one OpenAICompatibleProvider subsumes vLLM, Ollama, OpenAI, OpenRouter, Together, Fireworks, Groq, etc.  | F.3       |
 | 2026-05-09 | charter        | 0.1.0   | charter.llm_openai_compat: OpenAICompatibleProvider with for_vllm_local() / for_ollama() convenience constructors  | F.3       |
+| 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 9: LLM adapter — LLMConfig + make*provider + config_from_env (5 providers, NEXUS_LLM*\* env vars)         | F.3       |
+| 2026-05-09 | charter        | 0.1.0   | py.typed marker so cross-package imports resolve under mypy strict                                                 | F.3       |
