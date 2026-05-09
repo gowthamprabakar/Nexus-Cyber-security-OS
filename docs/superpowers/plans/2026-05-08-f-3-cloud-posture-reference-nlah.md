@@ -32,7 +32,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                   |
 | 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
 | 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                    |
-| 6.5  | 🟡 queued  | —         | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
+| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
 | 7    | ⬜ pending | —         | Findings → Markdown summarizer (consumes OCSF envelope)           |
 | 8    | ⬜ pending | —         | NLAH (domain brain)                                               |
 | 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003) |
@@ -1050,7 +1050,17 @@ git commit -m "feat(cloud-posture): customer-scoped Neo4j knowledge-graph writer
 
 ---
 
-### Task 6.5: Refactor `schemas.py` to OCSF typing layer (per ADR-004) — 🟡 NEW
+### Task 6.5: Refactor `schemas.py` to OCSF typing layer (per ADR-004) — ✅ DONE (`6131300`)
+
+**Notes on the implementation as shipped:**
+
+- **API shape diverges slightly from the plan-as-drafted.** Plan said `build_finding(prowler_raw, *, ...)` (Prowler-specific). As shipped: `build_finding(*, finding_id, rule_id, severity, title, description, affected, detected_at, envelope, evidence)` with typed args. Reason: the agent driver constructs findings from multiple tool sources (Prowler, S3 describe, IAM analyzer), not just Prowler. A separate `from_prowler_ocsf(...)` adapter is deferred to Task 10 once we have a clearer view of which Prowler fields actually flow.
+- **`CloudPostureFinding` strictness.** Construction validates three things atomically: `class_uid == 2003`, `finding_id` matches `FINDING_ID_RE`, and `nexus_envelope` is well-formed (round-tripped through `unwrap_ocsf`).
+- **`Severity` round-trip helpers exposed.** `severity_to_id` and `severity_from_id` are now public so future agents emitting OCSF can reuse the mapping. OCSF `severity_id` 6 (Fatal) collapses to our `critical` on read.
+- **`FindingsReport.findings` is now `list[dict]`.** Stores wrapped OCSF dicts directly so the report serializes to JSON in a single step without losing OCSF shape. `add_finding(CloudPostureFinding)` is the typed helper; `count_by_severity()` reads `severity_id` off each dict.
+- **`AffectedResource` retained** as a typed builder with a `to_ocsf()` helper. Same Pydantic shape as before, plus the OCSF emission method.
+- **Workspace dep + `py.typed` marker.** Added `nexus-shared` to cloud-posture's deps; added `packages/shared/src/shared/py.typed` so mypy strict resolves cross-package types.
+- **17 new schema tests, all passing.** Severity round-trips (parametrized × 5), Fatal→critical collapse, unknown ID rejection, AffectedResource→OCSF shape, build_finding class_uid + envelope round-trip, typed accessors, finding_id regex, empty-affected rejection, wrong class_uid rejection, missing-envelope rejection, FindingsReport aggregation.
 
 **Files:** Modify `packages/agents/cloud-posture/src/cloud_posture/schemas.py`, `tests/test_schemas.py`. Touches no other code today (schemas only consumed in tests).
 

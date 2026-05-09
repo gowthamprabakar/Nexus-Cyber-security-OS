@@ -17,3 +17,5 @@
 | 2026-05-09 | docs/plans     | —       | F.3 plan amended: status header + Tasks 4.5/5.5/6.5/8.5 inserted; Task 9 delta added (consume `charter.llm`)       | F.3       |
 | 2026-05-09 | shared         | 0.1.0   | F.3 Task 5.5: fabric scaffolding (subjects, envelope, correlation_id) per ADR-004                                  | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 6: customer-scoped Neo4j async knowledge-graph writer (UNWIND-batched relations)                          | F.3       |
+| 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 6.5: schemas.py refactored to OCSF v1.3 Compliance Finding (class_uid 2003) typing layer per ADR-004      | F.3       |
+| 2026-05-09 | shared         | 0.1.0   | py.typed marker so mypy strict resolves cross-package types                                                        | F.3       |
