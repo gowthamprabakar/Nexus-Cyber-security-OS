@@ -1,10 +1,10 @@
-"""Prowler 5.x subprocess wrapper. Returns parsed JSON findings."""
+"""Prowler 5.x async subprocess wrapper. Returns parsed OCSF findings."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,7 +13,7 @@ _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
 class ProwlerError(RuntimeError):
-    """Prowler exited non-zero or produced unparseable output."""
+    """Prowler exited non-zero, timed out, or produced unparseable output."""
 
 
 @dataclass
@@ -21,19 +21,18 @@ class ProwlerResult:
     raw_findings: list[dict[str, Any]] = field(default_factory=list)
 
 
-def run_prowler_aws(
+async def run_prowler_aws(
     account_id: str,
     region: str,
     output_dir: Path,
     min_severity: str = "info",
     profile: str | None = None,
-    timeout_sec: int = 1800,
+    timeout: float = 1800.0,
 ) -> ProwlerResult:
     """Run Prowler against an AWS account/region. Returns raw OCSF findings."""
     output_dir.mkdir(parents=True, exist_ok=True)
     binary = shutil.which("prowler") or "prowler"
     args = [
-        binary,
         "aws",
         "--region",
         region,
@@ -45,9 +44,22 @@ def run_prowler_aws(
     ]
     if profile:
         args += ["--profile", profile]
-    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout_sec)  # noqa: S603
+
+    proc = await asyncio.create_subprocess_exec(
+        binary,
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except TimeoutError as exc:
+        proc.kill()
+        await proc.wait()
+        raise ProwlerError(f"prowler timed out after {timeout}s") from exc
+
     if proc.returncode != 0:
-        raise ProwlerError(f"prowler exited {proc.returncode}: {proc.stderr.strip()}")
+        raise ProwlerError(f"prowler exited {proc.returncode}: {stderr_b.decode().strip()}")
 
     json_files = sorted(output_dir.glob("*.ocsf.json"))
     if not json_files:
