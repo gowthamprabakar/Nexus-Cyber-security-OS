@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
+    "nexus-shared",
     "anthropic>=0.36.0",
     "boto3>=1.35.0",
     "botocore>=1.35.0",
@@ -33,6 +34,7 @@ cloud-posture = "cloud_posture.cli:main"
 
 [tool.uv.sources]
 nexus-charter = { workspace = true }
+nexus-shared = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
