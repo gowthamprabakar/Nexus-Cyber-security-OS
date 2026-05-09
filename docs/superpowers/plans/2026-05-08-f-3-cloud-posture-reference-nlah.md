@@ -30,7 +30,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                     |
 | 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                       |
 | 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                   |
-| 5.5  | 🟡 queued  | —         | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
+| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
 | 6    | ⬜ pending | —         | Neo4j KG writer (thin)                                            |
 | 6.5  | 🟡 queued  | —         | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
 | 7    | ⬜ pending | —         | Findings → Markdown summarizer (consumes OCSF envelope)           |
@@ -880,7 +880,7 @@ git commit -m "feat(cloud-posture): IAM analyzer (list_users_without_mfa, list_a
 
 ---
 
-### Task 5.5: Fabric scaffolding + OCSF envelope helpers (per ADR-004) — 🟡 NEW
+### Task 5.5: Fabric scaffolding + OCSF envelope helpers (per ADR-004) — ✅ DONE (`eee6e7e`)
 
 **Files:** Create `packages/shared/src/shared/fabric/__init__.py`, `subjects.py`, `envelope.py`, `correlation.py`. Tests under `packages/shared/tests/`.
 
@@ -895,14 +895,14 @@ git commit -m "feat(cloud-posture): IAM analyzer (list_users_without_mfa, list_a
 
 **Steps:**
 
-- [ ] **Step 1: Add `ulid-py>=1.1.0` to `packages/shared/pyproject.toml`** (transitive: standard libs only otherwise).
-- [ ] **Step 2: Write failing tests** — `test_subjects.py` (round-trip a few subject builders, assert tenancy escaping), `test_envelope.py` (wrap then unwrap returns equal payload; missing required key raises), `test_correlation.py` (contextvar isolation per asyncio task; new_correlation_id is unique + lexically sortable).
-- [ ] **Step 3: Run failure** — `ImportError`s expected.
-- [ ] **Step 4: Implement** all four files.
-- [ ] **Step 5: Tests pass** — target ≥ 8 passing tests for the slice.
-- [ ] **Step 6: Commit** — `feat(shared): fabric scaffolding (subjects, envelope, correlation) per adr-004`.
+- [x] **Step 1: Add `python-ulid>=2.0.0` to `packages/shared/pyproject.toml`** (chose `python-ulid` over `ulid-py` — actively maintained; same shape).
+- [x] **Step 2: Write failing tests** — 26 tests across `test_fabric_subjects.py`, `test_fabric_envelope.py`, `test_fabric_correlation.py`.
+- [x] **Step 3: Run failure** — `ModuleNotFoundError: No module named 'shared.fabric'` confirmed.
+- [x] **Step 4: Implement** `subjects.py`, `envelope.py`, `correlation.py`, `__init__.py`.
+- [x] **Step 5: Tests pass** — 26/26 (exceeded the ≥ 8 target). Full repo: 92/92.
+- [x] **Step 6: Commit** — `feat(shared): fabric scaffolding (subjects, envelope, correlation) per adr-004` at `eee6e7e`.
 
-**Acceptance:** `from shared.fabric import new_correlation_id, wrap_ocsf, findings_subject` works from `cloud-posture` and from any future agent. No NATS client in this task.
+**Acceptance met:** `from shared.fabric import new_correlation_id, wrap_ocsf, findings_subject` works. No NATS client in this task.
 
 ---
 
