@@ -34,7 +34,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                 |
 | 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                 |
 | 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper) |
-| 8    | ⬜ pending | —         | NLAH (domain brain)                                                            |
+| 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader |
 | 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003)              |
 | 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic               |
 | 10   | ⬜ pending | —         | Cloud Posture agent driver                                                     |
@@ -1247,7 +1247,15 @@ git commit -m "feat(cloud-posture): findings → markdown summarizer with severi
 
 ---
 
-### Task 8: NLAH (the agent's domain brain)
+### Task 8: NLAH (the agent's domain brain) — ✅ DONE (`c9655c8`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **NLAH directory moved inside the package** (`src/cloud_posture/nlah/`) so it ships with both editable and wheel installs. `default_nlah_dir()` returns the in-package path; `load_system_prompt()` with no args loads the shipped NLAH.
+- **Examples were rewritten to show the OCSF v1.3 wire format** (per Task 6.5). The plan's example findings were in the pre-OCSF Pydantic shape; the new examples show Prowler raw → enrichment → information-the-agent-surfaces → OCSF event the driver emits.
+- **Severity rubric tightened** with a calibration paragraph: when a Prowler-flagged misconfig has an evidence-backed mitigating control, downgrade one tier; compound-risk findings (e.g. overprivileged role + console-no-MFA on the same identity) become a single Critical finding rather than two.
+- **Self-evolution boundary section added** to the README: NLAH changes are signed, eval-gated, multi-party-approved, canary-rolled. Frames the NLAH as code, not docs.
+- **8 loader tests** instead of the planned 3: lex-ordered example concatenation, optional tools section, optional examples section, default-dir resolution against the packaged NLAH, end-to-end load-with-no-args, plus the original 3.
 
 **Files:** Create `nlah/README.md`, `nlah/tools.md`, `nlah/examples/public_s3_finding.md`, `nlah/examples/overprivileged_iam_finding.md`, `nlah_loader.py`, `tests/test_nlah_loader.py`
 
