@@ -22,3 +22,4 @@
 | 2026-05-09 | docs/\_meta    | —       | system-readiness.md — Phase 1a Week 2 snapshot: 110 tests, 9/16 F.3 tasks shipped, weighted Wiz coverage ~1.25%    | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 7: findings → markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)                         | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 8: NLAH (domain brain) + tools reference + 2 OCSF-shaped few-shot examples + loader                       | F.3       |
+| 2026-05-09 | charter        | 0.1.0   | F.3 Task 8.5: LLMProvider Protocol + AnthropicProvider per ADR-003; current_charter() contextvar                   | F.3       |

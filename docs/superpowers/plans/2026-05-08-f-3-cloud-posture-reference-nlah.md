@@ -22,27 +22,27 @@ This plan grew three new tasks during execution to absorb the architectural deci
 1 → 2 → 3 → 4 → 4.5 → 5 → 5.5 (NEW) → 6 → 6.5 (NEW) → 7 → 8 → 8.5 (NEW) → 9 → 10 → 11 → 12 → 13 → 14 → 15
 ```
 
-| Task | Status     | Commit    | Notes                                                                          |
-| ---- | ---------- | --------- | ------------------------------------------------------------------------------ |
-| 1    | ✅ done    | `aa2886a` | deps                                                                           |
-| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)                       |
-| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)                   |
-| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                                  |
-| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                                    |
-| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                                |
-| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)                 |
-| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                 |
-| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                 |
-| 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper) |
-| 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader |
-| 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003)              |
-| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic               |
-| 10   | ⬜ pending | —         | Cloud Posture agent driver                                                     |
-| 11   | ⬜ pending | —         | LocalStack integration test                                                    |
-| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                           |
-| 13   | ⬜ pending | —         | CLI                                                                            |
-| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                  |
-| 15   | ⬜ pending | —         | README + ADR                                                                   |
+| Task | Status     | Commit    | Notes                                                                                     |
+| ---- | ---------- | --------- | ----------------------------------------------------------------------------------------- |
+| 1    | ✅ done    | `aa2886a` | deps                                                                                      |
+| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)                                  |
+| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)                              |
+| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                                             |
+| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                                               |
+| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                                           |
+| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)                            |
+| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                            |
+| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                            |
+| 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)            |
+| 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader            |
+| 8.5  | ✅ done    | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
+| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic                          |
+| 10   | ⬜ pending | —         | Cloud Posture agent driver                                                                |
+| 11   | ⬜ pending | —         | LocalStack integration test                                                               |
+| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                                      |
+| 13   | ⬜ pending | —         | CLI                                                                                       |
+| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                             |
+| 15   | ⬜ pending | —         | README + ADR                                                                              |
 
 ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
@@ -1557,7 +1557,17 @@ git commit -m "feat(cloud-posture): NLAH (domain brain) + tools reference + few-
 
 ---
 
-### Task 8.5: `charter.llm` — `LLMProvider` interface + `AnthropicProvider` (per ADR-003) — 🟡 NEW
+### Task 8.5: `charter.llm` — `LLMProvider` interface + `AnthropicProvider` (per ADR-003) — ✅ DONE (`cec4ddc`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Split into two modules.** `charter/llm.py` holds the always-available pieces (Protocol, types, `FakeLLMProvider`); `charter/llm_anthropic.py` holds `AnthropicProvider` with deferred Anthropic SDK + tenacity imports. This keeps the `nexus-charter` Apache-2.0 release surface free of vendor SDKs by default — `anthropic` and `tenacity` are an optional extra (`pip install nexus-charter[anthropic]`).
+- **`current_charter()` lives in `charter.context`.** Added a module-level `_CURRENT_CHARTER` `ContextVar` and a public `current_charter()` accessor. `Charter.__enter__` sets the contextvar; `__exit__` resets it inside a `finally` so an exception in the body still clears state. This is the bridge the LLM provider uses to know "am I inside a Charter?" — confirmed by 3 new tests on the contextvar.
+- **`LLMProvider` is a `runtime_checkable` Protocol.** Both `FakeLLMProvider` and `AnthropicProvider` satisfy `isinstance(p, LLMProvider)`.
+- **Retry policy is explicit about what's retryable.** Only `RateLimitError`, `InternalServerError`, `APIConnectionError`, `APITimeoutError`. Auth / permission / bad-request errors are caller bugs and bubble out on first failure. Verified by two tests.
+- **Audit emission emits three actions** (not two as in the plan): `llm_call_started`, `llm_call_completed`, `llm_call_failed`. The failure case is wrapped in `try/finally`-style flow so the audit chain captures the error_type and error message before the exception propagates. Tested with a forced auth error inside a Charter context.
+- **Budget enforcement is the caller's responsibility.** Documented at module level. The provider returns `LLMResponse.usage` (input + output tokens); the agent driver charges the charter budget envelope. Keeps the provider decoupled from charter internals beyond the audit hook.
+- **19 tests** (16 LLM + 3 contextvar). Plan budgeted ≥ 6.
 
 **Files:** Create `packages/charter/src/charter/llm.py`, `packages/charter/tests/test_llm.py`.
 
