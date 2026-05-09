@@ -22,27 +22,27 @@ This plan grew three new tasks during execution to absorb the architectural deci
 1 → 2 → 3 → 4 → 4.5 → 5 → 5.5 (NEW) → 6 → 6.5 (NEW) → 7 → 8 → 8.5 (NEW) → 9 → 10 → 11 → 12 → 13 → 14 → 15
 ```
 
-| Task | Status     | Commit    | Notes                                                             |
-| ---- | ---------- | --------- | ----------------------------------------------------------------- |
-| 1    | ✅ done    | `aa2886a` | deps                                                              |
-| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)          |
-| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)      |
-| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                     |
-| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                       |
-| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                   |
-| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
-| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                    |
-| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
-| 7    | ⬜ pending | —         | Findings → Markdown summarizer (consumes OCSF envelope)           |
-| 8    | ⬜ pending | —         | NLAH (domain brain)                                               |
-| 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003) |
-| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic  |
-| 10   | ⬜ pending | —         | Cloud Posture agent driver                                        |
-| 11   | ⬜ pending | —         | LocalStack integration test                                       |
-| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                              |
-| 13   | ⬜ pending | —         | CLI                                                               |
-| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                     |
-| 15   | ⬜ pending | —         | README + ADR                                                      |
+| Task | Status     | Commit    | Notes                                                                          |
+| ---- | ---------- | --------- | ------------------------------------------------------------------------------ |
+| 1    | ✅ done    | `aa2886a` | deps                                                                           |
+| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)                       |
+| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)                   |
+| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                                  |
+| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                                    |
+| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                                |
+| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)                 |
+| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                 |
+| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                 |
+| 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper) |
+| 8    | ⬜ pending | —         | NLAH (domain brain)                                                            |
+| 8.5  | 🟡 queued  | —         | NEW — `charter.llm` module: `LLMProvider` interface (per ADR-003)              |
+| 9    | ⬜ pending | —         | LLM client wrapper — implements `LLMProvider`, not raw Anthropic               |
+| 10   | ⬜ pending | —         | Cloud Posture agent driver                                                     |
+| 11   | ⬜ pending | —         | LocalStack integration test                                                    |
+| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                           |
+| 13   | ⬜ pending | —         | CLI                                                                            |
+| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                  |
+| 15   | ⬜ pending | —         | README + ADR                                                                   |
 
 ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
@@ -1086,7 +1086,14 @@ git commit -m "feat(cloud-posture): customer-scoped Neo4j knowledge-graph writer
 
 ---
 
-### Task 7: Findings → Markdown summarizer
+### Task 7: Findings → Markdown summarizer — ✅ DONE (`bda99a9`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Plan tests imported the old `Finding` Pydantic model.** That model is gone after Task 6.5. As shipped: tests use `build_finding(...)` to construct `CloudPostureFinding` objects, then `report.add_finding(f)` to attach them to a `FindingsReport`.
+- **`FindingsReport.findings` is `list[dict]` now**, so the summarizer wraps each raw OCSF dict in a `CloudPostureFinding(raw)` for typed access (severity, finding_id, title, resources). The plan's iteration over typed `Finding` objects became iteration over `CloudPostureFinding(raw)` wrappers.
+- **ARN extraction** reads from `OCSF resources[].uid` (set by `AffectedResource.to_ocsf()` in Task 6.5), not from `f.affected[].arn` (which no longer exists).
+- **4 new tests** beyond the plan's 3: high-to-low severity ordering check, empty-severity section omission, total-count spot-check, multi-ARN finding rendering.
 
 **Files:** Create `summarizer.py`, `test_summarizer.py`
 
