@@ -23,3 +23,5 @@
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 7: findings → markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)                         | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 8: NLAH (domain brain) + tools reference + 2 OCSF-shaped few-shot examples + loader                       | F.3       |
 | 2026-05-09 | charter        | 0.1.0   | F.3 Task 8.5: LLMProvider Protocol + AnthropicProvider per ADR-003; current_charter() contextvar                   | F.3       |
+| 2026-05-09 | docs/decisions | —       | ADR-006 — one OpenAICompatibleProvider subsumes vLLM, Ollama, OpenAI, OpenRouter, Together, Fireworks, Groq, etc.  | F.3       |
+| 2026-05-09 | charter        | 0.1.0   | charter.llm_openai_compat: OpenAICompatibleProvider with for_vllm_local() / for_ollama() convenience constructors  | F.3       |

@@ -17,6 +17,13 @@ anthropic = [
     "anthropic>=0.36.0",
     "tenacity>=9.0.0",
 ]
+# `openai-compatible` covers OpenAI proper plus any compatible HTTP endpoint:
+# vLLM-local, Ollama, OpenRouter, Together, Fireworks, Groq, DeepSeek,
+# llama.cpp server, LM Studio. See ADR-006.
+openai-compatible = [
+    "openai>=1.50.0",
+    "tenacity>=9.0.0",
+]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -25,6 +32,7 @@ dev = [
     "freezegun>=1.5.0",
     "types-PyYAML>=6.0.0",
     "anthropic>=0.36.0",
+    "openai>=1.50.0",
     "tenacity>=9.0.0",
 ]
 
