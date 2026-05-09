@@ -92,3 +92,31 @@ def test_context_assert_complete_passes_when_outputs_present(tmp_path: Path) -> 
     with Charter(contract, tools=_registry()) as ctx:
         ctx.write_output("greeting.txt", b"hi")
         ctx.assert_complete()  # does not raise
+
+
+def test_current_charter_is_none_outside_context() -> None:
+    from charter import current_charter
+
+    assert current_charter() is None
+
+
+def test_current_charter_returns_active_charter(tmp_path: Path) -> None:
+    from charter import current_charter
+
+    contract = _make_contract(tmp_path)
+    assert current_charter() is None
+    with Charter(contract, tools=_registry()) as ctx:
+        assert current_charter() is ctx
+    assert current_charter() is None
+
+
+def test_current_charter_restored_on_exception(tmp_path: Path) -> None:
+    """Even if the body raises, exiting the Charter must clear the contextvar."""
+    from charter import current_charter
+
+    contract = _make_contract(tmp_path)
+    with pytest.raises(RuntimeError, match="boom"):  # noqa: SIM117
+        with Charter(contract, tools=_registry()):
+            assert current_charter() is not None
+            raise RuntimeError("boom")
+    assert current_charter() is None

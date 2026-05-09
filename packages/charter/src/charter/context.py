@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar, Token
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -11,6 +12,16 @@ from charter.budget import BudgetEnvelope
 from charter.contract import ExecutionContract
 from charter.tools import ToolRegistry
 from charter.workspace import WorkspaceManager
+
+# Active Charter for the current asyncio task / sync stack. Used by
+# downstream modules (e.g. charter.llm_anthropic) to detect "am I inside
+# a Charter?" without threading the context through every call site.
+_CURRENT_CHARTER: ContextVar[Charter | None] = ContextVar("nexus_current_charter", default=None)
+
+
+def current_charter() -> Charter | None:
+    """Return the Charter active for this asyncio task / context, or None."""
+    return _CURRENT_CHARTER.get()
 
 
 class Charter:
@@ -39,6 +50,7 @@ class Charter:
         )
         self.audit_path = Path(contract.workspace) / "audit.jsonl"
         self.audit: AuditLog | None = None
+        self._cv_token: Token[Charter | None] | None = None
 
     def __enter__(self) -> Charter:
         self.workspace_mgr.setup()
@@ -49,6 +61,7 @@ class Charter:
         )
         self.audit.append(action="invocation_started", payload={"task": self.contract.task})
         self.budget.start_clock()
+        self._cv_token = _CURRENT_CHARTER.set(self)
         return self
 
     def __exit__(
@@ -57,15 +70,20 @@ class Charter:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        if self.audit is None:
-            raise RuntimeError("Charter.__exit__ called before __enter__")
-        if exc is None:
-            self.audit.append(action="invocation_completed", payload={})
-        else:
-            self.audit.append(
-                action="invocation_failed",
-                payload={"exception": exc.__class__.__name__, "message": str(exc)},
-            )
+        try:
+            if self.audit is None:
+                raise RuntimeError("Charter.__exit__ called before __enter__")
+            if exc is None:
+                self.audit.append(action="invocation_completed", payload={})
+            else:
+                self.audit.append(
+                    action="invocation_failed",
+                    payload={"exception": exc.__class__.__name__, "message": str(exc)},
+                )
+        finally:
+            if self._cv_token is not None:
+                _CURRENT_CHARTER.reset(self._cv_token)
+                self._cv_token = None
 
     def call_tool(self, name: str, *, llm_calls: int = 0, tokens: int = 0, **kwargs: Any) -> Any:
         """Run a tool through the charter — whitelist + budget + audit."""

@@ -1,6 +1,6 @@
 """Nexus runtime charter."""
 
-from charter.context import Charter
+from charter.context import Charter, current_charter
 from charter.contract import ExecutionContract, load_contract
 from charter.exceptions import (
     BudgetExhausted,
@@ -22,6 +22,7 @@ __all__ = [
     "ToolNotPermitted",
     "ToolRegistry",
     "VerificationResult",
+    "current_charter",
     "load_contract",
     "verify_audit_log",
 ]

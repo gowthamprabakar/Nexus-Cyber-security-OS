@@ -513,17 +513,25 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+anthropic = [
+    { name = "anthropic" },
+    { name = "tenacity" },
+]
 dev = [
+    { name = "anthropic" },
     { name = "freezegun" },
     { name = "hypothesis" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "tenacity" },
     { name = "types-pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.36.0" },
+    { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.36.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "cryptography", specifier = ">=43.0.0" },
     { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.5.0" },
@@ -534,9 +542,11 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "structlog", specifier = ">=24.4.0" },
+    { name = "tenacity", marker = "extra == 'anthropic'", specifier = ">=9.0.0" },
+    { name = "tenacity", marker = "extra == 'dev'", specifier = ">=9.0.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["anthropic", "dev"]
 
 [[package]]
 name = "nexus-cloud-posture"
