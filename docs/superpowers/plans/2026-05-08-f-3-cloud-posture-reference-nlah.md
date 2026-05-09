@@ -31,7 +31,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                       |
 | 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                   |
 | 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)    |
-| 6    | ⬜ pending | —         | Neo4j KG writer (thin)                                            |
+| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                    |
 | 6.5  | 🟡 queued  | —         | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)    |
 | 7    | ⬜ pending | —         | Findings → Markdown summarizer (consumes OCSF envelope)           |
 | 8    | ⬜ pending | —         | NLAH (domain brain)                                               |
@@ -906,7 +906,15 @@ git commit -m "feat(cloud-posture): IAM analyzer (list_users_without_mfa, list_a
 
 ---
 
-### Task 6: Neo4j knowledge-graph writer (thin)
+### Task 6: Neo4j knowledge-graph writer (thin) — ✅ DONE (`bee67ad`)
+
+**Notes on the implementation as shipped:**
+
+- **Async-from-start per [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).** Used `neo4j.AsyncDriver` shape: `async with driver.session() as s: await s.run(...)`. The plan-as-drafted was sync; the writer was promoted to async to match every other tool.
+- **Affected-ARN batching.** The plan called for one MATCH/MERGE query per affected ARN. As shipped: a single `UNWIND $arns` query that batches all asset MERGEs + relationship creates in one round-trip. Cypher cost is O(1) round-trips per finding instead of O(N).
+- **Empty-arns shortcut.** A finding with `affected_arns=[]` skips the relation query entirely. Original plan would have run an empty UNWIND.
+- **5 tests instead of 2.** Added: customer_id-scoping check (a regression guard for cross-tenant leakage), kwargs-round-trip check, empty-arns shortcut.
+- Driver type is `Any` (not a `Protocol`) — the neo4j async driver shape varies across minor versions and a Protocol would create false-positive type errors on upgrade. The writer's contract is defined by the tests, not by Python typing.
 
 **Files:** Create `packages/agents/cloud-posture/src/cloud_posture/tools/neo4j_kg.py`, `tests/test_neo4j_kg.py`
 
