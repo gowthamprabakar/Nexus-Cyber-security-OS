@@ -57,3 +57,6 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-ra --strict-markers --strict-config -p no:cacheprovider --import-mode=importlib"
+markers = [
+    "integration: live integration tests that require external services (skipped by default; opt in with NEXUS_LIVE_* env vars)",
+]
