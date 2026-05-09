@@ -37,7 +37,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader            |
 | 8.5  | ✅ done    | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
 | 9    | ✅ done    | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
-| 10   | ⬜ pending | —         | Cloud Posture agent driver                                                                |
+| 10   | ✅ done    | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
 | 11   | ⬜ pending | —         | LocalStack integration test                                                               |
 | 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                                      |
 | 13   | ⬜ pending | —         | CLI                                                                                       |
@@ -1749,7 +1749,18 @@ git commit -m "feat(cloud-posture): Anthropic Claude client wrapper with exponen
 
 ---
 
-### Task 10: Cloud Posture agent driver — wires everything together via Charter
+### Task 10: Cloud Posture agent driver — wires everything together via Charter — ✅ DONE (`0905108`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Async driver, not sync.** Plan's `def run(...)` is now `async def run(...)` because every tool wrapper is async ([ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md)). IAM enrichment runs in parallel via `asyncio.TaskGroup`.
+- **OCSF schema, not the old per-agent `Finding` model.** Plan's `Finding(...)` calls became `build_finding(*, finding_id, rule_id, severity, title, description, affected, detected_at, envelope, evidence)`. Each finding carries a fresh `NexusEnvelope` (per Task 5.5 + 6.5).
+- **Per-finding `correlation_id`** minted via `new_correlation_id()` (the run is also bound to one correlation_id at the top level via `correlation_scope(...)`). End-to-end traceability now flows scanner → finding → audit.
+- **`kg_upsert_*` tools are conditional.** When `neo4j_driver=None` the registry skips them and the agent still produces `findings.json` + `summary.md`. Test confirms this; required for dev / no-graph deployments.
+- **Stable `rule_id` mapping.** `_PROWLER_RULE_MAP` covers six known CheckIDs (iam_user_no_mfa, s3_bucket_public_access, …); unmapped ones get a deterministic `CSPM-AWS-PROWLER-NNN` from a SHA-256 hash modulo 1000 so `FINDING_ID_RE` always matches.
+- **`llm_provider` plumbed but uncalled.** The signature accepts an `LLMProvider | None` for forward-compatibility with Investigation/Synthesis agents; the v0.1 Cloud Posture flow is deterministic per the NLAH `Out-of-scope` clause.
+- **Malformed Prowler rows skip rather than crash.** `_finding_from_prowler` returns `None` on `KeyError` / `ValueError`; one bad row no longer poisons the whole report.
+- **10 unit tests** vs. plan's 2: registry composition (with + without driver), findings.json + summary.md presence, OCSF class_uid verification, severity grouping in summary, full audit chain shape, empty-Prowler graceful path, IAM-no-MFA finding ID format, admin-policy severity_id == 5.
 
 **Files:** Create `agent.py`, `tests/test_agent_unit.py`
 

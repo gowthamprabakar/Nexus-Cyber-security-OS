@@ -27,3 +27,5 @@
 | 2026-05-09 | charter        | 0.1.0   | charter.llm_openai_compat: OpenAICompatibleProvider with for_vllm_local() / for_ollama() convenience constructors  | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 9: LLM adapter — LLMConfig + make*provider + config_from_env (5 providers, NEXUS_LLM*\* env vars)         | F.3       |
 | 2026-05-09 | charter        | 0.1.0   | py.typed marker so cross-package imports resolve under mypy strict                                                 | F.3       |
+| 2026-05-09 | charter        | 0.1.0   | live integration tests against Ollama qwen3:4b (skipped by default; opt in with NEXUS_LIVE_OLLAMA=1)               | F.3       |
+| 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 10: agent driver — async run() wires charter + tools + OCSF schemas + summarizer + optional Neo4j KG      | F.3       |
