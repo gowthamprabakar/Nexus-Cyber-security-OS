@@ -64,3 +64,4 @@
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 2: OCSF v1.3 Vulnerability Finding schema (class_uid 2002) + envelope wrapper; 19 tests                     | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 3: `trivy_image_scan` async subprocess wrapper per ADR-005; 9 tests                                         | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 4: `osv_query` httpx async client — establishes HTTP-wrapper convention (retry + TTL cache); 8 tests        | D.1       |
+| 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 5: `kev_catalog` + `is_kev` async clients (CISA KEV); inherits Task 4 convention; 6 tests                   | D.1       |
