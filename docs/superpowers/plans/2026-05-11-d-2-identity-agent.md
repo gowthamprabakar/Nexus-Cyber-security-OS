@@ -261,12 +261,12 @@ async def aws_access_analyzer_findings(
 ) -> list[AccessAnalyzerFinding]:
 ```
 
-- [ ] **Step 1: Write failing tests** with moto if it supports Access Analyzer; otherwise mock the boto3 client directly.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 4 tests.
-- [ ] **Step 4: Commit** — `feat(identity): access analyzer findings wrapper (D.2 task 5)`.
+- [x] **Step 1: Write failing tests** — moto does not implement Access Analyzer, so we stub `boto3.Session` directly (same pattern as Task 4).
+- [x] **Step 2: Implement**.
+- [x] **Step 3: Tests pass** — 7/7.
+- [x] **Step 4: Commit** — `c1f2b81 feat(d2,f4): access analyzer wrapper + tenant resolver (D.2 + F.4 task 5)`. Bundled with F.4 Task 5.
 
-**Q2 outcome must be recorded** in this task's commit message.
+**Q2 resolved**: identity _reimplements_ IAM tools rather than reusing cloud-posture's, because cloud-posture's helpers are CSPM-shaped (compliance findings against CIS/PCI), identity needs richer typed dataclasses for the resolver, and cross-package import between agents violates the agent-isolation principle.
 
 ---
 

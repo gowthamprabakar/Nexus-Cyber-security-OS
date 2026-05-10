@@ -265,10 +265,10 @@ class VerifiedToken:
 
 Maps `VerifiedToken → (tenant_id, user_id)`. First-login auto-provisions a `User` row tied to the JWT's `sub` and the token's `tenant_id` claim.
 
-- [ ] **Step 1: Write failing tests** — known user resolves; first-login provisions; suspended tenant rejects.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 6 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): tenant resolver with first-login provisioning (F.4 task 5)`.
+- [x] **Step 1: Write failing tests** — first-login provisions, repeat-login resolves, last_login updates, role-from-token, unknown-role fallback, unknown-tenant reject, suspended-tenant reject.
+- [x] **Step 2: Implement**.
+- [x] **Step 3: Tests pass** — 8/8 (in-memory aiosqlite; greenlet added to dev deps).
+- [x] **Step 4: Commit** — `c1f2b81 feat(d2,f4): access analyzer wrapper + tenant resolver (D.2 + F.4 task 5)`. Bundled with D.2 Task 5.
 
 ---
 
