@@ -1,16 +1,44 @@
 [project]
 name = "nexus-eval-framework"
 version = "0.1.0"
-description = "Nexus eval framework — case format, runner, gates, comparison reports"
+description = "Nexus eval framework — typed case + result + trace; async runner; comparison; gates; CLI"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../LICENSE-APACHE" }
 dependencies = [
+    "nexus-charter",
+    "nexus-shared",
     "pydantic>=2.9.0",
-    "rich>=13.8.0",
+    "pyyaml>=6.0.2",
+    "click>=8.1.0",
+    "python-ulid>=2.0.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3.0", "pytest-cov>=5.0.0"]
+# Both extras carry the SDK that the corresponding charter provider
+# already pulls in; they're optional here so consumers running pure-
+# FakeRunner suites don't transitively pull either SDK.
+anthropic = [
+    "anthropic>=0.36.0",
+    "tenacity>=9.0.0",
+]
+openai-compatible = [
+    "openai>=1.50.0",
+    "tenacity>=9.0.0",
+]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "freezegun>=1.5.0",
+    "types-PyYAML>=6.0.0",
+]
+
+[project.scripts]
+eval-framework = "eval_framework.cli:main"
+
+[tool.uv.sources]
+nexus-charter = { workspace = true }
+nexus-shared = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
