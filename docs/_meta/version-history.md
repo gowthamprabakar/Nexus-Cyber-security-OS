@@ -37,3 +37,4 @@
 | 2026-05-10 | docs/decisions | —       | ADR-007 — Cloud Posture canonical for charter context / async tools / OCSF / NLAH layout / LLM plumbing / eval shape | F.3       |
 | 2026-05-10 | cloud-posture  | 0.1.0   | F.3 Task 16: final verification — 4/6 gates green (94 tests, 96.09% cov, ruff/mypy clean, audit valid)               | F.3       |
 | 2026-05-10 | docs/\_meta    | —       | f3-verification-2026-05-10.md — F.3 accepted as code-complete; gate-by-gate record                                   | F.3       |
+| 2026-05-10 | docs/\_meta    | —       | system-readiness re-issued (2026-05-10): 203 tests, 96% cov, 7 ADRs, weighted Wiz ~6.7% (CSPM at 30% of weight)      | F.3       |
