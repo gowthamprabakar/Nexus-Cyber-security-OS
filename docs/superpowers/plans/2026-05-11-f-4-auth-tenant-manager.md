@@ -68,9 +68,9 @@
 | ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 1    | ✅ done    | `aa0f687` | Bootstrap `packages/control-plane/` (pyproject + auth/ + tenants/ + api/ + README); 3 smoke tests; F.5 boundary set    |
 | 2    | ✅ done    | `9d4fbb5` | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; alembic baseline `0001_initial`; 19 tests                     |
-| 3    | ⬜ pending | —         | Auth0 management-API client (httpx + retries) — create connection, fetch users, send invite                            |
-| 4    | ⬜ pending | —         | JWT verifier — Auth0 JWKS fetch + cache + signature/exp/iss/aud validation                                             |
-| 5    | ⬜ pending | —         | Tenant resolver — JWT custom claims → `(tenant_id, user_id)`; first-login auto-provision                               |
+| 3    | ✅ done    | `e54962c` | Auth0 management-API client (httpx + tenacity + token cache); 10 respx tests; retry on 429/5xx                         |
+| 4    | ✅ done    | `52f709b` | JWT verifier (RS256 + JWKS cache); 11 respx tests; **Q2 resolved** (Auth0 namespaced custom claims)                    |
+| 5    | ✅ done    | `c1f2b81` | Tenant resolver — first-login provisioning + suspended-tenant reject; 8 aiosqlite tests                                |
 | 6    | ⬜ pending | —         | RBAC — `Role` enum + `permission_for(role, action)` table; admin/operator/auditor scoping                              |
 | 7    | ⬜ pending | —         | SCIM 2.0 endpoint — POST /Users + PATCH /Users/{id} + DELETE /Users/{id}; HMAC-signed Auth0 webhook                    |
 | 8    | ⬜ pending | —         | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |

@@ -68,9 +68,9 @@ eval suite (10/10 cases via the F.2 framework)
 | ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
 | 1    | ✅ done    | `aa0f687` | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub); `charter.llm_adapter` import test |
 | 2    | ✅ done    | `9d4fbb5` | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 17 tests; pattern check ✓     |
-| 3    | ⬜ pending | —         | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination) — `boto3` via `asyncio.to_thread`     |
-| 4    | ⬜ pending | —         | `aws_iam_simulate_principal_policy` async wrapper — IAM SimulatePrincipalPolicy API                              |
-| 5    | ⬜ pending | —         | `aws_access_analyzer_findings` async wrapper — Access Analyzer external-access findings                          |
+| 3    | ✅ done    | `e54962c` | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination); 11 tests via moto                    |
+| 4    | ✅ done    | `52f709b` | `aws_iam_simulate_principal_policy` — batches actions in chunks of 50; 8 tests via stubbed `boto3.Session`       |
+| 5    | ✅ done    | `c1f2b81` | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
 | 6    | ⬜ pending | —         | `permission_path_resolver` (custom, deterministic) — flatten managed + inline policies into effective grants     |
 | 7    | ⬜ pending | —         | Findings normalizer — overprivilege + dormant + external-access → OCSF Identity Finding                          |
 | 8    | ⬜ pending | —         | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)            |
