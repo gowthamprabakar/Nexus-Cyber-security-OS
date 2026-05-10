@@ -40,3 +40,5 @@
 | 2026-05-10 | docs/\_meta    | —       | system-readiness re-issued (2026-05-10): 203 tests, 96% cov, 7 ADRs, weighted Wiz ~6.7% (CSPM at 30% of weight)      | F.3       |
 | 2026-05-10 | docs/plans     | —       | F.2 Eval Framework v0.1 plan written (16 tasks; runner Protocol + suite + gates + comparison + CLI)                  | F.2       |
 | 2026-05-10 | docs/plans     | —       | build-roadmap updated to link the F.2 plan and mark F.3 ✅ code-complete                                             | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 1: bootstrap apache-2.0 package skeleton (pyproject, py.typed, cli stub)                                    | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 2: typed pydantic models — EvalCase / EvalResult / SuiteResult / EvalTrace; 19 tests                        | F.2       |

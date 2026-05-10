@@ -22,24 +22,24 @@
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit | Notes                                                               |
-| ---- | ---------- | ------ | ------------------------------------------------------------------- |
-| 1    | ⬜ pending | —      | Bootstrap `packages/eval-framework/` (pyproject, license, py.typed) |
-| 2    | ⬜ pending | —      | Core types: EvalCase, EvalResult, SuiteResult, EvalTrace            |
-| 3    | ⬜ pending | —      | YAML case loader + validation                                       |
-| 4    | ⬜ pending | —      | `EvalRunner` Protocol + `FakeRunner` test double                    |
-| 5    | ⬜ pending | —      | Async `run_suite(cases, runner, …)` with per-case workspace         |
-| 6    | ⬜ pending | —      | Trace capture from charter audit.jsonl                              |
-| 7    | ⬜ pending | —      | `CloudPostureEvalRunner` — migrate from `_eval_local`               |
-| 8    | ⬜ pending | —      | Comparison: `diff_results(baseline, candidate)`                     |
-| 9    | ⬜ pending | —      | Gates: `Gate` config + `apply_gate(suite_result)`                   |
-| 10   | ⬜ pending | —      | Markdown report renderers (suite + comparison + gate)               |
-| 11   | ⬜ pending | —      | JSON output (machine-readable, schema-stable for Meta-Harness)      |
-| 12   | ⬜ pending | —      | Provider-parity helper: `run_across_providers(cases, runner, …)`    |
-| 13   | ⬜ pending | —      | CLI: `eval-framework run / compare / gate`                          |
-| 14   | ⬜ pending | —      | Migrate cloud-posture's 10 cases; delete `_eval_local`              |
-| 15   | ⬜ pending | —      | README + ADR-008 (Eval Framework architecture)                      |
-| 16   | ⬜ pending | —      | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)      |
+| Task | Status     | Commit    | Notes                                                                         |
+| ---- | ---------- | --------- | ----------------------------------------------------------------------------- |
+| 1    | ✅ done    | `f905af0` | Bootstrap `packages/eval-framework/` (pyproject, license, py.typed, cli stub) |
+| 2    | ✅ done    | `e800fff` | Core types: EvalCase, EvalResult, SuiteResult, EvalTrace; 19 tests            |
+| 3    | ⬜ pending | —         | YAML case loader + validation                                                 |
+| 4    | ⬜ pending | —         | `EvalRunner` Protocol + `FakeRunner` test double                              |
+| 5    | ⬜ pending | —         | Async `run_suite(cases, runner, …)` with per-case workspace                   |
+| 6    | ⬜ pending | —         | Trace capture from charter audit.jsonl                                        |
+| 7    | ⬜ pending | —         | `CloudPostureEvalRunner` — migrate from `_eval_local`                         |
+| 8    | ⬜ pending | —         | Comparison: `diff_results(baseline, candidate)`                               |
+| 9    | ⬜ pending | —         | Gates: `Gate` config + `apply_gate(suite_result)`                             |
+| 10   | ⬜ pending | —         | Markdown report renderers (suite + comparison + gate)                         |
+| 11   | ⬜ pending | —         | JSON output (machine-readable, schema-stable for Meta-Harness)                |
+| 12   | ⬜ pending | —         | Provider-parity helper: `run_across_providers(cases, runner, …)`              |
+| 13   | ⬜ pending | —         | CLI: `eval-framework run / compare / gate`                                    |
+| 14   | ⬜ pending | —         | Migrate cloud-posture's 10 cases; delete `_eval_local`                        |
+| 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                |
+| 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) (Apache 2.0 split), [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) (cross-provider parity gate), [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) (async-by-default), [ADR-007](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) (template patterns the runner follows).
 
