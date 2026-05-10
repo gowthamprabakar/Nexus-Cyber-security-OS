@@ -1,12 +1,24 @@
-"""Cloud Posture LLM adapter — picks the right `LLMProvider` from config.
+"""LLM adapter — picks the right `LLMProvider` from config.
 
-Per ADR-003 and ADR-006: the agent NEVER imports `anthropic` or `openai`
+Per ADR-003 and ADR-006: agents NEVER import `anthropic` or `openai`
 directly. Instead this module:
 
 1. Reads a deployment-side `LLMConfig` (built from env vars or constructed
    in code), and
 2. Returns a concrete `charter.llm.LLMProvider` that the agent driver
-   (Task 10) calls through.
+   calls through.
+
+**Hoisted into the charter package per ADR-007 v1.1** (2026-05-11).
+F.3 (Cloud Posture) and D.1 (Vulnerability) each shipped verbatim copies
+of this module under their own packages; the diff between the two was
+exactly 1 line (the docstring header). D.1's risk-down review surfaced
+the duplication and the canonical home for it.
+
+All 18 agents do:
+
+    from charter.llm_adapter import LLMConfig, make_provider, config_from_env
+
+The `NEXUS_LLM_*` env-var schema is the deployment-time contract.
 
 Supported `provider` values:
 - `"anthropic"`            — Anthropic Claude API (frontier tier path)

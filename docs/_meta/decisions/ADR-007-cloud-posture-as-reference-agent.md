@@ -1,7 +1,7 @@
 # ADR-007 — Cloud Posture is the reference NLAH
 
-- **Status:** accepted
-- **Date:** 2026-05-10
+- **Status:** accepted (v1.1 — amended 2026-05-11 with the LLM-adapter hoist; see [§v1.1 amendment](#v11-amendment-2026-05-11---llm-adapter-hoist))
+- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1)
 - **Authors:** AI/Agent Eng, Detection Eng
 - **Stakeholders:** every agent author; PM (capacity planning); compliance (audit-chain consistency across agents)
 
@@ -25,18 +25,18 @@ We had to pick one to ship F.3 against, then derive the other 17.
 
 The Cloud Posture agent is canonical for these patterns. Other agents diverge only with explicit ADR justification.
 
-| Pattern                                                                                                                   | Reference implementation                                                                                                                                         | Lives in                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Charter-wrapped invocation**                                                                                            | `with Charter(contract, tools=registry) as ctx: ...` (or async variant)                                                                                          | [`agent.py`](../../../packages/agents/cloud-posture/src/cloud_posture/agent.py)                                 |
-| **Async tool wrappers** ([ADR-005](ADR-005-async-tool-wrapper-convention.md))                                             | `asyncio.create_subprocess_exec` for binaries; `asyncio.to_thread(boto3...)` for sync SDKs; `httpx.AsyncClient` for HTTP                                         | [`tools/`](../../../packages/agents/cloud-posture/src/cloud_posture/tools/)                                     |
-| **OCSF wire format** ([ADR-004](ADR-004-fabric-layer.md))                                                                 | `build_finding(...)` constructs OCSF v1.3 Compliance Finding (`class_uid 2003`); `CloudPostureFinding` is a typed accessor over the wrapped dict                 | [`schemas.py`](../../../packages/agents/cloud-posture/src/cloud_posture/schemas.py)                             |
-| **NexusEnvelope** (per finding)                                                                                           | `correlation_id`, `tenant_id`, `agent_id`, `nlah_version`, `model_pin`, `charter_invocation_id`                                                                  | [`shared.fabric.envelope`](../../../packages/shared/src/shared/fabric/envelope.py)                              |
-| **NLAH directory shape**                                                                                                  | `nlah/README.md` (canonical brain) + `nlah/tools.md` (tool index) + `nlah/examples/*.md` (few-shot, OCSF-shaped) — packaged inside the importable wheel          | [`nlah/`](../../../packages/agents/cloud-posture/src/cloud_posture/nlah/)                                       |
-| **LLM provider plumbing** ([ADR-003](ADR-003-llm-provider-strategy.md), [ADR-006](ADR-006-openai-compatible-provider.md)) | Driver accepts `Optional[LLMProvider]`; agent-side adapter (`make_provider(LLMConfig)`) selects Anthropic / OpenAI / vLLM / Ollama from `NEXUS_LLM_*` env vars   | [`llm.py`](../../../packages/agents/cloud-posture/src/cloud_posture/llm.py)                                     |
-| **Eval shape**                                                                                                            | YAML cases with `fixture` (mocked tool outputs) + `expected` (finding count + per-severity counts); placeholder runner until F.2 eval-framework lands            | [`eval/`](../../../packages/agents/cloud-posture/eval/)                                                         |
-| **CLI surface**                                                                                                           | `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml` via `[project.scripts]` entry point                                                    | [`cli.py`](../../../packages/agents/cloud-posture/src/cloud_posture/cli.py)                                     |
-| **Test layout**                                                                                                           | `tests/test_*.py` for unit + `tests/integration/` for opt-in live tests gated by `NEXUS_LIVE_*` env vars                                                         | [`tests/`](../../../packages/agents/cloud-posture/tests/)                                                       |
-| **Smoke runbook**                                                                                                         | `runbooks/<environment>_smoke.md` with read-only-confirmation gate, contract-validate gate, CloudTrail review, failure protocol with regression-eval requirement | [`runbooks/aws_dev_account_smoke.md`](../../../packages/agents/cloud-posture/runbooks/aws_dev_account_smoke.md) |
+| Pattern                                                                                                                   | Reference implementation                                                                                                                                                    | Lives in                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Charter-wrapped invocation**                                                                                            | `with Charter(contract, tools=registry) as ctx: ...` (or async variant)                                                                                                     | [`agent.py`](../../../packages/agents/cloud-posture/src/cloud_posture/agent.py)                                 |
+| **Async tool wrappers** ([ADR-005](ADR-005-async-tool-wrapper-convention.md))                                             | `asyncio.create_subprocess_exec` for binaries; `asyncio.to_thread(boto3...)` for sync SDKs; `httpx.AsyncClient` for HTTP                                                    | [`tools/`](../../../packages/agents/cloud-posture/src/cloud_posture/tools/)                                     |
+| **OCSF wire format** ([ADR-004](ADR-004-fabric-layer.md))                                                                 | `build_finding(...)` constructs OCSF v1.3 Compliance Finding (`class_uid 2003`); `CloudPostureFinding` is a typed accessor over the wrapped dict                            | [`schemas.py`](../../../packages/agents/cloud-posture/src/cloud_posture/schemas.py)                             |
+| **NexusEnvelope** (per finding)                                                                                           | `correlation_id`, `tenant_id`, `agent_id`, `nlah_version`, `model_pin`, `charter_invocation_id`                                                                             | [`shared.fabric.envelope`](../../../packages/shared/src/shared/fabric/envelope.py)                              |
+| **NLAH directory shape**                                                                                                  | `nlah/README.md` (canonical brain) + `nlah/tools.md` (tool index) + `nlah/examples/*.md` (few-shot, OCSF-shaped) — packaged inside the importable wheel                     | [`nlah/`](../../../packages/agents/cloud-posture/src/cloud_posture/nlah/)                                       |
+| **LLM provider plumbing** ([ADR-003](ADR-003-llm-provider-strategy.md), [ADR-006](ADR-006-openai-compatible-provider.md)) | Driver accepts `Optional[LLMProvider]`; the **shared** `make_provider(LLMConfig)` selects Anthropic / OpenAI / vLLM / Ollama from `NEXUS_LLM_*` env vars (per ADR-007 v1.1) | [`charter.llm_adapter`](../../../packages/charter/src/charter/llm_adapter.py)                                   |
+| **Eval shape**                                                                                                            | YAML cases with `fixture` (mocked tool outputs) + `expected` (finding count + per-severity counts); placeholder runner until F.2 eval-framework lands                       | [`eval/`](../../../packages/agents/cloud-posture/eval/)                                                         |
+| **CLI surface**                                                                                                           | `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml` via `[project.scripts]` entry point                                                               | [`cli.py`](../../../packages/agents/cloud-posture/src/cloud_posture/cli.py)                                     |
+| **Test layout**                                                                                                           | `tests/test_*.py` for unit + `tests/integration/` for opt-in live tests gated by `NEXUS_LIVE_*` env vars                                                                    | [`tests/`](../../../packages/agents/cloud-posture/tests/)                                                       |
+| **Smoke runbook**                                                                                                         | `runbooks/<environment>_smoke.md` with read-only-confirmation gate, contract-validate gate, CloudTrail review, failure protocol with regression-eval requirement            | [`runbooks/aws_dev_account_smoke.md`](../../../packages/agents/cloud-posture/runbooks/aws_dev_account_smoke.md) |
 
 ## Why Cloud Posture and not the alternatives
 
@@ -97,3 +97,56 @@ The Cloud Posture agent is canonical for these patterns. Other agents diverge on
   - [ADR-006 — OpenAI-compatible provider](ADR-006-openai-compatible-provider.md)
 - Build roadmap: [`docs/superpowers/plans/2026-05-08-build-roadmap.md`](../../superpowers/plans/2026-05-08-build-roadmap.md)
 - System readiness snapshot: [`docs/_meta/system-readiness.md`](../system-readiness.md)
+
+---
+
+## v1.1 amendment (2026-05-11) — LLM-adapter hoist
+
+### Trigger
+
+D.1 (Vulnerability Agent) was the first agent built to ADR-007 v1.0. Its [verification record](../d1-verification-2026-05-11.md) validated **10 of 10** patterns and surfaced **one** that needed amendment: the LLM provider plumbing.
+
+### What changed
+
+Cloud Posture's `cloud_posture/llm.py` and Vulnerability's `vulnerability/llm.py` were **byte-for-byte identical** modulo the docstring header (literally a 1-line diff). Nothing in the LLM-adapter logic is agent-specific — it reads `NEXUS_LLM_*` env vars and selects from {Anthropic, OpenAI, OpenAI-compatible, vLLM, Ollama}. Per-agent duplication had zero design value and would have grown to 18 copies as Track-D filled out.
+
+The amendment:
+
+1. **Hoist** the LLM adapter into `nexus-charter` as `charter.llm_adapter`. The module is now a peer of `charter.llm` (the Protocol), `charter.llm_anthropic` (Anthropic provider), `charter.llm_openai_compat` (OpenAI-compatible provider).
+2. **Delete** `cloud_posture/llm.py` and `vulnerability/llm.py`. Each agent's runtime code didn't import them in v0.1 anyway (deterministic flow).
+3. **Move** `test_llm.py` from each agent into a single canonical `packages/charter/tests/test_llm_adapter.py`. 19 tests cover the full surface; deleting the two per-agent copies removed 38 redundant tests.
+4. **Update the reference table above** — the LLM-provider-plumbing row now points at `charter.llm_adapter` instead of `cloud_posture/llm.py`.
+
+### Future agents
+
+All 18 agents (and any third-party agent built on Nexus) do:
+
+```python
+from charter.llm_adapter import LLMConfig, make_provider, config_from_env
+
+config = config_from_env()  # reads NEXUS_LLM_*
+provider = make_provider(config)
+# pass into agent.run(contract, llm_provider=provider, ...)
+```
+
+No per-agent `llm.py`. Any future divergence (e.g., a custom provider that no other agent needs) goes into a separate per-agent module rather than a copy of the adapter.
+
+### What this validates
+
+- **ADR-007 v1.0 was right at the policy level** (one canonical reference, others follow), even though one specific item was at the wrong **scope** (per-agent copy where shared was correct).
+- The risk-down review pattern works: D.1 caught this before D.2–D.13 multiplied the duplication. Amendment via a small charter PR before the next agent starts.
+- Future risk-down reviews (e.g., D.2's pattern check, A.4's Meta-Harness conformance review) follow the same shape — surface deltas, queue ADR amendments, land before the next agent.
+
+### Cross-package blast radius
+
+| Change                                             | Files affected                              |
+| -------------------------------------------------- | ------------------------------------------- |
+| New module `charter/llm_adapter.py`                | 1 file (~165 LOC, copy with updated doc)    |
+| Canonical test `charter/tests/test_llm_adapter.py` | 1 file (19 tests; from cloud-posture)       |
+| Deleted `cloud_posture/llm.py`                     | -1 file                                     |
+| Deleted `vulnerability/llm.py`                     | -1 file                                     |
+| Deleted `cloud_posture/tests/test_llm.py`          | -1 file                                     |
+| Deleted `vulnerability/tests/test_llm.py`          | -1 file                                     |
+| Net source LOC                                     | ~unchanged (1 canonical file replaces 2)    |
+| Net test LOC                                       | -1 redundant copy                           |
+| Repo tests after amendment                         | 459 passed / 5 skipped (was 478; -19 dupes) |

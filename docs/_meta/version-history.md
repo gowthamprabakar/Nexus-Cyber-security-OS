@@ -78,3 +78,5 @@
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 16: final verification — 6/6 gates green; 96.84% cov; **ADR-007 validated 10/10** with 1 amendment queued   | D.1       |
 | 2026-05-11 | docs/\_meta    | —       | d1-verification-2026-05-11.md — D.1 accepted as code-complete; ADR-007 conformance review                            | D.1       |
 | 2026-05-11 | docs/\_meta    | —       | system-readiness re-issued (2026-05-11): 478 tests, weighted Wiz ~10–12%, 2 of 18 agents shipped, ADR-007 validated  | D.1       |
+| 2026-05-11 | charter        | 0.1.0   | ADR-007 v1.1 amendment — `charter.llm_adapter` hoisted from per-agent `llm.py` copies; 19 canonical tests            | ADR-007   |
+| 2026-05-11 | docs/decisions | —       | ADR-007 v1.1 — LLM-adapter hoist (per-agent `llm.py` deleted; charter is the canonical home)                         | ADR-007   |

@@ -1,18 +1,18 @@
-"""Tests for vulnerability.llm — LLMConfig + make_provider + config_from_env."""
+"""Tests for `charter.llm_adapter` — LLMConfig + make_provider + config_from_env."""
 
 from __future__ import annotations
 
 import pytest
 from charter.llm import LLMProvider, ModelTier
-from charter.llm_anthropic import AnthropicProvider
-from charter.llm_openai_compat import OpenAICompatibleProvider
-from vulnerability.llm import (
+from charter.llm_adapter import (
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_VLLM_BASE_URL,
     LLMConfig,
     config_from_env,
     make_provider,
 )
+from charter.llm_anthropic import AnthropicProvider
+from charter.llm_openai_compat import OpenAICompatibleProvider
 
 # ---------------------- make_provider: per-provider tests --------------------
 
