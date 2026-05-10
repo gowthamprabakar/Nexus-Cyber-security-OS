@@ -50,3 +50,4 @@
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 8: `diff_results` ComparisonReport — newly_failing/passing + dropped/added markers; 13 new tests            | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 9: `Gate` + `apply_gate` — pass-rate, regression-vs-baseline, token-delta, p95 duration; 15 new tests       | F.2       |
 | 2026-05-10 | docs/\_meta    | —       | platform-completion-report-2026-05-10.md — vision-aligned, roadmap-anchored end-of-day completion snapshot           | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 10: markdown renderers (suite + comparison + gate); auditor-readable; 19 new tests                          | F.2       |
