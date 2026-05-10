@@ -42,7 +42,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 12   | ✅ done | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
 | 13   | ✅ done | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
 | 14   | ✅ done | `484e272` | AWS dev-account smoke runbook (uses `cloud-posture run --contract`; live-tested gates)    |
-| 15   | ✅ done | (see TBD) | README + ADR-007 (Cloud Posture as the reference NLAH; 10 template patterns codified)     |
+| 15   | ✅ done | `82dbd55` | README + ADR-007 (Cloud Posture as the reference NLAH; 10 template patterns codified)     |
 
 ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
