@@ -39,7 +39,7 @@
 | 13   | ✅ done | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner     |
 | 14   | ✅ done | `6268b64` | cloud-posture migrated to framework; entry-point registered; `_eval_local` + `test_eval_local` deleted |
 | 15   | ✅ done | `faf0049` | README + ADR-008 — eval-framework architecture; Apache 2.0 sister of charter; substrate-not-policy     |
-| 16   | ✅ done | _next_    | Final verification — all 6 gates green; 94.93% cov; 16/16 tasks; **F.2 accepted as code-complete**     |
+| 16   | ✅ done | `9712ae7` | Final verification — all 6 gates green; 94.93% cov; 16/16 tasks; **F.2 accepted as code-complete**     |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) (Apache 2.0 split), [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) (cross-provider parity gate), [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) (async-by-default), [ADR-007](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) (template patterns the runner follows).
 
