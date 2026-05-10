@@ -46,3 +46,4 @@
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 4: EvalRunner Protocol (@runtime_checkable) + FakeRunner test double; 8 tests                               | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 5: async `run_suite()` — per-case workspace + per-case timeout + ULID suite_id; 18 new tests                | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 6: `build_trace_from_audit_log` — paired LLM calls + chain-valid via charter verifier; 12 new tests         | F.2       |
+| 2026-05-10 | cloud-posture  | 0.1.0   | F.2 Task 7: `CloudPostureEvalRunner` — Protocol impl over agent.run; 10/10 shipped cases pass via `run_suite`        | F.2       |
