@@ -62,3 +62,4 @@
 | 2026-05-10 | docs/plans     | —       | D.1 Vulnerability Agent plan written (16 tasks); ADR-007 risk-down test for the reference template                   | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 1: bootstrap package skeleton (pyproject, BSL, py.typed, README stub, smoke test)                           | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 2: OCSF v1.3 Vulnerability Finding schema (class_uid 2002) + envelope wrapper; 19 tests                     | D.1       |
+| 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 3: `trivy_image_scan` async subprocess wrapper per ADR-005; 9 tests                                         | D.1       |
