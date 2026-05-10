@@ -12,6 +12,7 @@ The Protocol is `@runtime_checkable` so callers / tests can do
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -62,6 +63,7 @@ class _QueuedResponse:
     failure_reason: str | None
     actuals: dict[str, Any]
     audit_log_path: Path | None
+    delay_sec: float = 0.0
 
 
 @dataclass
@@ -88,12 +90,14 @@ class FakeRunner:
         failure_reason: str | None = None,
         actuals: dict[str, Any] | None = None,
         audit_log_path: Path | None = None,
+        delay_sec: float = 0.0,
     ) -> None:
         self._queue[case_id] = _QueuedResponse(
             passed=passed,
             failure_reason=failure_reason,
             actuals=dict(actuals or {}),
             audit_log_path=audit_log_path,
+            delay_sec=delay_sec,
         )
 
     async def run(
@@ -107,6 +111,8 @@ class FakeRunner:
         self.calls.append(case)
         if case.case_id in self._queue:
             r = self._queue[case.case_id]
+            if r.delay_sec > 0.0:
+                await asyncio.sleep(r.delay_sec)
             return r.passed, r.failure_reason, dict(r.actuals), r.audit_log_path
         if self.default_passed:
             return True, None, {}, None

@@ -93,3 +93,17 @@ async def test_queued_response_with_audit_log_path(tmp_path: Path) -> None:
 
     _passed, _, _, audit_path = await runner.run(_case("001"), workspace=tmp_path)
     assert audit_path == audit
+
+
+@pytest.mark.asyncio
+async def test_queued_response_with_delay(tmp_path: Path) -> None:
+    """`delay_sec` lets timeout tests exercise the wait_for path."""
+    import time
+
+    runner = FakeRunner()
+    runner.queue("001", passed=True, delay_sec=0.05)
+
+    started = time.perf_counter()
+    await runner.run(_case("001"), workspace=tmp_path)
+    elapsed = time.perf_counter() - started
+    assert elapsed >= 0.04  # leave slack for scheduling jitter
