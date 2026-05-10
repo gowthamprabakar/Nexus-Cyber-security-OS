@@ -71,7 +71,7 @@
 | 3    | ✅ done    | `e54962c` | Auth0 management-API client (httpx + tenacity + token cache); 10 respx tests; retry on 429/5xx                         |
 | 4    | ✅ done    | `52f709b` | JWT verifier (RS256 + JWKS cache); 11 respx tests; **Q2 resolved** (Auth0 namespaced custom claims)                    |
 | 5    | ✅ done    | `c1f2b81` | Tenant resolver — first-login provisioning + suspended-tenant reject; 8 aiosqlite tests                                |
-| 6    | ⬜ pending | —         | RBAC — `Role` enum + `permission_for(role, action)` table; admin/operator/auditor scoping                              |
+| 6    | ✅ done    | `90d176b` | RBAC table — 3 roles × 7 actions; 27 tests; **Q3 resolved** (hard-coded; DB-backed deferred to Phase 1c)               |
 | 7    | ⬜ pending | —         | SCIM 2.0 endpoint — POST /Users + PATCH /Users/{id} + DELETE /Users/{id}; HMAC-signed Auth0 webhook                    |
 | 8    | ⬜ pending | —         | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |
 | 9    | ⬜ pending | —         | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
@@ -295,10 +295,12 @@ def permission_for(role: Role, action: Action) -> bool:
     return action in _PERMISSIONS[role]
 ```
 
-- [ ] **Step 1: Write failing tests** — every role × every action permitted/forbidden as expected; admin has all; auditor has only READ_FINDINGS.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 12 tests (matrix test parametrized).
-- [ ] **Step 4: Commit** — `feat(control-plane): rbac with three roles + permission table (F.4 task 6)`.
+- [x] **Step 1: Write failing tests** — full role × action matrix parametrized.
+- [x] **Step 2: Implement** with hard-coded `_PERMISSIONS` table (Phase 1 — DB-backed deferred to 1c).
+- [x] **Step 3: Tests pass** — 27/27 (21 matrix entries + 6 invariants).
+- [x] **Step 4: Commit** — `90d176b feat(d2,f4): permission-path resolver + rbac table (D.2 + F.4 task 6)`. Bundled with D.2 Task 6.
+
+**Q3 resolved**: hard-coded RBAC for Phase 1; DB-backed roles deferred to Phase 1c. The migration is a one-shot dump of the dict, so we lose nothing by deferring.
 
 ---
 

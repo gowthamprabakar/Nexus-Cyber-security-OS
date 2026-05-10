@@ -71,7 +71,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 3    | ✅ done    | `e54962c` | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination); 11 tests via moto                    |
 | 4    | ✅ done    | `52f709b` | `aws_iam_simulate_principal_policy` — batches actions in chunks of 50; 8 tests via stubbed `boto3.Session`       |
 | 5    | ✅ done    | `c1f2b81` | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
-| 6    | ⬜ pending | —         | `permission_path_resolver` (custom, deterministic) — flatten managed + inline policies into effective grants     |
+| 6    | ✅ done    | `90d176b` | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
 | 7    | ⬜ pending | —         | Findings normalizer — overprivilege + dormant + external-access → OCSF Identity Finding                          |
 | 8    | ⬜ pending | —         | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)            |
 | 9    | ⬜ pending | —         | NLAH (README + tools.md + 2 OCSF examples + loader)                                                              |
@@ -287,10 +287,12 @@ class EffectiveGrant:
     is_admin: bool                         # `*:*` or `iam:*` etc.
 ```
 
-- [ ] **Step 1: Write failing tests** — single principal + managed policy → expected grants; permission boundary subtraction; group-membership transitivity; `Deny` overrides `Allow`; admin classification.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 12 tests (this is the most-tested module).
-- [ ] **Step 4: Commit** — `feat(identity): permission path resolver (D.2 task 6)`.
+- [x] **Step 1: Write failing tests** — covers decision-effect mapping, admin classification matrix, multi-principal grouping, source-policy attribution, and shape invariants.
+- [x] **Step 2: Implement** as a pure-Python transformation over simulator output (boundary subtraction is implicit because the simulator pre-applies it).
+- [x] **Step 3: Tests pass** — 22/22.
+- [x] **Step 4: Commit** — `90d176b feat(d2,f4): permission-path resolver + rbac table (D.2 + F.4 task 6)`. Bundled with F.4 Task 6.
+
+**Q3 resolved**: Phase 1 cap is users/roles/groups + managed/inline + permission boundaries. SCPs and IAM `Condition` evaluation deferred to Phase 2.
 
 ---
 
