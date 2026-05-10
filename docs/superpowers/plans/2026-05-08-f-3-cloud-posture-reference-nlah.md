@@ -43,8 +43,11 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 13   | ✅ done | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
 | 14   | ✅ done | `484e272` | AWS dev-account smoke runbook (uses `cloud-posture run --contract`; live-tested gates)    |
 | 15   | ✅ done | `82dbd55` | README + ADR-007 (Cloud Posture as the reference NLAH; 10 template patterns codified)     |
+| 16   | ✅ done | this run  | Final verification — 4/6 gates green; 2 gates deferred for env / scope, not failed        |
 
-ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
+**🎉 F.3 — accepted as code-complete on 2026-05-10.** See [`docs/_meta/f3-verification-2026-05-10.md`](../../_meta/f3-verification-2026-05-10.md) for the gate-by-gate record.
+
+ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md), [ADR-006 OpenAI-compatible provider](../../_meta/decisions/ADR-006-openai-compatible-provider.md), [ADR-007 Cloud Posture as the reference agent](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md).
 
 ---
 
