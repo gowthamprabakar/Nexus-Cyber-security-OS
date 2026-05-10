@@ -40,7 +40,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 10   | ✅ done    | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
 | 11   | ✅ done    | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
 | 12   | ✅ done    | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
-| 13   | ⬜ pending | —         | CLI                                                                                       |
+| 13   | ✅ done    | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
 | 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                             |
 | 15   | ⬜ pending | —         | README + ADR                                                                              |
 
@@ -2796,7 +2796,25 @@ git commit -m "feat(cloud-posture): minimal local eval runner + 10 representativ
 
 ---
 
-### Task 13: CLI
+### Task 13: CLI — ✅ DONE (`6b4b170`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Two subcommands instead of one.** Plan ships only `eval`. As shipped: `eval CASES_DIR` + `run --contract path.yaml [--aws-account-id ...] [--aws-region ...]`. The `run` subcommand makes Task 14's smoke runbook executable as `uv run cloud-posture run --contract <path>` rather than driving the agent through ad-hoc Python.
+- **`--version` wired** via `click.version_option(__version__)` so deployments can identify the binary.
+- **`run` uses `asyncio.run(agent_run(...))`** to bridge the async driver into the sync Click handler. Same pattern as the eval runner.
+- **`run` deliberately doesn't plumb LLM / Neo4j.** v0.1 Cloud Posture is deterministic; users who want KG persistence go through the agent library API. Documented in the docstring.
+- **Eval failure output includes `actual_counts`** so failures are diagnosable from the CLI without re-running. `FAIL 002_fail: finding_count expected 0, got 1 (actual={'critical': 0, 'high': 1, ...})`.
+- **7 unit tests** through Click's `CliRunner`: --help lists subcommands, --version prints, eval passes on clean case, eval exits non-zero on failure, eval rejects missing dir, eval handles empty dir, eval runs all shipped cases.
+
+**Live smoke:**
+
+```
+$ uv run cloud-posture --version
+cloud-posture, version 0.1.0
+$ uv run cloud-posture eval packages/agents/cloud-posture/eval/cases
+10/10 passed
+```
 
 **Files:** Create `cli.py`, `tests/test_cli.py`
 
