@@ -2,7 +2,7 @@
 
 |                    |                                                                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Snapshot date**  | 2026-05-10                                                                                                                               |
+| **Snapshot date**  | 2026-05-10 (end of day — F.2 closeout)                                                                                                   |
 | **Phase position** | Phase 1a (Foundation), Week ~2 of 12                                                                                                     |
 | **Audience**       | Engineering, founders, design partners' security teams                                                                                   |
 | **Purpose**        | Honest assessment of what's built, what's not, and what's needed before any external commitment                                          |
@@ -13,29 +13,46 @@
 
 ## TL;DR
 
-**Foundation just got real.** Yesterday Cloud Posture had four tool wrappers and an OCSF schema; today it's a runnable, end-to-end agent — the **template the other 17 agents follow** ([ADR-007](decisions/ADR-007-cloud-posture-as-reference-agent.md)). It scans, emits OCSF v1.3 findings + a markdown summary, persists to a hash-chained audit log, and verifies clean end-to-end. The CLI ships. The eval suite passes 10/10. Live `qwen3:4b` round-trips through the provider abstraction in 17.67s. F.3 is **code-complete** as of today ([verification record](f3-verification-2026-05-10.md)).
+**Two foundations now real.** This morning we marked F.3 (Cloud Posture reference agent) code-complete. End-of-day, F.2 (Eval Framework v0.1) joined it: 16 of 16 tasks done, 6 of 6 verification gates green, 94.93% coverage, ADR-008 accepted ([verification record](f2-verification-2026-05-10.md)). The Apache 2.0 OSS pair (charter + eval-framework) is now ready to release alongside each other per [ADR-001](decisions/ADR-001-monorepo-bootstrap.md) when [O.6](../superpowers/plans/2026-05-08-build-roadmap.md) ships. **Cross-provider parity (ADR-003) is no longer aspirational** — `run_across_providers` + `diff_results` is the substrate today.
 
-**What's still the same:** the platform is **not** ready for paying customers, edge deployment, vertical content packs, multi-cloud, ChatOps, remediation, self-evolution, or "85% Wiz" coverage claims. None of those are deficiencies — they're scheduled work for Phase 1a's remaining tracks (F.2 eval, F.4 auth, F.5 memory, F.6 audit) and Phase 1b/1c.
+**What's still the same:** the platform is **not** ready for paying customers, edge deployment, vertical content packs, multi-cloud, ChatOps, remediation, self-evolution, or "85% Wiz" coverage claims. None of those are deficiencies — they're scheduled work for Phase 1a's remaining tracks (F.4 auth, F.5 memory, F.6 audit) and Phase 1b/1c.
 
-**Coverage against Wiz today:** ~6.7% on the user-weighted capability framework, up from ~1.25% yesterday. The jump is concentrated in CSPM (one agent of 18 → ~30% of the CSPM weight, which is the largest weight at 0.20).
+**Coverage against Wiz today:** ~6.7% on the user-weighted capability framework, unchanged from this morning (F.2 extends substrate, not customer-visible detection). The eval substrate compounds future progress — every Track-D agent ships through the same case-schema → runner → suite → comparison → gate flow, with a one-line `pyproject.toml` entry-point change.
 
-**Recommendation:** still don't show this to a paying prospect. **Now suitable** to demo end-to-end to a design partner who has signed an LOI: `cloud-posture run --contract` produces real OCSF findings + a summary + a verifiable audit chain, with the runbook explaining how to run it against their dev account.
+**Recommendation:** still don't show this to a paying prospect. **Suitable** to demo end-to-end to a design partner who has signed an LOI. **Newly suitable** for a published-today OSS announcement of the Apache 2.0 charter + eval-framework pair (gated only by O.6 hardening and a tag).
 
 ---
 
-## What changed since 2026-05-09
+## What changed since the morning snapshot (2026-05-10 AM)
 
-|                                 | Yesterday (2026-05-09) |                                                          Today (2026-05-10) |
-| ------------------------------- | ---------------------: | --------------------------------------------------------------------------: |
-| **F.3 tasks shipped**           |                9 of 16 |                                     **20 of 20** (16 numbered + 4 inserted) |
-| **Total tests passing**         |                    110 |                                               **203 (+ 5 skipped, opt-in)** |
-| **Cloud-posture coverage**      |       n/a (incomplete) |                                                                  **96.09%** |
-| **Source files (mypy strict)**  |                     28 |                                                                      **37** |
-| **Total Python LOC (monorepo)** |                  2,851 |                                                                   **6,679** |
-| **ADRs in force**               |                      5 |            **7** (added ADR-006 OpenAI-compatible, ADR-007 reference agent) |
-| **Commits this session**        |                     11 |                                                                      **36** |
-| **Live LLM round-trip proven**  |                     No | **Yes** — `qwen3:4b` via Ollama, 17.67s incl. audit emission inside Charter |
-| **Weighted Wiz coverage**       |                 ~1.25% |                                                                   **~6.7%** |
+|                                 | Morning (F.3 closeout) |                                       End of day (F.2 closeout) |
+| ------------------------------- | ---------------------: | --------------------------------------------------------------: |
+| **F.2 tasks shipped**           |                0 of 16 |                                                    **16 of 16** |
+| **F.3 tasks shipped**           |               20 of 20 |                                                        20 of 20 |
+| **Total tests passing**         |                    203 |                                   **348** (+ 5 skipped, opt-in) |
+| **Cloud-posture coverage**      |                 96.09% |                                                          96.09% |
+| **Eval-framework coverage**     |                    n/a |                                                      **94.93%** |
+| **Source files (mypy strict)**  |                     37 |                                                          **57** |
+| **Total Python LOC (monorepo)** |                  6,679 |                                                       **9,334** |
+| **ADRs in force**               |                      7 |                            **8** (added ADR-008 eval-framework) |
+| **Commits this session**        |                     36 |                                                          **89** |
+| **OSS-pair shipping ready**     |           Charter only |               **Charter + eval-framework** (gated by O.6 + tag) |
+| **Cross-provider parity gate**  |           Aspirational | **Buildable today** via `run_across_providers` + `diff_results` |
+| **Weighted Wiz coverage**       |                  ~6.7% |                                                           ~6.7% |
+
+## What changed since 2026-05-09 (yesterday)
+
+|                                 | Yesterday (2026-05-09) |                                                                       Today (2026-05-10) |
+| ------------------------------- | ---------------------: | ---------------------------------------------------------------------------------------: |
+| **F.3 tasks shipped**           |                9 of 16 |                                                  **20 of 20** (16 numbered + 4 inserted) |
+| **F.2 tasks shipped**           |                      0 |                                                                             **16 of 16** |
+| **Total tests passing**         |                    110 |                                                            **348 (+ 5 skipped, opt-in)** |
+| **Source files (mypy strict)**  |                     28 |                                                                                   **57** |
+| **Total Python LOC (monorepo)** |                  2,851 |                                                                                **9,334** |
+| **ADRs in force**               |                      5 | **8** (added ADR-006 OpenAI-compatible, ADR-007 reference agent, ADR-008 eval-framework) |
+| **Commits this session**        |                     11 |                                                                                   **89** |
+| **Live LLM round-trip proven**  |                     No |              **Yes** — `qwen3:4b` via Ollama, 17.67s incl. audit emission inside Charter |
+| **Weighted Wiz coverage**       |                 ~1.25% |                                                                                **~6.7%** |
 
 ---
 
@@ -125,7 +142,7 @@ The honest list. Each item maps to a sub-plan in [`build-roadmap.md`](../superpo
 - **ChatOps approval flows** — S.3, Phase 1b.
 - **Three-tier remediation** — A.1 → A.2 → A.3, Phase 1b → 1c.
 - **Self-evolution / Meta-Harness Agent** — A.4, Phase 1c.
-- **Eval framework (F.2)** — `packages/eval-framework/` is still skeleton. Cloud Posture has a placeholder runner ([`_eval_local.py`](../../packages/agents/cloud-posture/src/cloud_posture/_eval_local.py)) that gets extracted when F.2 ships. **F.2 is the most-leveraged next move** — without it Meta-Harness has no landing pad and cross-provider eval-parity ([ADR-003](decisions/ADR-003-llm-provider-strategy.md)) has no gate.
+- ~~**Eval framework (F.2)**~~ — **shipped** end of day 2026-05-10. 16/16 tasks; 6/6 verification gates green; 146 tests; 94.93% coverage; ADR-008 accepted; cloud-posture migrated off `_eval_local`. See [`docs/_meta/f2-verification-2026-05-10.md`](f2-verification-2026-05-10.md).
 - **Vertical content packs** — empty `packages/content-packs/{healthcare,tech,generic}/`. Phase 1b/1c.
 - **NATS JetStream client + cluster** — fabric scaffolding (5.5) ships only the schema and the IDs; no broker connection, no consumer groups. Phase 1b (E.2 expansion).
 - **Multi-cloud** — AWS only. Azure: D.\* Phase 2. GCP: deferred per PRD.
@@ -139,7 +156,7 @@ The honest list. Each item maps to a sub-plan in [`build-roadmap.md`](../superpo
 | Gate                                              |        Ready?         | Why / why not                                                                                                                                                                                                                                               |
 | ------------------------------------------------- | :-------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Show the runtime charter to a partner             |        🟢 yes         | F.1 ships; hello-world proves the pipeline; 50+ tests pass.                                                                                                                                                                                                 |
-| Open-source the charter package                   |        🟡 soon        | Apache 2.0 license in place. Defer until F.2 (eval-framework) is ready to release alongside per ADR-001.                                                                                                                                                    |
+| Open-source the charter package                   |     🟢 unblocked      | Apache 2.0 license in place. **F.2 eval-framework also code-complete** — the OSS pair can release together per [ADR-001](decisions/ADR-001-monorepo-bootstrap.md). Final blocker is now O.6 (tag + contribution guide + code of conduct).                   |
 | **Run a single agent against a real AWS account** | 🟡 **operator-ready** | **Was 🔴 yesterday. Now: agent driver works, CLI ships, runbook is documented and live-tested up to the documented Prowler-binary gate. Only blockers are operator-side (AWS read-only creds + `pipx install prowler` + docker for LocalStack pre-check).** |
 | Stand up an edge agent in a customer cluster      |         🔴 no         | `packages/edge/` is empty. Phase 1b.                                                                                                                                                                                                                        |
 | Sell to a paying customer                         |         🔴 no         | Phase 1 success criteria require all 18 agents + SOC 2 Type I + edge. M9–M12.                                                                                                                                                                               |
@@ -161,7 +178,7 @@ The honest list. Each item maps to a sub-plan in [`build-roadmap.md`](../superpo
 
 5. **Operations debt under-resourced for Phase 1** — unchanged. 3 stateful systems × 2 planes = 6 DBs to operate (TimescaleDB, PostgreSQL, Neo4j on each side). For 8 engineers serving 5–8 design partners, this is a lot of moving parts. Mitigation candidate: defer Neo4j until graph queries are demonstrated necessary; collapse to PostgreSQL + JSONB + pgvector for Phase 1a.
 
-6. **Vendor concentration on Anthropic for production traffic** — partially retired. ADR-006 names the abstraction; the live-tested seam now means a fallback to OpenAI / vLLM / Ollama is a config change, not a rebuild. **Remaining gap:** no agent has actually been pinned to a non-Anthropic provider in CI yet. Eval parity gate (F.2) is the missing piece.
+6. **Vendor concentration on Anthropic for production traffic** — **further retired**. ADR-006 abstracted the call site; ADR-008 + F.2's `run_across_providers` is the parity-gate substrate. The Anthropic ↔ Ollama ↔ vLLM ↔ OpenAI swap is a config change with a measurable gate. **Remaining gap:** no agent has actually been pinned to a non-Anthropic provider in CI yet — but the gate that would block a regression now exists.
 
 7. **Husky pre-commit hooks deprecated** — unchanged. Cosmetic today; will fail in husky v10. Schedule before next husky upgrade.
 
@@ -169,33 +186,33 @@ The honest list. Each item maps to a sub-plan in [`build-roadmap.md`](../superpo
 
 ## Recommended next 4–6 weeks
 
-In dependency order:
+In dependency order. F.2 is now retired from this list — it shipped end-of-day 2026-05-10.
 
-1. **F.2 Eval Framework v0.1.** The most-leveraged next move. Extracts the placeholder runner from `cloud_posture._eval_local`. Without it, Meta-Harness has no landing pad and cross-provider eval-parity has no gate. ~3 weeks. Apache 2.0 — releases alongside the charter as the first OSS package per ADR-001.
+1. **F.4 Auth + tenant manager.** Auth0 SSO, SCIM, RBAC, MFA. Parallel-safe with F.5. ~3 weeks. **Highest leverage now** — every Track-D agent eventually needs tenant-scoped auth; lands the SOC 2 Type I starting condition.
 
-2. **F.4 Auth + tenant manager.** Auth0 SSO, SCIM, RBAC, MFA. Parallel-safe with F.2 / F.3 / F.5. ~3 weeks.
+2. **F.5 Memory engines integration.** TimescaleDB (episodic) + PostgreSQL (procedural) + Neo4j Aura (semantic). Per-tenant workspace pattern enforced. ~3 weeks. Could be reduced to PostgreSQL + JSONB + pgvector for Phase 1a per risk #5.
 
-3. **F.5 Memory engines integration.** TimescaleDB (episodic) + PostgreSQL (procedural) + Neo4j Aura (semantic). Per-tenant workspace pattern enforced. ~3 weeks. Could be reduced to PostgreSQL + JSONB + pgvector for Phase 1a per risk #5.
+3. **F.6 Audit Agent (#14).** Append-only hash-chained log writer at the _platform_ level (not just per-invocation). Builds on the charter audit primitive that F.3 just verified. ~2 weeks.
 
-4. **F.6 Audit Agent (#14).** Append-only hash-chained log writer at the _platform_ level (not just per-invocation). Builds on the charter audit primitive that F.3 just verified. ~2 weeks.
+4. **D.1 Vulnerability Agent.** First agent built to the Cloud Posture template. **Risk-down moment** for [ADR-007](decisions/ADR-007-cloud-posture-as-reference-agent.md) — tests whether the 10 patterns generalize. ~4 weeks. Now also exercises the new eval-framework pipeline: registers a new runner via the `nexus_eval_runners` entry-point group and wires its eval cases through `eval-framework run / compare / gate`.
 
-5. **D.1 Vulnerability Agent.** First agent built to the Cloud Posture template. Tests whether [ADR-007](decisions/ADR-007-cloud-posture-as-reference-agent.md)'s 10 patterns generalize as advertised. The validation that the reference choice was right. ~4 weeks.
+5. **P0.7 spike — Anthropic budget enforcement at customer level.** Foundation for the per-tenant aggregator missing from the charter. ~1 week.
 
-6. **P0.7 spike — Anthropic budget enforcement at customer level.** Foundation for the per-tenant aggregator missing from the charter. ~1 week.
+6. **P0.10 (new sub-plan) — JetStream cluster + leaf-node + first consumer.** Validates ADR-004 before edge plane work begins. ~2 weeks.
 
-7. **P0.10 (new sub-plan) — JetStream cluster + leaf-node + first consumer.** Validates ADR-004 before edge plane work begins. ~2 weeks.
+7. **O.6 OSS releases.** Apache 2.0 charter + eval-framework can now ship together. Tag, push to public GitHub, contribution guide, code of conduct. ~2 weeks. **Newly unblocked today** — before F.2 closeout, this couldn't ship.
 
-8. **First design-partner LOI conversion.** Now demo-able end-to-end via the smoke runbook. Calendar-bounded by external negotiation; not engineering-bounded.
+8. **First design-partner LOI conversion.** Demo-able end-to-end via the smoke runbook. Calendar-bounded by external negotiation; not engineering-bounded.
 
 ---
 
 ## Looking forward — the next 3 months
 
-| Month            | Outcome                                                                                                                                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M2 (current)** | F.3 done ✅. F.2 eval-framework v0.1 ships. F.4 auth lands. F.5 memory engines wired. **Phase 1a hits the half-way mark.** Capability coverage moves from ~6.7% → ~12% as the second agent (Vulnerability or Identity) lands to template. |
-| M3               | F.6 Audit Agent. D.1 Vulnerability + D.2 Identity in dev. **Phase 1a exit gate** — multi-agent reasoning, eval framework gating NLAH changes, auth in place, memory engines flowing.                                                      |
-| M4               | First detection-breadth agents in dev (D.1–D.6). First edge agent prototype (E.1) running in a Helm dry-run. Capability coverage ~25%.                                                                                                    |
+| Month            | Outcome                                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M2 (current)** | F.3 done ✅. F.2 done ✅. F.4 auth lands. F.5 memory engines wired. F.6 audit agent in dev. **Phase 1a hits the half-way mark.** Capability coverage moves from ~6.7% → ~12% as the second agent (Vulnerability or Identity) lands to template. |
+| M3               | F.6 Audit Agent. D.1 Vulnerability + D.2 Identity in dev. **Phase 1a exit gate** — multi-agent reasoning, eval framework gating NLAH changes, auth in place, memory engines flowing.                                                            |
+| M4               | First detection-breadth agents in dev (D.1–D.6). First edge agent prototype (E.1) running in a Helm dry-run. Capability coverage ~25%.                                                                                                          |
 
 ---
 
@@ -218,6 +235,7 @@ This is the project's mirror. Keep it accurate.
 ## Historical snapshots
 
 - [system-readiness-2026-05-09.md](system-readiness-2026-05-09.md) — Phase 1a Week 2 baseline (110 tests, 9/16 F.3 tasks shipped, ~1.25% weighted Wiz coverage)
+- this file's morning revision (F.3-closeout) is preserved in git history at commit `b539150`; reachable via `git show b539150:docs/_meta/system-readiness.md`
 
 ---
 
