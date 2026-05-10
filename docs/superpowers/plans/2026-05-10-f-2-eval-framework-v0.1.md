@@ -37,7 +37,7 @@
 | 11   | ✅ done    | `7aa44aa` | JSON output — `suite_to_json` / `from_json` + comparison; round-trip equality; 13 new tests            |
 | 12   | ✅ done    | `d756f09` | `run_across_providers` — multi-provider parity per ADR-003; drift surfaces via diff_results; 7 tests   |
 | 13   | ✅ done    | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner     |
-| 14   | ✅ done    | _next_    | cloud-posture migrated to framework; entry-point registered; `_eval_local` + `test_eval_local` deleted |
+| 14   | ✅ done    | `6268b64` | cloud-posture migrated to framework; entry-point registered; `_eval_local` + `test_eval_local` deleted |
 | 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                                         |
 | 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                                         |
 
