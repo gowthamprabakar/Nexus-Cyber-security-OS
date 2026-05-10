@@ -1,0 +1,12 @@
+case_id: 002_iam_user_admin_no_mfa
+description: Console-enabled user without MFA should produce one high-severity finding
+fixture:
+  prowler_findings: []
+  iam_users_without_mfa: [bob]
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 1
+    medium: 0

@@ -1,0 +1,20 @@
+case_id: 007_kms_key_no_rotation
+description: KMS customer-managed key without rotation → one medium finding
+fixture:
+  prowler_findings:
+    - CheckID: kms_cmk_rotation_enabled
+      Severity: medium
+      Status: FAIL
+      ResourceArn: arn:aws:kms:us-east-1:111122223333:key/abc-123
+      ResourceType: AwsKmsKey
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'KMS CMK abc-123 does not have rotation enabled'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 0
+    medium: 1

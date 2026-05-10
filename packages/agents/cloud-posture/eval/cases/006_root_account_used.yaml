@@ -1,0 +1,19 @@
+case_id: 006_root_account_used
+description: Root account used in last 30d without MFA → one critical finding
+fixture:
+  prowler_findings:
+    - CheckID: iam_root_no_mfa
+      Severity: critical
+      Status: FAIL
+      ResourceArn: arn:aws:iam::111122223333:root
+      ResourceType: AwsIamUser
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'Root account used recently without MFA'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 1
+    high: 0

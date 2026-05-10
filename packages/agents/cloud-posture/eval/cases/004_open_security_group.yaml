@@ -1,0 +1,19 @@
+case_id: 004_open_security_group
+description: Security group allowing 0.0.0.0/0 on port 22 → one critical finding
+fixture:
+  prowler_findings:
+    - CheckID: ec2_securitygroup_allow_ingress_from_internet_to_port_22
+      Severity: critical
+      Status: FAIL
+      ResourceArn: arn:aws:ec2:us-east-1:111122223333:security-group/sg-abc
+      ResourceType: AwsEc2SecurityGroup
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'SG sg-abc opens 22/tcp to 0.0.0.0/0'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 1
+    high: 0

@@ -1,0 +1,19 @@
+case_id: 009_public_rds_snapshot
+description: RDS snapshot shared with all AWS accounts → one critical finding
+fixture:
+  prowler_findings:
+    - CheckID: rds_snapshots_public_access
+      Severity: critical
+      Status: FAIL
+      ResourceArn: arn:aws:rds:us-east-1:111122223333:snapshot:public-snap
+      ResourceType: AwsRdsDbSnapshot
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'Snapshot public-snap is shared with all AWS accounts'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 1
+    high: 0

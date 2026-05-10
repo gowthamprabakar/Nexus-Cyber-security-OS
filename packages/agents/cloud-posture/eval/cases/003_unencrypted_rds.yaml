@@ -1,0 +1,19 @@
+case_id: 003_unencrypted_rds
+description: Unencrypted RDS instance produces one high-severity finding
+fixture:
+  prowler_findings:
+    - CheckID: rds_instance_storage_encrypted
+      Severity: high
+      Status: FAIL
+      ResourceArn: arn:aws:rds:us-east-1:111122223333:db:prod-db
+      ResourceType: AwsRdsDbInstance
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'RDS instance prod-db is not encrypted at rest'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 1

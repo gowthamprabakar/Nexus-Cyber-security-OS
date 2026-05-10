@@ -1,0 +1,19 @@
+case_id: 005_no_cloudtrail
+description: Account without multi-region CloudTrail → one high-severity finding
+fixture:
+  prowler_findings:
+    - CheckID: cloudtrail_multi_region_enabled
+      Severity: high
+      Status: FAIL
+      ResourceArn: arn:aws:cloudtrail:us-east-1:111122223333:trail/none
+      ResourceType: AwsCloudTrailTrail
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'No multi-region CloudTrail trail enabled'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 1

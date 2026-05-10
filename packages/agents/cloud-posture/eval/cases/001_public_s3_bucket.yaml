@@ -1,0 +1,22 @@
+case_id: 001_public_s3_bucket
+description: Public S3 bucket should produce one high-severity finding
+fixture:
+  prowler_findings:
+    - CheckID: s3_bucket_public_access
+      Severity: high
+      Status: FAIL
+      ResourceArn: arn:aws:s3:::acme-public
+      ResourceType: AwsS3Bucket
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'Bucket acme-public allows public READ via ACL'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 1
+    medium: 0
+    low: 0
+    info: 0

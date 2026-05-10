@@ -1,0 +1,20 @@
+case_id: 010_unencrypted_ebs_volume
+description: Unencrypted EBS volume → one medium-severity finding
+fixture:
+  prowler_findings:
+    - CheckID: ec2_ebs_volume_encryption
+      Severity: medium
+      Status: FAIL
+      ResourceArn: arn:aws:ec2:us-east-1:111122223333:volume/vol-abc
+      ResourceType: AwsEc2Volume
+      Region: us-east-1
+      AccountId: '111122223333'
+      StatusExtended: 'EBS volume vol-abc is unencrypted'
+  iam_users_without_mfa: []
+  iam_admin_policies: []
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 0
+    high: 0
+    medium: 1

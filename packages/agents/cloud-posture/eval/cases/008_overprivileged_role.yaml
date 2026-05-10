@@ -1,0 +1,19 @@
+case_id: 008_overprivileged_role
+description: Customer-managed admin-equivalent policy → one critical finding
+fixture:
+  prowler_findings: []
+  iam_users_without_mfa: []
+  iam_admin_policies:
+    - policy_name: TooBroad
+      policy_arn: arn:aws:iam::111122223333:policy/TooBroad
+      document:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: '*'
+            Resource: '*'
+expected:
+  finding_count: 1
+  has_severity:
+    critical: 1
+    high: 0
