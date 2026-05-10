@@ -36,7 +36,7 @@
 | 10   | ✅ done    | `6293dec` | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                       |
 | 11   | ✅ done    | `7aa44aa` | JSON output — `suite_to_json` / `from_json` + comparison; round-trip equality; 13 new tests          |
 | 12   | ✅ done    | `d756f09` | `run_across_providers` — multi-provider parity per ADR-003; drift surfaces via diff_results; 7 tests |
-| 13   | ✅ done    | _next_    | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner   |
+| 13   | ✅ done    | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner   |
 | 14   | ⬜ pending | —         | Migrate cloud-posture's 10 cases; delete `_eval_local`                                               |
 | 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                                       |
 | 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                                       |
