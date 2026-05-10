@@ -38,7 +38,7 @@
 | 12   | ✅ done    | `d756f09` | `run_across_providers` — multi-provider parity per ADR-003; drift surfaces via diff_results; 7 tests   |
 | 13   | ✅ done    | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner     |
 | 14   | ✅ done    | `6268b64` | cloud-posture migrated to framework; entry-point registered; `_eval_local` + `test_eval_local` deleted |
-| 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                                         |
+| 15   | ✅ done    | _next_    | README + ADR-008 — eval-framework architecture; Apache 2.0 sister of charter; substrate-not-policy     |
 | 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                                         |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) (Apache 2.0 split), [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) (cross-provider parity gate), [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) (async-by-default), [ADR-007](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) (template patterns the runner follows).

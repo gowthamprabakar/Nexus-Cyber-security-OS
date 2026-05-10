@@ -55,3 +55,5 @@
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 12: `run_across_providers` — ADR-003 parity substrate; drift surfaces via diff_results; 7 new tests         | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 13: CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 new tests                   | F.2       |
 | 2026-05-10 | cloud-posture  | 0.1.0   | F.2 Task 14: cloud-posture eval migrated to framework; entry-point registered; `_eval_local` deleted                 | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 15: README + ADR-008 — eval-framework architecture; Apache 2.0 sister of charter                            | F.2       |
+| 2026-05-10 | docs/decisions | —       | ADR-008 — eval-framework architecture (Protocol + pydantic + entry-points + Apache 2.0 + substrate-not-policy)       | F.2       |
