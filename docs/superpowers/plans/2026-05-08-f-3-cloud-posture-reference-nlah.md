@@ -41,7 +41,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 11   | ✅ done    | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
 | 12   | ✅ done    | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
 | 13   | ✅ done    | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
-| 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                             |
+| 14   | ✅ done    | `484e272` | AWS dev-account smoke runbook (uses `cloud-posture run --contract`; live-tested gates)    |
 | 15   | ⬜ pending | —         | README + ADR                                                                              |
 
 ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
@@ -2922,7 +2922,17 @@ git commit -m "feat(cloud-posture): CLI with eval subcommand"
 
 ---
 
-### Task 14: AWS dev-account smoke runbook (manual)
+### Task 14: AWS dev-account smoke runbook (manual) — ✅ DONE (`484e272`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Uses `uv run cloud-posture run --contract`** (the CLI from Task 13) instead of inline ad-hoc Python. Drops the `import anthropic / import neo4j` boilerplate the plan had — those subsystems aren't part of the v0.1 deterministic flow.
+- **Honest about the Prowler dependency.** The plan said `pip install prowler`; experience showed cloud-posture does NOT pin the Prowler CLI as a transitive (the wrapper resolves via `shutil.which`). Runbook now recommends `pipx install prowler` to isolate from the workspace's `uv sync`, with `pip --user` / brew / docker as alternatives.
+- **Validates the example contract YAML** end-to-end via `uv run charter validate /tmp/smoke-contract.yaml` — caught two real bugs in the plan's contract: (1) `BudgetSpec` requires positive `llm_calls` and `tokens` even for the deterministic flow; (2) the original `delegation_id` contained `O` which Crockford base32 doesn't allow. Both fixed and called out in the runbook.
+- **Live-tested the `cloud-posture run` invocation** end-to-end. Without Prowler installed it fails at exactly the documented gate (`FileNotFoundError: 'prowler'`), confirming the prereq isn't a paper requirement.
+- **CloudTrail review step added.** Pass criteria includes "zero non-read events during the smoke window" — caught by `aws cloudtrail lookup-events` filtered to `ReadOnly==false`.
+- **Failure protocol explicit.** When the runbook fails: capture artifacts → file a bug → add a regression eval case under `eval/cases/` so the same failure has a test before any fix lands.
+- **Out-of-scope section** lists what this smoke does NOT cover (LLM enrichment, Neo4j KG persistence, multi-region/account scans, Tier-1/2 remediation), so the runbook can't be misread as a full release-readiness gate.
 
 **Files:** Create `runbooks/aws_dev_account_smoke.md`
 
