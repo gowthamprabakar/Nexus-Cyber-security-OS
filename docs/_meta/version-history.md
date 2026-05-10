@@ -80,3 +80,4 @@
 | 2026-05-11 | docs/\_meta    | —       | system-readiness re-issued (2026-05-11): 478 tests, weighted Wiz ~10–12%, 2 of 18 agents shipped, ADR-007 validated  | D.1       |
 | 2026-05-11 | charter        | 0.1.0   | ADR-007 v1.1 amendment — `charter.llm_adapter` hoisted from per-agent `llm.py` copies; 19 canonical tests            | ADR-007   |
 | 2026-05-11 | docs/decisions | —       | ADR-007 v1.1 — LLM-adapter hoist (per-agent `llm.py` deleted; charter is the canonical home)                         | ADR-007   |
+| 2026-05-11 | docs/\_meta    | —       | system-readiness-2026-05-11-eod.md — timestamped EOD snapshot with rate-of-completion across 6 dimensions            | readiness |
