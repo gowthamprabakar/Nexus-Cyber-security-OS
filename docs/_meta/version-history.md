@@ -68,3 +68,4 @@
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 6: `nvd_enrich` — NVD CVSS + EPSS; best-effort enrichment never blocks finding emission; 7 tests            | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 7: Trivy → OCSF normalizer with concurrent enrichment via `asyncio.TaskGroup`; 17 tests                     | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 8: findings → markdown summarizer with KEV section pinned at top; 13 tests                                  | D.1       |
+| 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 9: NLAH (README + tools.md + 2 OCSF-shaped examples) + loader; 8 tests                                      | D.1       |
