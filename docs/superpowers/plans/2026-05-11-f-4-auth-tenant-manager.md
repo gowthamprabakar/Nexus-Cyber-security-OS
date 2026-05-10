@@ -64,20 +64,20 @@
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
 ```
 
-| Task | Status     | Commit | Notes                                                                                                                  |
-| ---- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 1    | ✅ done    | _next_ | Bootstrap `packages/control-plane/` (pyproject + auth/ + tenants/ + api/ + README); 3 smoke tests; F.5 boundary set    |
-| 2    | ⬜ pending | —      | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; first migration                                               |
-| 3    | ⬜ pending | —      | Auth0 management-API client (httpx + retries) — create connection, fetch users, send invite                            |
-| 4    | ⬜ pending | —      | JWT verifier — Auth0 JWKS fetch + cache + signature/exp/iss/aud validation                                             |
-| 5    | ⬜ pending | —      | Tenant resolver — JWT custom claims → `(tenant_id, user_id)`; first-login auto-provision                               |
-| 6    | ⬜ pending | —      | RBAC — `Role` enum + `permission_for(role, action)` table; admin/operator/auditor scoping                              |
-| 7    | ⬜ pending | —      | SCIM 2.0 endpoint — POST /Users + PATCH /Users/{id} + DELETE /Users/{id}; HMAC-signed Auth0 webhook                    |
-| 8    | ⬜ pending | —      | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |
-| 9    | ⬜ pending | —      | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
-| 10   | ⬜ pending | —      | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
-| 11   | ⬜ pending | —      | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
-| 12   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; integration test against Auth0 sandbox; SOC 2 evidence checklist) |
+| Task | Status     | Commit    | Notes                                                                                                                  |
+| ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ done    | `aa0f687` | Bootstrap `packages/control-plane/` (pyproject + auth/ + tenants/ + api/ + README); 3 smoke tests; F.5 boundary set    |
+| 2    | ⬜ pending | —         | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; first migration                                               |
+| 3    | ⬜ pending | —         | Auth0 management-API client (httpx + retries) — create connection, fetch users, send invite                            |
+| 4    | ⬜ pending | —         | JWT verifier — Auth0 JWKS fetch + cache + signature/exp/iss/aud validation                                             |
+| 5    | ⬜ pending | —         | Tenant resolver — JWT custom claims → `(tenant_id, user_id)`; first-login auto-provision                               |
+| 6    | ⬜ pending | —         | RBAC — `Role` enum + `permission_for(role, action)` table; admin/operator/auditor scoping                              |
+| 7    | ⬜ pending | —         | SCIM 2.0 endpoint — POST /Users + PATCH /Users/{id} + DELETE /Users/{id}; HMAC-signed Auth0 webhook                    |
+| 8    | ⬜ pending | —         | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |
+| 9    | ⬜ pending | —         | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
+| 10   | ⬜ pending | —         | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
+| 11   | ⬜ pending | —         | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
+| 12   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; integration test against Auth0 sandbox; SOC 2 evidence checklist) |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
