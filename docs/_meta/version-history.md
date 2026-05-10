@@ -85,3 +85,5 @@
 | 2026-05-11 | docs/plans     | —       | F.4 Auth + Tenant Manager plan written (12 tasks; Auth0 SSO + SCIM + RBAC + MFA; SOC 2 Type I starter evidence)      | F.4       |
 | 2026-05-11 | identity       | 0.1.0   | D.2 Task 1: bootstrap identity package skeleton; `charter.llm_adapter` import gate (ADR-007 v1.1 validation)         | D.2       |
 | 2026-05-11 | control-plane  | 0.1.0   | F.4 Task 1: bootstrap control-plane package — auth/ + tenants/ + api/ scaffolding; Postgres baseline plumbing        | F.4       |
+| 2026-05-11 | identity       | 0.1.0   | D.2 Task 2: OCSF Detection Finding schema (class_uid 2004); FindingType enum; 17 tests; ADR-007 v1.1 pattern check ✓ | D.2       |
+| 2026-05-11 | control-plane  | 0.1.0   | F.4 Task 2: Tenant + User + Role models (pydantic + SQLAlchemy) + alembic 0001_initial baseline; 19 tests            | F.4       |

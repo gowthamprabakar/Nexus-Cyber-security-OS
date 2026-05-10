@@ -7,7 +7,7 @@ license = { file = "../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
     "nexus-shared",
-    "pydantic>=2.9.0",
+    "pydantic[email]>=2.9.0",
     "fastapi>=0.115.0",
     "httpx>=0.27.0",
     "pyjwt[crypto]>=2.9.0",
