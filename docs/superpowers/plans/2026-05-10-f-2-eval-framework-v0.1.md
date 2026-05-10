@@ -31,7 +31,7 @@
 | 5    | ✅ done    | `8c87e46` | Async `run_suite(cases, runner, …)` with per-case workspace + per-case timeout; 18 tests            |
 | 6    | ✅ done    | `1e13530` | `build_trace_from_audit_log` parser + verifier wrap + run_suite integration; 12 new tests           |
 | 7    | ✅ done    | `1b4d73c` | `CloudPostureEvalRunner` migrated from `_eval_local`; 10/10 shipped cases pass via `run_suite`      |
-| 8    | ✅ done    | _next_    | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests |
+| 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests |
 | 9    | ⬜ pending | —         | Gates: `Gate` config + `apply_gate(suite_result)`                                                   |
 | 10   | ⬜ pending | —         | Markdown report renderers (suite + comparison + gate)                                               |
 | 11   | ⬜ pending | —         | JSON output (machine-readable, schema-stable for Meta-Harness)                                      |
