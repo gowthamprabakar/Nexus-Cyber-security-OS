@@ -51,3 +51,4 @@
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 9: `Gate` + `apply_gate` — pass-rate, regression-vs-baseline, token-delta, p95 duration; 15 new tests       | F.2       |
 | 2026-05-10 | docs/\_meta    | —       | platform-completion-report-2026-05-10.md — vision-aligned, roadmap-anchored end-of-day completion snapshot           | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 10: markdown renderers (suite + comparison + gate); auditor-readable; 19 new tests                          | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 11: JSON serialization — schema-stable wire format for Meta-Harness; round-trip equality; 13 new tests      | F.2       |

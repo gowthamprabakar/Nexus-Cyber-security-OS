@@ -34,7 +34,7 @@
 | 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests |
 | 9    | ✅ done    | `a8700bf` | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests     |
 | 10   | ✅ done    | `6293dec` | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                      |
-| 11   | ⬜ pending | —         | JSON output (machine-readable, schema-stable for Meta-Harness)                                      |
+| 11   | ✅ done    | _next_    | JSON output — `suite_to_json` / `from_json` + comparison; round-trip equality; 13 new tests         |
 | 12   | ⬜ pending | —         | Provider-parity helper: `run_across_providers(cases, runner, …)`                                    |
 | 13   | ⬜ pending | —         | CLI: `eval-framework run / compare / gate`                                                          |
 | 14   | ⬜ pending | —         | Migrate cloud-posture's 10 cases; delete `_eval_local`                                              |
