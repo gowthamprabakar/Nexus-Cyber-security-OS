@@ -66,3 +66,4 @@
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 4: `osv_query` httpx async client — establishes HTTP-wrapper convention (retry + TTL cache); 8 tests        | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 5: `kev_catalog` + `is_kev` async clients (CISA KEV); inherits Task 4 convention; 6 tests                   | D.1       |
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 6: `nvd_enrich` — NVD CVSS + EPSS; best-effort enrichment never blocks finding emission; 7 tests            | D.1       |
+| 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 7: Trivy → OCSF normalizer with concurrent enrichment via `asyncio.TaskGroup`; 17 tests                     | D.1       |
