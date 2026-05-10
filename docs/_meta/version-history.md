@@ -59,3 +59,4 @@
 | 2026-05-10 | docs/decisions | —       | ADR-008 — eval-framework architecture (Protocol + pydantic + entry-points + Apache 2.0 + substrate-not-policy)       | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 16: final verification — 6/6 gates green; 146 tests; 94.93% cov; **F.2 accepted code-complete**             | F.2       |
 | 2026-05-10 | docs/\_meta    | —       | f2-verification-2026-05-10.md — F.2 verification record; system-readiness re-issued for end-of-day F.2 closeout      | F.2       |
+| 2026-05-10 | docs/plans     | —       | D.1 Vulnerability Agent plan written (16 tasks); ADR-007 risk-down test for the reference template                   | D.1       |
