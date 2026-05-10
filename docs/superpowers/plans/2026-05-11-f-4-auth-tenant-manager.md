@@ -254,10 +254,10 @@ class VerifiedToken:
     amr: tuple[str, ...]  # for MFA check (Task 9)
 ```
 
-- [ ] **Step 1: Write failing tests** — valid token, expired token (freezegun), bad signature, wrong issuer, missing custom claims.
-- [ ] **Step 2: Implement** with PyJWT.
-- [ ] **Step 3: Tests pass** — ≥ 10 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): jwt verifier with auth0 jwks cache (F.4 task 4)`.
+- [x] **Step 1: Write failing tests** — valid token, expired, bad signature, wrong iss/aud, missing custom claim, unknown kid, JWKS caching, JWKS 5xx.
+- [x] **Step 2: Implement** with PyJWT.
+- [x] **Step 3: Tests pass** — 11/11 (one-shot RSA keypair + respx-mocked JWKS endpoint).
+- [x] **Step 4: Commit** — `52f709b feat(d2,f4): iam policy simulator + auth0 jwt verifier (D.2 + F.4 task 4)`. Bundled with D.2 Task 4. **Q2 resolved**: tenant/roles via Auth0 namespaced custom claims (`https://nexus.app/...`).
 
 ---
 

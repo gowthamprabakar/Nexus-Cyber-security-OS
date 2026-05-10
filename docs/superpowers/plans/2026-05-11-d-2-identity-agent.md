@@ -239,10 +239,10 @@ async def aws_iam_list_identities(
 
 The IAM SimulatePrincipalPolicy API takes (principal, actions, resources) → permission decisions. Wrapper batches up to 50 actions per call (API limit).
 
-- [ ] **Step 1: Write failing tests** — moto-mocked policy simulator; verify the wrapper yields one decision per (principal, action, resource) triple.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 5 tests.
-- [ ] **Step 4: Commit** — `feat(identity): iam simulate principal policy wrapper (D.2 task 4)`.
+- [x] **Step 1: Write failing tests** — wrapper yields one decision per (principal, action, resource) triple. Stubbed via monkey-patched `boto3.Session` because moto raises `NotImplementedError` on `simulate_principal_policy`.
+- [x] **Step 2: Implement**.
+- [x] **Step 3: Tests pass** — 8/8 (incl. 75-action batching split, multi-resource fan-out, error wrap).
+- [x] **Step 4: Commit** — `52f709b feat(d2,f4): iam policy simulator + auth0 jwt verifier (D.2 + F.4 task 4)`. Bundled with F.4 Task 4.
 
 ---
 
