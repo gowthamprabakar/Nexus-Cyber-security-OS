@@ -20,10 +20,12 @@ from pathlib import Path
 
 import click
 from charter.contract import load_contract
+from eval_framework.cases import load_cases
+from eval_framework.suite import run_suite
 
 from cloud_posture import __version__
-from cloud_posture._eval_local import load_cases, run_case
 from cloud_posture.agent import run as agent_run
+from cloud_posture.eval_runner import CloudPostureEvalRunner
 
 
 @click.group()
@@ -44,16 +46,17 @@ def eval_cmd(cases_dir: Path) -> None:
     """Run the local eval suite at CASES_DIR.
 
     Exits 0 when every case passes, 1 otherwise. Prints one line per
-    failing case with the failure_reason from the runner.
+    failing case with the failure_reason from the runner. Uses
+    `eval_framework.run_suite` against the registered
+    `CloudPostureEvalRunner`.
     """
     cases = load_cases(cases_dir)
-    results = [run_case(c) for c in cases]
-    passed = sum(1 for r in results if r.passed)
-    click.echo(f"{passed}/{len(results)} passed")
+    suite = asyncio.run(run_suite(cases, CloudPostureEvalRunner()))
+    click.echo(f"{suite.passed}/{suite.total} passed")
     fail_count = 0
-    for r in results:
-        if not r.passed:
-            click.echo(f"  FAIL {r.case_id}: {r.failure_reason} (actual={r.actual_counts})")
+    for case in suite.cases:
+        if not case.passed:
+            click.echo(f"  FAIL {case.case_id}: {case.failure_reason} (actual={case.actuals})")
             fail_count += 1
     if fail_count:
         raise SystemExit(1)

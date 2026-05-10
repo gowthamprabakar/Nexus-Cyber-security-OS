@@ -33,6 +33,9 @@ dev = [
 [project.scripts]
 cloud-posture = "cloud_posture.cli:main"
 
+[project.entry-points."nexus_eval_runners"]
+cloud_posture = "cloud_posture.eval_runner:CloudPostureEvalRunner"
+
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }

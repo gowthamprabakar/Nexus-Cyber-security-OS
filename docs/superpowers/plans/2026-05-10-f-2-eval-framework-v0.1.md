@@ -22,24 +22,24 @@
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit    | Notes                                                                                                |
-| ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------- |
-| 1    | ✅ done    | `f905af0` | Bootstrap `packages/eval-framework/` (pyproject, license, py.typed, cli stub)                        |
-| 2    | ✅ done    | `e800fff` | Core types: EvalCase, EvalResult, SuiteResult, EvalTrace; 19 tests                                   |
-| 3    | ✅ done    | `7ca4150` | YAML loader: `load_case_file` + `load_cases`; loads cloud-posture suite unchanged; 11 new tests      |
-| 4    | ✅ done    | `2ccaab1` | `EvalRunner` Protocol (`@runtime_checkable`) + `FakeRunner` test double; 8 tests                     |
-| 5    | ✅ done    | `8c87e46` | Async `run_suite(cases, runner, …)` with per-case workspace + per-case timeout; 18 tests             |
-| 6    | ✅ done    | `1e13530` | `build_trace_from_audit_log` parser + verifier wrap + run_suite integration; 12 new tests            |
-| 7    | ✅ done    | `1b4d73c` | `CloudPostureEvalRunner` migrated from `_eval_local`; 10/10 shipped cases pass via `run_suite`       |
-| 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests  |
-| 9    | ✅ done    | `a8700bf` | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests      |
-| 10   | ✅ done    | `6293dec` | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                       |
-| 11   | ✅ done    | `7aa44aa` | JSON output — `suite_to_json` / `from_json` + comparison; round-trip equality; 13 new tests          |
-| 12   | ✅ done    | `d756f09` | `run_across_providers` — multi-provider parity per ADR-003; drift surfaces via diff_results; 7 tests |
-| 13   | ✅ done    | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner   |
-| 14   | ⬜ pending | —         | Migrate cloud-posture's 10 cases; delete `_eval_local`                                               |
-| 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                                       |
-| 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                                       |
+| Task | Status     | Commit    | Notes                                                                                                  |
+| ---- | ---------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| 1    | ✅ done    | `f905af0` | Bootstrap `packages/eval-framework/` (pyproject, license, py.typed, cli stub)                          |
+| 2    | ✅ done    | `e800fff` | Core types: EvalCase, EvalResult, SuiteResult, EvalTrace; 19 tests                                     |
+| 3    | ✅ done    | `7ca4150` | YAML loader: `load_case_file` + `load_cases`; loads cloud-posture suite unchanged; 11 new tests        |
+| 4    | ✅ done    | `2ccaab1` | `EvalRunner` Protocol (`@runtime_checkable`) + `FakeRunner` test double; 8 tests                       |
+| 5    | ✅ done    | `8c87e46` | Async `run_suite(cases, runner, …)` with per-case workspace + per-case timeout; 18 tests               |
+| 6    | ✅ done    | `1e13530` | `build_trace_from_audit_log` parser + verifier wrap + run_suite integration; 12 new tests              |
+| 7    | ✅ done    | `1b4d73c` | `CloudPostureEvalRunner` migrated from `_eval_local`; 10/10 shipped cases pass via `run_suite`         |
+| 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests    |
+| 9    | ✅ done    | `a8700bf` | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests        |
+| 10   | ✅ done    | `6293dec` | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                         |
+| 11   | ✅ done    | `7aa44aa` | JSON output — `suite_to_json` / `from_json` + comparison; round-trip equality; 13 new tests            |
+| 12   | ✅ done    | `d756f09` | `run_across_providers` — multi-provider parity per ADR-003; drift surfaces via diff_results; 7 tests   |
+| 13   | ✅ done    | `916b5aa` | CLI — `eval-framework run / compare / gate` via setuptools entry-points; 10 tests via Click runner     |
+| 14   | ✅ done    | _next_    | cloud-posture migrated to framework; entry-point registered; `_eval_local` + `test_eval_local` deleted |
+| 15   | ⬜ pending | —         | README + ADR-008 (Eval Framework architecture)                                                         |
+| 16   | ⬜ pending | —         | Final verification (coverage ≥ 80%; CLI smoke; suite-on-suite)                                         |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) (Apache 2.0 split), [ADR-003](../../_meta/decisions/ADR-003-llm-provider-strategy.md) (cross-provider parity gate), [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) (async-by-default), [ADR-007](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) (template patterns the runner follows).
 
