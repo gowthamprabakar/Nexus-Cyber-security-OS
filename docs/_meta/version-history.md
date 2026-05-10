@@ -73,3 +73,4 @@
 | 2026-05-10 | vulnerability  | 0.1.0   | D.1 Task 11: agent driver — async run() wires charter + concurrent Trivy + normalizer + summarizer; 10 tests         | D.1       |
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 12: 10 eval cases (KEV + severity + fix variants + clean image)                                             | D.1       |
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 13: `VulnerabilityEvalRunner` + entry-point; 10/10 via `eval-framework run --runner vulnerability`          | D.1       |
+| 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 14: CLI — `vuln-agent eval` + `vuln-agent run --contract --image`; 5 tests via Click runner                 | D.1       |
