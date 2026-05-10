@@ -22,27 +22,27 @@ This plan grew three new tasks during execution to absorb the architectural deci
 1 → 2 → 3 → 4 → 4.5 → 5 → 5.5 (NEW) → 6 → 6.5 (NEW) → 7 → 8 → 8.5 (NEW) → 9 → 10 → 11 → 12 → 13 → 14 → 15
 ```
 
-| Task | Status     | Commit    | Notes                                                                                     |
-| ---- | ---------- | --------- | ----------------------------------------------------------------------------------------- |
-| 1    | ✅ done    | `aa2886a` | deps                                                                                      |
-| 2    | ✅ done    | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)                                  |
-| 3    | ✅ done    | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)                              |
-| 4    | ✅ done    | `0b93530` | S3 describe (refactored to async in Task 4.5)                                             |
-| 4.5  | ✅ done    | `3f9a26d` | Async tool wrapper convention (per ADR-005)                                               |
-| 5    | ✅ done    | `8d952e6` | IAM analyzer (async-from-start)                                                           |
-| 5.5  | ✅ done    | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)                            |
-| 6    | ✅ done    | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                            |
-| 6.5  | ✅ done    | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                            |
-| 7    | ✅ done    | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)            |
-| 8    | ✅ done    | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader            |
-| 8.5  | ✅ done    | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
-| 9    | ✅ done    | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
-| 10   | ✅ done    | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
-| 11   | ✅ done    | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
-| 12   | ✅ done    | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
-| 13   | ✅ done    | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
-| 14   | ✅ done    | `484e272` | AWS dev-account smoke runbook (uses `cloud-posture run --contract`; live-tested gates)    |
-| 15   | ⬜ pending | —         | README + ADR                                                                              |
+| Task | Status  | Commit    | Notes                                                                                     |
+| ---- | ------- | --------- | ----------------------------------------------------------------------------------------- |
+| 1    | ✅ done | `aa2886a` | deps                                                                                      |
+| 2    | ✅ done | `1376b2b` | Pydantic schemas (will be refactored in Task 6.5 → OCSF)                                  |
+| 3    | ✅ done | `d62807d` | Prowler subprocess wrapper (refactored to async in Task 4.5)                              |
+| 4    | ✅ done | `0b93530` | S3 describe (refactored to async in Task 4.5)                                             |
+| 4.5  | ✅ done | `3f9a26d` | Async tool wrapper convention (per ADR-005)                                               |
+| 5    | ✅ done | `8d952e6` | IAM analyzer (async-from-start)                                                           |
+| 5.5  | ✅ done | `eee6e7e` | NEW — Fabric scaffolding + OCSF envelope helpers (per ADR-004)                            |
+| 6    | ✅ done | `bee67ad` | Neo4j KG writer (thin, async, customer-scoped)                                            |
+| 6.5  | ✅ done | `6131300` | NEW — Refactor `schemas.py` to OCSF typing layer (per ADR-004)                            |
+| 7    | ✅ done | `bda99a9` | Findings → Markdown summarizer (consumes OCSF via CloudPostureFinding wrapper)            |
+| 8    | ✅ done | `c9655c8` | NLAH (domain brain): README + tools + 2 OCSF-shaped few-shot examples + loader            |
+| 8.5  | ✅ done | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
+| 9    | ✅ done | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
+| 10   | ✅ done | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
+| 11   | ✅ done | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
+| 12   | ✅ done | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
+| 13   | ✅ done | `6b4b170` | CLI: `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml`            |
+| 14   | ✅ done | `484e272` | AWS dev-account smoke runbook (uses `cloud-posture run --contract`; live-tested gates)    |
+| 15   | ✅ done | (see TBD) | README + ADR-007 (Cloud Posture as the reference NLAH; 10 template patterns codified)     |
 
 ADR references: [ADR-003 LLM provider strategy](../../_meta/decisions/ADR-003-llm-provider-strategy.md), [ADR-004 fabric layer](../../_meta/decisions/ADR-004-fabric-layer.md), [ADR-005 async tool wrappers](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
@@ -3069,7 +3069,14 @@ git commit -m "docs(cloud-posture): aws dev-account smoke runbook"
 
 ---
 
-### Task 15: README and ADR
+### Task 15: README and ADR — ✅ DONE
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **ADR numbered 007, not 003.** Plan said `ADR-003` but ADR-003 was claimed by the LLM provider strategy (also ADR-004, 005, 006 are in use). Renumbered to [`ADR-007 — Cloud Posture as the reference NLAH`](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md).
+- **README rewritten against the as-shipped reality**, not the plan's pre-OCSF / pre-async / pre-LLMProvider snapshot. Mentions the OCSF v1.3 wire format, the NexusEnvelope per finding, the async tool surface, the LLM-provider plumbing, the optional Neo4j path, the integration-test layout, and the runbook. Cross-links every relevant ADR.
+- **ADR-007 codifies ten template patterns** the other 17 agents must follow (charter context / async tools / OCSF / NexusEnvelope / NLAH layout / LLM plumbing / eval shape / CLI surface / test layout / smoke runbook), names where each lives, lists three commitments this template imposes on the project (load-bearing for the suite; per-agent ADRs declare follow-or-deviate; reviewers check the ten patterns), and itemizes where the template won't generalize 1:1 (Investigation sub-agent orchestration, Curiosity reactive trigger, AI-Security / Synthesis as LLM-first).
+- **Alternatives section expanded** beyond the plan: added Alt 4 ("no reference agent — every author writes from scratch") with explicit rejection rationale ("shape drift, audit-chain inconsistency, 18 different OCSF dialects").
 
 **Files:** Create `packages/agents/cloud-posture/README.md`, `docs/_meta/decisions/ADR-003-cloud-posture-as-reference-agent.md`
 
