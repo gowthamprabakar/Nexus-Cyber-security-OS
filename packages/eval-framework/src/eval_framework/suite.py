@@ -134,3 +134,38 @@ async def _run_one(
         duration_sec=time.perf_counter() - started,
         trace=trace,
     )
+
+
+# ---------------------------- run_across_providers -------------------------
+
+
+async def run_across_providers(
+    cases: list[EvalCase],
+    runner: EvalRunner,
+    providers: dict[str, LLMProvider],
+    *,
+    workspace_root: Path | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, SuiteResult]:
+    """Run the same suite against every provider in `providers`.
+
+    Per F.2 plan Task 12; this is the substrate for ADR-003's eval-parity
+    gate ("a workhorse swap must be proven on the per-agent eval suite
+    before customer rollout"). Pair the returned `SuiteResult`s with
+    `diff_results(...)` to surface drift.
+
+    Returns a `dict[provider_label, SuiteResult]`. Sequential execution.
+    Each provider gets an isolated `<workspace_root>/<suite_id>/...` tree
+    so re-runs don't collide.
+    """
+    out: dict[str, SuiteResult] = {}
+    for label, provider in providers.items():
+        out[label] = await run_suite(
+            cases,
+            runner,
+            llm_provider=provider,
+            workspace_root=workspace_root,
+            metadata=dict(metadata or {}),
+        )
+        del label  # provider identity already lives in SuiteResult.provider_id
+    return out
