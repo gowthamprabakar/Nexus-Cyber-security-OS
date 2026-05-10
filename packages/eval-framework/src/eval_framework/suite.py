@@ -28,7 +28,7 @@ from charter.llm import LLMProvider
 from eval_framework.cases import EvalCase
 from eval_framework.results import EvalResult, SuiteResult
 from eval_framework.runner import EvalRunner
-from eval_framework.trace import EvalTrace
+from eval_framework.trace import EvalTrace, build_trace_from_audit_log
 
 
 async def run_suite(
@@ -121,6 +121,10 @@ async def _run_one(
             trace=EvalTrace(),
         )
 
+    trace = (
+        build_trace_from_audit_log(audit_log_path) if audit_log_path is not None else EvalTrace()
+    )
+
     return EvalResult(
         case_id=case.case_id,
         runner=runner.agent_name,
@@ -128,5 +132,5 @@ async def _run_one(
         failure_reason=failure_reason,
         actuals=actuals,
         duration_sec=time.perf_counter() - started,
-        trace=EvalTrace(audit_log_path=str(audit_log_path) if audit_log_path else None),
+        trace=trace,
     )

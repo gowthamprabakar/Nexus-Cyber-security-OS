@@ -29,7 +29,7 @@
 | 3    | ✅ done    | `7ca4150` | YAML loader: `load_case_file` + `load_cases`; loads cloud-posture suite unchanged; 11 new tests |
 | 4    | ✅ done    | `2ccaab1` | `EvalRunner` Protocol (`@runtime_checkable`) + `FakeRunner` test double; 8 tests                |
 | 5    | ✅ done    | `8c87e46` | Async `run_suite(cases, runner, …)` with per-case workspace + per-case timeout; 18 tests        |
-| 6    | ⬜ pending | —         | Trace capture from charter audit.jsonl                                                          |
+| 6    | ✅ done    | _next_    | `build_trace_from_audit_log` parser + verifier wrap + run_suite integration; 12 new tests       |
 | 7    | ⬜ pending | —         | `CloudPostureEvalRunner` — migrate from `_eval_local`                                           |
 | 8    | ⬜ pending | —         | Comparison: `diff_results(baseline, candidate)`                                                 |
 | 9    | ⬜ pending | —         | Gates: `Gate` config + `apply_gate(suite_result)`                                               |
