@@ -10,6 +10,7 @@ members = [
     "packages/charter",
     "packages/eval-framework",
     "packages/agents/cloud-posture",
+    "packages/agents/vulnerability",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -43,6 +44,7 @@ files = [
     "packages/charter/src",
     "packages/eval-framework/src",
     "packages/agents/cloud-posture/src",
+    "packages/agents/vulnerability/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
