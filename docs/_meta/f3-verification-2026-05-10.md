@@ -106,13 +106,17 @@ Audit valid: True, entries: 7
 Workspace: /var/folders/.../tmpahyah0g5/ws
 ```
 
-Seven audit entries, hash chain verifies. Sequence:
+Seven audit entries, hash chain verifies. Sequence (per [`agent.py`](../../packages/agents/cloud-posture/src/cloud_posture/agent.py)):
 
-1. `invocation_started`
-   2–5. four `tool_call` entries (Prowler, IAM users-no-MFA, IAM admin-policies, ToolGroup overhead — agent driver registers tools, charter audits each call regardless of outcome)
-2. `output_written` × 1 — wait, recount: actual entries observed = 7. Likely 1 invocation_started + 3 tool_call + 2 output_written + 1 invocation_completed = 7. ✓
+1. `invocation_started` — emitted by `Charter.__enter__`
+2. `tool_call: prowler_scan`
+3. `tool_call: aws_iam_list_users_without_mfa` — TaskGroup task 1
+4. `tool_call: aws_iam_list_admin_policies` — TaskGroup task 2
+5. `output_written: findings.json`
+6. `output_written: summary.md`
+7. `invocation_completed` — emitted by `Charter.__exit__`
 
-`charter.verifier.verify_audit_log(...)` returns `valid=True, entries_checked=7`. The chain is intact end-to-end.
+`charter.verifier.verify_audit_log(...)` returns `valid=True, entries_checked=7`. The chain is intact end-to-end and the entry sequence matches the expected agent flow.
 
 ## Verification summary
 
