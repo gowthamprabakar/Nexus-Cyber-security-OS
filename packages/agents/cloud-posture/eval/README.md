@@ -55,18 +55,18 @@ expected:
 
 They were chosen for **coverage breadth across severity bands and resource types**, not difficulty:
 
-| #   | CheckID family                         | Severity | Why it matters                                           |
-| --- | -------------------------------------- | -------- | -------------------------------------------------------- |
-| 001 | s3_bucket_public_access                | high     | Most common cloud-data-exposure pattern                  |
-| 002 | iam (no-MFA path)                      | high     | Credential-theft vector; tests the IAM enrichment branch |
-| 003 | rds_instance_storage_encrypted         | high     | Encryption-at-rest baseline                              |
-| 004 | ec2_securitygroup_open_22              | critical | SSH exposed to internet — catastrophic                   |
-| 005 | cloudtrail_multi_region                | high     | Audit blind-spot                                         |
-| 006 | iam_root_no_mfa                        | critical | Root account compromise = game over                      |
-| 007 | kms_cmk_rotation_enabled               | medium   | Compliance drift; tests the medium severity path         |
-| 008 | iam admin policy (Action=_ Resource=_) | critical | Tests the admin-policy enrichment branch                 |
-| 009 | rds_snapshots_public_access            | critical | Public exfil of structured data                          |
-| 010 | ec2_ebs_volume_encryption              | medium   | Volume-level encryption baseline                         |
+| #   | CheckID family                                 | Severity | Why it matters                                           |
+| --- | ---------------------------------------------- | -------- | -------------------------------------------------------- |
+| 001 | s3_bucket_public_access                        | high     | Most common cloud-data-exposure pattern                  |
+| 002 | iam (no-MFA path)                              | high     | Credential-theft vector; tests the IAM enrichment branch |
+| 003 | rds_instance_storage_encrypted                 | high     | Encryption-at-rest baseline                              |
+| 004 | ec2_securitygroup_open_22                      | critical | SSH exposed to internet — catastrophic                   |
+| 005 | cloudtrail_multi_region                        | high     | Audit blind-spot                                         |
+| 006 | iam_root_no_mfa                                | critical | Root account compromise = game over                      |
+| 007 | kms_cmk_rotation_enabled                       | medium   | Compliance drift; tests the medium severity path         |
+| 008 | iam admin policy (`Action="*"` `Resource="*"`) | critical | Tests the admin-policy enrichment branch                 |
+| 009 | rds_snapshots_public_access                    | critical | Public exfil of structured data                          |
+| 010 | ec2_ebs_volume_encryption                      | medium   | Volume-level encryption baseline                         |
 
 Together they exercise:
 

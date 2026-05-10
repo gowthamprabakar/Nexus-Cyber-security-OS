@@ -39,7 +39,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 9    | ✅ done    | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
 | 10   | ✅ done    | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
 | 11   | ✅ done    | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
-| 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                                      |
+| 12   | ✅ done    | `bd6d5fd` | Minimal local eval runner + 10 cases (10/10 passing across all severity bands)            |
 | 13   | ⬜ pending | —         | CLI                                                                                       |
 | 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                             |
 | 15   | ⬜ pending | —         | README + ADR                                                                              |
@@ -2276,7 +2276,20 @@ git commit -m "test(cloud-posture): localstack-backed integration test for IAM n
 
 ---
 
-### Task 12: Minimal local eval runner + 10 cases
+### Task 12: Minimal local eval runner + 10 cases — ✅ DONE (`bd6d5fd`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **`asyncio.run` bridge.** Plan called `agent_mod.run(...)` synchronously; the actual driver is `async def run`, so the runner wraps the call in `asyncio.run(_run_case_async(...))`. Keeps the public `run_case(case)` interface synchronous so the documented one-liner (`uv run python -c "..."`) works without async ceremony.
+- **Tool patches go through `unittest.mock.patch.object` + `ExitStack`** instead of `pytest.MonkeyPatch()`. The runner is usable from a CLI / standalone script with no pytest dep at runtime.
+- **Async fakes return coroutines.** Each tool stub is `async def fake_x(...)` that returns the fixture data, since the agent driver awaits the tool functions (per [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md)).
+- **Budget bumped to 500 cloud_api_calls.** Plan's 200 was too tight: Prowler is registered as 200 cloud_calls + the two IAM tools at 10 each = 220, exhausting the envelope before the agent finishes.
+- **`run_case(case)` defaults to a fresh `tempfile.gettempdir() / "nexus-eval" / <case_id>-<uuid8>` workspace** so concurrent runs (and re-runs) don't collide, instead of the plan's hard-coded `/tmp/nexus-eval/<case_id>`.
+- **No LLM / Neo4j arguments.** Driver no longer takes an `llm` parameter; eval runs pass `neo4j_driver=None` so the registry skips KG tools entirely and the test doesn't need a Neo4j mock.
+- **7 unit tests** (vs plan's 3): load + lex-sort, pass + fail on count, pass + fail on severity, plus a regression-guard `test_all_shipped_cases_pass` that runs the full 10-case suite under pytest.
+- **Comprehensive `eval/README.md`** including the case schema, the documented one-liner, the Phase-1 trajectory (≥ 100 cases per agent), and a justification table for why these 10 cases were chosen first (severity-band coverage + IAM-enrichment branches + mapped-vs-fallback rule_id paths + 6 OCSF resource types).
+
+**Live run output:** `10/10 passed` across critical/high/medium severities for all six covered OCSF resource types.
 
 **Files:** Create `_eval_local.py`, `eval/cases/*.yaml`, `eval/README.md`, `tests/test_eval_local.py`
 

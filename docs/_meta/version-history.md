@@ -30,3 +30,4 @@
 | 2026-05-09 | charter        | 0.1.0   | live integration tests against Ollama qwen3:4b (skipped by default; opt in with NEXUS_LIVE_OLLAMA=1)               | F.3       |
 | 2026-05-09 | cloud-posture  | 0.1.0   | F.3 Task 10: agent driver — async run() wires charter + tools + OCSF schemas + summarizer + optional Neo4j KG      | F.3       |
 | 2026-05-10 | cloud-posture  | 0.1.0   | F.3 Task 11: LocalStack-backed integration tests for IAM no-MFA + admin policy + clean account                     | F.3       |
+| 2026-05-10 | cloud-posture  | 0.1.0   | F.3 Task 12: minimal local eval runner + 10 representative cases (10/10 passing); F.2 placeholder                  | F.3       |
