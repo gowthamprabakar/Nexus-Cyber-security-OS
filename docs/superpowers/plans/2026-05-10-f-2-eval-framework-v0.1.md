@@ -33,7 +33,7 @@
 | 7    | ✅ done    | `1b4d73c` | `CloudPostureEvalRunner` migrated from `_eval_local`; 10/10 shipped cases pass via `run_suite`      |
 | 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests |
 | 9    | ✅ done    | `a8700bf` | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests     |
-| 10   | ✅ done    | _next_    | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                      |
+| 10   | ✅ done    | `6293dec` | Markdown renderers — suite + comparison + gate; auditor-readable; 19 new tests                      |
 | 11   | ⬜ pending | —         | JSON output (machine-readable, schema-stable for Meta-Harness)                                      |
 | 12   | ⬜ pending | —         | Provider-parity helper: `run_across_providers(cases, runner, …)`                                    |
 | 13   | ⬜ pending | —         | CLI: `eval-framework run / compare / gate`                                                          |
