@@ -64,24 +64,24 @@ eval suite (10/10 cases via the F.2 framework)
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit | Notes                                                                                                           |
-| ---- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------- |
-| 1    | ⬜ pending | —      | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub, tests/test_smoke.py)              |
-| 2    | ⬜ pending | —      | OCSF v1.3 Identity / Entitlement Finding schema (class_uid TBD in design phase) + envelope wrapper              |
-| 3    | ⬜ pending | —      | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination) — `boto3` via `asyncio.to_thread`    |
-| 4    | ⬜ pending | —      | `aws_iam_simulate_principal_policy` async wrapper — IAM SimulatePrincipalPolicy API                             |
-| 5    | ⬜ pending | —      | `aws_access_analyzer_findings` async wrapper — Access Analyzer external-access findings                         |
-| 6    | ⬜ pending | —      | `permission_path_resolver` (custom, deterministic) — flatten managed + inline policies into effective grants    |
-| 7    | ⬜ pending | —      | Findings normalizer — overprivilege + dormant + external-access → OCSF Identity Finding                         |
-| 8    | ⬜ pending | —      | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)           |
-| 9    | ⬜ pending | —      | NLAH (README + tools.md + 2 OCSF examples + loader)                                                             |
-| 10   | ⬜ pending | —      | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)    |
-| 11   | ⬜ pending | —      | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1 |
-| 12   | ⬜ pending | —      | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)               |
-| 13   | ⬜ pending | —      | `IdentityEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `run_suite`                     |
-| 14   | ⬜ pending | —      | CLI: `identity-agent eval CASES_DIR` + `identity-agent run --contract`                                          |
-| 15   | ⬜ pending | —      | Package README + runbook (`runbooks/scan_aws_account.md`) + ADR-007 v1.1 conformance addendum                   |
-| 16   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2)                         |
+| Task | Status     | Commit | Notes                                                                                                            |
+| ---- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ done    | _next_ | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub); `charter.llm_adapter` import test |
+| 2    | ⬜ pending | —      | OCSF v1.3 Identity / Entitlement Finding schema (class_uid TBD in design phase) + envelope wrapper               |
+| 3    | ⬜ pending | —      | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination) — `boto3` via `asyncio.to_thread`     |
+| 4    | ⬜ pending | —      | `aws_iam_simulate_principal_policy` async wrapper — IAM SimulatePrincipalPolicy API                              |
+| 5    | ⬜ pending | —      | `aws_access_analyzer_findings` async wrapper — Access Analyzer external-access findings                          |
+| 6    | ⬜ pending | —      | `permission_path_resolver` (custom, deterministic) — flatten managed + inline policies into effective grants     |
+| 7    | ⬜ pending | —      | Findings normalizer — overprivilege + dormant + external-access → OCSF Identity Finding                          |
+| 8    | ⬜ pending | —      | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)            |
+| 9    | ⬜ pending | —      | NLAH (README + tools.md + 2 OCSF examples + loader)                                                              |
+| 10   | ⬜ pending | —      | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)     |
+| 11   | ⬜ pending | —      | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1  |
+| 12   | ⬜ pending | —      | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)                |
+| 13   | ⬜ pending | —      | `IdentityEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `run_suite`                      |
+| 14   | ⬜ pending | —      | CLI: `identity-agent eval CASES_DIR` + `identity-agent run --contract`                                           |
+| 15   | ⬜ pending | —      | Package README + runbook (`runbooks/scan_aws_account.md`) + ADR-007 v1.1 conformance addendum                    |
+| 16   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2)                          |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) · [**ADR-007 v1.1**](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) · [ADR-008](../../_meta/decisions/ADR-008-eval-framework.md).
 

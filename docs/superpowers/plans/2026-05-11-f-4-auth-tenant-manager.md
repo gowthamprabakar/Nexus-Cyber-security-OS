@@ -66,7 +66,7 @@
 
 | Task | Status     | Commit | Notes                                                                                                                  |
 | ---- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 1    | ⬜ pending | —      | Bootstrap `packages/control-plane/` shape (pyproject + auth/ + tenants/ + tests + README stub) — coordinate with F.5   |
+| 1    | ✅ done    | _next_ | Bootstrap `packages/control-plane/` (pyproject + auth/ + tenants/ + api/ + README); 3 smoke tests; F.5 boundary set    |
 | 2    | ⬜ pending | —      | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; first migration                                               |
 | 3    | ⬜ pending | —      | Auth0 management-API client (httpx + retries) — create connection, fetch users, send invite                            |
 | 4    | ⬜ pending | —      | JWT verifier — Auth0 JWKS fetch + cache + signature/exp/iss/aud validation                                             |
