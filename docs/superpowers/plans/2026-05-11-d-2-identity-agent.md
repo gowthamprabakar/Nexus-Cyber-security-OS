@@ -228,10 +228,10 @@ async def aws_iam_list_identities(
 
 `IdentityListing` is a frozen dataclass: `users`, `roles`, `groups`, `attachments` (principal → policy ARNs).
 
-- [ ] **Step 1: Write failing tests** with `moto` (`@mock_aws` in async context-manager form). Pre-seed users + roles + groups + policies.
-- [ ] **Step 2: Implement** — boto3 + asyncio.to*thread + paginated `list_users` / `list_roles` / `list_groups` + `list_attached*\*\_policies`.
-- [ ] **Step 3: Tests pass** — ≥ 6 tests including pagination edge case (page-size = 1 across 3 users).
-- [ ] **Step 4: Commit** — `feat(identity): aws iam list identities async wrapper (D.2 task 3)`.
+- [x] **Step 1: Write failing tests** with `moto` (`@mock_aws` in async context-manager form). Pre-seed users + roles + groups + policies.
+- [x] **Step 2: Implement** — boto3 + asyncio.to*thread + paginated `list_users` / `list_roles` / `list_groups` + `list_attached*\*\_policies`.
+- [x] **Step 3: Tests pass** — 11/11 (incl. 25-user pagination case).
+- [x] **Step 4: Commit** — `e54962c feat(d2,f4): aws iam listing tool + auth0 management api client (D.2 + F.4 task 3)`. Bundled with F.4 Task 3.
 
 ---
 

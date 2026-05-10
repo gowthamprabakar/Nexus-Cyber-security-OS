@@ -226,10 +226,10 @@ Async httpx client per ADR-005 / ADR-007 v1.1's HTTP-wrapper convention. Wraps:
 - `POST /api/v2/organizations` — create a SAML org (for enterprise tenants).
 - `POST /oauth/token` — fetch a management API access token (cached for ~24h).
 
-- [ ] **Step 1: Write failing tests** with respx — happy paths + 4xx error mapping + 5xx retry.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 8 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): auth0 management api client (F.4 task 3)`.
+- [x] **Step 1: Write failing tests** with respx — happy paths + 4xx error mapping + 5xx retry.
+- [x] **Step 2: Implement**.
+- [x] **Step 3: Tests pass** — 10/10 (token cache, invite, list, create-org, 5xx retry/exhaust, 429 retry, oauth 4xx).
+- [x] **Step 4: Commit** — `e54962c feat(d2,f4): aws iam listing tool + auth0 management api client (D.2 + F.4 task 3)`. Bundled with D.2 Task 3.
 
 ---
 
