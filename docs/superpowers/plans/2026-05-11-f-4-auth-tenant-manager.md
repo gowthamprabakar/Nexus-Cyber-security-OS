@@ -67,7 +67,7 @@
 | Task | Status     | Commit    | Notes                                                                                                                  |
 | ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 1    | ✅ done    | `aa0f687` | Bootstrap `packages/control-plane/` (pyproject + auth/ + tenants/ + api/ + README); 3 smoke tests; F.5 boundary set    |
-| 2    | ✅ done    | _next_    | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; alembic baseline `0001_initial`; 19 tests                     |
+| 2    | ✅ done    | `9d4fbb5` | `Tenant` + `User` + `Role` pydantic + SQLAlchemy models; alembic baseline `0001_initial`; 19 tests                     |
 | 3    | ⬜ pending | —         | Auth0 management-API client (httpx + retries) — create connection, fetch users, send invite                            |
 | 4    | ⬜ pending | —         | JWT verifier — Auth0 JWKS fetch + cache + signature/exp/iss/aud validation                                             |
 | 5    | ⬜ pending | —         | Tenant resolver — JWT custom claims → `(tenant_id, user_id)`; first-login auto-provision                               |

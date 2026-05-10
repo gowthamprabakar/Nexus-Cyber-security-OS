@@ -67,7 +67,7 @@ eval suite (10/10 cases via the F.2 framework)
 | Task | Status     | Commit    | Notes                                                                                                            |
 | ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
 | 1    | ✅ done    | `aa0f687` | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub); `charter.llm_adapter` import test |
-| 2    | ✅ done    | _next_    | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 17 tests; pattern check ✓     |
+| 2    | ✅ done    | `9d4fbb5` | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 17 tests; pattern check ✓     |
 | 3    | ⬜ pending | —         | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination) — `boto3` via `asyncio.to_thread`     |
 | 4    | ⬜ pending | —         | `aws_iam_simulate_principal_policy` async wrapper — IAM SimulatePrincipalPolicy API                              |
 | 5    | ⬜ pending | —         | `aws_access_analyzer_findings` async wrapper — Access Analyzer external-access findings                          |
