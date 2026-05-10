@@ -43,3 +43,4 @@
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 1: bootstrap apache-2.0 package skeleton (pyproject, py.typed, cli stub)                                    | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 2: typed pydantic models — EvalCase / EvalResult / SuiteResult / EvalTrace; 19 tests                        | F.2       |
 | 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 3: YAML loader — `load_case_file` + `load_cases`; loads cloud-posture suite unchanged; 11 new tests         | F.2       |
+| 2026-05-10 | eval-framework | 0.1.0   | F.2 Task 4: EvalRunner Protocol (@runtime_checkable) + FakeRunner test double; 8 tests                               | F.2       |
