@@ -75,3 +75,6 @@
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 13: `VulnerabilityEvalRunner` + entry-point; 10/10 via `eval-framework run --runner vulnerability`          | D.1       |
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 14: CLI — `vuln-agent eval` + `vuln-agent run --contract --image`; 5 tests via Click runner                 | D.1       |
 | 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 15: package README (with ADR-007 conformance addendum) + scan-image runbook                                 | D.1       |
+| 2026-05-11 | vulnerability  | 0.1.0   | D.1 Task 16: final verification — 6/6 gates green; 96.84% cov; **ADR-007 validated 10/10** with 1 amendment queued   | D.1       |
+| 2026-05-11 | docs/\_meta    | —       | d1-verification-2026-05-11.md — D.1 accepted as code-complete; ADR-007 conformance review                            | D.1       |
+| 2026-05-11 | docs/\_meta    | —       | system-readiness re-issued (2026-05-11): 478 tests, weighted Wiz ~10–12%, 2 of 18 agents shipped, ADR-007 validated  | D.1       |

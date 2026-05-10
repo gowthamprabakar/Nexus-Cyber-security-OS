@@ -2,44 +2,26 @@
 
 |                    |                                                                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Snapshot date**  | 2026-05-11 (D.1 closeout — first agent built to ADR-007 template)                                                                        |
+| **Snapshot date**  | 2026-05-10 (end of day — F.2 closeout)                                                                                                   |
 | **Phase position** | Phase 1a (Foundation), Week ~2 of 12                                                                                                     |
 | **Audience**       | Engineering, founders, design partners' security teams                                                                                   |
 | **Purpose**        | Honest assessment of what's built, what's not, and what's needed before any external commitment                                          |
 | **Cadence**        | Re-issue at end of each phase milestone (Phase 1a complete → Phase 1b complete → …); date-stamped historical snapshots in this directory |
-| **Supersedes**     | [system-readiness-2026-05-10.md](system-readiness-2026-05-10.md), [system-readiness-2026-05-09.md](system-readiness-2026-05-09.md)       |
+| **Supersedes**     | [system-readiness-2026-05-09.md](system-readiness-2026-05-09.md)                                                                         |
 
 ---
 
 ## TL;DR
 
-**ADR-007 is no longer a hypothesis.** D.1 (Vulnerability Agent) shipped end-of-day 2026-05-11: 16 of 16 tasks done, 6 of 6 verification gates green, 96.84% coverage, **10 of 10 ADR-007 patterns validated** with one amendment recommended ([verification record](d1-verification-2026-05-11.md)). The Cloud Posture reference template generalizes to a domain that shares no tooling with CSPM (no Prowler, no boto3, no AWS at all). The remaining 11 Track-D agents adopt a verified canon, not a hypothesis.
-
-**Two foundations + two agents now real.** F.1 (charter) + F.2 (eval framework) ship as the Apache 2.0 substrate. F.3 (Cloud Posture) + D.1 (Vulnerability) are the first two production agents, both running end-to-end against the eval framework via the `nexus_eval_runners` entry-point group.
+**Two foundations now real.** This morning we marked F.3 (Cloud Posture reference agent) code-complete. End-of-day, F.2 (Eval Framework v0.1) joined it: 16 of 16 tasks done, 6 of 6 verification gates green, 94.93% coverage, ADR-008 accepted ([verification record](f2-verification-2026-05-10.md)). The Apache 2.0 OSS pair (charter + eval-framework) is now ready to release alongside each other per [ADR-001](decisions/ADR-001-monorepo-bootstrap.md) when [O.6](../superpowers/plans/2026-05-08-build-roadmap.md) ships. **Cross-provider parity (ADR-003) is no longer aspirational** — `run_across_providers` + `diff_results` is the substrate today.
 
 **What's still the same:** the platform is **not** ready for paying customers, edge deployment, vertical content packs, multi-cloud, ChatOps, remediation, self-evolution, or "85% Wiz" coverage claims. None of those are deficiencies — they're scheduled work for Phase 1a's remaining tracks (F.4 auth, F.5 memory, F.6 audit) and Phase 1b/1c.
 
-**Coverage against Wiz today:** ~10–12% on the user-weighted capability framework, up from ~6.7% yesterday. The jump is concentrated in Vulnerability (D.1 → ~30% of the 0.15 weight = ~4.5pp) plus the substrate compounding effects.
+**Coverage against Wiz today:** ~6.7% on the user-weighted capability framework, unchanged from this morning (F.2 extends substrate, not customer-visible detection). The eval substrate compounds future progress — every Track-D agent ships through the same case-schema → runner → suite → comparison → gate flow, with a one-line `pyproject.toml` entry-point change.
 
-**Recommendation:** **Newly suitable** for a published-today OSS announcement of the Apache 2.0 charter + eval-framework pair (gated only by O.6 hardening and a tag). **Newly suitable** for a design-partner demo against a real registry image — the [scan-image runbook](../../packages/agents/vulnerability/runbooks/scan_image.md) covers the operator path end-to-end.
+**Recommendation:** still don't show this to a paying prospect. **Suitable** to demo end-to-end to a design partner who has signed an LOI. **Newly suitable** for a published-today OSS announcement of the Apache 2.0 charter + eval-framework pair (gated only by O.6 hardening and a tag).
 
 ---
-
-## What changed since 2026-05-10 (yesterday's F.2 closeout)
-
-|                                 | Yesterday (F.2 closeout) |                              Today (D.1 closeout) |
-| ------------------------------- | -----------------------: | ------------------------------------------------: |
-| **Production agents shipped**   |                  1 of 18 |                                       **2 of 18** |
-| **D.1 tasks shipped**           |                        0 |                                      **16 of 16** |
-| **ADR-007 patterns validated**  |       1 of 10 (only F.3) |                                      **10 of 10** |
-| **Total tests passing**         |                      348 |    **478** (+130 from D.1; full repo, +5 skipped) |
-| **Vulnerability coverage**      |                      n/a |                                        **96.84%** |
-| **Source files (mypy strict)**  |                       57 |                                            **71** |
-| **Total Python LOC (monorepo)** |                    9,334 |                                        **14,562** |
-| **ADRs in force**               |                        8 |                                                 8 |
-| **ADR-007 amendments queued**   |                      n/a | **1 (hoist `llm.py` into `charter.llm_adapter`)** |
-| **Commits this session**        |                       89 |                                           **133** |
-| **Weighted Wiz coverage**       |                    ~6.7% |                                       **~10–12%** |
 
 ## What changed since the morning snapshot (2026-05-10 AM)
 
@@ -204,35 +186,33 @@ The honest list. Each item maps to a sub-plan in [`build-roadmap.md`](../superpo
 
 ## Recommended next 4–6 weeks
 
-D.1 is now retired from this list — shipped 2026-05-11 with 10/10 ADR-007 patterns validated.
+In dependency order. F.2 is now retired from this list — it shipped end-of-day 2026-05-10.
 
-1. **Hoist `llm.py` into `charter.llm_adapter`.** The single ADR-007 amendment surfaced by D.1's risk-down. ~1 day. **Do this before D.2 starts** so a third copy doesn't enter the codebase. Small charter PR; bumps ADR-007 to v1.1 with the amendment recorded.
+1. **F.4 Auth + tenant manager.** Auth0 SSO, SCIM, RBAC, MFA. Parallel-safe with F.5. ~3 weeks. **Highest leverage now** — every Track-D agent eventually needs tenant-scoped auth; lands the SOC 2 Type I starting condition.
 
-2. **F.4 Auth + tenant manager.** Auth0 SSO, SCIM, RBAC, MFA. Parallel-safe with F.5. ~3 weeks. Every Track-D agent eventually needs tenant-scoped auth; lands the SOC 2 Type I starting condition.
+2. **F.5 Memory engines integration.** TimescaleDB (episodic) + PostgreSQL (procedural) + Neo4j Aura (semantic). Per-tenant workspace pattern enforced. ~3 weeks. Could be reduced to PostgreSQL + JSONB + pgvector for Phase 1a per risk #5.
 
-3. **F.5 Memory engines integration.** TimescaleDB (episodic) + PostgreSQL (procedural) + Neo4j Aura (semantic). Per-tenant workspace pattern enforced. ~3 weeks. Could be reduced to PostgreSQL + JSONB + pgvector for Phase 1a per risk #5.
+3. **F.6 Audit Agent (#14).** Append-only hash-chained log writer at the _platform_ level (not just per-invocation). Builds on the charter audit primitive that F.3 just verified. ~2 weeks.
 
-4. **F.6 Audit Agent (#14).** Append-only hash-chained log writer at the _platform_ level (not just per-invocation). Builds on the charter audit primitive that F.3 + D.1 both verified. ~2 weeks.
+4. **D.1 Vulnerability Agent.** First agent built to the Cloud Posture template. **Risk-down moment** for [ADR-007](decisions/ADR-007-cloud-posture-as-reference-agent.md) — tests whether the 10 patterns generalize. ~4 weeks. Now also exercises the new eval-framework pipeline: registers a new runner via the `nexus_eval_runners` entry-point group and wires its eval cases through `eval-framework run / compare / gate`.
 
-5. **D.2 Identity Agent.** Second Track-D agent. Standalone CIEM (cloud-posture's IAM tools were partial). Adopts ADR-007 v1.1 (post-amendment). ~5 weeks per build-roadmap.
+5. **P0.7 spike — Anthropic budget enforcement at customer level.** Foundation for the per-tenant aggregator missing from the charter. ~1 week.
 
-6. **P0.7 spike — Anthropic budget enforcement at customer level.** Foundation for the per-tenant aggregator missing from the charter. ~1 week.
+6. **P0.10 (new sub-plan) — JetStream cluster + leaf-node + first consumer.** Validates ADR-004 before edge plane work begins. ~2 weeks.
 
-7. **P0.10 (new sub-plan) — JetStream cluster + leaf-node + first consumer.** Validates ADR-004 before edge plane work begins. ~2 weeks.
+7. **O.6 OSS releases.** Apache 2.0 charter + eval-framework can now ship together. Tag, push to public GitHub, contribution guide, code of conduct. ~2 weeks. **Newly unblocked today** — before F.2 closeout, this couldn't ship.
 
-8. **O.6 OSS releases.** Apache 2.0 charter + eval-framework. Tag, push to public GitHub, contribution guide, code of conduct. ~2 weeks.
-
-9. **First design-partner LOI conversion.** Now demo-able against TWO real surfaces: AWS dev account (cloud-posture) and a registry image (vulnerability). Calendar-bounded by external negotiation; not engineering-bounded.
+8. **First design-partner LOI conversion.** Demo-able end-to-end via the smoke runbook. Calendar-bounded by external negotiation; not engineering-bounded.
 
 ---
 
 ## Looking forward — the next 3 months
 
-| Month            | Outcome                                                                                                                                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M2 (current)** | F.3 done ✅. F.2 done ✅. **D.1 done ✅** — ADR-007 validated 10/10. ADR-007 v1.1 amendment (`charter.llm_adapter` hoist) lands first. F.4 auth + F.5 memory + F.6 audit + D.2 Identity start in parallel. **Phase 1a hits the half-way mark.** Capability coverage ~10–12%. |
-| M3               | F.6 Audit Agent. D.1 Vulnerability + D.2 Identity in dev. **Phase 1a exit gate** — multi-agent reasoning, eval framework gating NLAH changes, auth in place, memory engines flowing.                                                                                         |
-| M4               | First detection-breadth agents in dev (D.1–D.6). First edge agent prototype (E.1) running in a Helm dry-run. Capability coverage ~25%.                                                                                                                                       |
+| Month            | Outcome                                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M2 (current)** | F.3 done ✅. F.2 done ✅. F.4 auth lands. F.5 memory engines wired. F.6 audit agent in dev. **Phase 1a hits the half-way mark.** Capability coverage moves from ~6.7% → ~12% as the second agent (Vulnerability or Identity) lands to template. |
+| M3               | F.6 Audit Agent. D.1 Vulnerability + D.2 Identity in dev. **Phase 1a exit gate** — multi-agent reasoning, eval framework gating NLAH changes, auth in place, memory engines flowing.                                                            |
+| M4               | First detection-breadth agents in dev (D.1–D.6). First edge agent prototype (E.1) running in a Helm dry-run. Capability coverage ~25%.                                                                                                          |
 
 ---
 
@@ -254,9 +234,8 @@ This is the project's mirror. Keep it accurate.
 
 ## Historical snapshots
 
-- [system-readiness-2026-05-10.md](system-readiness-2026-05-10.md) — F.2 closeout (348 tests, F.2 v0.1 shipped, ~6.7% weighted Wiz coverage)
 - [system-readiness-2026-05-09.md](system-readiness-2026-05-09.md) — Phase 1a Week 2 baseline (110 tests, 9/16 F.3 tasks shipped, ~1.25% weighted Wiz coverage)
-- the F.3-closeout (morning of 2026-05-10) revision is preserved in git history at commit `b539150`; reachable via `git show b539150:docs/_meta/system-readiness.md`
+- this file's morning revision (F.3-closeout) is preserved in git history at commit `b539150`; reachable via `git show b539150:docs/_meta/system-readiness.md`
 
 ---
 
