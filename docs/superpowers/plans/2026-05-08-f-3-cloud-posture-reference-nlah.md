@@ -38,7 +38,7 @@ This plan grew three new tasks during execution to absorb the architectural deci
 | 8.5  | ✅ done    | `cec4ddc` | NEW — `charter.llm` + `charter.llm_anthropic` (per ADR-003); current_charter() contextvar |
 | 9    | ✅ done    | `b02e332` | LLM adapter — `LLMConfig` + `make_provider` + `config_from_env` over `charter.llm`        |
 | 10   | ✅ done    | `0905108` | Cloud Posture agent driver — async; OCSF; charter + tools + summarizer + KG; 10 tests     |
-| 11   | ⬜ pending | —         | LocalStack integration test                                                               |
+| 11   | ✅ done    | `ab1f4ba` | LocalStack integration tests (skipped by default; opt in with NEXUS_LIVE_LOCALSTACK=1)    |
 | 12   | ⬜ pending | —         | Minimal local eval runner + 10 cases                                                      |
 | 13   | ⬜ pending | —         | CLI                                                                                       |
 | 14   | ⬜ pending | —         | AWS dev-account smoke runbook                                                             |
@@ -2111,7 +2111,17 @@ git commit -m "feat(cloud-posture): agent driver wiring Prowler + IAM enrichment
 
 ---
 
-### Task 11: LocalStack-backed integration test
+### Task 11: LocalStack-backed integration test — ✅ DONE (`ab1f4ba`)
+
+**Notes on the implementation as shipped (delta from plan-as-drafted):**
+
+- **Same skip strategy as the live-Ollama tests** ([`packages/charter/tests/integration/`](../../../packages/charter/tests/integration/)): env-var gate (`NEXUS_LIVE_LOCALSTACK=1`) plus a graceful skip when the endpoint is unreachable. Default `pytest` shows clear instructions for bringing infra up. No surprise CI failures.
+- **Three tests instead of one.** Plan had a single IAM-no-MFA test; the agent driver now also detects admin-equivalent customer-managed policies and handles clean accounts, so we cover all three paths against real LocalStack-backed boto3 calls.
+- **Tests live in `tests/integration/`** subdirectory matching the Ollama-test layout — keeps unit tests fast and CI-clean while making the live tests easy to find.
+- **`run` is awaited.** The plan's `run(contract=..., llm=..., neo4j_driver=...)` (sync, with `llm=` arg) becomes `await run(contract=..., neo4j_driver=None)` per the Task 10 driver shape.
+- **Assertions read OCSF, not the old `Finding.title`.** Matches the post-Task-6.5 wire format: `f["finding_info"]["uid"]` for IDs, `f["severity_id"]` for severity (5 = Critical).
+- **Prowler is stubbed** with an async no-op fixture — LocalStack doesn't host a Prowler binary, so the IAM SDK paths are what's actually exercised against LocalStack.
+- **Default `pytest packages/`:** 189 passed, 5 skipped (2 Ollama + 3 LocalStack); ruff + mypy strict clean.
 
 **Files:** Create `tests/conftest.py`, `tests/test_agent_integration.py`
 
