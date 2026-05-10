@@ -32,7 +32,7 @@
 | 6    | ✅ done    | `1e13530` | `build_trace_from_audit_log` parser + verifier wrap + run_suite integration; 12 new tests           |
 | 7    | ✅ done    | `1b4d73c` | `CloudPostureEvalRunner` migrated from `_eval_local`; 10/10 shipped cases pass via `run_suite`      |
 | 8    | ✅ done    | `7b36e5f` | `diff_results` — case-id-keyed join, regression/improvement classification, drift markers; 13 tests |
-| 9    | ✅ done    | _next_    | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests     |
+| 9    | ✅ done    | `a8700bf` | `Gate` + `apply_gate` — pass-rate, regressions vs baseline, token-delta, p95 duration; 15 tests     |
 | 10   | ⬜ pending | —         | Markdown report renderers (suite + comparison + gate)                                               |
 | 11   | ⬜ pending | —         | JSON output (machine-readable, schema-stable for Meta-Harness)                                      |
 | 12   | ⬜ pending | —         | Provider-parity helper: `run_across_providers(cases, runner, …)`                                    |
