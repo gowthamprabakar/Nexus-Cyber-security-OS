@@ -81,3 +81,5 @@
 | 2026-05-11 | charter        | 0.1.0   | ADR-007 v1.1 amendment — `charter.llm_adapter` hoisted from per-agent `llm.py` copies; 19 canonical tests            | ADR-007   |
 | 2026-05-11 | docs/decisions | —       | ADR-007 v1.1 — LLM-adapter hoist (per-agent `llm.py` deleted; charter is the canonical home)                         | ADR-007   |
 | 2026-05-11 | docs/\_meta    | —       | system-readiness-2026-05-11-eod.md — timestamped EOD snapshot with rate-of-completion across 6 dimensions            | readiness |
+| 2026-05-11 | docs/plans     | —       | D.2 Identity Agent plan written (16 tasks; 2nd consumer of ADR-007 v1.1; CIEM via boto3 IAM + Access Analyzer)       | D.2       |
+| 2026-05-11 | docs/plans     | —       | F.4 Auth + Tenant Manager plan written (12 tasks; Auth0 SSO + SCIM + RBAC + MFA; SOC 2 Type I starter evidence)      | F.4       |
