@@ -27,12 +27,15 @@ from charter.memory.models import (
     RelationshipModel,
 )
 from charter.memory.procedural import PlaybookRow, ProceduralStore
+from charter.memory.semantic import MAX_TRAVERSAL_DEPTH, EntityRow, SemanticStore
 
 __all__ = [
     "EMBEDDING_DIM",
+    "MAX_TRAVERSAL_DEPTH",
     "Base",
     "Embedding",
     "EntityModel",
+    "EntityRow",
     "EpisodeModel",
     "EpisodeRow",
     "EpisodicStore",
@@ -41,4 +44,5 @@ __all__ = [
     "PlaybookRow",
     "ProceduralStore",
     "RelationshipModel",
+    "SemanticStore",
 ]
