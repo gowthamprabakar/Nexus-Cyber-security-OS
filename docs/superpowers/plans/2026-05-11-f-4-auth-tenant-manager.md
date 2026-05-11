@@ -74,7 +74,7 @@
 | 6    | ✅ done    | `90d176b` | RBAC table — 3 roles × 7 actions; 27 tests; **Q3 resolved** (hard-coded; DB-backed deferred to Phase 1c)               |
 | 7    | ✅ done    | `46a3388` | SCIM 2.0 endpoint — POST/GET/PATCH/DELETE /Users; HMAC-signed; 14 tests via FastAPI TestClient + aiosqlite             |
 | 8    | ✅ done    | `1120d1f` | FastAPI surface — login redirect, callback, /auth/me, /tenants/me, POST /tenants (admin); 15 tests + audit hook        |
-| 9    | ⬜ pending | —         | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
+| 9    | ✅ done    | `da6928c` | MFA enforcement gate — `amr` must contain `mfa` for all actions except READ_FINDINGS; 10 tests                         |
 | 10   | ⬜ pending | —         | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
 | 11   | ⬜ pending | —         | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
 | 12   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; integration test against Auth0 sandbox; SOC 2 evidence checklist) |
@@ -351,10 +351,10 @@ def require_mfa(token: VerifiedToken) -> None:
         raise PermissionDenied("MFA required for this action")
 ```
 
-- [ ] **Step 1: Write failing tests** — MFA-present admin action allowed; MFA-absent admin action rejected; MFA-absent read-only action allowed.
-- [ ] **Step 2: Implement** — wire into the FastAPI dependency that gates admin routes.
-- [ ] **Step 3: Tests pass** — ≥ 6 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): mfa enforcement on admin actions (F.4 task 9)`.
+- [x] **Step 1: Write failing tests** — predicate, require_mfa raise/pass, requires_mfa_for matrix, integration test (POST /tenants 403 without MFA).
+- [x] **Step 2: Implement** in `control_plane.auth.mfa`; wire `require_mfa` into POST /tenants.
+- [x] **Step 3: Tests pass** — 10/10 (9 unit + 1 integration); failure emits `mfa_required_failure` via existing audit hook.
+- [x] **Step 4: Commit** — `da6928c feat(d2,f4): identity nlah bundle + mfa enforcement (D.2 + F.4 task 9)`. Bundled with D.2 Task 9.
 
 ---
 

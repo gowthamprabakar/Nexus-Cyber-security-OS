@@ -74,7 +74,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 6    | ✅ done    | `90d176b` | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
 | 7    | ✅ done    | `46a3388` | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
 | 8    | ✅ done    | `1120d1f` | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
-| 9    | ⬜ pending | —         | NLAH (README + tools.md + 2 OCSF examples + loader)                                                              |
+| 9    | ✅ done    | `da6928c` | NLAH bundle + loader; 8 tests; hoist-candidate flag logged for charter.nlah_loader                               |
 | 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)     |
 | 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1  |
 | 12   | ⬜ pending | —         | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)                |
@@ -329,12 +329,12 @@ Mirror D.1's [`summarizer.py`](../../../packages/agents/vulnerability/src/vulner
 
 Mirror D.1 [`nlah/`](../../../packages/agents/vulnerability/src/vulnerability/nlah/) — README + tools.md + 2 OCSF-shaped examples. Examples: (a) admin-no-MFA principal, (b) clean account.
 
-- [ ] **Step 1: Write the four files**.
-- [ ] **Step 2: Loader test** — copy-with-rename of D.1's nlah_loader test (8 tests).
-- [ ] **Step 3: Tests pass**.
-- [ ] **Step 4: Commit** — `feat(identity): nlah (D.2 task 9)`.
+- [x] **Step 1: Write the four files** — README + tools.md + admin-no-mfa example + clean-account example.
+- [x] **Step 2: Loader test** — copy-with-rename of D.1's nlah_loader test.
+- [x] **Step 3: Tests pass** — 8/8.
+- [x] **Step 4: Commit** — `da6928c feat(d2,f4): identity nlah bundle + mfa enforcement (D.2 + F.4 task 9)`. Bundled with F.4 Task 9.
 
-**Pattern check:** the loader is also identical to cloud-posture's. **Candidate for hoisting into `charter.nlah_loader`** — log this and surface in Task 16's conformance review.
+**Pattern check confirmed:** the loader is materially identical across three agents (cloud-posture, vulnerability, identity). **Hoist candidate for `charter.nlah_loader`** logged in the module docstring and surfaces in Task 16's conformance review.
 
 ---
 
