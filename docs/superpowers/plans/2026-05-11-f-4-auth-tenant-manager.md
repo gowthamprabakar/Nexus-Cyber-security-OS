@@ -75,7 +75,7 @@
 | 7    | ✅ done    | `46a3388` | SCIM 2.0 endpoint — POST/GET/PATCH/DELETE /Users; HMAC-signed; 14 tests via FastAPI TestClient + aiosqlite             |
 | 8    | ✅ done    | `1120d1f` | FastAPI surface — login redirect, callback, /auth/me, /tenants/me, POST /tenants (admin); 15 tests + audit hook        |
 | 9    | ✅ done    | `da6928c` | MFA enforcement gate — `amr` must contain `mfa` for all actions except READ_FINDINGS; 10 tests                         |
-| 10   | ⬜ pending | —         | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
+| 10   | ✅ done    | `c099c79` | Charter audit chain — `ControlPlaneAuditor` wraps `charter.AuditLog`; 9 tests; chain verifies via charter.verifier     |
 | 11   | ⬜ pending | —         | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
 | 12   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; integration test against Auth0 sandbox; SOC 2 evidence checklist) |
 
@@ -371,10 +371,10 @@ Per ADR-002, every auth event emits a hash-chained audit entry. Events:
 
 These bridge into the charter audit chain via a small adapter.
 
-- [ ] **Step 1: Write failing tests** — every event type produces a hash-chained entry; chain verifies via `charter.verifier.verify_audit_log`.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 8 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): charter-instrumented audit for auth events (F.4 task 10)`.
+- [x] **Step 1: Write failing tests** — chain integrity, charter.verifier round-trip, concurrent emits serialized, payload/agent/run_id fidelity, action-name preservation.
+- [x] **Step 2: Implement** `ControlPlaneAuditor` (async lock + `to_thread` around `charter.AuditLog.append`) + `make_audit_emit` adapter for the FastAPI hook.
+- [x] **Step 3: Tests pass** — 9/9.
+- [x] **Step 4: Commit** — `c099c79 feat(d2,f4): consume charter.llm_adapter + charter audit chain (D.2 + F.4 task 10)`. Bundled with D.2 Task 10. The auth_routes / scim handlers continue to call their existing `audit_emit` hook — Task 11 (or the operator runbook) wires `ControlPlaneAuditor` as the default in production.
 
 ---
 

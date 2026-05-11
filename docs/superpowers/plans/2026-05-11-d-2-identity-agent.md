@@ -75,7 +75,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 7    | ✅ done    | `46a3388` | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
 | 8    | ✅ done    | `1120d1f` | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
 | 9    | ✅ done    | `da6928c` | NLAH bundle + loader; 8 tests; hoist-candidate flag logged for charter.nlah_loader                               |
-| 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)     |
+| 10   | ✅ done    | `c099c79` | Consumes `charter.llm_adapter` directly; ADR-007 v1.1 twice-validated; anti-pattern guard test added             |
 | 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1  |
 | 12   | ⬜ pending | —         | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)                |
 | 13   | ⬜ pending | —         | `IdentityEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `run_suite`                      |
@@ -348,9 +348,9 @@ from charter.llm_adapter import LLMConfig, make_provider, config_from_env
 
 This task validates the hoist: if the import works without modification across agent boundaries, ADR-007 v1.1 is twice-confirmed.
 
-- [ ] **Step 1: Confirm import works** — `python -c "from charter.llm_adapter import LLMConfig, make_provider, config_from_env"` succeeds.
-- [ ] **Step 2: No new tests** — the canonical 19 tests at `packages/charter/tests/test_llm_adapter.py` already cover the surface.
-- [ ] **Step 3: Commit** — `chore(identity): consume charter.llm_adapter (D.2 task 10; adr-007 v1.1)`.
+- [x] **Step 1: Confirm import works** — symbols resolve from `charter.llm_adapter`; smoke-test asserts this.
+- [x] **Step 2: Anti-pattern guard added** — `test_no_per_agent_llm_module` asserts `identity.llm` does NOT exist, so the regression cannot land silently. This goes beyond the plan's "no new tests" stance because the guard is cheap and crucial.
+- [x] **Step 3: Commit** — `c099c79 feat(d2,f4): consume charter.llm_adapter + charter audit chain (D.2 + F.4 task 10)`. Bundled with F.4 Task 10. ADR-007 v1.1 twice-validated (D.1 was first).
 
 **Note:** Task 11's agent.run signature accepts `llm_provider: LLMProvider | None = None` per the canon; the adapter is wired through but not called in v0.1 deterministic flow.
 
