@@ -278,6 +278,28 @@ def test_post_tenants_creates_row_and_calls_auth0_mgmt(
     assert ("globex", "Globex Corp") in fake_auth0.created_orgs
 
 
+def test_post_tenants_requires_mfa_even_for_admin(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An admin without MFA in `amr` must be rejected with 403."""
+    admin_no_mfa = VerifiedToken(
+        sub="auth0|admin",
+        tenant_id=TENANT_ID,
+        roles=("admin",),
+        expires_at=datetime.now(UTC),
+        amr=("pwd",),  # no mfa
+    )
+    client, fake_auth0 = _make_client(session_factory, token=admin_no_mfa)
+    response = client.post(
+        "/tenants",
+        json={"name": "skipsmfa"},
+        headers={"authorization": "Bearer tok-abc"},
+    )
+    assert response.status_code == 403
+    assert "MFA" in response.json()["detail"]
+    assert fake_auth0.created_orgs == []
+
+
 def test_post_tenants_returns_403_for_non_admin(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

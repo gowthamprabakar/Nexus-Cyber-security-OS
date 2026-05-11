@@ -36,6 +36,7 @@ from ulid import ULID
 
 from control_plane.auth.auth0_client import Auth0Client
 from control_plane.auth.jwt_verifier import VerifiedToken
+from control_plane.auth.mfa import MfaRequiredError, require_mfa, requires_mfa_for
 from control_plane.auth.rbac import Action, permission_for
 from control_plane.tenants.models import Role, TenantRow
 
@@ -173,6 +174,15 @@ def make_auth_router(
     ) -> dict[str, Any]:
         if not _has_admin_action(verified.roles, Action.MANAGE_TENANT):
             raise HTTPException(status_code=403, detail="admin role required")
+        if requires_mfa_for(Action.MANAGE_TENANT):
+            try:
+                require_mfa(verified)
+            except MfaRequiredError as e:
+                await audit_emit(
+                    "mfa_required_failure",
+                    {"sub": verified.sub, "action": Action.MANAGE_TENANT.value},
+                )
+                raise HTTPException(status_code=403, detail=str(e)) from e
 
         org = await auth0_client.create_organization(name=body.name, display_name=body.display_name)
 

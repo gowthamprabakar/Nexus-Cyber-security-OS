@@ -1,0 +1,63 @@
+"""Concatenate the NLAH directory into a single system prompt for the LLM.
+
+Mirrors D.1's [`nlah_loader.py`](../../../../vulnerability/src/vulnerability/nlah_loader.py)
+verbatim — same load order, same default-dir resolver, same override semantics.
+The NLAH ships *inside* the package (`identity/nlah/`) so it's available in
+both editable and wheel installs.
+
+Order of concatenation:
+1. `README.md`            (the canonical NLAH — required)
+2. `tools.md`             (tool index — optional)
+3. `examples/*.md`        (few-shot examples, sorted lexicographically — optional)
+
+**ADR-007 v1.1 follow-up flag (D.2 risk-down):** this loader is now
+materially identical across three agents (cloud-posture, vulnerability,
+identity). **Hoist candidate for `charter.nlah_loader`.** Tracked in
+Task 16's conformance addendum.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+_TOOLS_HEADER = "\n\n---\n\n# Tools reference\n\n"
+_EXAMPLES_HEADER = "\n\n---\n\n# Few-shot examples\n"
+
+
+def default_nlah_dir() -> Path:
+    """Path to the NLAH directory shipped inside this package."""
+    return Path(__file__).parent / "nlah"
+
+
+def load_system_prompt(nlah_dir: Path | str | None = None) -> str:
+    """Build the LLM system prompt by concatenating the NLAH directory.
+
+    With no argument, loads the NLAH that ships with the package. Pass an
+    explicit `nlah_dir` to override (useful in tests and for customer-specific
+    NLAH overrides — feature deferred to Phase 1b customer-context work).
+    """
+    base = Path(nlah_dir) if nlah_dir is not None else default_nlah_dir()
+    if not base.is_dir():
+        raise FileNotFoundError(f"NLAH directory missing: {base}")
+    readme = base / "README.md"
+    if not readme.is_file():
+        raise FileNotFoundError(f"NLAH/README.md missing in {base}")
+
+    parts: list[str] = [readme.read_text(encoding="utf-8")]
+
+    tools = base / "tools.md"
+    if tools.is_file():
+        parts.append(_TOOLS_HEADER + tools.read_text(encoding="utf-8"))
+
+    examples_dir = base / "examples"
+    if examples_dir.is_dir():
+        example_files = sorted(examples_dir.glob("*.md"))
+        if example_files:
+            parts.append(_EXAMPLES_HEADER)
+            for example in example_files:
+                parts.append("\n\n" + example.read_text(encoding="utf-8"))
+
+    return "".join(parts)
+
+
+__all__ = ["default_nlah_dir", "load_system_prompt"]
