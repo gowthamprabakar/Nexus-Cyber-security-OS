@@ -76,7 +76,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 8    | ✅ done    | `1120d1f` | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
 | 9    | ✅ done    | `da6928c` | NLAH bundle + loader; 8 tests; hoist-candidate flag logged for charter.nlah_loader                               |
 | 10   | ✅ done    | `c099c79` | Consumes `charter.llm_adapter` directly; ADR-007 v1.1 twice-validated; anti-pattern guard test added             |
-| 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1  |
+| 11   | ✅ done    | `0f0b0d7` | Agent driver — `run()` wires charter + concurrent IAM listing + AA fetch + admin-grant synth; 15 tests           |
 | 12   | ⬜ pending | —         | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)                |
 | 13   | ⬜ pending | —         | `IdentityEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `run_suite`                      |
 | 14   | ⬜ pending | —         | CLI: `identity-agent eval CASES_DIR` + `identity-agent run --contract`                                           |
@@ -382,10 +382,10 @@ async def run(
 ) -> FindingsReport:
 ```
 
-- [ ] **Step 1: Write failing tests** — clean account → 0 findings; admin-no-MFA fixture → 1 finding; multi-finding fixture → correct rollup.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 10 tests.
-- [ ] **Step 4: Commit** — `feat(identity): agent driver wiring charter + iam tools (D.2 task 11)`.
+- [x] **Step 1: Write failing tests** — empty + admin-no-MFA + admin-with-MFA + group transitivity + dormant role + Access Analyzer happy/skip + mixed-rollup + envelope plumbing + audit chain.
+- [x] **Step 2: Implement** — concurrent IAM-listing + Access Analyzer fetch via `asyncio.TaskGroup`; admin grants synthesized from `attached_policy_arns` (simulator wrapper registered but not invoked in v0.1 — deferred to Phase 2).
+- [x] **Step 3: Tests pass** — 15/15.
+- [x] **Step 4: Commit** — `0f0b0d7 feat(d2,f4): identity agent driver + auth0 setup runbook (D.2 + F.4 task 11)`. Bundled with F.4 Task 11.
 
 ---
 

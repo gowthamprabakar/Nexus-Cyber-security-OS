@@ -76,7 +76,7 @@
 | 8    | ✅ done    | `1120d1f` | FastAPI surface — login redirect, callback, /auth/me, /tenants/me, POST /tenants (admin); 15 tests + audit hook        |
 | 9    | ✅ done    | `da6928c` | MFA enforcement gate — `amr` must contain `mfa` for all actions except READ_FINDINGS; 10 tests                         |
 | 10   | ✅ done    | `c099c79` | Charter audit chain — `ControlPlaneAuditor` wraps `charter.AuditLog`; 9 tests; chain verifies via charter.verifier     |
-| 11   | ⬜ pending | —         | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
+| 11   | ✅ done    | `0f0b0d7` | Auth0 tenant setup runbook — 8 sections; common-failures table; post-login Action injects nexus.app namespaced claims  |
 | 12   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; integration test against Auth0 sandbox; SOC 2 evidence checklist) |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
@@ -391,8 +391,8 @@ These bridge into the charter audit chain via a small adapter.
 7. MFA policy enforcement at the Auth0 tenant level.
 8. Verifying the integration via the Auth0 sandbox + our integration test.
 
-- [ ] **Step 1: Write the runbook**.
-- [ ] **Step 2: Commit** — `docs(control-plane): auth0 tenant setup runbook (F.4 task 11)`.
+- [x] **Step 1: Write the runbook** — 8 sections + prerequisites + common-failures table + cleanup-and-retry, includes the post-login Action that injects `https://nexus.app/{tenant_id,roles}` claims.
+- [x] **Step 2: Commit** — `0f0b0d7 feat(d2,f4): identity agent driver + auth0 setup runbook (D.2 + F.4 task 11)`. Bundled with D.2 Task 11.
 
 ---
 
