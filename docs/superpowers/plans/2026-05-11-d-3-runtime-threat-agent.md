@@ -75,8 +75,8 @@ eval suite (10/10 cases via the F.2 framework)
 | 3    | ✅ done    | `2a3ffd6` | `falco_alerts_read` async wrapper — JSONL reader; 12 tests; malformed-line tolerance                                                                  |
 | 4    | ✅ done    | `e5b5843` | `tracee_alerts_read` async wrapper — JSONL reader; 11 tests; ns timestamp + args-list flatten + k8s lift                                              |
 | 5    | ✅ done    | `e5b5843` | `osquery_run` subprocess wrapper — 10 tests via FakeProcess shim; **Q2 resolved** (all three feeds shipped in v0.1)                                   |
-| 6    | ⬜ pending | —         | Severity normalizer — Falco priority + Tracee severity + OSQuery custom → OCSF `severity_id`                                                          |
-| 7    | ⬜ pending | —         | Findings normalizer — alerts + OSQuery rows → OCSF Detection Findings; concurrent fixture loading via `asyncio.TaskGroup`                             |
+| 6    | ✅ done    | `f97ded0` | Severity normalizer — 3 native scales → internal `Severity`; 25 tests with full-matrix parametrization                                                |
+| 7    | ✅ done    | `f97ded0` | Findings normalizer — 5-family dispatch (Falco tags / Tracee event prefix / OSQuery row); 20 tests; no v0.1 dedup (deferred to D.7)                   |
 | 8    | ⬜ pending | —         | Findings → markdown summarizer; "Critical runtime alerts" section pinned at top (mirrors D.1 KEV, D.2 high-risk-principals)                           |
 | 9    | ⬜ pending | —         | NLAH bundle (README + tools.md + 2 OCSF examples) + **25-line shim** importing `charter.nlah_loader` (ADR-007 v1.2 validation)                        |
 | 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — third agent consuming the v1.1 hoist; smoke test confirms no per-agent `llm.py`                              |
