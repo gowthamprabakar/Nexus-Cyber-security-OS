@@ -71,8 +71,8 @@ eval suite (10/10 cases via the F.2 framework)
 | Task | Status     | Commit    | Notes                                                                                                                                                            |
 | ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | ✅ done    | `27c04a3` | Bootstrap `packages/agents/runtime-threat/`; 4 smoke tests including the v1.2 validation gate (`test_charter_nlah_loader_import_works`)                          |
-| 2    | ⬜ pending | —         | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum (PROCESS/FILE/NETWORK/SYSCALL/OSQUERY); 15+ tests                              |
-| 3    | ⬜ pending | —         | `falco_alerts_read` async wrapper — JSONL stream consumer; typed `FalcoAlert` dataclass; tolerates malformed lines                                               |
+| 2    | ✅ done    | `2a3ffd6` | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 41 tests; **Q1 resolved** (shared 2004 with D.2)                              |
+| 3    | ✅ done    | `2a3ffd6` | `falco_alerts_read` async wrapper — JSONL reader; 12 tests; malformed-line tolerance                                                                             |
 | 4    | ⬜ pending | —         | `tracee_alerts_read` async wrapper — JSONL stream consumer; typed `TraceeAlert` dataclass; Tracee schema differs from Falco enough to warrant its own normalizer |
 | 5    | ⬜ pending | —         | `osquery_run` async wrapper — subprocess invocation of `osqueryi` with a SQL pack; typed `OsqueryResult`                                                         |
 | 6    | ⬜ pending | —         | Severity normalizer — Falco priority + Tracee severity + OSQuery custom → OCSF `severity_id`                                                                     |
