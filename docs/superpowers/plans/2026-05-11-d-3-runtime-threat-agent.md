@@ -80,9 +80,9 @@ eval suite (10/10 cases via the F.2 framework)
 | 8    | ✅ done    | `b785b4a` | Markdown summarizer with critical-alerts pin; 14 tests; parametrized per finding-type rendering                                                       |
 | 9    | ✅ done    | `b785b4a` | NLAH bundle + 25-line shim (vs D.1's 55-LOC pre-hoist); 8 tests; **first agent on ADR-007 v1.2 from scratch**                                         |
 | 10   | ✅ done    | `b785b4a` | charter.llm_adapter consumed directly; **ADR-007 v1.1 thrice-validated**; no per-agent llm.py exists (anti-pattern guard green)                       |
-| 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent alert reads + normalizer + summarizer; deterministic v0.1                                     |
-| 12   | ⬜ pending | —         | 10 representative eval cases (process suspicion / file tamper / network beacon / OSQuery process tree / multi-finding rollup variants)                |
-| 13   | ⬜ pending | —         | `RuntimeThreatEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `eval-framework run --runner runtime_threat`                     |
+| 11   | ✅ done    | `b84fe5c` | Agent driver — async `run()` wires charter + concurrent multi-feed reads + normalizer + summarizer; 13 tests                                          |
+| 12   | ✅ done    | `b84fe5c` | 10 representative YAML cases under `eval/cases/` (5-family coverage + multi-feed overlap)                                                             |
+| 13   | ✅ done    | `b84fe5c` | `RuntimeThreatEvalRunner` real impl + entry-point; 15 tests; **10/10 via `eval-framework run --runner runtime_threat`**                               |
 | 14   | ⬜ pending | —         | CLI: `runtime-threat-agent eval CASES_DIR` + `runtime-threat-agent run --contract path.yaml --falco-feed FILE --tracee-feed FILE --osquery-pack FILE` |
 | 15   | ⬜ pending | —         | Package README + runbook (`runbooks/consume_falco_feed.md`) + ADR-007 v1.2 conformance addendum                                                       |
 | 16   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2; ADR-007 v1.2 confirmed)                                       |
