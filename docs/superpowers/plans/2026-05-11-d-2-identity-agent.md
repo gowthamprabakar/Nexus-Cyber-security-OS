@@ -73,7 +73,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 5    | ✅ done    | `c1f2b81` | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
 | 6    | ✅ done    | `90d176b` | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
 | 7    | ✅ done    | `46a3388` | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
-| 8    | ⬜ pending | —         | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)            |
+| 8    | ✅ done    | `1120d1f` | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
 | 9    | ⬜ pending | —         | NLAH (README + tools.md + 2 OCSF examples + loader)                                                              |
 | 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)     |
 | 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent IAM tools + normalizer + summarizer; deterministic v0.1  |
@@ -318,10 +318,10 @@ The normalizer detects:
 
 Mirror D.1's [`summarizer.py`](../../../packages/agents/vulnerability/src/vulnerability/summarizer.py). Pin a "High-risk principals" section at the top (analogous to D.1's KEV section): principals with admin-grants OR external-access OR MFA-gap.
 
-- [ ] **Step 1: Write failing tests** — empty + each finding type + multi-finding rollup.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 8 tests.
-- [ ] **Step 4: Commit** — `feat(identity): markdown summarizer with high-risk-principals section (D.2 task 8)`.
+- [x] **Step 1: Write failing tests** — empty + each high-risk type pin + dormant-only doesn't pin + dedup + severity ordering + breakdown counts.
+- [x] **Step 2: Implement** with the same layout shape as D.1's summarizer; one delta (high-risk-principals section).
+- [x] **Step 3: Tests pass** — 13/13.
+- [x] **Step 4: Commit** — `1120d1f feat(d2,f4): identity markdown summarizer + fastapi auth surface (D.2 + F.4 task 8)`. Bundled with F.4 Task 8.
 
 ---
 

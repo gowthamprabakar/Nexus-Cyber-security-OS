@@ -73,7 +73,7 @@
 | 5    | ✅ done    | `c1f2b81` | Tenant resolver — first-login provisioning + suspended-tenant reject; 8 aiosqlite tests                                |
 | 6    | ✅ done    | `90d176b` | RBAC table — 3 roles × 7 actions; 27 tests; **Q3 resolved** (hard-coded; DB-backed deferred to Phase 1c)               |
 | 7    | ✅ done    | `46a3388` | SCIM 2.0 endpoint — POST/GET/PATCH/DELETE /Users; HMAC-signed; 14 tests via FastAPI TestClient + aiosqlite             |
-| 8    | ⬜ pending | —         | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |
+| 8    | ✅ done    | `1120d1f` | FastAPI surface — login redirect, callback, /auth/me, /tenants/me, POST /tenants (admin); 15 tests + audit hook        |
 | 9    | ⬜ pending | —         | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
 | 10   | ⬜ pending | —         | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
 | 11   | ⬜ pending | —         | Operator runbook — Auth0 tenant creation, SAML setup for an enterprise customer, SCIM webhook config                   |
@@ -334,10 +334,10 @@ Wire the auth + tenant flow:
 
 Charter-instrumented — every route emits an audit entry through `Charter`.
 
-- [ ] **Step 1: Write failing tests** with FastAPI TestClient — happy path login flow, callback, /auth/me, /tenants/me, /tenants admin gate.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 12 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): fastapi surface for auth + tenants (F.4 task 8)`.
+- [x] **Step 1: Write failing tests** with FastAPI TestClient — login redirect, callback exchange + sad paths, /auth/me + 401 + cookie-read, /tenants/me + 404, POST /tenants admin gate + 403/401/422, audit-hook invocation.
+- [x] **Step 2: Implement** with factory-injected `verify_token` / `auth0_client` / `audit_emit` so the JWT-crypto, Auth0-mgmt-API, and audit-chain surfaces stay decoupled.
+- [x] **Step 3: Tests pass** — 15/15.
+- [x] **Step 4: Commit** — `1120d1f feat(d2,f4): identity markdown summarizer + fastapi auth surface (D.2 + F.4 task 8)`. Bundled with D.2 Task 8. `audit_emit` is a noop hook today; Task 10 wires it through the charter audit chain.
 
 ---
 
