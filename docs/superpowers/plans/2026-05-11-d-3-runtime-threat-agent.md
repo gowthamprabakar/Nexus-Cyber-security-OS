@@ -77,9 +77,9 @@ eval suite (10/10 cases via the F.2 framework)
 | 5    | ✅ done    | `e5b5843` | `osquery_run` subprocess wrapper — 10 tests via FakeProcess shim; **Q2 resolved** (all three feeds shipped in v0.1)                                   |
 | 6    | ✅ done    | `f97ded0` | Severity normalizer — 3 native scales → internal `Severity`; 25 tests with full-matrix parametrization                                                |
 | 7    | ✅ done    | `f97ded0` | Findings normalizer — 5-family dispatch (Falco tags / Tracee event prefix / OSQuery row); 20 tests; no v0.1 dedup (deferred to D.7)                   |
-| 8    | ⬜ pending | —         | Findings → markdown summarizer; "Critical runtime alerts" section pinned at top (mirrors D.1 KEV, D.2 high-risk-principals)                           |
-| 9    | ⬜ pending | —         | NLAH bundle (README + tools.md + 2 OCSF examples) + **25-line shim** importing `charter.nlah_loader` (ADR-007 v1.2 validation)                        |
-| 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — third agent consuming the v1.1 hoist; smoke test confirms no per-agent `llm.py`                              |
+| 8    | ✅ done    | `b785b4a` | Markdown summarizer with critical-alerts pin; 14 tests; parametrized per finding-type rendering                                                       |
+| 9    | ✅ done    | `b785b4a` | NLAH bundle + 25-line shim (vs D.1's 55-LOC pre-hoist); 8 tests; **first agent on ADR-007 v1.2 from scratch**                                         |
+| 10   | ✅ done    | `b785b4a` | charter.llm_adapter consumed directly; **ADR-007 v1.1 thrice-validated**; no per-agent llm.py exists (anti-pattern guard green)                       |
 | 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent alert reads + normalizer + summarizer; deterministic v0.1                                     |
 | 12   | ⬜ pending | —         | 10 representative eval cases (process suspicion / file tamper / network beacon / OSQuery process tree / multi-finding rollup variants)                |
 | 13   | ⬜ pending | —         | `RuntimeThreatEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `eval-framework run --runner runtime_threat`                     |
