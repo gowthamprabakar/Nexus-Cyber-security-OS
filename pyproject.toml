@@ -12,6 +12,7 @@ members = [
     "packages/agents/cloud-posture",
     "packages/agents/vulnerability",
     "packages/agents/identity",
+    "packages/agents/runtime-threat",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -47,6 +48,7 @@ files = [
     "packages/agents/cloud-posture/src",
     "packages/agents/vulnerability/src",
     "packages/agents/identity/src",
+    "packages/agents/runtime-threat/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
