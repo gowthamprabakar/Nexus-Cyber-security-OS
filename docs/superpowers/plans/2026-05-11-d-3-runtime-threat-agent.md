@@ -68,24 +68,24 @@ eval suite (10/10 cases via the F.2 framework)
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit    | Notes                                                                                                                                                 |
-| ---- | ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | ✅ done    | `27c04a3` | Bootstrap `packages/agents/runtime-threat/`; 4 smoke tests including the v1.2 validation gate (`test_charter_nlah_loader_import_works`)               |
-| 2    | ✅ done    | `2a3ffd6` | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 41 tests; **Q1 resolved** (shared 2004 with D.2)                   |
-| 3    | ✅ done    | `2a3ffd6` | `falco_alerts_read` async wrapper — JSONL reader; 12 tests; malformed-line tolerance                                                                  |
-| 4    | ✅ done    | `e5b5843` | `tracee_alerts_read` async wrapper — JSONL reader; 11 tests; ns timestamp + args-list flatten + k8s lift                                              |
-| 5    | ✅ done    | `e5b5843` | `osquery_run` subprocess wrapper — 10 tests via FakeProcess shim; **Q2 resolved** (all three feeds shipped in v0.1)                                   |
-| 6    | ✅ done    | `f97ded0` | Severity normalizer — 3 native scales → internal `Severity`; 25 tests with full-matrix parametrization                                                |
-| 7    | ✅ done    | `f97ded0` | Findings normalizer — 5-family dispatch (Falco tags / Tracee event prefix / OSQuery row); 20 tests; no v0.1 dedup (deferred to D.7)                   |
-| 8    | ✅ done    | `b785b4a` | Markdown summarizer with critical-alerts pin; 14 tests; parametrized per finding-type rendering                                                       |
-| 9    | ✅ done    | `b785b4a` | NLAH bundle + 25-line shim (vs D.1's 55-LOC pre-hoist); 8 tests; **first agent on ADR-007 v1.2 from scratch**                                         |
-| 10   | ✅ done    | `b785b4a` | charter.llm_adapter consumed directly; **ADR-007 v1.1 thrice-validated**; no per-agent llm.py exists (anti-pattern guard green)                       |
-| 11   | ✅ done    | `b84fe5c` | Agent driver — async `run()` wires charter + concurrent multi-feed reads + normalizer + summarizer; 13 tests                                          |
-| 12   | ✅ done    | `b84fe5c` | 10 representative YAML cases under `eval/cases/` (5-family coverage + multi-feed overlap)                                                             |
-| 13   | ✅ done    | `b84fe5c` | `RuntimeThreatEvalRunner` real impl + entry-point; 15 tests; **10/10 via `eval-framework run --runner runtime_threat`**                               |
-| 14   | ⬜ pending | —         | CLI: `runtime-threat-agent eval CASES_DIR` + `runtime-threat-agent run --contract path.yaml --falco-feed FILE --tracee-feed FILE --osquery-pack FILE` |
-| 15   | ⬜ pending | —         | Package README + runbook (`runbooks/consume_falco_feed.md`) + ADR-007 v1.2 conformance addendum                                                       |
-| 16   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2; ADR-007 v1.2 confirmed)                                       |
+| Task | Status  | Commit          | Notes                                                                                                                                   |
+| ---- | ------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ done | `27c04a3`       | Bootstrap `packages/agents/runtime-threat/`; 4 smoke tests including the v1.2 validation gate (`test_charter_nlah_loader_import_works`) |
+| 2    | ✅ done | `2a3ffd6`       | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 41 tests; **Q1 resolved** (shared 2004 with D.2)     |
+| 3    | ✅ done | `2a3ffd6`       | `falco_alerts_read` async wrapper — JSONL reader; 12 tests; malformed-line tolerance                                                    |
+| 4    | ✅ done | `e5b5843`       | `tracee_alerts_read` async wrapper — JSONL reader; 11 tests; ns timestamp + args-list flatten + k8s lift                                |
+| 5    | ✅ done | `e5b5843`       | `osquery_run` subprocess wrapper — 10 tests via FakeProcess shim; **Q2 resolved** (all three feeds shipped in v0.1)                     |
+| 6    | ✅ done | `f97ded0`       | Severity normalizer — 3 native scales → internal `Severity`; 25 tests with full-matrix parametrization                                  |
+| 7    | ✅ done | `f97ded0`       | Findings normalizer — 5-family dispatch (Falco tags / Tracee event prefix / OSQuery row); 20 tests; no v0.1 dedup (deferred to D.7)     |
+| 8    | ✅ done | `b785b4a`       | Markdown summarizer with critical-alerts pin; 14 tests; parametrized per finding-type rendering                                         |
+| 9    | ✅ done | `b785b4a`       | NLAH bundle + 25-line shim (vs D.1's 55-LOC pre-hoist); 8 tests; **first agent on ADR-007 v1.2 from scratch**                           |
+| 10   | ✅ done | `b785b4a`       | charter.llm_adapter consumed directly; **ADR-007 v1.1 thrice-validated**; no per-agent llm.py exists (anti-pattern guard green)         |
+| 11   | ✅ done | `b84fe5c`       | Agent driver — async `run()` wires charter + concurrent multi-feed reads + normalizer + summarizer; 13 tests                            |
+| 12   | ✅ done | `b84fe5c`       | 10 representative YAML cases under `eval/cases/` (5-family coverage + multi-feed overlap)                                               |
+| 13   | ✅ done | `b84fe5c`       | `RuntimeThreatEvalRunner` real impl + entry-point; 15 tests; **10/10 via `eval-framework run --runner runtime_threat`**                 |
+| 14   | ✅ done | _(this commit)_ | CLI `runtime-threat-agent eval` / `run` (Falco / Tracee / OSQuery flags); 8 Click tests including a real Falco JSONL end-to-end         |
+| 15   | ✅ done | _(this commit)_ | README + `runbooks/consume_falco_feed.md` + ADR-007 v1.2 conformance addendum                                                           |
+| 16   | ✅ done | _(this commit)_ | Final verification — 94.97% coverage / 181 tests / ruff+mypy strict clean / 10/10 eval / ADR-007 v1.1+v1.2 both confirmed               |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) · [**ADR-007 v1.2**](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) · [ADR-008](../../_meta/decisions/ADR-008-eval-framework.md).
 
