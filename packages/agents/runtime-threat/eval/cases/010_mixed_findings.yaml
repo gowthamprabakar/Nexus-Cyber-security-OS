@@ -1,0 +1,59 @@
+case_id: 010_mixed_findings
+description: All five families in one scan — multi-family rollup gate
+fixture:
+  falco_alerts:
+    - time: '2026-05-11T12:00:00Z'
+      rule: Terminal shell in container
+      priority: Critical
+      output: shell spawned
+      output_fields:
+        container.id: mixed-cid-1
+        proc.cmdline: /bin/sh
+      tags: [container, shell, process]
+    - time: '2026-05-11T12:00:05Z'
+      rule: Outbound to Tor exit
+      priority: Critical
+      output: tor exit hit
+      output_fields:
+        container.id: mixed-cid-2
+        fd.rip: 185.220.101.42
+      tags: [network]
+    - time: '2026-05-11T12:00:10Z'
+      rule: Unauthorized kernel module load
+      priority: Critical
+      output: rootkit suspected
+      output_fields:
+        proc.cmdline: insmod /tmp/rk.ko
+      tags: [syscall]
+  tracee_alerts:
+    - timestamp: 1715414400000000000
+      event_name: security_file_open
+      process_name: cat
+      process_id: 4242
+      host_name: mixed-host
+      container_image: alpine:3.18
+      container_id: mixed-cid-3
+      args:
+        pathname: /etc/shadow
+      severity: 3
+      description: Sensitive file read
+      pod_name: ''
+      namespace: ''
+  osquery_sql: "SELECT pid, name FROM processes WHERE name = 'evil-daemon'"
+  osquery_finding_context: 'evil_daemon_running'
+  osquery_rows:
+    - pid: '31337'
+      name: 'evil-daemon'
+      hostname: 'mixed-host'
+expected:
+  finding_count: 5
+  by_severity:
+    critical: 4
+    high: 0
+    medium: 1
+  by_finding_type:
+    runtime_process: 1
+    runtime_network: 1
+    runtime_syscall: 1
+    runtime_file: 1
+    runtime_osquery: 1

@@ -1,0 +1,38 @@
+case_id: 009_multi_feed_overlap
+description: Same incident reported by Falco + Tracee — v0.1 emits TWO findings (no cross-feed dedup; deferred to D.7)
+fixture:
+  falco_alerts:
+    - time: '2026-05-11T12:00:00Z'
+      rule: Sensitive file read
+      priority: Error
+      output: A sensitive file was opened
+      output_fields:
+        container.id: shared-incident-cid
+        fd.name: /etc/shadow
+      tags: [filesystem, file]
+  tracee_alerts:
+    - timestamp: 1715414400000000000
+      event_name: security_file_open
+      process_name: cat
+      process_id: 4242
+      host_name: ip-10-0-1-42
+      container_image: alpine:3.18
+      container_id: shared-incident-cid
+      args:
+        pathname: /etc/shadow
+      severity: 3
+      description: Read sensitive credential file
+      pod_name: ''
+      namespace: ''
+  osquery_rows: []
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 1
+    high: 1
+  by_finding_type:
+    runtime_file: 2
+    runtime_network: 0
+    runtime_syscall: 0
+    runtime_process: 0
+    runtime_osquery: 0

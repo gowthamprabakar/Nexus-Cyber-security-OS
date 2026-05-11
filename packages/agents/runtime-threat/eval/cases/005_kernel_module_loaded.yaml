@@ -1,0 +1,25 @@
+case_id: 005_kernel_module_loaded
+description: Falco "Unauthorized kernel module load" with Critical priority → CRITICAL RUNTIME_SYSCALL
+fixture:
+  falco_alerts:
+    - time: '2026-05-11T12:00:00Z'
+      rule: Unauthorized kernel module load
+      priority: Critical
+      output: An unauthorized kernel module was loaded
+      output_fields:
+        proc.cmdline: insmod /tmp/rootkit.ko
+        proc.pid: 9999
+      tags: [syscall, kernel]
+  tracee_alerts: []
+  osquery_rows: []
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+  by_finding_type:
+    runtime_syscall: 1
+    runtime_file: 0
+    runtime_network: 0
+    runtime_process: 0
+    runtime_osquery: 0

@@ -1,0 +1,29 @@
+case_id: 002_suspicious_shell_spawn
+description: Falco "Terminal shell in container" alert — overprivilege HIGH (RUNTIME_PROCESS)
+fixture:
+  falco_alerts:
+    - time: '2026-05-11T12:00:00Z'
+      rule: Terminal shell in container
+      priority: Warning
+      output: A shell was used as the entrypoint
+      output_fields:
+        container.id: abc123def456
+        container.image.repository: nginx
+        proc.cmdline: /bin/sh
+        k8s.pod.name: frontend-7f9d
+        k8s.ns.name: production
+      tags: [container, shell, process]
+  tracee_alerts: []
+  osquery_rows: []
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0
+    critical: 0
+  by_finding_type:
+    runtime_process: 1
+    runtime_file: 0
+    runtime_network: 0
+    runtime_syscall: 0
+    runtime_osquery: 0

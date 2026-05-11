@@ -1,0 +1,25 @@
+case_id: 008_osquery_orphan_process
+description: OSQuery row reveals an orphan process — MEDIUM RUNTIME_OSQUERY (default severity)
+fixture:
+  falco_alerts: []
+  tracee_alerts: []
+  osquery_sql: 'SELECT pid, name, parent_pid FROM processes WHERE parent_pid NOT IN (SELECT pid FROM processes)'
+  osquery_finding_context: 'orphan_process'
+  osquery_rows:
+    - pid: '31337'
+      name: 'evil-daemon'
+      parent_pid: '99999'
+      hostname: 'ip-10-0-4-100'
+      host_id: 'host-id-xyz'
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    critical: 0
+    high: 0
+  by_finding_type:
+    runtime_osquery: 1
+    runtime_process: 0
+    runtime_file: 0
+    runtime_network: 0
+    runtime_syscall: 0

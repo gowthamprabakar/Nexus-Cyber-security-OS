@@ -1,0 +1,20 @@
+case_id: 001_clean_cluster
+description: Empty Falco + Tracee + OSQuery feeds — agent emits no findings
+fixture:
+  falco_alerts: []
+  tracee_alerts: []
+  osquery_rows: []
+expected:
+  finding_count: 0
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  by_finding_type:
+    runtime_process: 0
+    runtime_file: 0
+    runtime_network: 0
+    runtime_syscall: 0
+    runtime_osquery: 0

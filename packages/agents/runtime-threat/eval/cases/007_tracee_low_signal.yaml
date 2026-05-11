@@ -1,0 +1,32 @@
+case_id: 007_tracee_low_signal
+description: Tracee severity-1 event — LOW RUNTIME_NETWORK (security_socket_connect)
+fixture:
+  falco_alerts: []
+  tracee_alerts:
+    - timestamp: 1715414400000000000
+      event_name: security_socket_connect
+      process_name: curl
+      process_id: 7777
+      host_name: ip-10-0-3-15
+      container_image: ubuntu:22.04
+      container_id: low-signal-cid
+      args:
+        addr: 10.0.0.1
+        port: '80'
+      severity: 1
+      description: Outbound HTTP connection from container
+      pod_name: web-app
+      namespace: default
+  osquery_rows: []
+expected:
+  finding_count: 1
+  by_severity:
+    low: 1
+    critical: 0
+    high: 0
+  by_finding_type:
+    runtime_network: 1
+    runtime_file: 0
+    runtime_syscall: 0
+    runtime_process: 0
+    runtime_osquery: 0
