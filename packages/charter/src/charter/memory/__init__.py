@@ -28,6 +28,7 @@ from charter.memory.models import (
 )
 from charter.memory.procedural import PlaybookRow, ProceduralStore
 from charter.memory.semantic import MAX_TRAVERSAL_DEPTH, EntityRow, SemanticStore
+from charter.memory.service import MemoryService
 
 __all__ = [
     "EMBEDDING_DIM",
@@ -40,6 +41,7 @@ __all__ = [
     "EpisodeRow",
     "EpisodicStore",
     "FakeEmbeddingProvider",
+    "MemoryService",
     "PlaybookModel",
     "PlaybookRow",
     "ProceduralStore",
