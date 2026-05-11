@@ -61,12 +61,18 @@ def test_env_uses_distinct_version_table() -> None:
 
 
 def test_script_directory_resolves_one_head() -> None:
+    """The script directory always has exactly one head. The baseline
+    revision is reachable from it; subsequent migrations chain on top
+    (the head currently points at the latest revision in the chain).
+    """
     cfg = Config(str(_INI))
     cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
     assert len(heads) == 1, f"expected exactly one head, got {heads}"
-    assert heads[0] == "0001_memory_baseline"
+    # The baseline must still be reachable as a base revision.
+    bases = script.get_bases()
+    assert "0001_memory_baseline" in bases
 
 
 # ---------------------------- 2. Migration structure ---------------------
