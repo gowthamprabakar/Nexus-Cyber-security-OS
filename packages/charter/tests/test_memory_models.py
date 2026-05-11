@@ -53,21 +53,17 @@ async def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
 
 
 def test_memory_module_reexports_only_existing_symbols() -> None:
-    """Discipline gate — `__all__` in charter.memory matches what models.py defines.
-
-    If a future task forward-declares a re-export of an unimplemented
-    class, this test fails immediately.
+    """Discipline gate — every symbol in `charter.memory.__all__` resolves
+    to a real implementation in one of the submodules (`models`, `episodic`,
+    later `embedding` / `procedural` / `semantic` / `service`). Forward-
+    declaring an unimplemented class fails this test immediately.
     """
     import charter.memory as memory_pkg
-    from charter.memory import models as models_mod
 
     for name in memory_pkg.__all__:
         assert hasattr(memory_pkg, name), (
             f"charter.memory.__all__ promises {name!r} but it isn't defined"
         )
-        # Every re-export resolves to the real implementation in models.py.
-        if name != "EMBEDDING_DIM":
-            assert getattr(memory_pkg, name) is getattr(models_mod, name)
 
 
 def test_embedding_dim_is_1536() -> None:

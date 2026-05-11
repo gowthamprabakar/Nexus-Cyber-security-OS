@@ -9,14 +9,14 @@ described in [ADR-009](../../../../../docs/_meta/decisions/ADR-009-memory-archit
 - `EntityModel`       — semantic (knowledge-graph nodes).
 - `RelationshipModel` — semantic (knowledge-graph edges).
 
-This package re-exports only what already exists. The typed async
-accessor classes (`EpisodicStore`, `ProceduralStore`, `SemanticStore`,
-`MemoryService`, `Embedding` Protocol) land in subsequent F.5 tasks
-and join this re-export list when they ship.
+Typed async accessors (`EpisodicStore`, `ProceduralStore`, `SemanticStore`,
+`MemoryService`, `Embedding` Protocol) land in subsequent F.5 tasks and
+join this re-export list as they ship.
 """
 
 from __future__ import annotations
 
+from charter.memory.episodic import EpisodeRow, EpisodicStore
 from charter.memory.models import (
     EMBEDDING_DIM,
     Base,
@@ -31,6 +31,8 @@ __all__ = [
     "Base",
     "EntityModel",
     "EpisodeModel",
+    "EpisodeRow",
+    "EpisodicStore",
     "PlaybookModel",
     "RelationshipModel",
 ]
