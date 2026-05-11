@@ -33,7 +33,8 @@ charter.Charter (per F.1 / ADR-002)
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Postgres 16 (alembic migration `0002_memory_baseline`)      │
+│ Postgres 16 (alembic migration `0001_memory_baseline`,      │
+│   separate head from control-plane's `alembic_version`)     │
 │                                                             │
 │   - episodes        (run events, JSONB payload, pgvector    │
 │                      embedding, BRIN index on time)         │
@@ -71,20 +72,20 @@ charter.Charter (per F.1 / ADR-002)
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
 ```
 
-| Task | Status     | Commit | Notes                                                                                                                                                |
-| ---- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | ⬜ pending | —      | Memory module scaffold in `charter/memory/` (Apache 2.0) + dev-deps (pgvector, asyncpg, aiosqlite); smoke import test                                |
-| 2    | ⬜ pending | —      | Alembic migration `0002_memory_baseline` — episodes / playbooks / entities / relationships tables with indexes; offline + dialect-portable shape     |
-| 3    | ⬜ pending | —      | `EpisodicStore` — typed async accessor; `append_event(charter, *, agent_id, action, payload, embedding=None)`; `query_by_correlation_id` etc.        |
-| 4    | ⬜ pending | —      | pgvector embedding helper — `embed_for_episode(payload, *, dim=1536)`; deterministic fake provider for tests; OpenAI / Anthropic providers Phase 1b  |
-| 5    | ⬜ pending | —      | `ProceduralStore` — playbook CRUD with LTREE-shaped hierarchical path; `publish_version` + `get_active(path)`                                        |
-| 6    | ⬜ pending | —      | `SemanticStore` — typed entity/relationship CRUD; `neighbors(entity_id, depth, *, edge_types)` via recursive CTE                                     |
-| 7    | ⬜ pending | —      | Per-tenant row-level security (RLS) policies wired into the alembic migration; integration test that an off-tenant query returns empty               |
-| 8    | ⬜ pending | —      | Charter-instrumentation adapter — every memory write emits a hash-chained audit entry; tested against `charter.verifier`                             |
-| 9    | ⬜ pending | —      | `MemoryService` facade — single async DI seam that the four shipped agents (F.3 / D.1 / D.2 / D.3) can wire into without each agent owning a session |
-| 10   | ⬜ pending | —      | Integration test against a live Postgres (Docker Compose) — opt-in via `NEXUS_LIVE_POSTGRES=1`; CRUD round-trip on all four tables; pgvector ANN     |
-| 11   | ⬜ pending | —      | Operator runbook (`runbooks/memory_bootstrap.md`) — Docker Compose Postgres + pgvector + alembic upgrade + smoke read/write                          |
-| 12   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; chain verifies; live integration test); ADR-009 (memory architecture) drafted                   |
+| Task | Status     | Commit | Notes                                                                                                                                                                                                                                                                                                                                  |
+| ---- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ⬜ pending | —      | Production SQLAlchemy models — `charter.memory.models` ships `Base` + `EpisodeModel` + `PlaybookModel` + `EntityModel` + `RelationshipModel` with every production index; tests assert structure + FK + ON DELETE CASCADE via `Base.metadata.create_all` against aiosqlite. Runtime/dev deps land here (pgvector, asyncpg, aiosqlite). |
+| 2    | ⬜ pending | —      | Alembic config + `0001_memory_baseline` migration that drives the Task 1 models; tests execute the migration end-to-end (offline-mode SQL emit + online `upgrade head` against aiosqlite); `version_table = "alembic_version_memory"` so it coexists with control-plane's alembic head when sharing a Postgres                         |
+| 3    | ⬜ pending | —      | `EpisodicStore` — typed async accessor; `append_event(charter, *, agent_id, action, payload, embedding=None)`; `query_by_correlation_id` etc.                                                                                                                                                                                          |
+| 4    | ⬜ pending | —      | pgvector embedding helper — `embed_for_episode(payload, *, dim=1536)`; deterministic fake provider for tests; OpenAI / Anthropic providers Phase 1b                                                                                                                                                                                    |
+| 5    | ⬜ pending | —      | `ProceduralStore` — playbook CRUD with LTREE-shaped hierarchical path; `publish_version` + `get_active(path)`                                                                                                                                                                                                                          |
+| 6    | ⬜ pending | —      | `SemanticStore` — typed entity/relationship CRUD; `neighbors(entity_id, depth, *, edge_types)` via recursive CTE                                                                                                                                                                                                                       |
+| 7    | ⬜ pending | —      | Per-tenant row-level security (RLS) policies wired into the alembic migration; integration test that an off-tenant query returns empty                                                                                                                                                                                                 |
+| 8    | ⬜ pending | —      | Charter-instrumentation adapter — every memory write emits a hash-chained audit entry; tested against `charter.verifier`                                                                                                                                                                                                               |
+| 9    | ⬜ pending | —      | `MemoryService` facade — single async DI seam that the four shipped agents (F.3 / D.1 / D.2 / D.3) can wire into without each agent owning a session                                                                                                                                                                                   |
+| 10   | ⬜ pending | —      | Integration test against a live Postgres (Docker Compose) — opt-in via `NEXUS_LIVE_POSTGRES=1`; CRUD round-trip on all four tables; pgvector ANN                                                                                                                                                                                       |
+| 11   | ⬜ pending | —      | Operator runbook (`runbooks/memory_bootstrap.md`) — Docker Compose Postgres + pgvector + alembic upgrade + smoke read/write                                                                                                                                                                                                            |
+| 12   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; chain verifies; live integration test); ADR-009 (memory architecture) drafted                                                                                                                                                                                                     |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) · [**ADR-009 (memory architecture)**](../../_meta/decisions/ADR-009-memory-architecture.md) — drafted alongside Task 12.
 
@@ -135,8 +136,12 @@ packages/charter/src/charter/memory/
 ├── service.py                                   # Task 9 (MemoryService facade)
 └── audit.py                                     # Task 8 (charter-instrumentation adapter)
 
-packages/charter/alembic/versions/
-└── 0002_memory_baseline.py                     # Task 2
+packages/charter/alembic/
+├── alembic.ini                                  # Task 2
+├── env.py                                       # Task 2 (sync + async migration support)
+├── script.py.mako                               # Task 2
+└── versions/
+    └── 0001_memory_baseline.py                  # Task 2 (autogenerated from models.py, then hand-tweaked for pgvector ivfflat + JSONB GIN)
 
 packages/charter/tests/
 ├── test_memory_episodic.py
@@ -153,19 +158,29 @@ packages/charter/runbooks/
 
 ---
 
-## Task 1: Module scaffold + dev-deps + smoke
+## Task 1: SQLAlchemy memory models + runtime deps
 
-`charter/memory/__init__.py` skeleton with re-exports of `EpisodicStore` / `ProceduralStore` / `SemanticStore` / `MemoryService` / `Embedding` Protocol. Dev-deps added to `packages/charter/pyproject.toml`: `pgvector>=0.3.0`, `asyncpg>=0.29.0`, `aiosqlite>=0.20.0` (already in control-plane dev-deps; copy across).
+**Production-grade discipline:** the first F.5 commit lands real working models that a customer's `Base.metadata.create_all` can materialize end-to-end. Nothing in this commit is a placeholder.
 
-- [ ] **Step 1: pyproject deps + scaffold files**.
-- [ ] **Step 2: Smoke tests** — 3 tests: package imports, `charter.memory.MemoryService` resolves, alembic config sees the new migration directory.
-- [ ] **Step 3: Commit** — `feat(f5): bootstrap charter.memory module scaffold (F.5 task 1)`.
+Files:
+
+- `packages/charter/pyproject.toml` — add `pgvector>=0.3.0`, `asyncpg>=0.29.0`, `sqlalchemy>=2.0.30`, `greenlet>=3.1.0` to runtime deps; add `aiosqlite>=0.20.0` to dev deps. None of these were previously in charter; they ship here because charter now owns persistent state.
+- `packages/charter/src/charter/memory/__init__.py` — re-exports the `Base` and the four model classes that exist in `models.py`. Nothing forward-declared; nothing re-exported that doesn't have a real implementation in this commit.
+- `packages/charter/src/charter/memory/models.py` — `Base` (DeclarativeBase) + `EpisodeModel` + `PlaybookModel` + `EntityModel` + `RelationshipModel`. Every column has its production type (ULID lengths, JSONB, vector dim 1536, TIMESTAMPTZ, LTREE). FKs + ON DELETE CASCADE on the relationships table. Indexes declared on the model so they materialize regardless of which dialect creates the schema. Bi-directional `to_pydantic()` / `to_dict()` shapes deferred to the stores in Tasks 3 / 5 / 6 (those tasks land typed accessor classes; the models here are the wire format).
+- `packages/charter/tests/test_memory_models.py` — exercises real behavior: `Base.metadata.create_all` against aiosqlite, schema introspection (every table + every column + every FK), insertion + commit round-trip through an `AsyncSession`. No "import works" placeholder tests.
+
+- [ ] **Step 1: Write failing tests** — table-count assertion, per-table column assertions, FK on `relationships.{src,dst}_entity_id → entities.entity_id` with ON DELETE CASCADE, index existence (where dialect-independent), insertion round-trip through a real AsyncSession. ≥ 12 tests.
+- [ ] **Step 2: Implement** the four models with production columns + indexes.
+- [ ] **Step 3: Tests pass** against aiosqlite (the dialect that backs the unit tests).
+- [ ] **Step 4: Commit** — `feat(f5): sqlalchemy memory models + runtime deps (F.5 task 1)`.
 
 ---
 
-## Task 2: Alembic baseline `0002_memory_baseline`
+## Task 2: Alembic config + baseline migration
 
-Mirror F.4's [`0001_initial_tenant_user_tables.py`](../../../packages/control-plane/alembic/versions/0001_initial_tenant_user_tables.py) shape. Tables:
+Land the alembic config under `packages/charter/alembic/` with `version_table = "alembic_version_memory"` so it coexists with control-plane's alembic head when the two packages share a Postgres instance. The baseline migration `0001_memory_baseline.py` is autogenerated from Task 1's models, then hand-tweaked to include the Postgres-only indexes (GIN on JSONB, ivfflat on vector) that the dialect-portable model definitions can't declare.
+
+Mirror F.4's [`0001_initial_tenant_user_tables.py`](../../../packages/control-plane/alembic/versions/0001_initial_tenant_user_tables.py) shape. Tables (mirroring the Task 1 models):
 
 ```sql
 -- episodes: every charter audit entry that warrants long-term storage
@@ -223,10 +238,10 @@ CREATE INDEX ix_relationships_src_type ON relationships (src_entity_id, relation
 CREATE INDEX ix_relationships_dst_type ON relationships (dst_entity_id, relationship);
 ```
 
-- [ ] **Step 1: Write failing tests** — alembic offline-SQL emits the four tables; indexes exist; FK + ON DELETE CASCADE present.
-- [ ] **Step 2: Implement** the migration.
-- [ ] **Step 3: Tests pass** — ≥ 6 tests.
-- [ ] **Step 4: Commit** — `feat(f5): alembic baseline for memory engines (F.5 task 2)`.
+- [ ] **Step 1: Write failing tests** — alembic config has `version_table = "alembic_version_memory"`; offline-SQL emits the four tables; `upgrade head` against aiosqlite succeeds and leaves `Base.metadata.tables` reachable; indexes + FK + ON DELETE CASCADE all present. ≥ 8 tests.
+- [ ] **Step 2: Implement** the alembic config + the migration.
+- [ ] **Step 3: Tests pass**.
+- [ ] **Step 4: Commit** — `feat(f5): alembic config + baseline migration for memory engines (F.5 task 2)`.
 
 ---
 
