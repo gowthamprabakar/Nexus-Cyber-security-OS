@@ -72,7 +72,7 @@
 | 4    | ✅ done    | `52f709b` | JWT verifier (RS256 + JWKS cache); 11 respx tests; **Q2 resolved** (Auth0 namespaced custom claims)                    |
 | 5    | ✅ done    | `c1f2b81` | Tenant resolver — first-login provisioning + suspended-tenant reject; 8 aiosqlite tests                                |
 | 6    | ✅ done    | `90d176b` | RBAC table — 3 roles × 7 actions; 27 tests; **Q3 resolved** (hard-coded; DB-backed deferred to Phase 1c)               |
-| 7    | ⬜ pending | —         | SCIM 2.0 endpoint — POST /Users + PATCH /Users/{id} + DELETE /Users/{id}; HMAC-signed Auth0 webhook                    |
+| 7    | ✅ done    | `46a3388` | SCIM 2.0 endpoint — POST/GET/PATCH/DELETE /Users; HMAC-signed; 14 tests via FastAPI TestClient + aiosqlite             |
 | 8    | ⬜ pending | —         | FastAPI surface — `/auth/login`, `/auth/callback`, `/auth/me`, `/tenants/me`; charter-instrumented                     |
 | 9    | ⬜ pending | —         | MFA enforcement gate — verify Auth0 `amr` claim contains `mfa`; reject token without MFA on admin actions              |
 | 10   | ⬜ pending | —         | Audit instrumentation — every auth event emits a hash-chained audit entry per ADR-002                                  |
@@ -315,10 +315,10 @@ Auth0 provisions users via SCIM webhooks; we materialize them in our `users` tab
 
 HMAC-signed; secret rotated quarterly.
 
-- [ ] **Step 1: Write failing tests** — happy CRUD, HMAC signature mismatch rejected, malformed SCIM payload returns 400.
-- [ ] **Step 2: Implement**.
-- [ ] **Step 3: Tests pass** — ≥ 10 tests.
-- [ ] **Step 4: Commit** — `feat(control-plane): scim 2.0 user endpoint (F.4 task 7)`.
+- [x] **Step 1: Write failing tests** — POST/GET/PATCH/DELETE happy paths + 401 (bad HMAC) + 400 (malformed) + 404 (unknown tenant/user) + 409 (duplicate).
+- [x] **Step 2: Implement**.
+- [x] **Step 3: Tests pass** — 14/14 (FastAPI TestClient + aiosqlite). PATCH only honors `replace active=false` in v0.1; broader PATCH-path support deferred.
+- [x] **Step 4: Commit** — `46a3388 feat(d2,f4): findings normalizer + scim 2.0 endpoint (D.2 + F.4 task 7)`. Bundled with D.2 Task 7.
 
 ---
 

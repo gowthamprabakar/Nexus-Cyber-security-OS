@@ -72,7 +72,7 @@ eval suite (10/10 cases via the F.2 framework)
 | 4    | ✅ done    | `52f709b` | `aws_iam_simulate_principal_policy` — batches actions in chunks of 50; 8 tests via stubbed `boto3.Session`       |
 | 5    | ✅ done    | `c1f2b81` | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
 | 6    | ✅ done    | `90d176b` | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
-| 7    | ⬜ pending | —         | Findings normalizer — overprivilege + dormant + external-access → OCSF Identity Finding                          |
+| 7    | ✅ done    | `46a3388` | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
 | 8    | ⬜ pending | —         | Findings → markdown summarizer (mirror D.1 KEV-section pattern; "high-risk principals" pinned at top)            |
 | 9    | ⬜ pending | —         | NLAH (README + tools.md + 2 OCSF examples + loader)                                                              |
 | 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — first agent to consume the hoisted adapter (validates ADR-007 v1.1)     |
@@ -307,10 +307,10 @@ The normalizer detects:
 - **External access** — cross-account or public via Access Analyzer.
 - **MFA gap** — admin-capable principals without MFA enforcement (re-uses cloud-posture's signal).
 
-- [ ] **Step 1: Write failing tests** — one fixture per finding type.
-- [ ] **Step 2: Implement** with concurrent enrichment via `asyncio.TaskGroup` (per D.1 Task 7).
-- [ ] **Step 3: Tests pass** — ≥ 10 tests.
-- [ ] **Step 4: Commit** — `feat(identity): findings normalizer with 4 detection types (D.2 task 7)`.
+- [x] **Step 1: Write failing tests** — one (or more) fixture per finding type + threshold configurability + ID uniqueness + multi-finding rollup.
+- [x] **Step 2: Implement** as an async-shaped pure transformation (no TaskGroup needed; all inputs pre-computed in v0.1).
+- [x] **Step 3: Tests pass** — 16/16.
+- [x] **Step 4: Commit** — `46a3388 feat(d2,f4): findings normalizer + scim 2.0 endpoint (D.2 + F.4 task 7)`. Bundled with F.4 Task 7.
 
 ---
 
