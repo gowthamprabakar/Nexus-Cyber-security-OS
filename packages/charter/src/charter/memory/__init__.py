@@ -16,6 +16,7 @@ join this re-export list as they ship.
 
 from __future__ import annotations
 
+from charter.memory.embedding import Embedding, FakeEmbeddingProvider
 from charter.memory.episodic import EpisodeRow, EpisodicStore
 from charter.memory.models import (
     EMBEDDING_DIM,
@@ -29,10 +30,12 @@ from charter.memory.models import (
 __all__ = [
     "EMBEDDING_DIM",
     "Base",
+    "Embedding",
     "EntityModel",
     "EpisodeModel",
     "EpisodeRow",
     "EpisodicStore",
+    "FakeEmbeddingProvider",
     "PlaybookModel",
     "RelationshipModel",
 ]
