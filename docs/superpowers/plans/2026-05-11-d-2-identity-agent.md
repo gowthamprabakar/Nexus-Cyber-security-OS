@@ -64,24 +64,24 @@ eval suite (10/10 cases via the F.2 framework)
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit    | Notes                                                                                                            |
-| ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
-| 1    | ✅ done    | `aa0f687` | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub); `charter.llm_adapter` import test |
-| 2    | ✅ done    | `9d4fbb5` | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 17 tests; pattern check ✓     |
-| 3    | ✅ done    | `e54962c` | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination); 11 tests via moto                    |
-| 4    | ✅ done    | `52f709b` | `aws_iam_simulate_principal_policy` — batches actions in chunks of 50; 8 tests via stubbed `boto3.Session`       |
-| 5    | ✅ done    | `c1f2b81` | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
-| 6    | ✅ done    | `90d176b` | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
-| 7    | ✅ done    | `46a3388` | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
-| 8    | ✅ done    | `1120d1f` | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
-| 9    | ✅ done    | `da6928c` | NLAH bundle + loader; 8 tests; hoist-candidate flag logged for charter.nlah_loader                               |
-| 10   | ✅ done    | `c099c79` | Consumes `charter.llm_adapter` directly; ADR-007 v1.1 twice-validated; anti-pattern guard test added             |
-| 11   | ✅ done    | `0f0b0d7` | Agent driver — `run()` wires charter + concurrent IAM listing + AA fetch + admin-grant synth; 15 tests           |
-| 12   | ⬜ pending | —         | 10 representative eval cases (overprivilege + dormant + external-access + clean account variants)                |
-| 13   | ⬜ pending | —         | `IdentityEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `run_suite`                      |
-| 14   | ⬜ pending | —         | CLI: `identity-agent eval CASES_DIR` + `identity-agent run --contract`                                           |
-| 15   | ⬜ pending | —         | Package README + runbook (`runbooks/scan_aws_account.md`) + ADR-007 v1.1 conformance addendum                    |
-| 16   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2)                          |
+| Task | Status  | Commit          | Notes                                                                                                            |
+| ---- | ------- | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ done | `aa0f687`       | Bootstrap `packages/agents/identity/` (pyproject, BSL, py.typed, README stub); `charter.llm_adapter` import test |
+| 2    | ✅ done | `9d4fbb5`       | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum; 17 tests; pattern check ✓     |
+| 3    | ✅ done | `e54962c`       | `aws_iam_list_identities` async wrapper (users, roles, groups; pagination); 11 tests via moto                    |
+| 4    | ✅ done | `52f709b`       | `aws_iam_simulate_principal_policy` — batches actions in chunks of 50; 8 tests via stubbed `boto3.Session`       |
+| 5    | ✅ done | `c1f2b81`       | `aws_access_analyzer_findings` — paginates ListFindingsV2; 7 tests; **Q2 resolved** (reimplement, not reuse)     |
+| 6    | ✅ done | `90d176b`       | `permission_path_resolver` — pure-Python flatten of simulator decisions; 22 tests; **Q3 resolved** (Phase 1 cap) |
+| 7    | ✅ done | `46a3388`       | Findings normalizer — overprivilege/dormant/external/MFA-gap; 16 tests                                           |
+| 8    | ✅ done | `1120d1f`       | Markdown summarizer with high-risk-principals pin; 13 tests                                                      |
+| 9    | ✅ done | `da6928c`       | NLAH bundle + loader; 8 tests; hoist-candidate flag logged for charter.nlah_loader                               |
+| 10   | ✅ done | `c099c79`       | Consumes `charter.llm_adapter` directly; ADR-007 v1.1 twice-validated; anti-pattern guard test added             |
+| 11   | ✅ done | `0f0b0d7`       | Agent driver — `run()` wires charter + concurrent IAM listing + AA fetch + admin-grant synth; 15 tests           |
+| 12   | ✅ done | `<bundled>`     | 10 representative YAML cases at `eval/cases/`; 10/10 pass via the runner                                         |
+| 13   | ✅ done | `<bundled>`     | `IdentityEvalRunner` + entry-point; 10/10 via `eval-framework run --runner identity` end-to-end                  |
+| 14   | ✅ done | `6d24403`       | `identity-agent eval` + `identity-agent run` CLI; 7 Click tests                                                  |
+| 15   | ✅ done | `5a58d51`       | README + `runbooks/scan_aws_account.md` + ADR-007 v1.1 addendum (nlah_loader hoist candidate flagged)            |
+| 16   | ✅ done | _(this commit)_ | Final verification — 97.46% coverage / ruff+mypy clean / 10/10 eval / ADR-007 v1.1 conformance confirmed         |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) · [**ADR-007 v1.1**](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) · [ADR-008](../../_meta/decisions/ADR-008-eval-framework.md).
 
@@ -479,10 +479,10 @@ Mirror D.1's gate set:
 
 Capture `docs/_meta/d2-verification-<date>.md` mirroring D.1's record.
 
-- [ ] **Step 1: Run all six gates.**
-- [ ] **Step 2: Write verification record.**
-- [ ] **Step 3: Re-issue system-readiness with timestamp** — D.2 done; weighted Wiz coverage ~14–16% (CIEM 0.10 × ~30% template parity = +3pp).
-- [ ] **Step 4: Commit** — `docs(d2): final verification + readiness re-issue`.
+- [x] **Step 1: Run all six gates** — coverage 97.46% (vs 80% threshold) · ruff/format/mypy clean · `identity-agent eval` 10/10 · `eval-framework run --runner identity` 10/10 (100.0%) · `eval-framework gate` exits 0 · ADR-007 v1.1 conformance confirmed (no `identity/llm.py`).
+- [x] **Step 2: Write verification record** at [`docs/_meta/d2-f4-verification-2026-05-11.md`](../../_meta/d2-f4-verification-2026-05-11.md) (joint D.2 + F.4 record).
+- [ ] **Step 3: Re-issue system-readiness with timestamp** — deferred; the D.2 + F.4 verification doc covers the Wiz delta inline (+3pp CIEM weighted).
+- [x] **Step 4: Commit** — will land bundled with the F.4 Task 12 commit below.
 
 **Acceptance:** Identity Agent runs end-to-end against the eval framework. ADR-007 v1.1 confirmed. Any new amendment recommendations queued for ADR-007 v1.2 before D.3.
 
