@@ -2,7 +2,10 @@ name: nexus-dev
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector ships pg16 + the `vector` extension preinstalled; charter.memory's
+    # F.5 alembic baseline calls CREATE EXTENSION vector + ltree on upgrade, so
+    # we need an image with both available. Drop-in replacement for postgres:16.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: nexus
       POSTGRES_PASSWORD: nexus_dev
