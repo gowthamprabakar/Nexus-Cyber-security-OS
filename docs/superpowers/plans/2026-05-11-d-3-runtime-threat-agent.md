@@ -68,24 +68,24 @@ eval suite (10/10 cases via the F.2 framework)
 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 ```
 
-| Task | Status     | Commit | Notes                                                                                                                                                            |
-| ---- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | ⬜ pending | —      | Bootstrap `packages/agents/runtime-threat/` (pyproject, BSL, py.typed, README stub); imports validate against `charter.{llm_adapter,nlah_loader}`                |
-| 2    | ⬜ pending | —      | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum (PROCESS/FILE/NETWORK/SYSCALL/OSQUERY); 15+ tests                              |
-| 3    | ⬜ pending | —      | `falco_alerts_read` async wrapper — JSONL stream consumer; typed `FalcoAlert` dataclass; tolerates malformed lines                                               |
-| 4    | ⬜ pending | —      | `tracee_alerts_read` async wrapper — JSONL stream consumer; typed `TraceeAlert` dataclass; Tracee schema differs from Falco enough to warrant its own normalizer |
-| 5    | ⬜ pending | —      | `osquery_run` async wrapper — subprocess invocation of `osqueryi` with a SQL pack; typed `OsqueryResult`                                                         |
-| 6    | ⬜ pending | —      | Severity normalizer — Falco priority + Tracee severity + OSQuery custom → OCSF `severity_id`                                                                     |
-| 7    | ⬜ pending | —      | Findings normalizer — alerts + OSQuery rows → OCSF Detection Findings; concurrent fixture loading via `asyncio.TaskGroup`                                        |
-| 8    | ⬜ pending | —      | Findings → markdown summarizer; "Critical runtime alerts" section pinned at top (mirrors D.1 KEV, D.2 high-risk-principals)                                      |
-| 9    | ⬜ pending | —      | NLAH bundle (README + tools.md + 2 OCSF examples) + **25-line shim** importing `charter.nlah_loader` (ADR-007 v1.2 validation)                                   |
-| 10   | ⬜ pending | —      | **Use `charter.llm_adapter` directly** — third agent consuming the v1.1 hoist; smoke test confirms no per-agent `llm.py`                                         |
-| 11   | ⬜ pending | —      | Agent driver — async `run()` wires charter + concurrent alert reads + normalizer + summarizer; deterministic v0.1                                                |
-| 12   | ⬜ pending | —      | 10 representative eval cases (process suspicion / file tamper / network beacon / OSQuery process tree / multi-finding rollup variants)                           |
-| 13   | ⬜ pending | —      | `RuntimeThreatEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `eval-framework run --runner runtime_threat`                                |
-| 14   | ⬜ pending | —      | CLI: `runtime-threat-agent eval CASES_DIR` + `runtime-threat-agent run --contract path.yaml --falco-feed FILE --tracee-feed FILE --osquery-pack FILE`            |
-| 15   | ⬜ pending | —      | Package README + runbook (`runbooks/consume_falco_feed.md`) + ADR-007 v1.2 conformance addendum                                                                  |
-| 16   | ⬜ pending | —      | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2; ADR-007 v1.2 confirmed)                                                  |
+| Task | Status     | Commit    | Notes                                                                                                                                                            |
+| ---- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ done    | `27c04a3` | Bootstrap `packages/agents/runtime-threat/`; 4 smoke tests including the v1.2 validation gate (`test_charter_nlah_loader_import_works`)                          |
+| 2    | ⬜ pending | —         | OCSF v1.3 Detection Finding schema (`class_uid 2004`) + 5-bucket FindingType enum (PROCESS/FILE/NETWORK/SYSCALL/OSQUERY); 15+ tests                              |
+| 3    | ⬜ pending | —         | `falco_alerts_read` async wrapper — JSONL stream consumer; typed `FalcoAlert` dataclass; tolerates malformed lines                                               |
+| 4    | ⬜ pending | —         | `tracee_alerts_read` async wrapper — JSONL stream consumer; typed `TraceeAlert` dataclass; Tracee schema differs from Falco enough to warrant its own normalizer |
+| 5    | ⬜ pending | —         | `osquery_run` async wrapper — subprocess invocation of `osqueryi` with a SQL pack; typed `OsqueryResult`                                                         |
+| 6    | ⬜ pending | —         | Severity normalizer — Falco priority + Tracee severity + OSQuery custom → OCSF `severity_id`                                                                     |
+| 7    | ⬜ pending | —         | Findings normalizer — alerts + OSQuery rows → OCSF Detection Findings; concurrent fixture loading via `asyncio.TaskGroup`                                        |
+| 8    | ⬜ pending | —         | Findings → markdown summarizer; "Critical runtime alerts" section pinned at top (mirrors D.1 KEV, D.2 high-risk-principals)                                      |
+| 9    | ⬜ pending | —         | NLAH bundle (README + tools.md + 2 OCSF examples) + **25-line shim** importing `charter.nlah_loader` (ADR-007 v1.2 validation)                                   |
+| 10   | ⬜ pending | —         | **Use `charter.llm_adapter` directly** — third agent consuming the v1.1 hoist; smoke test confirms no per-agent `llm.py`                                         |
+| 11   | ⬜ pending | —         | Agent driver — async `run()` wires charter + concurrent alert reads + normalizer + summarizer; deterministic v0.1                                                |
+| 12   | ⬜ pending | —         | 10 representative eval cases (process suspicion / file tamper / network beacon / OSQuery process tree / multi-finding rollup variants)                           |
+| 13   | ⬜ pending | —         | `RuntimeThreatEvalRunner` registered via `nexus_eval_runners` entry-point; 10/10 via `eval-framework run --runner runtime_threat`                                |
+| 14   | ⬜ pending | —         | CLI: `runtime-threat-agent eval CASES_DIR` + `runtime-threat-agent run --contract path.yaml --falco-feed FILE --tracee-feed FILE --osquery-pack FILE`            |
+| 15   | ⬜ pending | —         | Package README + runbook (`runbooks/consume_falco_feed.md`) + ADR-007 v1.2 conformance addendum                                                                  |
+| 16   | ⬜ pending | —         | Final verification (≥ 80% coverage; ruff/mypy clean; CLI smoke; suite-on-suite via F.2; ADR-007 v1.2 confirmed)                                                  |
 
 ADR references: [ADR-001](../../_meta/decisions/ADR-001-monorepo-bootstrap.md) · [ADR-002](../../_meta/decisions/ADR-002-charter-as-context-manager.md) · [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) · [ADR-005](../../_meta/decisions/ADR-005-async-tool-wrapper-convention.md) · [**ADR-007 v1.2**](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) · [ADR-008](../../_meta/decisions/ADR-008-eval-framework.md).
 
@@ -196,10 +196,10 @@ Mirror D.2 Task 1 with the substitution `identity → runtime_threat` and the in
 1. The smoke test imports `charter.nlah_loader` AND `charter.llm_adapter` — both v1.1 and v1.2 hoists are validated by smoke before any agent code lands.
 2. The pyproject `[project.entry-points."nexus_eval_runners"]` registers `runtime_threat → runtime_threat.eval_runner:RuntimeThreatEvalRunner` (the eval-runner file lands in Task 13; the entry-point can resolve a not-yet-existing import path because uv's editable install is lazy).
 
-- [ ] **Step 1: pyproject + scaffold files**.
-- [ ] **Step 2: workspace member registration** in repo root `pyproject.toml`.
-- [ ] **Step 3: Smoke tests** — 3 tests: package imports, `charter.nlah_loader` import works, `charter.llm_adapter` import works.
-- [ ] **Step 4: Commit** — `feat(d3): bootstrap runtime-threat agent package (D.3 task 1)`.
+- [x] **Step 1: pyproject + scaffold files**.
+- [x] **Step 2: workspace member registration** in repo root `pyproject.toml`.
+- [x] **Step 3: Smoke tests** — 4 tests landed (one more than planned): package imports + `charter.llm_adapter` + `charter.nlah_loader` + anti-pattern guard for `runtime_threat.llm`.
+- [x] **Step 4: Commit** — `27c04a3 feat(d3): plan + bootstrap runtime-threat agent package (D.3 task 1)`. Plan written + Task 1 shipped in the same commit.
 
 ---
 
