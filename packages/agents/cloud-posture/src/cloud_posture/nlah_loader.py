@@ -1,54 +1,26 @@
-"""Concatenate the NLAH directory into a single system prompt for the LLM.
+"""Per-agent shim — delegates to `charter.nlah_loader` (ADR-007 v1.2).
 
-The NLAH ships *inside* the package (`cloud_posture/nlah/`) so it's available
-in both editable and wheel installs. Tests can pass an explicit `nlah_dir` to
-exercise the loader against synthetic content.
-
-Order of concatenation:
-1. `README.md`            (the canonical NLAH — required)
-2. `tools.md`             (tool index — optional)
-3. `examples/*.md`        (few-shot examples, sorted lexicographically — optional)
+The canonical loader lives in [`charter.nlah_loader`](../../../../charter/src/charter/nlah_loader.py).
+This shim binds the agent's own `__file__` so legacy callers keep
+their zero-argument `default_nlah_dir()` API.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-_TOOLS_HEADER = "\n\n---\n\n# Tools reference\n\n"
-_EXAMPLES_HEADER = "\n\n---\n\n# Few-shot examples\n"
+from charter.nlah_loader import default_nlah_dir as _resolve_default_dir
+from charter.nlah_loader import load_system_prompt as _load
 
 
 def default_nlah_dir() -> Path:
     """Path to the NLAH directory shipped inside this package."""
-    return Path(__file__).parent / "nlah"
+    return _resolve_default_dir(__file__)
 
 
 def load_system_prompt(nlah_dir: Path | str | None = None) -> str:
-    """Build the LLM system prompt by concatenating the NLAH directory.
+    """Build the LLM system prompt from this package's NLAH dir."""
+    return _load(nlah_dir if nlah_dir is not None else default_nlah_dir())
 
-    With no argument, loads the NLAH that ships with the package. Pass an
-    explicit `nlah_dir` to override (useful in tests and for customer-specific
-    NLAH overrides — feature deferred to Phase 1b customer-context work).
-    """
-    base = Path(nlah_dir) if nlah_dir is not None else default_nlah_dir()
-    if not base.is_dir():
-        raise FileNotFoundError(f"NLAH directory missing: {base}")
-    readme = base / "README.md"
-    if not readme.is_file():
-        raise FileNotFoundError(f"NLAH/README.md missing in {base}")
 
-    parts: list[str] = [readme.read_text(encoding="utf-8")]
-
-    tools = base / "tools.md"
-    if tools.is_file():
-        parts.append(_TOOLS_HEADER + tools.read_text(encoding="utf-8"))
-
-    examples_dir = base / "examples"
-    if examples_dir.is_dir():
-        example_files = sorted(examples_dir.glob("*.md"))
-        if example_files:
-            parts.append(_EXAMPLES_HEADER)
-            for example in example_files:
-                parts.append("\n\n" + example.read_text(encoding="utf-8"))
-
-    return "".join(parts)
+__all__ = ["default_nlah_dir", "load_system_prompt"]

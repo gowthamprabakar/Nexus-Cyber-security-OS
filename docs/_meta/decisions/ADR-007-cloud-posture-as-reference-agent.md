@@ -1,7 +1,7 @@
 # ADR-007 — Cloud Posture is the reference NLAH
 
-- **Status:** accepted (v1.1 — amended 2026-05-11 with the LLM-adapter hoist; see [§v1.1 amendment](#v11-amendment-2026-05-11---llm-adapter-hoist))
-- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1)
+- **Status:** accepted (v1.2 — amended 2026-05-11 with the NLAH-loader hoist; see [§v1.2 amendment](#v12-amendment-2026-05-11---nlah-loader-hoist) · prior v1.1 hoisted the LLM adapter)
+- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2)
 - **Authors:** AI/Agent Eng, Detection Eng
 - **Stakeholders:** every agent author; PM (capacity planning); compliance (audit-chain consistency across agents)
 
@@ -32,6 +32,7 @@ The Cloud Posture agent is canonical for these patterns. Other agents diverge on
 | **OCSF wire format** ([ADR-004](ADR-004-fabric-layer.md))                                                                 | `build_finding(...)` constructs OCSF v1.3 Compliance Finding (`class_uid 2003`); `CloudPostureFinding` is a typed accessor over the wrapped dict                            | [`schemas.py`](../../../packages/agents/cloud-posture/src/cloud_posture/schemas.py)                             |
 | **NexusEnvelope** (per finding)                                                                                           | `correlation_id`, `tenant_id`, `agent_id`, `nlah_version`, `model_pin`, `charter_invocation_id`                                                                             | [`shared.fabric.envelope`](../../../packages/shared/src/shared/fabric/envelope.py)                              |
 | **NLAH directory shape**                                                                                                  | `nlah/README.md` (canonical brain) + `nlah/tools.md` (tool index) + `nlah/examples/*.md` (few-shot, OCSF-shaped) — packaged inside the importable wheel                     | [`nlah/`](../../../packages/agents/cloud-posture/src/cloud_posture/nlah/)                                       |
+| **NLAH loader**                                                                                                           | `load_system_prompt(nlah_dir)` + `default_nlah_dir(package_file)` — **shared** in `charter.nlah_loader` (per ADR-007 v1.2); agents ship a 25-line `__file__`-binding shim   | [`charter.nlah_loader`](../../../packages/charter/src/charter/nlah_loader.py)                                   |
 | **LLM provider plumbing** ([ADR-003](ADR-003-llm-provider-strategy.md), [ADR-006](ADR-006-openai-compatible-provider.md)) | Driver accepts `Optional[LLMProvider]`; the **shared** `make_provider(LLMConfig)` selects Anthropic / OpenAI / vLLM / Ollama from `NEXUS_LLM_*` env vars (per ADR-007 v1.1) | [`charter.llm_adapter`](../../../packages/charter/src/charter/llm_adapter.py)                                   |
 | **Eval shape**                                                                                                            | YAML cases with `fixture` (mocked tool outputs) + `expected` (finding count + per-severity counts); placeholder runner until F.2 eval-framework lands                       | [`eval/`](../../../packages/agents/cloud-posture/eval/)                                                         |
 | **CLI surface**                                                                                                           | `cloud-posture eval CASES_DIR` + `cloud-posture run --contract path.yaml` via `[project.scripts]` entry point                                                               | [`cli.py`](../../../packages/agents/cloud-posture/src/cloud_posture/cli.py)                                     |
@@ -150,3 +151,59 @@ No per-agent `llm.py`. Any future divergence (e.g., a custom provider that no ot
 | Net source LOC                                     | ~unchanged (1 canonical file replaces 2)    |
 | Net test LOC                                       | -1 redundant copy                           |
 | Repo tests after amendment                         | 459 passed / 5 skipped (was 478; -19 dupes) |
+
+---
+
+## v1.2 amendment (2026-05-11) — NLAH-loader hoist
+
+### Trigger
+
+D.2 (Identity Agent) was the second agent built to ADR-007 v1.1. Its [verification record](../d2-f4-verification-2026-05-11.md) confirmed the v1.1 LLM-adapter hoist twice over and surfaced **one** new candidate for hoisting: the NLAH loader.
+
+After D.2 landed, three agents (cloud-posture, vulnerability, identity) were each shipping a near-identical `nlah_loader.py` — a ~55 LOC module that walks `nlah/README.md` + `nlah/tools.md` + `nlah/examples/*.md` and concatenates them into a system prompt. The implementations differed only in docstring wording. Per v1.1's "**amend on the third duplicate**" discipline, this is the right moment — before D.3 inherits a fourth copy.
+
+### What changed
+
+1. **Hoist** the canonical loader into `nexus-charter` as `charter.nlah_loader`. It now sits next to `charter.llm_adapter` and `charter.audit` as a shared substrate primitive.
+2. **API shift:** the legacy zero-argument `default_nlah_dir()` becomes `default_nlah_dir(package_file)` — callers thread their own `__file__` so the shared module can locate each agent's adjacent `nlah/` directory.
+3. **Each agent keeps a 25-line shim** (`identity/nlah_loader.py`, `vulnerability/nlah_loader.py`, `cloud_posture/nlah_loader.py`) that binds `__file__` and re-exports `default_nlah_dir()` + `load_system_prompt()` with the legacy zero-argument signatures. Tests, agent code, and downstream consumers see no API change.
+4. **Canonical tests** land at `packages/charter/tests/test_nlah_loader.py` (10 tests covering `default_nlah_dir`, the four sections of `load_system_prompt`, and both error paths). The three per-agent test files keep passing unchanged against the shim — they exercise the same logic end-to-end.
+
+### Future agents
+
+A new agent ships a one-time shim (~25 lines) and never re-implements the load logic:
+
+```python
+# packages/agents/<new-agent>/src/<new_agent>/nlah_loader.py
+from pathlib import Path
+from charter.nlah_loader import default_nlah_dir as _resolve_default_dir
+from charter.nlah_loader import load_system_prompt as _load
+
+
+def default_nlah_dir() -> Path:
+    return _resolve_default_dir(__file__)
+
+
+def load_system_prompt(nlah_dir: Path | str | None = None) -> str:
+    return _load(nlah_dir if nlah_dir is not None else default_nlah_dir())
+```
+
+Any improvement to the loader (e.g., supporting tenant-specific NLAH overrides in Phase 1b) lands once in `charter.nlah_loader` and every agent inherits it automatically.
+
+### What this validates
+
+- The "amend on the third duplicate" rule is now a confirmed habit, not a slogan. v1.1 caught one pattern at duplicate #2 (LLM adapter); v1.2 catches the next at duplicate #3 (NLAH loader). Both amendments landed before the next agent inherits the duplication.
+- ADR-007 + risk-down reviews are the right shape for keeping 18 agents from drifting into local copies of substrate logic.
+
+### Cross-package blast radius
+
+| Change                                             | Files affected                                                        |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| New module `charter/nlah_loader.py`                | 1 file (~75 LOC, canonical)                                           |
+| Canonical test `charter/tests/test_nlah_loader.py` | 1 file (10 tests)                                                     |
+| Cloud Posture `nlah_loader.py` collapsed to shim   | -30 LOC                                                               |
+| Vulnerability `nlah_loader.py` collapsed to shim   | -30 LOC                                                               |
+| Identity `nlah_loader.py` collapsed to shim        | -35 LOC                                                               |
+| Per-agent test files (`test_nlah_loader.py` x 3)   | unchanged — they exercise the shim end-to-end                         |
+| Net source LOC                                     | small net win (~-20 LOC) plus one logical home for future loader work |
+| Repo tests after amendment                         | 740 passed / 5 skipped (was 730; +10 from charter canon, 0 lost)      |
