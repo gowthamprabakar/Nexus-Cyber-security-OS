@@ -26,6 +26,7 @@ from charter.memory.models import (
     PlaybookModel,
     RelationshipModel,
 )
+from charter.memory.procedural import PlaybookRow, ProceduralStore
 
 __all__ = [
     "EMBEDDING_DIM",
@@ -37,5 +38,7 @@ __all__ = [
     "EpisodicStore",
     "FakeEmbeddingProvider",
     "PlaybookModel",
+    "PlaybookRow",
+    "ProceduralStore",
     "RelationshipModel",
 ]
