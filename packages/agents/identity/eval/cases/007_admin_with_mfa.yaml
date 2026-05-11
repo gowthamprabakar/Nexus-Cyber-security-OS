@@ -1,0 +1,24 @@
+case_id: 007_admin_with_mfa
+description: Admin user WITH MFA — overprivilege HIGH but no mfa_gap (MFA satisfied)
+fixture:
+  iam_listing:
+    users:
+      - arn: arn:aws:iam::123456789012:user/carol
+        name: carol
+        user_id: AIDA-CAROL
+        last_used_at: '2026-05-10T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+    roles: []
+    groups: []
+  users_with_mfa: [carol]
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 0
+    high: 1
+  by_finding_type:
+    overprivilege: 1
+    mfa_gap: 0
+    dormant: 0
+    external_access: 0

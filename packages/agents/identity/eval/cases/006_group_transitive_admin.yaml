@@ -1,0 +1,27 @@
+case_id: 006_group_transitive_admin
+description: User inherits admin via group — overprivilege for user + group + mfa_gap for user
+fixture:
+  iam_listing:
+    users:
+      - arn: arn:aws:iam::123456789012:user/bob
+        name: bob
+        user_id: AIDA-BOB
+        last_used_at: '2026-05-10T00:00:00+00:00'
+        group_memberships: [admins]
+    roles: []
+    groups:
+      - arn: arn:aws:iam::123456789012:group/admins
+        name: admins
+        group_id: AGPA-ADMINS
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+expected:
+  finding_count: 3
+  by_severity:
+    critical: 1
+    high: 2
+  by_finding_type:
+    overprivilege: 2
+    mfa_gap: 1
+    dormant: 0
+    external_access: 0

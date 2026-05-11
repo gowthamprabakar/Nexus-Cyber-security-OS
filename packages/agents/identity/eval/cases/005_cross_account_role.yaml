@@ -1,0 +1,27 @@
+case_id: 005_cross_account_role
+description: Access Analyzer flags a cross-account role trust — external_access HIGH
+fixture:
+  iam_listing:
+    users: []
+    roles: []
+    groups: []
+  analyzer_arn: arn:aws:access-analyzer:us-east-1:123456789012:analyzer/nexus
+  access_analyzer_findings:
+    - id: aa-cross-account
+      resource_arn: arn:aws:iam::123456789012:role/PartnerAccess
+      resource_type: AWS::IAM::Role
+      external_principals: ['arn:aws:iam::999999999999:root']
+      actions: [sts:AssumeRole]
+      is_public: false
+      status: ACTIVE
+      finding_type: ExternalAccess
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 0
+    high: 1
+  by_finding_type:
+    external_access: 1
+    overprivilege: 0
+    mfa_gap: 0
+    dormant: 0

@@ -1,0 +1,23 @@
+case_id: 002_admin_no_mfa
+description: Admin user without MFA — overprivilege HIGH + mfa_gap CRITICAL (2 findings)
+fixture:
+  iam_listing:
+    users:
+      - arn: arn:aws:iam::123456789012:user/alice
+        name: alice
+        user_id: AIDA-ALICE
+        last_used_at: '2026-05-10T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+    roles: []
+    groups: []
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 1
+    high: 1
+  by_finding_type:
+    overprivilege: 1
+    mfa_gap: 1
+    dormant: 0
+    external_access: 0

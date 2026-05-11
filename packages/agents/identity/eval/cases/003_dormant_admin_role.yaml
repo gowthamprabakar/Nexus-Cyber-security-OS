@@ -1,0 +1,23 @@
+case_id: 003_dormant_admin_role
+description: Admin role last used 400 days ago — overprivilege HIGH + dormant MEDIUM
+fixture:
+  iam_listing:
+    users: []
+    roles:
+      - arn: arn:aws:iam::123456789012:role/LegacyAdminRole
+        name: LegacyAdminRole
+        role_id: AROA-LEGACY
+        last_used_at: '2025-03-27T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+    groups: []
+expected:
+  finding_count: 2
+  by_severity:
+    high: 1
+    medium: 1
+  by_finding_type:
+    overprivilege: 1
+    dormant: 1
+    mfa_gap: 0
+    external_access: 0

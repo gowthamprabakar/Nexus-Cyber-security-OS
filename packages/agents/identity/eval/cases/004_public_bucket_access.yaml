@@ -1,0 +1,27 @@
+case_id: 004_public_bucket_access
+description: Access Analyzer flags a public S3 bucket — external_access CRITICAL
+fixture:
+  iam_listing:
+    users: []
+    roles: []
+    groups: []
+  analyzer_arn: arn:aws:access-analyzer:us-east-1:123456789012:analyzer/nexus
+  access_analyzer_findings:
+    - id: aa-public-bucket
+      resource_arn: arn:aws:s3:::public-data
+      resource_type: AWS::S3::Bucket
+      external_principals: ['*']
+      actions: [s3:GetObject]
+      is_public: true
+      status: ACTIVE
+      finding_type: ExternalAccess
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+  by_finding_type:
+    external_access: 1
+    overprivilege: 0
+    mfa_gap: 0
+    dormant: 0

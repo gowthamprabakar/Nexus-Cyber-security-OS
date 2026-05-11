@@ -1,0 +1,28 @@
+case_id: 009_multiple_dormant_roles
+description: Two non-admin roles idle past threshold — two dormant MEDIUM findings
+fixture:
+  iam_listing:
+    users: []
+    roles:
+      - arn: arn:aws:iam::123456789012:role/UnusedRole1
+        name: UnusedRole1
+        role_id: AROA-UNUSED1
+        last_used_at: '2025-08-23T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/ReadOnlyAccess
+      - arn: arn:aws:iam::123456789012:role/UnusedRole2
+        name: UnusedRole2
+        role_id: AROA-UNUSED2
+        last_used_at: null
+        attached_policy_arns: []
+    groups: []
+expected:
+  finding_count: 2
+  by_severity:
+    medium: 2
+    high: 0
+  by_finding_type:
+    dormant: 2
+    overprivilege: 0
+    mfa_gap: 0
+    external_access: 0

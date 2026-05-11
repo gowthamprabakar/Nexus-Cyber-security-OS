@@ -1,0 +1,24 @@
+case_id: 008_dormant_human_user
+description: Non-admin human user idle for 200 days — dormant MEDIUM only
+fixture:
+  iam_listing:
+    users:
+      - arn: arn:aws:iam::123456789012:user/dave
+        name: dave
+        user_id: AIDA-DAVE
+        last_used_at: '2025-10-23T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/ReadOnlyAccess
+    roles: []
+    groups: []
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0
+    critical: 0
+  by_finding_type:
+    dormant: 1
+    overprivilege: 0
+    mfa_gap: 0
+    external_access: 0

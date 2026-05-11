@@ -1,0 +1,21 @@
+case_id: 001_clean_account
+description: Fresh account with no users, roles, or groups — agent emits no findings
+fixture:
+  iam_listing:
+    users: []
+    roles: []
+    groups: []
+expected:
+  finding_count: 0
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  by_finding_type:
+    overprivilege: 0
+    dormant: 0
+    external_access: 0
+    mfa_gap: 0
+    admin_path: 0

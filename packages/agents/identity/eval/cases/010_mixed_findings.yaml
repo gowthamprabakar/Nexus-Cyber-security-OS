@@ -1,0 +1,40 @@
+case_id: 010_mixed_findings
+description: All four finding families in one account — multi-finding rollup
+fixture:
+  iam_listing:
+    users:
+      - arn: arn:aws:iam::123456789012:user/erin
+        name: erin
+        user_id: AIDA-ERIN
+        last_used_at: '2026-05-10T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+    roles:
+      - arn: arn:aws:iam::123456789012:role/RetiredRole
+        name: RetiredRole
+        role_id: AROA-RETIRED
+        last_used_at: '2025-03-27T00:00:00+00:00'
+        attached_policy_arns:
+          - arn:aws:iam::aws:policy/ReadOnlyAccess
+    groups: []
+  analyzer_arn: arn:aws:access-analyzer:us-east-1:123456789012:analyzer/nexus
+  access_analyzer_findings:
+    - id: aa-mixed-public
+      resource_arn: arn:aws:s3:::leaked
+      resource_type: AWS::S3::Bucket
+      external_principals: ['*']
+      actions: [s3:GetObject]
+      is_public: true
+      status: ACTIVE
+      finding_type: ExternalAccess
+expected:
+  finding_count: 4
+  by_severity:
+    critical: 2
+    high: 1
+    medium: 1
+  by_finding_type:
+    overprivilege: 1
+    mfa_gap: 1
+    dormant: 1
+    external_access: 1
