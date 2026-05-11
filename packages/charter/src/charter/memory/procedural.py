@@ -30,6 +30,8 @@ from typing import Any
 from sqlalchemy import ColumnElement, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from charter.audit import AuditLog
+from charter.memory.audit import ACTION_PLAYBOOK_PUBLISHED
 from charter.memory.models import PlaybookModel
 
 
@@ -69,8 +71,14 @@ class PlaybookRow:
 class ProceduralStore:
     """Typed async accessor over the `playbooks` table."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        audit_log: AuditLog | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._audit_log = audit_log
 
     async def publish_version(
         self,
@@ -117,7 +125,17 @@ class ProceduralStore:
             )
             session.add(row)
             await session.flush()
-            return next_version
+
+        if self._audit_log is not None:
+            self._audit_log.append(
+                action=ACTION_PLAYBOOK_PUBLISHED,
+                payload={
+                    "tenant_id": tenant_id,
+                    "path": path,
+                    "version": next_version,
+                },
+            )
+        return next_version
 
     async def get_active(
         self,

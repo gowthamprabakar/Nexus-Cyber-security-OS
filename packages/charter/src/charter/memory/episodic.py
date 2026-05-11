@@ -27,6 +27,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from charter.audit import AuditLog
+from charter.memory.audit import ACTION_EPISODE_APPENDED
 from charter.memory.models import EpisodeModel
 
 
@@ -75,8 +77,14 @@ class EpisodeRow:
 class EpisodicStore:
     """Typed async accessor over the `episodes` table."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        audit_log: AuditLog | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._audit_log = audit_log
 
     async def append_event(
         self,
@@ -100,7 +108,20 @@ class EpisodicStore:
             )
             session.add(row)
             await session.flush()
-            return int(row.episode_id)
+            episode_id = int(row.episode_id)
+
+        if self._audit_log is not None:
+            self._audit_log.append(
+                action=ACTION_EPISODE_APPENDED,
+                payload={
+                    "tenant_id": tenant_id,
+                    "episode_id": episode_id,
+                    "correlation_id": correlation_id,
+                    "agent_id": agent_id,
+                    "event_action": action,
+                },
+            )
+        return episode_id
 
     async def query_by_correlation_id(
         self,

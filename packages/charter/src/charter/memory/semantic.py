@@ -31,6 +31,8 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ulid import ULID
 
+from charter.audit import AuditLog
+from charter.memory.audit import ACTION_ENTITY_UPSERTED, ACTION_RELATIONSHIP_ADDED
 from charter.memory.models import EntityModel, RelationshipModel
 
 MAX_TRAVERSAL_DEPTH = 3
@@ -69,8 +71,14 @@ class EntityRow:
 class SemanticStore:
     """Typed async accessor over `entities` + `relationships`."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        audit_log: AuditLog | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._audit_log = audit_log
 
     async def upsert_entity(
         self,
@@ -114,7 +122,18 @@ class SemanticStore:
                     properties=props,
                 )
             )
-            return entity_id
+
+        if self._audit_log is not None:
+            self._audit_log.append(
+                action=ACTION_ENTITY_UPSERTED,
+                payload={
+                    "tenant_id": tenant_id,
+                    "entity_id": entity_id,
+                    "entity_type": entity_type,
+                    "external_id": external_id,
+                },
+            )
+        return entity_id
 
     async def get_entity(
         self,
@@ -152,7 +171,20 @@ class SemanticStore:
                 )
                 .returning(RelationshipModel.relationship_id)
             )
-            return int(result.scalar_one())
+            relationship_id = int(result.scalar_one())
+
+        if self._audit_log is not None:
+            self._audit_log.append(
+                action=ACTION_RELATIONSHIP_ADDED,
+                payload={
+                    "tenant_id": tenant_id,
+                    "relationship_id": relationship_id,
+                    "src_entity_id": src_entity_id,
+                    "dst_entity_id": dst_entity_id,
+                    "relationship_type": relationship_type,
+                },
+            )
+        return relationship_id
 
     async def neighbors(
         self,
