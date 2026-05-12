@@ -20,7 +20,7 @@ fixture:
         "hypothesis_id": "H-001",
         "statement": "The public S3 bucket was created during the May 12 incident; the audit event corroborates the change.",
         "confidence": 0.8,
-        "evidence_refs": ["audit_event:0000000000000002", "finding:CP-1"]
+        "evidence_refs": ["audit_event:0000000000000000", "finding:CP-1"]
       }
     ]}
 expected:

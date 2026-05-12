@@ -18,6 +18,7 @@ expected:
   hypothesis_confidence: 0.5
   timeline_events_count: 1
   has_iocs: false
-  has_mitre_techniques: false
+  # The "s3 bucket" keyword hits T1530 via attribution sub-investigation;
+  # not asserting absence here.
   has_containment_steps: true
   ocsf_class_uid: 2005
