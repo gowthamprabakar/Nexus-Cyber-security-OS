@@ -59,8 +59,13 @@ def _from_audit_event(ae: AuditEvent) -> TimelineEvent:
         # Keep description compact — top-level keys are enough.
         keys = ", ".join(sorted(ae.payload.keys()))
         summary = f"{ae.action} ({keys})"
+    # SQLite drops tz on TIMESTAMPTZ round-trip; pin to UTC so the
+    # Timeline sorter can compare against tz-aware finding events.
+    emitted_at = ae.emitted_at
+    if emitted_at.tzinfo is None:
+        emitted_at = emitted_at.replace(tzinfo=UTC)
     return TimelineEvent(
-        emitted_at=ae.emitted_at,
+        emitted_at=emitted_at,
         source="audit",
         actor=ae.agent_id,
         action=ae.action,
