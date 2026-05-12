@@ -1,7 +1,7 @@
 # ADR-007 — Cloud Posture is the reference NLAH
 
-- **Status:** accepted (v1.2 — amended 2026-05-11 with the NLAH-loader hoist; see [§v1.2 amendment](#v12-amendment-2026-05-11---nlah-loader-hoist) · prior v1.1 hoisted the LLM adapter)
-- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2)
+- **Status:** accepted (v1.3 — amended 2026-05-12 with the always-on agent class for F.6 Audit Agent; see [§v1.3 amendment](#v13-amendment-2026-05-12---always-on-agent-class) · prior v1.2 hoisted the NLAH loader · prior v1.1 hoisted the LLM adapter)
+- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2); 2026-05-12 (v1.3)
 - **Authors:** AI/Agent Eng, Detection Eng
 - **Stakeholders:** every agent author; PM (capacity planning); compliance (audit-chain consistency across agents)
 
@@ -207,3 +207,75 @@ Any improvement to the loader (e.g., supporting tenant-specific NLAH overrides i
 | Per-agent test files (`test_nlah_loader.py` x 3)   | unchanged — they exercise the shim end-to-end                         |
 | Net source LOC                                     | small net win (~-20 LOC) plus one logical home for future loader work |
 | Repo tests after amendment                         | 740 passed / 5 skipped (was 730; +10 from charter canon, 0 lost)      |
+
+---
+
+## v1.3 amendment (2026-05-12) — Always-on agent class
+
+**Triggered by:** F.6 Audit Agent. Per the glossary, the Audit Agent is **"the only agent the others cannot disable"** — its job is to record what happened, and a misconfigured caller must not be able to stop it. But the v1.0 / v1.1 / v1.2 reference template (Cloud Posture / D.1 / D.2 / D.3) honours **every** `BudgetSpec` axis: a `BudgetExhausted` on any of `llm_calls`, `tokens`, `wall_clock_sec`, `cloud_api_calls`, or `mb_written` raises and halts the run. For an audit-recording agent, that's wrong: a token-budget overrun on a chain-verification query is **less acceptable** than logging a warning and proceeding, because failing to record is the worse outcome than slightly exceeding a budget.
+
+### The decision
+
+We introduce an **always-on agent class** with one member in v0.1 (F.6 Audit Agent). An always-on agent honours **only `wall_clock_sec`** from its `BudgetSpec`. Every other budget axis catches `BudgetExhausted`, logs a structlog warning, and proceeds. `wall_clock_sec` still raises so a runaway query is killable.
+
+The policy is **locked into the agent driver**, not the `BudgetEnvelope` itself. Other agents' `consume()` calls keep their hard stops. Only an always-on agent's driver wraps the consume in the catch-and-warn helper (`audit.agent._enforce_always_on`).
+
+The allowlist of always-on agents is **explicit**. In v0.1 the only member is `audit_agent`. Adding a new always-on agent requires:
+
+1. An ADR justifying why this agent can't be stoppable by a budget overrun.
+2. A code-side opt-in via `_enforce_always_on` (or its successor).
+3. The agent's driver carrying its own test that exercises the warning-not-raise path for every non-`wall_clock_sec` axis.
+
+### Why not change `BudgetEnvelope` itself?
+
+Three reasons:
+
+1. **Blast radius.** Changing `BudgetEnvelope.consume` to never raise would affect every agent. The reference template's hard-stop behaviour is load-bearing for cost discipline on the 17 budget-bounded agents.
+2. **Test surface.** Every agent's `test_agent.py` asserts `BudgetExhausted` raises for over-limit calls. Changing the envelope changes 17 test files at once.
+3. **Explicit policy.** Catching `BudgetExhausted` in the driver makes the **policy choice visible at the agent's seam**. Reading `audit/agent.py` shows the warning-not-raise path immediately; reading another agent's `agent.py` makes the absence of that path obvious. Implicit "every agent that uses this envelope is always-on" would invert that and make the policy invisible.
+
+### What this validates
+
+- ADR-007 v1.0 said "deltas from the template are recorded in per-agent ADRs". F.6 is the first agent to deviate from the reference, and it lands here with the deviation justified and tested.
+- The "amend on the third duplicate" rule still holds — but this is a different kind of amendment. v1.1 + v1.2 generalised patterns (duplicate code → shared substrate). v1.3 admits a controlled exception (one agent, one budget axis, one explicit allowlist). Both kinds belong in ADR-007.
+
+### Pattern: how a future always-on agent opts in
+
+```python
+from charter.exceptions import BudgetExhausted
+
+def _enforce_always_on(exc: BudgetExhausted) -> None:
+    """ADR-007 v1.3 always-on policy. Only `wall_clock_sec` raises."""
+    if exc.dimension == "wall_clock_sec":
+        raise exc
+    _LOG.warning(
+        "always-on: budget axis %s exhausted (limit=%s, used=%s); proceeding",
+        exc.dimension, exc.limit, exc.used,
+    )
+```
+
+The driver wraps every `consume()` call site with the helper. Tests cover:
+
+- A `BudgetExhausted` on `wall_clock_sec` raises out of the driver.
+- A `BudgetExhausted` on `llm_calls`, `tokens`, `cloud_api_calls`, or `mb_written` logs a warning and the agent proceeds.
+- The warning surfaces the dimension + limit + used so an operator can size the budget appropriately next time.
+
+### What this does NOT change
+
+- **Charter context manager.** `with Charter(contract, tools=registry) as ctx: ...` shape is unchanged. The always-on policy lives inside the `with` block, not around it.
+- **Audit log.** Every action still emits a chained audit entry. The always-on policy is about budgets, not auditability — auditability is non-negotiable.
+- **OCSF wire format.** Still 6003 (API Activity) for F.6; the always-on flag is a runtime behaviour, not a schema field.
+
+### Cross-package blast radius
+
+| Change                                              | Files affected                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------------------- |
+| New helper `_enforce_always_on` in `audit/agent.py` | 1 file (~10 LOC)                                                        |
+| Test that exercises both paths (`test_agent.py`)    | 2 new tests (raise on wall_clock; warn-not-raise on every other axis)   |
+| No changes to `charter.budget`                      | 0 files — policy lives in the agent driver, not the envelope            |
+| No changes to other agents' drivers                 | 0 files — only opted-in members of the always-on class touch the helper |
+| Repo tests after amendment                          | 1168 passed / 11 skipped (was 1133; +35 from F.6 task work, 0 lost)     |
+
+### v1.4 candidate flagged
+
+If a future agent (e.g. D.7 Investigation when it consumes the audit chain at scale) needs the same exception, **promote `_enforce_always_on` to `charter.audit`** as a public helper. The pattern is duplicated at #2 → hoist at #3 per the established rule.
