@@ -1,0 +1,33 @@
+case_id: 004_per_action_query
+description: Mixed-action corpus filtered by action=entity_upserted — only those events surface.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-001
+      action: episode_appended
+      payload: { finding_id: F-1 }
+    - agent: semantic_writer
+      run_id: corr-002
+      action: entity_upserted
+      payload: { entity_id: 01HV0HOST00000000000HOST1A }
+    - agent: cloud_posture
+      run_id: corr-003
+      action: episode_appended
+      payload: { finding_id: F-2 }
+    - agent: semantic_writer
+      run_id: corr-004
+      action: entity_upserted
+      payload: { entity_id: 01HV0HOST00000000000HOST2B }
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: entity_upserted
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 2
+  chain_valid: true
+  count_by_action:
+    entity_upserted: 2

@@ -1,0 +1,32 @@
+case_id: 007_time_range_filter
+description: 3 events spanning May; query window May 10-20 surfaces only the middle event.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-001
+      action: episode_appended
+      payload: { tag: early }
+      timestamp: '2026-05-01T12:00:00Z'
+    - agent: cloud_posture
+      run_id: corr-002
+      action: episode_appended
+      payload: { tag: middle }
+      timestamp: '2026-05-15T12:00:00Z'
+    - agent: cloud_posture
+      run_id: corr-003
+      action: episode_appended
+      payload: { tag: late }
+      timestamp: '2026-05-29T12:00:00Z'
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: '2026-05-10T00:00:00Z'
+    until: '2026-05-20T23:59:59Z'
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 1
+  chain_valid: true
+  count_by_action:
+    episode_appended: 1

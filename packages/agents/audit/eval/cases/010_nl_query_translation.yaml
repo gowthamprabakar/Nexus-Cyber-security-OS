@@ -1,0 +1,35 @@
+case_id: 010_nl_query_translation
+description: |
+  Natural-language query exercises charter.llm_adapter consumption. The LLM
+  stub returns a JSON payload selecting `action=entity_upserted`; the agent
+  driver feeds the translated params into AuditStore.query. Pins the
+  end-to-end NL → typed-args → filter loop.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-001
+      action: episode_appended
+      payload: { n: 1 }
+    - agent: semantic_writer
+      run_id: corr-002
+      action: entity_upserted
+      payload: { entity_id: 01HV0HOST00000000000HOST1A }
+    - agent: semantic_writer
+      run_id: corr-003
+      action: entity_upserted
+      payload: { entity_id: 01HV0HOST00000000000HOST2B }
+  memory_events: []
+  tampered_jsonl_index: null
+  nl_query: 'show me every entity upsert'
+  llm_response: '{"action": "entity_upserted"}'
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 2
+  chain_valid: true
+  count_by_action:
+    entity_upserted: 2

@@ -1,0 +1,29 @@
+case_id: 006_cross_source_merge
+description: jsonl chain + F.5 memory events combine in a single AuditStore query.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-J1
+      action: episode_appended
+      payload: { src: jsonl, n: 1 }
+    - agent: cloud_posture
+      run_id: corr-J2
+      action: episode_appended
+      payload: { src: jsonl, n: 2 }
+  memory_events:
+    - correlation_id: corr-M1
+      agent_id: runtime_threat
+      action: episode_appended
+      payload: { src: memory, n: 1 }
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 3
+  chain_valid: true
+  count_by_action:
+    episode_appended: 3

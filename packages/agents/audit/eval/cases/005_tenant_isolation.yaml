@@ -1,0 +1,32 @@
+case_id: 005_tenant_isolation
+description: Memory events for a different tenant must NOT surface when querying the active tenant.
+fixture:
+  jsonl_events: []
+  memory_events:
+    - tenant_id: '01HV0T0000000000000000TENA'
+      correlation_id: corr-A1
+      agent_id: cloud_posture
+      action: episode_appended
+      payload: { who: A }
+    - tenant_id: '01HV0T0000000000000000TENB'
+      correlation_id: corr-B1
+      agent_id: cloud_posture
+      action: episode_appended
+      payload: { who: B }
+    - tenant_id: '01HV0T0000000000000000TENB'
+      correlation_id: corr-B2
+      agent_id: runtime_threat
+      action: entity_upserted
+      payload: { who: B }
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 1
+  chain_valid: true
+  count_by_action:
+    episode_appended: 1

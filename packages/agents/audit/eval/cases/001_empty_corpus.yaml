@@ -1,0 +1,16 @@
+case_id: 001_empty_corpus
+description: No sources, no memory — agent emits an empty result with chain valid.
+fixture:
+  jsonl_events: []
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 0
+  chain_valid: true
+  count_by_action: {}

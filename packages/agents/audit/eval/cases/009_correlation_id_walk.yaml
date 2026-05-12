@@ -1,0 +1,34 @@
+case_id: 009_correlation_id_walk
+description: Multi-event delegation chain — query by correlation_id surfaces every event in the chain.
+fixture:
+  jsonl_events:
+    - agent: supervisor
+      run_id: corr-shared
+      action: invocation_started
+      payload: { step: 0 }
+    - agent: cloud_posture
+      run_id: corr-shared
+      action: episode_appended
+      payload: { step: 1 }
+    - agent: cloud_posture
+      run_id: corr-shared
+      action: episode_appended
+      payload: { step: 2 }
+    - agent: runtime_threat
+      run_id: corr-other
+      action: episode_appended
+      payload: { unrelated: true }
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: corr-shared
+expected:
+  total: 3
+  chain_valid: true
+  count_by_action:
+    invocation_started: 1
+    episode_appended: 2

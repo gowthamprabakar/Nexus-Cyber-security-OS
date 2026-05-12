@@ -1,0 +1,29 @@
+case_id: 002_clean_chain_ingest
+description: 3-event hash-chained jsonl ingest — chain valid, total 3, all episode_appended.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-001
+      action: episode_appended
+      payload: { finding_id: F-1 }
+    - agent: cloud_posture
+      run_id: corr-002
+      action: episode_appended
+      payload: { finding_id: F-2 }
+    - agent: cloud_posture
+      run_id: corr-003
+      action: episode_appended
+      payload: { finding_id: F-3 }
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: null
+    correlation_id: null
+expected:
+  total: 3
+  chain_valid: true
+  count_by_action:
+    episode_appended: 3

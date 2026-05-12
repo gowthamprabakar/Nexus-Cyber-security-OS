@@ -1,0 +1,34 @@
+case_id: 008_agent_id_filter
+description: Two-agent corpus filtered by agent_id=runtime_threat surfaces only that agent's events.
+fixture:
+  jsonl_events:
+    - agent: cloud_posture
+      run_id: corr-CP1
+      action: episode_appended
+      payload: { by: CP }
+    - agent: runtime_threat
+      run_id: corr-RT1
+      action: episode_appended
+      payload: { by: RT }
+    - agent: cloud_posture
+      run_id: corr-CP2
+      action: episode_appended
+      payload: { by: CP }
+    - agent: runtime_threat
+      run_id: corr-RT2
+      action: entity_upserted
+      payload: { by: RT }
+  memory_events: []
+  tampered_jsonl_index: null
+  query:
+    since: null
+    until: null
+    action: null
+    agent_id: runtime_threat
+    correlation_id: null
+expected:
+  total: 2
+  chain_valid: true
+  count_by_action:
+    episode_appended: 1
+    entity_upserted: 1
