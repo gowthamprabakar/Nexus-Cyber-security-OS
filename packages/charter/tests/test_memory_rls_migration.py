@@ -110,12 +110,15 @@ def test_rls_migration_downgrade_drops_policies_and_disables_rls() -> None:
 # ---------------------------- alembic resolves the new head --------------
 
 
-def test_rls_migration_is_the_unique_head() -> None:
+def test_rls_migration_is_reachable_in_the_chain() -> None:
+    """RLS isn't the latest head anymore (F.6's 0003_audit_events chains
+    after it). It must still be reachable as a revision in the chain.
+    """
     cfg = Config(str(_INI))
     cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
     script = ScriptDirectory.from_config(cfg)
-    heads = script.get_heads()
-    assert list(heads) == ["0002_memory_rls"]
+    revs = {r.revision for r in script.walk_revisions()}
+    assert "0002_memory_rls" in revs
 
 
 # ---------------------------- end-to-end against aiosqlite ---------------
