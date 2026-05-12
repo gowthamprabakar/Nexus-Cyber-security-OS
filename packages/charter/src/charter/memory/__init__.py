@@ -20,6 +20,7 @@ from charter.memory.embedding import Embedding, FakeEmbeddingProvider
 from charter.memory.episodic import EpisodeRow, EpisodicStore
 from charter.memory.models import (
     EMBEDDING_DIM,
+    AuditEventModel,
     Base,
     EntityModel,
     EpisodeModel,
@@ -33,6 +34,7 @@ from charter.memory.service import MemoryService
 __all__ = [
     "EMBEDDING_DIM",
     "MAX_TRAVERSAL_DEPTH",
+    "AuditEventModel",
     "Base",
     "Embedding",
     "EntityModel",

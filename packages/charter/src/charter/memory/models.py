@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    CHAR,
     BigInteger,
     Boolean,
     DateTime,
@@ -298,10 +299,54 @@ class RelationshipModel(Base):
     )
 
 
+class AuditEventModel(Base):
+    """One ingested audit-chain event in the Audit Agent (F.6) backing store.
+
+    `audit_events` is the fast-query mirror of the per-source `audit.jsonl`
+    files emitted by `charter.audit.AuditLog` *and* the F.5 memory-engine
+    audit emissions (`episode_appended`, etc). The Audit Agent's `AuditStore`
+    (F.6 Task 5) is the only writer; readers are compliance teams, the
+    Meta-Harness Agent (A.4), and the Investigation Agent (D.7).
+
+    `(tenant_id, entry_hash)` is unique so re-ingesting the same file is
+    idempotent — operators can rerun an ingest without worrying about
+    duplicates. The hash columns are 64-char hex strings (SHA-256
+    digests from `charter.audit._hash_entry`).
+    """
+
+    __tablename__ = "audit_events"
+
+    audit_event_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    tenant_id: Mapped[str] = mapped_column(String(26), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(_PortableJSONB(), nullable=False)
+    previous_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
+    entry_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
+    emitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "entry_hash", name="uq_audit_events_tenant_entry_hash"),
+        Index("ix_audit_events_tenant_emitted", "tenant_id", "emitted_at"),
+        Index("ix_audit_events_tenant_action", "tenant_id", "action"),
+        Index("ix_audit_events_correlation", "correlation_id"),
+    )
+
+
 # Re-exports kept here so `charter.memory.__init__` only re-exports
 # symbols this module actually defines.
 __all__ = [
     "EMBEDDING_DIM",
+    "AuditEventModel",
     "Base",
     "EntityModel",
     "EpisodeModel",

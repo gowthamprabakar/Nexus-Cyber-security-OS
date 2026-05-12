@@ -74,8 +74,18 @@ def test_embedding_dim_is_1536() -> None:
 # ---------------------------- schema shape --------------------------------
 
 
-def test_base_metadata_contains_exactly_four_tables() -> None:
-    assert set(Base.metadata.tables) == {"episodes", "playbooks", "entities", "relationships"}
+def test_base_metadata_contains_the_memory_and_audit_tables() -> None:
+    """F.5 ships four memory tables; F.6 extends the same `Base` with
+    `audit_events`. The shared declarative `Base` is the contract — a
+    new table here means a new alembic migration follows.
+    """
+    assert set(Base.metadata.tables) == {
+        "episodes",
+        "playbooks",
+        "entities",
+        "relationships",
+        "audit_events",
+    }
 
 
 @pytest.mark.asyncio
