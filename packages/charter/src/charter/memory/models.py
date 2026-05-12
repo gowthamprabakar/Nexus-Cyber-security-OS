@@ -332,7 +332,7 @@ class AuditEventModel(Base):
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
-    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    source: Mapped[str] = mapped_column(String(512), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "entry_hash", name="uq_audit_events_tenant_entry_hash"),

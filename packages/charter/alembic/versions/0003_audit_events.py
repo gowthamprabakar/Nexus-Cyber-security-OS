@@ -59,7 +59,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
-        sa.Column("source", sa.String(length=64), nullable=False),
+        sa.Column("source", sa.String(length=512), nullable=False),
         sa.UniqueConstraint(
             "tenant_id",
             "entry_hash",

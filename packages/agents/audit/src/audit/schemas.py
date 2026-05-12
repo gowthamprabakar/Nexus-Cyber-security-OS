@@ -77,7 +77,10 @@ class AuditEvent(BaseModel):
     previous_hash: str
     entry_hash: str
     emitted_at: datetime
-    source: str = Field(min_length=1, max_length=64)
+    # `source` carries provenance like "jsonl:<path>" or "memory:<tenant>";
+    # filesystem paths can be long. 512 matches the LTREE column ceiling
+    # in `charter.memory.models._PortableLtree`.
+    source: str = Field(min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def _check_hashes(self) -> AuditEvent:
