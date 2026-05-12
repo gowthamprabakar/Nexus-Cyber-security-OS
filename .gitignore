@@ -43,3 +43,8 @@ coverage/
 
 # Local infra
 docker/.data/
+
+# Local dev tooling (per-user; not project state)
+.claude/
+_bmad/
+.coverage
