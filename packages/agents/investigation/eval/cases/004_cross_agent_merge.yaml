@@ -1,0 +1,31 @@
+case_id: 004_cross_agent_merge
+description: Audit chain + 2 sibling agents (cloud_posture + runtime_threat). Timeline merges all three sources sorted by time.
+fixture:
+  audit_events:
+    - { seed: 1, agent_id: 'cloud_posture', action: 'finding.created' }
+    - { seed: 2, agent_id: 'runtime_threat', action: 'finding.created' }
+  sibling_findings:
+    - agent: cloud_posture
+      findings:
+        - class_uid: 2003
+          class_name: Compliance Finding
+          finding_info:
+            uid: CP-1
+            title: Public bucket
+          time_ms_offset_from_base: 1000
+    - agent: runtime_threat
+      findings:
+        - class_uid: 2004
+          class_name: Detection Finding
+          finding_info:
+            uid: RT-1
+            title: Shell spawn in container
+          time_ms_offset_from_base: 2000
+  llm_response: null
+expected:
+  # 2 audit + 2 findings = 4 timeline events.
+  timeline_events_count: 4
+  hypotheses_count: 2
+  has_containment_steps: true
+  containment_steps_count: 2
+  ocsf_class_uid: 2005

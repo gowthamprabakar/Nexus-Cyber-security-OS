@@ -1,0 +1,30 @@
+case_id: 007_llm_hypothesis_validated
+description: |
+  LLM stub returns a hypothesis with `evidence_refs` that resolve against
+  the collected corpus. Synthesizer accepts it; VALIDATE stage confirms.
+fixture:
+  audit_events:
+    - { seed: 1, agent_id: 'cloud_posture', action: 'finding.created' }
+  sibling_findings:
+    - agent: cloud_posture
+      findings:
+        - class_uid: 2003
+          class_name: Compliance Finding
+          finding_info:
+            uid: CP-1
+            title: Public S3 bucket
+          time_ms_offset_from_base: 0
+  llm_response: |
+    {"hypotheses": [
+      {
+        "hypothesis_id": "H-001",
+        "statement": "The public S3 bucket was created during the May 12 incident; the audit event corroborates the change.",
+        "confidence": 0.8,
+        "evidence_refs": ["audit_event:0000000000000002", "finding:CP-1"]
+      }
+    ]}
+expected:
+  hypotheses_count: 1
+  hypothesis_id_first: H-001
+  hypothesis_confidence: 0.8
+  ocsf_class_uid: 2005

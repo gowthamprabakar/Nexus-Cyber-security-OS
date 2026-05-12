@@ -1,0 +1,43 @@
+case_id: 010_containment_plan_per_class
+description: |
+  Three sibling findings with distinct OCSF class_uids (2002 Vuln,
+  2003 Compliance, 2004 Detection). The PLAN stage emits a containment
+  step per finding, each drawn from the class-specific template.
+fixture:
+  audit_events: []
+  sibling_findings:
+    - agent: vulnerability
+      findings:
+        - class_uid: 2002
+          class_name: Vulnerability Finding
+          finding_info:
+            uid: V-CVE-2024-12345
+            title: CVE-2024-12345 in libfoo
+          time_ms_offset_from_base: 0
+    - agent: cloud_posture
+      findings:
+        - class_uid: 2003
+          class_name: Compliance Finding
+          finding_info:
+            uid: CP-public-bucket
+            title: Public S3 bucket
+          time_ms_offset_from_base: 1000
+    - agent: runtime_threat
+      findings:
+        - class_uid: 2004
+          class_name: Detection Finding
+          finding_info:
+            uid: RT-shell-spawn
+            title: Shell spawn in container
+          time_ms_offset_from_base: 2000
+  llm_response: null
+expected:
+  hypotheses_count: 3
+  timeline_events_count: 3
+  has_containment_steps: true
+  containment_steps_count: 3
+  containment_class_uids:
+    - 2002
+    - 2003
+    - 2004
+  ocsf_class_uid: 2005

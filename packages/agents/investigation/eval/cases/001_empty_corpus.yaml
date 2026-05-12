@@ -1,0 +1,13 @@
+case_id: 001_empty_corpus
+description: No audit events, no siblings, no LLM — empty incident report with all 4 artifacts emitted.
+fixture:
+  audit_events: []
+  sibling_findings: []
+  llm_response: null
+expected:
+  hypotheses_count: 0
+  timeline_events_count: 0
+  has_iocs: false
+  has_mitre_techniques: false
+  has_containment_steps: false
+  ocsf_class_uid: 2005

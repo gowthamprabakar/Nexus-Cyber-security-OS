@@ -1,0 +1,23 @@
+case_id: 005_ioc_extraction
+description: Sibling findings carrying network IOCs in their evidence dicts. The ioc_pivot sub-investigation extracts them.
+fixture:
+  audit_events: []
+  sibling_findings:
+    - agent: runtime_threat
+      findings:
+        - class_uid: 2004
+          class_name: Detection Finding
+          finding_info:
+            uid: RT-network-1
+            title: Outbound to suspicious IP
+          time_ms_offset_from_base: 0
+          evidence:
+            remote_ip: 198.51.100.42
+            remote_domain: evil.example.com
+            file_hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  llm_response: null
+expected:
+  hypotheses_count: 1
+  has_iocs: true
+  ioc_count_min: 3 # IP + domain + sha256
+  ocsf_class_uid: 2005

@@ -1,0 +1,33 @@
+case_id: 008_llm_hallucination_dropped
+description: |
+  LLM stub returns a hypothesis with a fabricated evidence_ref
+  (audit_event:deadbeefdeadbeef that doesn't exist). Synthesizer drops
+  it; deterministic fallback emits one hypothesis per finding instead.
+  Pins the "never let fabricated evidence into the report" invariant.
+fixture:
+  audit_events:
+    - { seed: 1, agent_id: 'cloud_posture', action: 'finding.created' }
+  sibling_findings:
+    - agent: cloud_posture
+      findings:
+        - class_uid: 2003
+          class_name: Compliance Finding
+          finding_info:
+            uid: CP-1
+            title: Real finding
+          time_ms_offset_from_base: 0
+  llm_response: |
+    {"hypotheses": [
+      {
+        "hypothesis_id": "H-bad",
+        "statement": "This hypothesis cites a fake audit event.",
+        "confidence": 0.95,
+        "evidence_refs": ["audit_event:deadbeefdeadbeef"]
+      }
+    ]}
+expected:
+  # Hallucination dropped → fallback emits 1 hypothesis per finding.
+  hypotheses_count: 1
+  hypothesis_id_first: H-CP-1
+  hypothesis_confidence: 0.5
+  ocsf_class_uid: 2005

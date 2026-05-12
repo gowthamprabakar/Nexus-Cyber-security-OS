@@ -1,0 +1,22 @@
+case_id: 006_mitre_attribution
+description: Sibling findings mentioning shell + container keywords. The attribution sub-investigation maps to MITRE ATT&CK T1059 (Command and Scripting Interpreter).
+fixture:
+  audit_events: []
+  sibling_findings:
+    - agent: runtime_threat
+      findings:
+        - class_uid: 2004
+          class_name: Detection Finding
+          finding_info:
+            uid: RT-shell-1
+            title: Terminal shell spawn in container
+          time_ms_offset_from_base: 0
+          rule: shell spawn detected
+          evidence:
+            process: /bin/sh -i
+  llm_response: null
+expected:
+  hypotheses_count: 1
+  has_mitre_techniques: true
+  mitre_technique_id_top: T1059
+  ocsf_class_uid: 2005

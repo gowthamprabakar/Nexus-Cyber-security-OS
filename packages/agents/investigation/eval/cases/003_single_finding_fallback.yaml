@@ -1,0 +1,23 @@
+case_id: 003_single_finding_fallback
+description: One sibling finding, no LLM. Deterministic fallback emits one hypothesis per finding (confidence 0.5, statement = title).
+fixture:
+  audit_events: []
+  sibling_findings:
+    - agent: cloud_posture
+      findings:
+        - class_uid: 2003
+          class_name: Compliance Finding
+          finding_info:
+            uid: F-public-bucket-1
+            title: Public S3 bucket in us-east-1
+          time_ms_offset_from_base: 0
+  llm_response: null
+expected:
+  hypotheses_count: 1
+  hypothesis_statement_contains: Public S3 bucket
+  hypothesis_confidence: 0.5
+  timeline_events_count: 1
+  has_iocs: false
+  has_mitre_techniques: false
+  has_containment_steps: true
+  ocsf_class_uid: 2005

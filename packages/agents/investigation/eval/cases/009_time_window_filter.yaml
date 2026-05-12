@@ -1,0 +1,20 @@
+case_id: 009_time_window_filter
+description: |
+  Audit events seeded across a wide time range, but the contract's
+  query window narrows to a small slice. Only audit events in-window
+  appear in the timeline.
+fixture:
+  audit_events:
+    - { seed: 1, agent_id: 'cloud_posture', action: 'x', emitted_at_offset_days: 0 }
+    - { seed: 2, agent_id: 'cloud_posture', action: 'y', emitted_at_offset_days: 7 }
+    - { seed: 3, agent_id: 'cloud_posture', action: 'z', emitted_at_offset_days: 30 }
+  sibling_findings: []
+  llm_response: null
+  window:
+    since_offset_days: 5
+    until_offset_days: 20
+expected:
+  # Only seed=2 (offset 7) is inside [5, 20].
+  timeline_events_count: 1
+  hypotheses_count: 0
+  ocsf_class_uid: 2005
