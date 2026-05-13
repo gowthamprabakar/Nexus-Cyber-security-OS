@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS | Toxic Combinations</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "tertiary-container": "#065f46",
+            "secondary": "#71717a",
+            "on-background": "#fafafa",
+            "on-secondary": "#09090b",
+            "outline-variant": "#27272a",
+            "surface-bright": "#18181b",
+            "on-error-container": "#fca5a5",
+            "on-primary-fixed": "#2e1065",
+            "error": "#ef4444",
+            "on-tertiary-container": "#bbf7d0",
+            "on-primary-container": "#ede9fe",
+            "surface-container-lowest": "#09090b",
+            "secondary-container": "#27272a",
+            "surface-tint": "#a78bfa",
+            "on-primary": "#0a0012",
+            "surface-dim": "#0c0c0f",
+            "on-error": "#1a0000",
+            "secondary-fixed-dim": "#71717a",
+            "on-tertiary": "#001a12",
+            "primary-fixed-dim": "#c4b5fd",
+            "on-tertiary-fixed-variant": "#047857",
+            "background": "#09090b",
+            "surface-container-high": "#18181b",
+            "tertiary-fixed": "#bbf7d0",
+            "primary": "#a78bfa",
+            "on-primary-fixed-variant": "#5b21b6",
+            "inverse-on-surface": "#09090b",
+            "surface-container-highest": "#1e1e22",
+            "on-secondary-container": "#a1a1aa",
+            "tertiary": "#34d399",
+            "primary-fixed": "#ede9fe",
+            "surface": "#0c0c0f",
+            "outline": "#52525b",
+            "inverse-surface": "#fafafa",
+            "primary-container": "#7c3aed",
+            "on-tertiary-fixed": "#003318",
+            "on-surface-variant": "#a1a1aa",
+            "error-container": "#3b1111",
+            "surface-container-low": "#0f0f12",
+            "secondary-fixed": "#a1a1aa",
+            "on-surface": "#fafafa",
+            "inverse-primary": "#5b21b6",
+            "on-secondary-fixed-variant": "#3f3f46",
+            "on-secondary-fixed": "#18181b",
+            "surface-variant": "#18181b",
+            "surface-container": "#121215",
+            "tertiary-fixed-dim": "#6ee7b7"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "headline": ["Geist"],
+            "display": ["Geist"],
+            "body": ["Geist"],
+            "label": ["Geist"],
+            "mono": ["JetBrains Mono"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    body {
+      background-color: #09090b;
+      color: #fafafa;
+    }
+    .toxic-grid-pattern {
+      background-image: radial-gradient(#27272a 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+  </style>
+</head>
+<body class="font-body selection:bg-primary selection:text-on-primary">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] text-secondary font-mono tracking-widest uppercase">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+        Command Center
+      </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+        Threat Hunter
+      </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+        Asset Inventory
+      </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="cloud_done">cloud_done</span>
+        Cloud Posture
+      </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+        Compliance
+      </a>
+</nav>
+<div class="mt-auto px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+        Settings
+      </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+        Support
+      </a>
+</div>
+</aside>
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-outline-variant bg-surface-dim flex justify-between items-center h-14 px-6">
+<div class="flex items-center gap-4 flex-1">
+<span class="text-lg font-headline font-bold text-on-surface">Obsidian AI</span>
+<div class="relative w-full max-w-md group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded px-10 py-1.5 text-label-md focus:outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Search toxic vectors..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+</button>
+</div>
+<div class="h-8 w-8 rounded bg-surface-container border border-outline-variant flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrJh9zsxidUOmo4l4MyzHVUk-a7d7fp1epvPwYgSlXsQk3t91jdMay2s8mAKPQfOu9kHT8ovrdubuWyLpH6_BBOtrvKPUejd79BdytliUrb2pEs_Nj8kBq60pedh-g-rVecN02mSDAOeRxux9w_j90u2bq4EboJBKXifMRrtCljPMPLiWdjImou3-en29bLhs-zne0jewibcXwdUI31cZktnkQFz-JzEzCKU82PstDfMX0qMiokYcBrxkrMhGtMDenPkqIB5Oc4oIi"/>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-64 mt-14 p-6 toxic-grid-pattern min-h-screen">
+<!-- Page Header & Stats -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="px-2 py-0.5 bg-error/10 border border-error/20 text-error text-[10px] font-mono font-bold uppercase tracking-widest rounded">Critical Path</span>
+<span class="text-secondary font-mono text-xs">Page 025 // TOXIC_COMBINATIONS</span>
+</div>
+<h2 class="text-3xl font-headline font-extrabold tracking-tight text-on-surface">Toxic Combination Analysis</h2>
+<p class="text-secondary mt-1">Identified high-risk scenarios where multiple security weaknesses converge on a single asset.</p>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container border border-outline-variant p-3 rounded-lg min-w-[120px]">
+<p class="text-[10px] text-secondary font-bold uppercase tracking-tighter">Total Chains</p>
+<p class="text-2xl font-mono font-bold text-error">42</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-3 rounded-lg min-w-[120px]">
+<p class="text-[10px] text-secondary font-bold uppercase tracking-tighter">Exposed Assets</p>
+<p class="text-2xl font-mono font-bold text-on-surface">128</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-3 rounded-lg min-w-[120px]">
+<p class="text-[10px] text-secondary font-bold uppercase tracking-tighter">Remediated</p>
+<p class="text-2xl font-mono font-bold text-tertiary">89%</p>
+</div>
+</div>
+</div>
+<!-- Central Toxic Chain Visualization -->
+<section class="mb-8 bg-surface-container border border-outline-variant rounded-xl overflow-hidden relative">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-dim">
+<h3 class="text-sm font-bold uppercase tracking-widest text-secondary flex items-center gap-2">
+<span class="material-symbols-outlined text-error text-lg" data-icon="hub">hub</span>
+          Critical Risk Convergance: AWS-PROD-CLUSTER-01
+        </h3>
+<span class="font-mono text-xs text-secondary">ID: 8821-X99-TOXIC</span>
+</div>
+<div class="p-8 flex flex-col lg:flex-row items-center justify-around gap-12 relative overflow-hidden">
+<!-- Visual Background Decoration -->
+<div class="absolute inset-0 pointer-events-none opacity-20">
+<svg class="stroke-error/30 fill-none" height="100%" width="100%">
+<path d="M0 100 Q 400 0 800 100 T 1200 100" stroke-width="0.5"></path>
+<path d="M0 150 Q 500 50 1000 150 T 1500 150" stroke-width="0.5"></path>
+</svg>
+</div>
+<!-- Node 1: CVE -->
+<div class="relative z-10 w-64 bg-surface border-2 border-error p-5 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.1)]">
+<div class="flex items-center gap-2 mb-3 text-error">
+<span class="material-symbols-outlined" data-icon="bug_report">bug_report</span>
+<span class="text-xs font-bold font-mono tracking-tighter">VULNERABILITY</span>
+</div>
+<h4 class="font-mono font-bold text-on-surface text-lg mb-1">CVE-2024-1234</h4>
+<p class="text-xs text-secondary mb-4 leading-relaxed">Remote Code Execution (RCE) in OpenSSL library affecting host runtime.</p>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-error w-[98%]"></div>
+</div>
+<p class="text-[10px] text-error font-bold mt-1 text-right">CVSS 9.8</p>
+</div>
+<!-- Vector 1 -->
+<div class="hidden lg:flex items-center text-error">
+<span class="material-symbols-outlined text-4xl" data-icon="trending_flat">trending_flat</span>
+</div>
+<!-- Node 2: Misconfig -->
+<div class="relative z-10 w-64 bg-surface border-2 border-primary p-5 rounded-xl shadow-[0_0_20px_rgba(167,139,250,0.1)]">
+<div class="flex items-center gap-2 mb-3 text-primary">
+<span class="material-symbols-outlined" data-icon="settings_suggest">settings_suggest</span>
+<span class="text-xs font-bold font-mono tracking-tighter">MISCONFIGURATION</span>
+</div>
+<h4 class="font-mono font-bold text-on-surface text-lg mb-1">S3_PUB_ACCESS</h4>
+<p class="text-xs text-secondary mb-4 leading-relaxed">S3 Bucket 'nexus-core-assets' has public read/write permissions enabled.</p>
+<div class="flex gap-1">
+<span class="px-1.5 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[8px] rounded uppercase">Public</span>
+<span class="px-1.5 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[8px] rounded uppercase">Writable</span>
+</div>
+</div>
+<!-- Vector 2 -->
+<div class="hidden lg:flex items-center text-error">
+<span class="material-symbols-outlined text-4xl" data-icon="bolt">bolt</span>
+</div>
+<!-- Result: Toxic Path -->
+<div class="relative z-10 w-72 bg-error-container border border-error/50 p-6 rounded-xl text-center">
+<div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-error mb-4">
+<span class="material-symbols-outlined text-on-error text-2xl" data-icon="warning">warning</span>
+</div>
+<h4 class="text-lg font-headline font-black text-on-error-container leading-tight mb-2">Exploitable Data Breach Path</h4>
+<p class="text-xs text-on-error-container/80 mb-6 font-medium">Attacker can execute code via CVE-2024-1234 to gain control of the pod and exfiltrate data from the public S3 bucket using the pod's overly permissive IAM role.</p>
+<button class="w-full py-2.5 bg-error text-on-error font-bold text-xs rounded hover:brightness-110 transition-all uppercase tracking-widest">Break the Chain</button>
+</div>
+</div>
+</section>
+<!-- Detailed Asset Risk Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<!-- Toxic Score Ranking List -->
+<div class="xl:col-span-2 space-y-4">
+<div class="flex items-center justify-between px-2">
+<h3 class="text-sm font-bold uppercase tracking-widest text-secondary">Prioritized Toxic Assets</h3>
+<div class="flex gap-2">
+<button class="p-1.5 border border-outline-variant rounded bg-surface text-secondary hover:text-on-surface">
+<span class="material-symbols-outlined text-sm" data-icon="filter_list">filter_list</span>
+</button>
+<button class="p-1.5 border border-outline-variant rounded bg-surface text-secondary hover:text-on-surface">
+<span class="material-symbols-outlined text-sm" data-icon="download">download</span>
+</button>
+</div>
+</div>
+<!-- Asset Card 1 -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5 flex gap-6 hover:border-primary/40 transition-all">
+<div class="flex flex-col items-center justify-center min-w-[80px] border-r border-outline-variant pr-6">
+<span class="text-[10px] text-secondary font-bold mb-1">RISK SCORE</span>
+<span class="text-3xl font-mono font-black text-error">9.4</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<h4 class="font-mono text-sm font-bold text-on-surface">prod-k8s-worker-alpha-02</h4>
+<span class="text-[10px] text-secondary font-mono">arn:aws:ec2:us-east-1:7712...</span>
+</div>
+<div class="flex flex-wrap gap-4 mb-4">
+<div class="flex items-center gap-1.5 text-error">
+<span class="material-symbols-outlined text-base" data-icon="dangerous">dangerous</span>
+<span class="text-[11px] font-bold">CVE-2023-50164</span>
+</div>
+<div class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-base" data-icon="lock_open">lock_open</span>
+<span class="text-[11px] font-bold">Privileged Container</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="material-symbols-outlined text-base" data-icon="public">public</span>
+<span class="text-[11px] font-bold">Direct Internet Route</span>
+</div>
+</div>
+<div class="p-3 bg-surface-dim border border-outline-variant rounded text-[11px] text-on-surface-variant leading-relaxed italic">
+              "Convergence of remote code execution on a privileged container with direct ingress creates a 'Ghost Path' for lateral movement."
+            </div>
+</div>
+<div class="flex flex-col justify-center gap-2">
+<button class="px-4 py-2 bg-primary text-on-primary text-[10px] font-bold uppercase rounded hover:opacity-90 transition-all">Remediate</button>
+<button class="px-4 py-2 border border-outline-variant text-secondary text-[10px] font-bold uppercase rounded hover:bg-surface-variant transition-all">Details</button>
+</div>
+</div>
+<!-- Asset Card 2 -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5 flex gap-6 hover:border-primary/40 transition-all opacity-80">
+<div class="flex flex-col items-center justify-center min-w-[80px] border-r border-outline-variant pr-6">
+<span class="text-[10px] text-secondary font-bold mb-1">RISK SCORE</span>
+<span class="text-3xl font-mono font-black text-error">8.9</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<h4 class="font-mono text-sm font-bold text-on-surface">lambda-payment-gateway-svc</h4>
+<span class="text-[10px] text-secondary font-mono">arn:aws:lambda:eu-west-1:0123...</span>
+</div>
+<div class="flex flex-wrap gap-4 mb-4">
+<div class="flex items-center gap-1.5 text-error">
+<span class="material-symbols-outlined text-base" data-icon="key">key</span>
+<span class="text-[11px] font-bold">Hardcoded Secrets</span>
+</div>
+<div class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-base" data-icon="security">security</span>
+<span class="text-[11px] font-bold">AdministratorAccess Role</span>
+</div>
+</div>
+<div class="p-3 bg-surface-dim border border-outline-variant rounded text-[11px] text-on-surface-variant leading-relaxed italic">
+              "Function contains AWS Access Keys in environment variables while running with full Admin IAM policy."
+            </div>
+</div>
+<div class="flex flex-col justify-center gap-2">
+<button class="px-4 py-2 bg-primary text-on-primary text-[10px] font-bold uppercase rounded hover:opacity-90 transition-all">Remediate</button>
+<button class="px-4 py-2 border border-outline-variant text-secondary text-[10px] font-bold uppercase rounded hover:bg-surface-variant transition-all">Details</button>
+</div>
+</div>
+<!-- Asset Card 3 -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5 flex gap-6 hover:border-primary/40 transition-all">
+<div class="flex flex-col items-center justify-center min-w-[80px] border-r border-outline-variant pr-6">
+<span class="text-[10px] text-secondary font-bold mb-1">RISK SCORE</span>
+<span class="text-3xl font-mono font-black text-orange-500">7.2</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<h4 class="font-mono text-sm font-bold text-on-surface">db-read-replica-reporting</h4>
+<span class="text-[10px] text-secondary font-mono">arn:aws:rds:us-west-2:4442...</span>
+</div>
+<div class="flex flex-wrap gap-4 mb-4">
+<div class="flex items-center gap-1.5 text-orange-500">
+<span class="material-symbols-outlined text-base" data-icon="no_encryption">no_encryption</span>
+<span class="text-[11px] font-bold">Missing Encryption</span>
+</div>
+<div class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-base" data-icon="lan">lan</span>
+<span class="text-[11px] font-bold">VPC Peering Loop</span>
+</div>
+</div>
+<div class="p-3 bg-surface-dim border border-outline-variant rounded text-[11px] text-on-surface-variant leading-relaxed italic">
+              "Unencrypted PII data exposed through an unintended VPC peering connection to untrusted development environment."
+            </div>
+</div>
+<div class="flex flex-col justify-center gap-2">
+<button class="px-4 py-2 bg-primary text-on-primary text-[10px] font-bold uppercase rounded hover:opacity-90 transition-all">Remediate</button>
+<button class="px-4 py-2 border border-outline-variant text-secondary text-[10px] font-bold uppercase rounded hover:bg-surface-variant transition-all">Details</button>
+</div>
+</div>
+</div>
+<!-- Side Analysis Panel -->
+<div class="space-y-6">
+<!-- Correlation Reasoning -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5">
+<h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary mb-4">Correlation Logic</h3>
+<div class="space-y-4">
+<div class="flex items-start gap-3">
+<div class="w-1 h-10 bg-error rounded-full mt-1"></div>
+<div>
+<p class="text-xs font-bold text-on-surface">Exploitability Engine</p>
+<p class="text-[11px] text-secondary leading-relaxed">Prioritizing vulnerabilities that have a matching exploit in the Wild and are currently reachable via misconfigured public gateways.</p>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<div class="w-1 h-10 bg-primary rounded-full mt-1"></div>
+<div>
+<p class="text-xs font-bold text-on-surface">Identity Entitlement Link</p>
+<p class="text-[11px] text-secondary leading-relaxed">Mapping IAM roles to vulnerable compute resources to identify blast radius for credential theft.</p>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<div class="w-1 h-10 bg-tertiary rounded-full mt-1"></div>
+<div>
+<p class="text-xs font-bold text-on-surface">Blast Radius Calculation</p>
+<p class="text-[11px] text-secondary leading-relaxed">Evaluating lateral movement potential from a compromised asset using current VPC flow logs.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Remediation Trends -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5">
+<h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary mb-4">Remediation Speed (MTTR)</h3>
+<div class="relative h-32 mb-4">
+<!-- Simplified Trend Visualization -->
+<svg class="w-full h-full stroke-primary fill-none overflow-visible" viewbox="0 0 400 100">
+<path d="M0 80 Q 50 70 100 90 T 200 40 T 300 60 T 400 20" stroke-linecap="round" stroke-width="2"></path>
+<path d="M0 80 Q 50 70 100 90 T 200 40 T 300 60 T 400 20 V 100 H 0 Z" fill="url(#grad)" fill-opacity="0.1" stroke="none"></path>
+<defs>
+<lineargradient id="grad" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" style="stop-color:var(--primary);stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:var(--primary);stop-opacity:0"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<div>
+<p class="text-[10px] text-secondary">Avg Time to Break Chain</p>
+<p class="text-xl font-mono font-bold text-on-surface">4.2h</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-secondary">Global Benchmark</p>
+<p class="text-xl font-mono font-bold text-tertiary">12.5h</p>
+</div>
+</div>
+</div>
+<!-- System Prompt / AI Recommendation -->
+<div class="bg-primary/5 border border-primary/20 rounded-lg p-5 relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-8xl" data-icon="neurology">neurology</span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Obsidian AI Suggestion</span>
+</div>
+<p class="text-xs text-on-surface leading-relaxed mb-4">"Breaking the IAM role 'FullAccessRole' on the Kubernetes cluster will neutralize 18 out of 42 active toxic chains instantly without disrupting production services."</p>
+<button class="text-[10px] font-bold text-primary uppercase border-b border-primary/30 hover:border-primary transition-all">Apply Recommendation</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Sticky Footer Action Bar -->
+<footer class="fixed bottom-0 right-0 w-[calc(100%-16rem)] h-12 bg-surface-dim border-t border-outline-variant flex items-center justify-between px-6 z-40">
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1.5 text-[10px] text-secondary">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+        Engine Status: Active
+      </span>
+<span class="text-[10px] text-secondary border-l border-outline-variant pl-4">Last scan: 2 minutes ago</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[10px] text-secondary mr-2">Quick Actions:</span>
+<button class="px-3 py-1 bg-surface-container border border-outline-variant rounded text-[10px] font-bold text-on-surface hover:bg-surface-variant transition-all">Re-Scan Assets</button>
+<button class="px-3 py-1 bg-surface-container border border-outline-variant rounded text-[10px] font-bold text-on-surface hover:bg-surface-variant transition-all">Export Report</button>
+<button class="px-3 py-1 bg-error text-on-error rounded text-[10px] font-bold hover:brightness-110 transition-all uppercase tracking-tighter">Emergency Lockdown</button>
+</div>
+</footer>
+</body></html>

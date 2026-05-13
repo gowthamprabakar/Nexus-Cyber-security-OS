@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS - Briefing Room</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#18181b",
+                    "on-secondary-container": "#a1a1aa",
+                    "secondary-fixed": "#a1a1aa",
+                    "background": "#09090b",
+                    "surface-container-highest": "#1e1e22",
+                    "primary-container": "#7c3aed",
+                    "primary": "#a78bfa",
+                    "tertiary-fixed": "#bbf7d0",
+                    "tertiary-container": "#065f46",
+                    "on-background": "#fafafa",
+                    "on-tertiary-fixed": "#003318",
+                    "on-primary-container": "#ede9fe",
+                    "on-surface": "#fafafa",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "secondary": "#71717a",
+                    "inverse-on-surface": "#09090b",
+                    "error-container": "#3b1111",
+                    "on-tertiary": "#001a12",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "on-primary": "#0a0012",
+                    "surface-container-lowest": "#09090b",
+                    "on-error-container": "#fca5a5",
+                    "secondary-fixed-dim": "#71717a",
+                    "secondary-container": "#27272a",
+                    "primary-fixed": "#ede9fe",
+                    "surface-container": "#121215",
+                    "on-error": "#1a0000",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "on-secondary-fixed": "#18181b",
+                    "surface-dim": "#0c0c0f",
+                    "surface-container-high": "#18181b",
+                    "surface": "#0c0c0f",
+                    "on-secondary": "#09090b",
+                    "surface-container-low": "#0f0f12",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-tertiary-container": "#bbf7d0",
+                    "inverse-surface": "#fafafa",
+                    "inverse-primary": "#5b21b6",
+                    "surface-tint": "#a78bfa",
+                    "outline-variant": "#27272a",
+                    "error": "#ef4444",
+                    "surface-bright": "#18181b",
+                    "on-surface-variant": "#a1a1aa",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "tertiary": "#34d399",
+                    "outline": "#52525b",
+                    "on-primary-fixed": "#2e1065"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist"],
+                    "display": ["Geist"],
+                    "body": ["Geist"],
+                    "label": ["Geist"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scroll-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background selection:bg-primary selection:text-on-primary">
+<div class="flex min-h-screen">
+<!-- SideNavBar -->
+<aside class="flex flex-col h-screen py-4 sticky left-0 top-0 overflow-y-auto bg-surface-container-low border-r border-outline-variant w-64 flex-shrink-0 z-50">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-xl" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div>
+<h2 class="text-lg font-bold text-on-surface tracking-tighter">System Admin</h2>
+<p class="text-xs text-on-secondary-container opacity-70">Level 4 Access</p>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-primary bg-surface-container-highest border-r-2 border-primary font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="briefcase">Briefcase</span>
+<span>Briefing Room</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="robot_2">robot_2</span>
+<span>Agent Workshop</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+<span>Network Map</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>System Logs</span>
+</a>
+</nav>
+<div class="px-3 mt-auto pt-4 space-y-1 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-secondary-container hover:bg-surface-container-high hover:text-on-surface transition-all duration-200 ease-in-out font-body text-sm font-medium text-error/80" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col min-w-0">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center px-6 w-full max-w-full sticky top-0 z-50 h-16 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-primary tracking-tighter">Nexus Cyber OS</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface w-48 p-0" placeholder="Global Search..." type="text"/>
+</div>
+<div class="flex items-center gap-2 border-l border-outline-variant pl-4">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">dns</span>
+</button>
+<div class="ml-2 w-8 h-8 rounded-full overflow-hidden border border-primary">
+<img alt="User avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuANVaPRmoreEhXEMgZ8-qzEHOLkZNDy1bu4UY9bO1MXrBPghkHQKc35aLmdNyUYz6pQUAAc0CX89Q94dS5-tRdm8p_SmtqUcwBbrPvveghiWArqSgBnFKonFwRrHqmsQI0kA7d-Pgu6hZE1pbjCtV0qiTBaCg8vG4-ZEseuz1XNr5A0PP8DWxWrDmXvDYHqk9TfaBIJf9wHFnJWyg9WXEqWbXzpmQhhGguixpmgnRXgdWfyoOG_rv0V5btWf59shtNsqHP1xIomFda1"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Page Body -->
+<div class="p-8 max-w-7xl mx-auto w-full">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+<div>
+<div class="flex items-center gap-2 text-primary mb-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="text-[10px] font-bold tracking-widest uppercase">Security Clearance: Verified</span>
+</div>
+<h1 class="text-4xl font-extrabold text-on-surface tracking-tighter">Briefing Room</h1>
+<p class="text-on-surface-variant text-sm mt-1">Real-time executive oversight &amp; risk evaluation.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface-variant text-base">calendar_today</span>
+<span class="text-sm font-medium">May 12 - May 19, 2024</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">expand_more</span>
+</div>
+<button class="flex items-center gap-2 bg-primary text-on-primary px-5 py-2 rounded-lg font-bold text-sm hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-sm">analytics</span>
+                            Generate Report
+                        </button>
+<button class="p-2 border border-outline-variant rounded-lg text-on-surface-variant hover:border-primary hover:text-primary transition-all">
+<span class="material-symbols-outlined">present_to_all</span>
+</button>
+</div>
+</div>
+<!-- Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+<div class="bg-surface-container p-5 rounded-xl border border-outline-variant flex flex-col justify-between">
+<span class="text-xs font-bold text-on-secondary-container uppercase tracking-wider mb-2">Overall Risk Score</span>
+<div class="flex items-end justify-between">
+<span class="text-3xl font-black text-on-surface tracking-tight">14.2</span>
+<span class="text-tertiary text-xs font-bold bg-tertiary-container/30 px-2 py-1 rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_down</span> 4%
+                            </span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-4">
+<div class="bg-tertiary h-full rounded-full" style="width: 14%"></div>
+</div>
+</div>
+<div class="bg-surface-container p-5 rounded-xl border border-outline-variant flex flex-col justify-between">
+<span class="text-xs font-bold text-on-secondary-container uppercase tracking-wider mb-2">Active Threats</span>
+<div class="flex items-end justify-between">
+<span class="text-3xl font-black text-on-surface tracking-tight">32</span>
+<span class="text-error text-xs font-bold bg-error-container/30 px-2 py-1 rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_up</span> 12%
+                            </span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-4 overflow-hidden flex">
+<div class="bg-error h-full" style="width: 25%"></div>
+<div class="bg-primary h-full" style="width: 45%"></div>
+</div>
+</div>
+<div class="bg-surface-container p-5 rounded-xl border border-outline-variant flex flex-col justify-between">
+<span class="text-xs font-bold text-on-secondary-container uppercase tracking-wider mb-2">MTTR</span>
+<div class="flex items-end justify-between">
+<div class="flex items-baseline gap-1">
+<span class="text-3xl font-black text-on-surface tracking-tight">2.4</span>
+<span class="text-sm font-medium text-on-surface-variant tracking-tight">hrs</span>
+</div>
+<span class="text-tertiary text-xs font-bold bg-tertiary-container/30 px-2 py-1 rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_down</span> 18m
+                            </span>
+</div>
+<div class="flex justify-between items-center mt-4">
+<span class="text-[10px] text-on-surface-variant">Benchmark: 3.5h</span>
+<span class="text-[10px] text-tertiary font-bold">Optimal</span>
+</div>
+</div>
+<div class="bg-surface-container p-5 rounded-xl border border-outline-variant flex flex-col justify-between">
+<span class="text-xs font-bold text-on-secondary-container uppercase tracking-wider mb-2">Agent Efficiency</span>
+<div class="flex items-end justify-between">
+<span class="text-3xl font-black text-on-surface tracking-tight">98.2%</span>
+<span class="text-tertiary text-xs font-bold bg-tertiary-container/30 px-2 py-1 rounded flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">check</span> Peak
+                            </span>
+</div>
+<div class="flex gap-1 mt-4">
+<div class="flex-1 h-3 bg-primary rounded-sm opacity-20"></div>
+<div class="flex-1 h-3 bg-primary rounded-sm opacity-40"></div>
+<div class="flex-1 h-3 bg-primary rounded-sm opacity-60"></div>
+<div class="flex-1 h-3 bg-primary rounded-sm opacity-80"></div>
+<div class="flex-1 h-3 bg-primary rounded-sm"></div>
+</div>
+</div>
+</div>
+<!-- Main Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Executive Report -->
+<div class="lg:col-span-2 space-y-6">
+<div class="bg-surface-container rounded-xl border border-outline-variant overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-bright">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">description</span>
+<h3 class="font-bold text-lg tracking-tight">Executive Situation Report</h3>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 hover:bg-surface-container-highest rounded-lg transition-all text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined text-xl">volume_up</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded-lg transition-all text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined text-xl">picture_as_pdf</span>
+</button>
+</div>
+</div>
+<div class="p-8 space-y-8 max-h-[600px] overflow-y-auto scroll-hide">
+<div>
+<h4 class="text-primary font-bold text-xs uppercase tracking-[0.2em] mb-3">Current Posture</h4>
+<p class="text-on-surface leading-relaxed text-sm lg:text-base">
+                                        The Nexus OS has maintained a stable defensive perimeter over the last 24 hours. Despite a <span class="text-error font-semibold underline decoration-error/30 underline-offset-4">12% uptick</span> in brute-force attempts targeting Edge Node Alpha, the automated Agent Workshop routines successfully quarantined 98% of suspicious traffic before initial handshake. MTTR has reached an all-time low of 2.4 hours, indicating high operational synchronization between AI agents and human oversight.
+                                    </p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div>
+<h4 class="text-primary font-bold text-xs uppercase tracking-[0.2em] mb-3">Critical Observations</h4>
+<ul class="space-y-4">
+<li class="flex gap-3">
+<span class="text-primary font-bold">01.</span>
+<p class="text-sm text-on-surface-variant"><span class="text-on-surface font-semibold">Anomalous Data Egress:</span> Detected 4.2GB of encrypted traffic flowing to an unmapped Tier-3 region at 03:00 UTC.</p>
+</li>
+<li class="flex gap-3">
+<span class="text-primary font-bold">02.</span>
+<p class="text-sm text-on-surface-variant"><span class="text-on-surface font-semibold">Legacy Patching:</span> 14% of internal workstations are running outdated firmware susceptible to recent Zero-Day exploits.</p>
+</li>
+</ul>
+</div>
+<div class="bg-surface-container-highest/50 p-6 rounded-lg border border-outline-variant">
+<h4 class="text-tertiary font-bold text-xs uppercase tracking-[0.2em] mb-3">Recommended Actions</h4>
+<ul class="space-y-3">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm mt-0.5">task_alt</span>
+<span class="text-xs font-medium text-on-surface">Initiate mandatory firmware sync across Tiers 1-4.</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm mt-0.5">task_alt</span>
+<span class="text-xs font-medium text-on-surface">Rotate root credentials for Agent Workshop.</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm mt-0.5">task_alt</span>
+<span class="text-xs font-medium text-on-surface">Deploy additional honeypots in Subnet 7.</span>
+</li>
+</ul>
+</div>
+</div>
+<div class="relative group h-48 w-full rounded-xl overflow-hidden border border-outline-variant">
+<img alt="Cyber security command center" class="w-full h-full object-cover grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-60 transition-all duration-700" data-alt="A highly detailed cinematic shot of a futuristic cybersecurity command center at night. The room is filled with large, glowing holographic data screens showing global network traffic and heatmaps in vibrant violet and emerald green. The atmosphere is professional, tech-heavy, and high-contrast, perfectly aligning with a dark developer-grade UI aesthetic. Subtle lens flares and sharp reflections on glass surfaces enhance the sense of depth and advanced technology." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCH5VzdgRutuR6Ab_5BCHTUeMVwLR7tFf-r8UK1JtoZT5Mc0GjhsnDukCYXEoVhwSl9b3Hi7CYoJXmZHouGZmyUZMRwYNwsv5SCONlgBp7FZH-jT8izzssrjLph-4CsEXP2qOYcCjMCqEL6XJmV_xjhhjbfZvncIqe9wtUxu8KDVYZqR3BUp7vgI0bVHvDSSBpnM9cbvxsEMT3BG38gMPkx7WAjvjV9AeC6qUfv4mYHYcUmetln1Z5TWsoUFRJ_YwbB4YHDlCdhroBM"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
+<div class="absolute bottom-4 left-4">
+<span class="text-[10px] bg-primary text-on-primary px-2 py-0.5 rounded font-black uppercase tracking-widest">Live Feed</span>
+<p class="text-xs text-on-surface font-bold mt-1">Global Response Node 09</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Side Column -->
+<div class="space-y-6">
+<!-- Risk Heatmap -->
+<div class="bg-surface-container rounded-xl border border-outline-variant p-6">
+<h3 class="font-bold text-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">map</span>
+                                Risk Heatmap
+                            </h3>
+<div class="aspect-square relative flex items-center justify-center bg-surface-container-highest/30 rounded-lg overflow-hidden">
+<!-- Mock Map / Heatmap visualization -->
+<div class="absolute inset-0 opacity-10">
+<img alt="World map texture" class="w-full h-full object-cover" data-alt="A minimalist outline of a world map against a pitch-black background, rendered in a technical architectural style. The map is overlaid with a hexagonal grid. High-contrast violet and emerald green data points indicate security threats globally. The style is clean, flat, and professional, avoiding decorative elements in favor of a data-driven developer dashboard aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIkXcifzCc8jagGCA9K5NA3837ymYgVUb11Cpajxpq1j4OA7nYjZCF4V_fKbv7CU-VCQItvmPTE2r0ktaqUv7nSiprw_w0Wr28qVj6veoOjF-sT7uqva7gRCQ8kxsK9zN5G-OdcjERNMfMeL1GAZUDrizX8oZ0R6kbiKpu3SPn2atGKpxZUnIPqBiXe8Ts-Xd23BlMVFXYLLe9myCtcVjaJTtqDpG0fFY5LAhb8ta_ZOWy0ixwSukLjaergF5xqY1f310tM_obwMEV"/>
+</div>
+<div class="grid grid-cols-5 grid-rows-5 gap-1 w-full h-full p-2">
+<!-- Dynamic generated "heat" blocks -->
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/20 border border-primary/30 rounded"></div>
+<div class="bg-tertiary/5 border border-tertiary/10 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/40 border border-primary/50 rounded flex items-center justify-center"><span class="text-[8px] font-bold">NA</span></div>
+<div class="bg-tertiary/5 border border-tertiary/10 rounded"></div>
+<div class="bg-error/30 border border-error/50 rounded animate-pulse"></div>
+<div class="bg-primary/10 border border-primary/20 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/20 border border-primary/30 rounded"></div>
+<div class="bg-tertiary/20 border border-tertiary/30 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-error/60 border border-error/80 rounded flex items-center justify-center"><span class="text-[8px] font-bold">EU</span></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/10 border border-primary/20 rounded"></div>
+<div class="bg-primary/10 border border-primary/20 rounded"></div>
+<div class="bg-primary/20 border border-primary/30 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-tertiary/5 border border-tertiary/10 rounded"></div>
+<div class="bg-error/20 border border-error/40 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/50 border border-primary/70 rounded flex items-center justify-center"><span class="text-[8px] font-bold">AS</span></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+<div class="bg-primary/10 border border-primary/20 rounded"></div>
+<div class="bg-tertiary/10 border border-tertiary/20 rounded"></div>
+</div>
+</div>
+<div class="mt-4 flex justify-between text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">
+<span>Low Risk</span>
+<div class="flex gap-1">
+<div class="w-3 h-3 bg-tertiary/20"></div>
+<div class="w-3 h-3 bg-primary/40"></div>
+<div class="w-3 h-3 bg-error/60"></div>
+</div>
+<span>Critical</span>
+</div>
+</div>
+<!-- Top Vulnerabilities -->
+<div class="bg-surface-container rounded-xl border border-outline-variant p-6">
+<h3 class="font-bold text-sm text-on-surface mb-4 flex justify-between items-center">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">list_alt</span>
+                                    Top 5 Vulnerabilities
+                                </span>
+<button class="text-xs text-primary hover:underline">View All</button>
+</h3>
+<div class="space-y-4">
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">CVE-2024-1182</span>
+<span class="text-[10px] text-on-surface-variant">Log4j RCE Variation</span>
+</div>
+<span class="bg-error/20 text-error text-[10px] font-black px-2 py-0.5 rounded border border-error/30 group-hover:bg-error group-hover:text-on-error transition-all">CRITICAL</span>
+</div>
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">CVE-2024-9901</span>
+<span class="text-[10px] text-on-surface-variant">OAuth Token Leak</span>
+</div>
+<span class="bg-error/20 text-error text-[10px] font-black px-2 py-0.5 rounded border border-error/30 group-hover:bg-error group-hover:text-on-error transition-all">CRITICAL</span>
+</div>
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">CVE-2023-8821</span>
+<span class="text-[10px] text-on-surface-variant">SSL Certificate Exp.</span>
+</div>
+<span class="bg-primary/20 text-primary text-[10px] font-black px-2 py-0.5 rounded border border-primary/30 group-hover:bg-primary group-hover:text-on-primary transition-all">HIGH</span>
+</div>
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">CVE-2024-0012</span>
+<span class="text-[10px] text-on-surface-variant">SSH Brute Force</span>
+</div>
+<span class="bg-primary/20 text-primary text-[10px] font-black px-2 py-0.5 rounded border border-primary/30 group-hover:bg-primary group-hover:text-on-primary transition-all">HIGH</span>
+</div>
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">CVE-2024-5541</span>
+<span class="text-[10px] text-on-surface-variant">SQLi in CRM Module</span>
+</div>
+<span class="bg-on-secondary-container/20 text-on-secondary-container text-[10px] font-black px-2 py-0.5 rounded border border-outline-variant group-hover:bg-on-secondary-container group-hover:text-background transition-all">MEDIUM</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Presentation Mode Toggle (FAB style) -->
+<button class="fixed bottom-8 right-8 w-12 h-12 bg-surface-container border border-primary text-primary rounded-full flex items-center justify-center shadow-xl shadow-primary/20 hover:bg-primary hover:text-on-primary transition-all z-[100] group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">fullscreen</span>
+<div class="absolute right-14 bg-surface-container border border-outline-variant px-3 py-1 rounded text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+            Presentation Mode
+        </div>
+</button>
+</body></html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS - Self-Evolution Surfaces</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#0c0c0f",
+                        "on-tertiary-container": "#bbf7d0",
+                        "on-surface-variant": "#a1a1aa",
+                        "on-secondary-container": "#a1a1aa",
+                        "secondary-fixed": "#a1a1aa",
+                        "surface-container-low": "#0f0f12",
+                        "secondary": "#71717a",
+                        "on-secondary": "#09090b",
+                        "secondary-fixed-dim": "#71717a",
+                        "on-primary": "#0a0012",
+                        "surface-bright": "#18181b",
+                        "inverse-on-surface": "#09090b",
+                        "on-background": "#fafafa",
+                        "surface-container-lowest": "#09090b",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "tertiary-container": "#065f46",
+                        "surface": "#0c0c0f",
+                        "error": "#ef4444",
+                        "on-primary-fixed": "#2e1065",
+                        "surface-container": "#121215",
+                        "error-container": "#3b1111",
+                        "primary": "#a78bfa",
+                        "on-primary-container": "#ede9fe",
+                        "on-tertiary": "#001a12",
+                        "on-error-container": "#fca5a5",
+                        "primary-container": "#7c3aed",
+                        "on-secondary-fixed": "#18181b",
+                        "secondary-container": "#27272a",
+                        "outline-variant": "#27272a",
+                        "on-surface": "#fafafa",
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "surface-tint": "#a78bfa",
+                        "tertiary": "#34d399",
+                        "on-error": "#1a0000",
+                        "inverse-primary": "#5b21b6",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "outline": "#52525b",
+                        "surface-variant": "#18181b",
+                        "on-tertiary-fixed": "#003318",
+                        "tertiary-fixed": "#bbf7d0",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "surface-container-highest": "#1e1e22",
+                        "surface-container-high": "#18181b",
+                        "primary-fixed": "#ede9fe",
+                        "inverse-surface": "#fafafa",
+                        "background": "#09090b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist"],
+                        "display": ["Geist"],
+                        "body": ["Geist"],
+                        "label": ["Geist"],
+                        "mono": ["JetBrains Mono"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1rem;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-background selection:bg-primary/30">
+<!-- Side Navigation Shell -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col p-4 z-50 bg-surface-dim dark:bg-surface-dim border-r border-outline-variant dark:border-outline-variant w-64">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-xl">terminal</span>
+</div>
+<div>
+<h1 class="text-lg font-headline font-black tracking-tighter text-on-surface dark:text-on-surface">Nexus Cyber OS</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant dark:text-on-surface-variant font-bold">Autonomous Security</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="bg-secondary-container dark:bg-secondary-container text-primary font-medium rounded-lg px-3 py-2 flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-body text-sm">Command Center</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">radar</span>
+<span class="font-body text-sm">Threat Hunter</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-body text-sm">Asset Inventory</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">security</span>
+<span class="font-body text-sm">Cloud Posture</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">verified_user</span>
+<span class="font-body text-sm">Compliance</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 border-t border-outline-variant flex flex-col gap-1">
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body text-sm">Support</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-body text-sm">Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen">
+<!-- Top Bar -->
+<header class="flex justify-between items-center h-16 px-8 w-full z-40 bg-surface dark:bg-surface border-b border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-4">
+<div class="bg-surface-container border border-outline-variant px-3 py-1.5 rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">auto_awesome</span>
+<span class="text-xs font-mono font-bold text-on-surface uppercase tracking-wider">Evolution Mode: Active</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">settings</span>
+</div>
+<div class="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary-container border border-outline-variant"></div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-8">
+<div class="mb-8">
+<h2 class="text-3xl font-headline font-bold text-on-surface tracking-tight mb-2">Self-Evolution Surfaces</h2>
+<p class="text-on-surface-variant max-w-2xl">Visualizing the recursive learning cycle of autonomous security agents. Analyzing model refinement, automated remediation breakthroughs, and precision delta since the last epoch.</p>
+</div>
+<!-- Bento Grid -->
+<div class="bento-grid">
+<!-- Metrics Row -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-xs font-mono text-on-surface-variant uppercase tracking-widest mb-1">Detection Precision Over Time</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">99.82<span class="text-lg text-tertiary ml-1 font-normal">+0.14%</span></h3>
+</div>
+<span class="material-symbols-outlined text-tertiary">trending_up</span>
+</div>
+<div class="h-16 flex items-end gap-1">
+<div class="flex-1 bg-surface-container-high h-4 rounded-sm"></div>
+<div class="flex-1 bg-surface-container-high h-6 rounded-sm"></div>
+<div class="flex-1 bg-surface-container-high h-5 rounded-sm"></div>
+<div class="flex-1 bg-surface-container-high h-8 rounded-sm"></div>
+<div class="flex-1 bg-primary/40 h-10 rounded-sm"></div>
+<div class="flex-1 bg-primary/60 h-12 rounded-sm"></div>
+<div class="flex-1 bg-primary h-14 rounded-sm"></div>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-xs font-mono text-on-surface-variant uppercase tracking-widest mb-1">Remediation Success Rate</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">94.5%</h3>
+</div>
+<span class="material-symbols-outlined text-primary">verified</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full w-[94.5%]"></div>
+</div>
+<div class="mt-4 flex justify-between text-[10px] font-mono text-on-surface-variant uppercase">
+<span>Baseline: 82%</span>
+<span>Target: 98%</span>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-xs font-mono text-on-surface-variant uppercase tracking-widest mb-1">Learning Cycles Completed</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">14,209</h3>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">cycle</span>
+</div>
+<div class="flex gap-2">
+<div class="flex-1 text-center py-2 bg-surface-container-low rounded-lg border border-outline-variant">
+<p class="text-[10px] text-on-surface-variant uppercase mb-1">Last 24h</p>
+<p class="text-sm font-bold text-on-surface">+128</p>
+</div>
+<div class="flex-1 text-center py-2 bg-surface-container-low rounded-lg border border-outline-variant">
+<p class="text-[10px] text-on-surface-variant uppercase mb-1">Model Epoch</p>
+<p class="text-sm font-bold text-on-surface">v4.2.0</p>
+</div>
+</div>
+</div>
+<!-- Main Visualization -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container border border-outline-variant rounded-xl p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h4 class="text-lg font-headline font-bold text-on-surface">Recursive Evolution Matrix</h4>
+<div class="flex gap-2">
+<button class="text-[10px] font-mono bg-surface-container-highest px-3 py-1 rounded border border-outline-variant text-on-surface">Precision</button>
+<button class="text-[10px] font-mono bg-surface-container-low px-3 py-1 rounded border border-outline-variant text-on-surface-variant hover:text-on-surface">Latency</button>
+</div>
+</div>
+<div class="relative flex-1 min-h-[300px] border-l border-b border-outline-variant/50">
+<!-- Chart Mockup -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none">
+<path d="M0 250 Q 100 240, 200 180 T 400 120 T 600 60 T 800 40" fill="none" stroke="#a78bfa" stroke-width="2"></path>
+<path d="M0 280 Q 150 270, 300 240 T 600 180 T 900 140" fill="none" stroke="#34d399" stroke-dasharray="4 2" stroke-width="1.5"></path>
+</svg>
+<div class="absolute bottom-4 right-4 flex flex-col gap-1 text-[10px] font-mono text-on-surface-variant">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 bg-primary rounded-full"></div> Agent Evolution
+                            </div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 bg-tertiary rounded-full"></div> Threat Baseline
+                            </div>
+</div>
+</div>
+</div>
+<!-- Recent Model Updates -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6">
+<h4 class="text-lg font-headline font-bold text-on-surface mb-6">Autonomous Improvements</h4>
+<div class="space-y-4">
+<div class="flex gap-4 p-3 bg-surface-container-low border border-outline-variant rounded-lg">
+<div class="text-tertiary">
+<span class="material-symbols-outlined">upgrade</span>
+</div>
+<div>
+<p class="text-xs font-mono text-on-surface font-bold mb-1">Zero-Day logic enhanced</p>
+<p class="text-[10px] text-on-surface-variant">Refined vector analysis for polymorphic payloads in cloud clusters.</p>
+<p class="text-[9px] font-mono mt-2 text-primary">Ref: DELTA-922</p>
+</div>
+</div>
+<div class="flex gap-4 p-3 bg-surface-container-low border border-outline-variant rounded-lg">
+<div class="text-primary">
+<span class="material-symbols-outlined">psychology</span>
+</div>
+<div>
+<p class="text-xs font-mono text-on-surface font-bold mb-1">Reduced False Positives</p>
+<p class="text-[10px] text-on-surface-variant">Self-corrected misclassification of administrative SSH bursts.</p>
+<p class="text-[9px] font-mono mt-2 text-primary">Ref: EPS-441</p>
+</div>
+</div>
+<div class="flex gap-4 p-3 bg-surface-container-low border border-outline-variant rounded-lg">
+<div class="text-on-surface-variant">
+<span class="material-symbols-outlined">settings_suggest</span>
+</div>
+<div>
+<p class="text-xs font-mono text-on-surface font-bold mb-1">Latency Optimization</p>
+<p class="text-[10px] text-on-surface-variant">Parallelized inference nodes for real-time edge processing.</p>
+<p class="text-[9px] font-mono mt-2 text-primary">Ref: LAT-012</p>
+</div>
+</div>
+<div class="flex gap-4 p-3 bg-surface-container-low border border-outline-variant rounded-lg opacity-50">
+<div class="text-on-surface-variant">
+<span class="material-symbols-outlined">history</span>
+</div>
+<div>
+<p class="text-xs font-mono text-on-surface font-bold mb-1">Legacy Purge</p>
+<p class="text-[10px] text-on-surface-variant">Deprecated v2.1 heuristics in favor of v4.0 neural weights.</p>
+<p class="text-[9px] font-mono mt-2 text-primary">Ref: PURGE-X</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-6 py-2 border border-outline-variant rounded-lg text-xs font-mono font-bold text-on-surface hover:bg-surface-container-high transition-colors uppercase tracking-widest">View Full Changelog</button>
+</div>
+<!-- Footer Visual -->
+<div class="col-span-12 bg-surface-container border border-outline-variant rounded-xl overflow-hidden relative">
+<div class="absolute inset-0 bg-gradient-to-r from-surface-container via-transparent to-surface-container z-10"></div>
+<img alt="AI Neural Evolution" class="w-full h-32 object-cover opacity-30 grayscale" data-alt="A macro perspective of a digital neural network representing artificial intelligence evolution. The visual features intricate interconnected nodes glowing with soft violet and emerald light against a deep obsidian background. The composition is sleek and professional, using sharp focus on foreground elements with a shallow depth of field, evoking a sense of high-performance computing and secure autonomous logic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2WDC1ZAgwi3uARcaWES-xq4s3qZzgdJDcnYZA5NsCZfRAJ3Axd-xkFFU15RD4SpVdQICjUSKOlqPNtIu8d6PutL35hiJ5eyxUzdzvjp_AFtM1DRIkug_mT4Cf__-u8Up5MO4sv1bnXVWYJJRsoWoybnka5DaU7DIywL6JJflf0TE17Zwmbd3UNfRxbMnEw3gqTIS0aU5CyhND6Erj4WnyjBWhzsb49IdiZFdjkle-oBmHXelxoan0K6ermWzQyiesjkXRj0DME7Jl"/>
+<div class="absolute inset-0 z-20 flex items-center justify-between px-10">
+<div>
+<p class="text-[10px] font-mono text-primary uppercase tracking-[0.4em] mb-1">System Status</p>
+<h5 class="text-xl font-headline font-bold text-on-surface">Nexus OS is currently at 99.9% Autonomous Capacity</h5>
+</div>
+<div class="flex gap-8">
+<div class="text-right">
+<p class="text-[10px] font-mono text-on-surface-variant uppercase">Uptime</p>
+<p class="text-sm font-bold text-on-surface">365d 14h 22m</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] font-mono text-on-surface-variant uppercase">Threat Resistance</p>
+<p class="text-sm font-bold text-tertiary">MAXIMUM</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

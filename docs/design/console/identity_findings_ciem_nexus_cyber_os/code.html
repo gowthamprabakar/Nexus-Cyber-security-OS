@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "surface-container-low": "#0f0f12",
+                    "surface-variant": "#18181b",
+                    "surface-container-high": "#18181b",
+                    "error": "#ef4444",
+                    "outline-variant": "#27272a",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "surface": "#0c0c0f",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "error-container": "#3b1111",
+                    "surface-tint": "#a78bfa",
+                    "on-background": "#fafafa",
+                    "surface-container-lowest": "#09090b",
+                    "tertiary": "#34d399",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-tertiary": "#001a12",
+                    "background": "#09090b",
+                    "secondary-container": "#27272a",
+                    "on-error": "#1a0000",
+                    "on-tertiary-fixed": "#003318",
+                    "on-surface-variant": "#a1a1aa",
+                    "inverse-on-surface": "#09090b",
+                    "tertiary-container": "#065f46",
+                    "inverse-surface": "#fafafa",
+                    "on-primary": "#0a0012",
+                    "tertiary-fixed": "#bbf7d0",
+                    "surface-container-highest": "#1e1e22",
+                    "secondary-fixed-dim": "#71717a",
+                    "on-tertiary-container": "#bbf7d0",
+                    "on-secondary": "#09090b",
+                    "inverse-primary": "#5b21b6",
+                    "surface-dim": "#0c0c0f",
+                    "secondary-fixed": "#a1a1aa",
+                    "secondary": "#71717a",
+                    "surface-bright": "#18181b",
+                    "surface-container": "#121215",
+                    "on-surface": "#fafafa",
+                    "on-primary-container": "#ede9fe",
+                    "outline": "#52525b",
+                    "on-primary-fixed": "#2e1065",
+                    "primary-fixed": "#ede9fe",
+                    "on-secondary-container": "#a1a1aa",
+                    "on-secondary-fixed": "#18181b",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-error-container": "#fca5a5",
+                    "primary-container": "#7c3aed",
+                    "primary": "#a78bfa"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist"],
+                    "display": ["Geist"],
+                    "body": ["Geist"],
+                    "label": ["Geist"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface flex min-h-screen">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col py-4 border-r border-outline-variant bg-surface transition-colors duration-150 ease-in-out z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Cloud Security</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<!-- Command Center -->
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Command Center</span>
+</a>
+<!-- Threat Hunter -->
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">security</span>
+<span>Threat Hunter</span>
+</a>
+<!-- Asset Inventory -->
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<!-- Cloud Posture -->
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<!-- Compliance (ACTIVE: Mapping Entitlement Management to Compliance/Risk hierarchy) -->
+<a class="flex items-center gap-3 px-3 py-2 text-primary font-body text-label-sm tracking-tight rounded bg-surface-container-highest border-r-2 border-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-3 mt-auto pt-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary font-body text-label-sm tracking-tight rounded hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 px-6 flex justify-between items-center bg-surface-dim border-b border-outline-variant z-40">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg py-1.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-on-surface-variant" placeholder="Search identities, permissions, or risks..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">terminal</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">account_tree</span></button>
+</div>
+<div class="h-8 w-8 rounded-full bg-primary-container border border-outline-variant flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJzh9DXJhMe0KIvvpuyT-RD9Wyr7NBYoh3y_8at-E5jkSPfhG2IERSPt4XGayM5Q4bUVDfmlsS-wqBFVAoDsTnM_8Rh0EIhzP3tAwpTF3VZlW21uYdYeD0f_0VuJhtUvHpOVkWANL9DqHiZioH7GwDSbMf5MQDrfmwhzFsD40z73Da-Qr6ohN3w5w-HyF5ZsmzAVRSHE3oZP3tqZ_m1sgzD6I6OSfq-c1z-KxVjRkBqgDCpU3yIRVZl1LX7DreZRkGEerrbbAmpFMC"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-14 p-8 flex-1 overflow-y-auto">
+<!-- Breadcrumbs & Title -->
+<div class="mb-8">
+<div class="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
+<span>Compliance</span>
+<span class="material-symbols-outlined text-[12px]">chevron_right</span>
+<span>Findings</span>
+<span class="material-symbols-outlined text-[12px]">chevron_right</span>
+<span class="text-on-surface">CIEM: Identity Entitlements (Page 18)</span>
+</div>
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-headline font-bold tracking-tight text-on-surface">Identity Entitlements</h2>
+<p class="text-on-surface-variant mt-1">Reviewing excessive permissions and privilege drift across cloud principals.</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-container border border-outline-variant rounded-lg text-sm font-medium hover:bg-surface-container-high transition-colors">Export Report</button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold shadow-lg shadow-primary/10">Remediate All</button>
+</div>
+</div>
+</div>
+<!-- Metrics Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+<div class="bg-surface-container border border-outline-variant p-5 rounded-xl">
+<p class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider mb-2">Over-privileged Identities</p>
+<div class="flex items-end gap-3">
+<span class="text-3xl font-headline font-bold text-error">482</span>
+<span class="text-xs text-error mb-1 flex items-center"><span class="material-symbols-outlined text-xs">arrow_upward</span> 12%</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2">Active principals with unused admin rights.</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-5 rounded-xl">
+<p class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider mb-2">Inactive Principals</p>
+<div class="flex items-end gap-3">
+<span class="text-3xl font-headline font-bold text-on-surface">1,240</span>
+<span class="text-xs text-on-surface-variant mb-1">90+ days idle</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2">Candidates for immediate de-provisioning.</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-5 rounded-xl">
+<p class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider mb-2">Privilege Gap Index</p>
+<div class="flex items-end gap-3">
+<span class="text-3xl font-headline font-bold text-tertiary">64%</span>
+<span class="text-xs text-tertiary mb-1">Critical</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2">Delta between granted vs used APIs.</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-5 rounded-xl">
+<p class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider mb-2">Star-Action Violations</p>
+<div class="flex items-end gap-3">
+<span class="text-3xl font-headline font-bold text-error">24</span>
+<span class="text-xs text-on-surface-variant mb-1">Policies</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2">Wildcard permissions in IAM statements.</p>
+</div>
+</div>
+<!-- Effective vs Used Visualization & Risk Heatmap -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+<div class="lg:col-span-2 bg-surface-container border border-outline-variant p-6 rounded-xl">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline font-bold">Effective Permissions vs. Used Permissions</h3>
+<div class="flex gap-4 text-xs font-medium">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-primary/20 border border-primary"></span> Granted</div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-tertiary"></span> Used</div>
+</div>
+</div>
+<!-- Visual Bar Chart -->
+<div class="space-y-6">
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span>S3 Storage Access</span>
+<span class="text-on-surface-variant">820 / 4,100 APIs</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-primary/30 w-full"></div>
+<div class="absolute top-0 left-0 h-full bg-tertiary w-[20%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span>IAM Management</span>
+<span class="text-on-surface-variant">42 / 2,400 APIs</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-primary/30 w-[90%]"></div>
+<div class="absolute top-0 left-0 h-full bg-tertiary w-[1.7%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span>KMS Decryption</span>
+<span class="text-on-surface-variant">156 / 320 APIs</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-primary/30 w-full"></div>
+<div class="absolute top-0 left-0 h-full bg-tertiary w-[48%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span>EC2 Provisioning</span>
+<span class="text-on-surface-variant">312 / 800 APIs</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-primary/30 w-[70%]"></div>
+<div class="absolute top-0 left-0 h-full bg-tertiary w-[39%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Profile Summary Card -->
+<div class="bg-surface-container border border-outline-variant p-6 rounded-xl flex flex-col justify-between">
+<div>
+<h3 class="font-headline font-bold mb-4">Identity Health Score</h3>
+<div class="relative w-48 h-48 mx-auto flex items-center justify-center">
+<!-- Custom SVG Gauge -->
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-highest" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-error" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-dasharray="552.92" stroke-dashoffset="350" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center transform rotate-0">
+<span class="text-4xl font-black">36</span>
+<span class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Poor Health</span>
+</div>
+</div>
+</div>
+<div class="space-y-3 mt-6">
+<div class="flex justify-between text-sm">
+<span class="text-on-surface-variant">Unused Admin Roles</span>
+<span class="text-error font-bold">142</span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-on-surface-variant">Shadow Admins</span>
+<span class="text-error font-bold">18</span>
+</div>
+<button class="w-full mt-2 py-2 bg-surface-container-highest border border-outline-variant text-primary text-sm font-bold rounded-lg hover:border-primary transition-all">
+                        Run Auto-Cleanup
+                    </button>
+</div>
+</div>
+</div>
+<!-- IAM Findings List Grid -->
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<h3 class="font-headline font-bold">Privileged Principals Analysis</h3>
+<div class="flex gap-2">
+<button class="p-1.5 hover:bg-surface-container-highest rounded"><span class="material-symbols-outlined text-sm">filter_list</span></button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded"><span class="material-symbols-outlined text-sm">download</span></button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+<th class="px-6 py-4 border-b border-outline-variant">Principal Type</th>
+<th class="px-6 py-4 border-b border-outline-variant">Identity Name</th>
+<th class="px-6 py-4 border-b border-outline-variant text-center">Risk Level</th>
+<th class="px-6 py-4 border-b border-outline-variant">Primary Misconfiguration</th>
+<th class="px-6 py-4 border-b border-outline-variant text-right">Action</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-highest/50 transition-colors">
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">person</span>
+<span>IAM User</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant font-mono text-xs">cicd-deployment-bot</td>
+<td class="px-6 py-4 border-b border-outline-variant text-center">
+<span class="bg-error/10 text-error px-2 py-0.5 rounded-full text-[10px] font-bold border border-error/20">CRITICAL</span>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex flex-col">
+<span class="text-on-surface font-medium">Full Star-Action (*) Usage</span>
+<span class="text-[10px] text-on-surface-variant">Policy: AdminAccess-Bypass</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant text-right">
+<button class="text-primary hover:underline font-bold text-xs">Review</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-highest/50 transition-colors">
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-lg">settings_input_component</span>
+<span>Service Account</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant font-mono text-xs">k8s-node-manager</td>
+<td class="px-6 py-4 border-b border-outline-variant text-center">
+<span class="bg-error/10 text-error px-2 py-0.5 rounded-full text-[10px] font-bold border border-error/20">HIGH</span>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex flex-col">
+<span class="text-on-surface font-medium">Excessive S3 DeleteObject</span>
+<span class="text-[10px] text-on-surface-variant">Last used: 182 days ago</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant text-right">
+<button class="text-primary hover:underline font-bold text-xs">Review</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-highest/50 transition-colors">
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-lg">account_circle</span>
+<span>IAM Role</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant font-mono text-xs">external-audit-readonly</td>
+<td class="px-6 py-4 border-b border-outline-variant text-center">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full text-[10px] font-bold border border-outline-variant">MEDIUM</span>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex flex-col">
+<span class="text-on-surface font-medium">Cross-Account Trust Drift</span>
+<span class="text-[10px] text-on-surface-variant">Allows trust from untracked IDP</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant text-right">
+<button class="text-primary hover:underline font-bold text-xs">Review</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-highest/50 transition-colors">
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">person</span>
+<span>IAM User</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant font-mono text-xs">j.doe@company.com</td>
+<td class="px-6 py-4 border-b border-outline-variant text-center">
+<span class="bg-error/10 text-error px-2 py-0.5 rounded-full text-[10px] font-bold border border-error/20">HIGH</span>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex flex-col">
+<span class="text-on-surface font-medium">IAM Self-Elevation Risk</span>
+<span class="text-[10px] text-on-surface-variant">Can attach policies to self</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant text-right">
+<button class="text-primary hover:underline font-bold text-xs">Review</button>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-highest/50 transition-colors">
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-lg">settings_input_component</span>
+<span>Service Account</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant font-mono text-xs">ec2-default-profile</td>
+<td class="px-6 py-4 border-b border-outline-variant text-center">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full text-[10px] font-bold border border-outline-variant">LOW</span>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant">
+<div class="flex flex-col">
+<span class="text-on-surface font-medium">Implicit PassRole Found</span>
+<span class="text-[10px] text-on-surface-variant">Non-compliant naming convention</span>
+</div>
+</td>
+<td class="px-6 py-4 border-b border-outline-variant text-right">
+<button class="text-primary hover:underline font-bold text-xs">Review</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-3 border-t border-outline-variant bg-surface-container-low flex justify-between items-center text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">
+<span>Showing 5 of 1,240 principals</span>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1 hover:text-on-surface"><span class="material-symbols-outlined text-sm">chevron_left</span> PREV</button>
+<span class="text-on-surface">Page 1 of 248</span>
+<button class="flex items-center gap-1 hover:text-on-surface">NEXT <span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+</div>
+</div>
+<!-- Identity Risk Heatmap / Image Content -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden group">
+<div class="p-6">
+<h3 class="font-headline font-bold mb-2">Entitlement Drift Visualization</h3>
+<p class="text-xs text-on-surface-variant mb-4">A historical view of permission growth across the production VPC environment.</p>
+</div>
+<div class="h-64 relative bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" data-alt="A sophisticated data visualization of network nodes and identity connections in a dark, high-contrast digital space. Neon violet and emerald green threads connect various geometric nodes, representing cloud permissions and entitlement paths. The aesthetic is modern, tech-focused, and clean, perfectly matching the Obsidian dark theme with its deep black background and precise accent highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTxolb5wVkkYPUT9ynqab5lDDj7KkCE_hCtvLD-wQHFP1IBUgHuYe_FVfMkXPXL0CnC0-oOVxFtKJWGrv_v6utHs_0mgB3EmDNls9pL-34umAUah4CRVVZGFvfzf33XNS81QTdfFgJeq80NEWqbURhZHnb_HcrUVEBJVTBTn4EU4jgEBE_jZjnVEkUwoNoQXxAnURjicS4yWkdCTByP10rSjblwrS3A2Sr6VM-vc7KkblvscMAEQOCV-NXbqSu3Rxs3nKEr3voWixb"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute bottom-4 left-6 flex items-center gap-2">
+<span class="px-2 py-1 bg-primary text-on-primary text-[10px] font-black rounded uppercase">Live Feed</span>
+<span class="text-xs font-mono text-on-surface">Last capture: 2m ago</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+<div class="p-6 border-b border-outline-variant">
+<h3 class="font-headline font-bold">Top Risk Clusters</h3>
+<p class="text-xs text-on-surface-variant mt-1">Identities sharing dangerous privilege combinations.</p>
+</div>
+<div class="p-6 flex-1 space-y-4">
+<div class="p-4 bg-error-container/30 border border-error/20 rounded-lg flex items-start gap-4">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">warning</span>
+<div>
+<h4 class="text-sm font-bold text-error">The "Admin Shadow" Cluster</h4>
+<p class="text-xs text-on-surface-variant mt-1">12 roles have indirect AdminAccess via cross-account assume-role chains that bypass standard IAM guardrails.</p>
+</div>
+</div>
+<div class="p-4 bg-surface-container-highest border border-outline-variant rounded-lg flex items-start gap-4">
+<span class="material-symbols-outlined text-primary">hub</span>
+<div>
+<h4 class="text-sm font-bold">Orphaned Access Keys</h4>
+<p class="text-xs text-on-surface-variant mt-1">82 long-lived access keys associated with deleted user principals are still attempting to authenticate.</p>
+</div>
+</div>
+<div class="p-4 bg-surface-container-highest border border-outline-variant rounded-lg flex items-start gap-4">
+<span class="material-symbols-outlined text-tertiary">lock_reset</span>
+<div>
+<h4 class="text-sm font-bold">Weak MFA Coverage</h4>
+<p class="text-xs text-on-surface-variant mt-1">Principals with '*' star-actions are missing hardware-based MFA enforcement in their IAM policies.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

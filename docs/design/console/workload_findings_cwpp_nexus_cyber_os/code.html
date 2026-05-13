@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CWPP Findings - Obsidian AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "surface-container-low": "#0f0f12",
+                    "surface-variant": "#18181b",
+                    "surface-container-high": "#18181b",
+                    "error": "#ef4444",
+                    "outline-variant": "#27272a",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "surface": "#0c0c0f",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "error-container": "#3b1111",
+                    "surface-tint": "#a78bfa",
+                    "on-background": "#fafafa",
+                    "surface-container-lowest": "#09090b",
+                    "tertiary": "#34d399",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-tertiary": "#001a12",
+                    "background": "#09090b",
+                    "secondary-container": "#27272a",
+                    "on-error": "#1a0000",
+                    "on-tertiary-fixed": "#003318",
+                    "on-surface-variant": "#a1a1aa",
+                    "inverse-on-surface": "#09090b",
+                    "tertiary-container": "#065f46",
+                    "inverse-surface": "#fafafa",
+                    "on-primary": "#0a0012",
+                    "tertiary-fixed": "#bbf7d0",
+                    "surface-container-highest": "#1e1e22",
+                    "secondary-fixed-dim": "#71717a",
+                    "on-tertiary-container": "#bbf7d0",
+                    "on-secondary": "#09090b",
+                    "inverse-primary": "#5b21b6",
+                    "surface-dim": "#0c0c0f",
+                    "secondary-fixed": "#a1a1aa",
+                    "secondary": "#71717a",
+                    "surface-bright": "#18181b",
+                    "surface-container": "#121215",
+                    "on-surface": "#fafafa",
+                    "on-primary-container": "#ede9fe",
+                    "outline": "#52525b",
+                    "on-primary-fixed": "#2e1065",
+                    "primary-fixed": "#ede9fe",
+                    "on-secondary-container": "#a1a1aa",
+                    "on-secondary-fixed": "#18181b",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-error-container": "#fca5a5",
+                    "primary-container": "#7c3aed",
+                    "primary": "#a78bfa"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist"],
+                    "display": ["Geist"],
+                    "body": ["Geist"],
+                    "label": ["Geist"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-[60]">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] text-on-surface-variant font-bold">Cloud Security</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">dashboard</span>
+                Command Center
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">security</span>
+                Threat Hunter
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">inventory_2</span>
+                Asset Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">cloud_done</span>
+                Cloud Posture
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">fact_check</span>
+                Compliance
+            </a>
+</nav>
+<div class="px-4 border-t border-outline-variant pt-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined text-xl">help_outline</span>
+                Support
+            </a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 bg-surface-dim border-b border-outline-variant px-6 flex justify-between items-center z-50">
+<div class="flex items-center gap-4 flex-1">
+<span class="text-lg font-headline font-bold text-on-surface">Obsidian AI</span>
+<div class="flex-1 max-w-xl">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg py-1.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Search finding IDs, workloads, or clusters..." type="text"/>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">account_tree</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant ml-2">
+<img class="w-full h-full object-cover" data-alt="A professional close-up portrait of a senior cloud security engineer in a high-tech obsidian dark theme setting. The lighting is moody with subtle violet and emerald green highlights reflecting off a glass background. The subject is wearing a modern dark suit, embodying precision and expertise in a developer-centric atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAk7RV2VF2NM5TiCGdlQW-xdtMadbbvBFRhWTNurI4ZmuOJKmh9o-5k8FRMuOO9GiW7qYMAp0ECyohoyzWQFjGXO3WTn8kmxj1D2W5w2Udm7ccvcUPyMyGub_pylJK3gNH9H_-NhOAPZFdR8YAUT1VsCR31zNTSgXWqFhi2vb4EWYKvSPfOvpAfh6nKBfFOkWIafkgYWB4lLrsZQRNtf9m5JGzSRXTHEdeehf_YmWZqzlyUVqjrZviFhSyFa8eBabMvrGaZrULzApSc"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 mt-14 p-8 min-h-screen">
+<div class="max-w-[1400px] mx-auto">
+<!-- Header Section -->
+<div class="mb-8 flex justify-between items-end">
+<div>
+<div class="flex items-center gap-2 text-tertiary font-bold mb-1">
+<span class="material-symbols-outlined text-sm">auto_awesome</span>
+<span class="text-xs uppercase tracking-widest">Runtime Analysis Active</span>
+</div>
+<h2 class="text-3xl font-headline font-bold text-on-surface tracking-tight">CWPP Findings (Page 19)</h2>
+<p class="text-on-surface-variant mt-1">Real-time threat detection across EC2, K8s, and Serverless workloads.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 border border-outline-variant rounded-lg text-sm font-bold text-on-surface hover:bg-surface-container transition-all">
+                        Generate Report
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all">
+                        Quarantine All
+                    </button>
+</div>
+</div>
+<!-- Top Bento Grid -->
+<div class="grid grid-cols-12 gap-6 mb-6">
+<!-- Runtime Threat Detection Feed -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+<div class="p-5 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<h3 class="font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">radar</span>
+                            Runtime Threat Detection
+                        </h3>
+<div class="flex items-center gap-2">
+<span class="flex h-2 w-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-[10px] text-on-surface-variant font-mono">LIVE FEED</span>
+</div>
+</div>
+<div class="flex-1 overflow-auto max-h-[400px]">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface-container text-[10px] text-on-surface-variant uppercase tracking-widest border-b border-outline-variant">
+<tr>
+<th class="px-6 py-4 font-black">Resource ID</th>
+<th class="px-6 py-4 font-black">Workload Type</th>
+<th class="px-6 py-4 font-black">Active Alert</th>
+<th class="px-6 py-4 font-black text-right">Confidence</th>
+</tr>
+</thead>
+<tbody class="text-sm font-body divide-y divide-outline-variant/50">
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<code class="bg-surface-container-lowest px-2 py-1 rounded text-primary border border-outline-variant">i-0a2b3c4d5e</code>
+<div class="text-[10px] text-on-surface-variant mt-1">us-east-1a • Production</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-base">dns</span>
+                                            EC2 Instance
+                                        </div>
+</td>
+<td class="px-6 py-4">
+<span class="flex items-center gap-2 text-error font-bold">
+<span class="material-symbols-outlined text-sm">warning</span>
+                                            Reverse Shell Detected
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-tertiary">98.4%</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<code class="bg-surface-container-lowest px-2 py-1 rounded text-primary border border-outline-variant">pod-secure-edge-7f</code>
+<div class="text-[10px] text-on-surface-variant mt-1">k8s-cluster-blue • namespace: payments</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-base">layers</span>
+                                            K8s Pod
+                                        </div>
+</td>
+<td class="px-6 py-4">
+<span class="flex items-center gap-2 text-error font-bold">
+<span class="material-symbols-outlined text-sm">emergency</span>
+                                            Malicious Process
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-tertiary">92.1%</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<code class="bg-surface-container-lowest px-2 py-1 rounded text-primary border border-outline-variant">fn-api-gateway-v2</code>
+<div class="text-[10px] text-on-surface-variant mt-1">Lambda • Runtime: Node.js 18.x</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-base">bolt</span>
+                                            Function
+                                        </div>
+</td>
+<td class="px-6 py-4">
+<span class="flex items-center gap-2 text-on-secondary-container font-bold">
+<span class="material-symbols-outlined text-sm">network_check</span>
+                                            Abnormal Outbound
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-tertiary">84.0%</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<code class="bg-surface-container-lowest px-2 py-1 rounded text-primary border border-outline-variant">i-7f8g9h0j1k</code>
+<div class="text-[10px] text-on-surface-variant mt-1">eu-central-1 • Staging</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-base">dns</span>
+                                            EC2 Instance
+                                        </div>
+</td>
+<td class="px-6 py-4">
+<span class="flex items-center gap-2 text-error font-bold">
+<span class="material-symbols-outlined text-sm">security_update_warning</span>
+                                            Privilege Escalation
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-tertiary">96.7%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Container Image Integrity Status -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+<div class="p-5 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<h3 class="font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">verified_user</span>
+                            Image Integrity
+                        </h3>
+</div>
+<div class="p-6 space-y-6 flex-1">
+<div class="flex items-center justify-between">
+<div class="text-3xl font-black text-on-surface">88%</div>
+<div class="text-[10px] text-on-surface-variant uppercase font-bold text-right">Scan Coverage</div>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 88%"></div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant uppercase font-black mb-1">Signed</div>
+<div class="text-xl font-headline font-bold text-tertiary">1,204</div>
+</div>
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant uppercase font-black mb-1">Unsigned</div>
+<div class="text-xl font-headline font-bold text-error">42</div>
+</div>
+</div>
+<div class="space-y-4">
+<h4 class="text-xs font-black text-on-surface-variant uppercase tracking-tighter">Integrity Alerts</h4>
+<div class="space-y-3">
+<div class="flex items-center gap-3 p-3 bg-error-container/20 border border-error/20 rounded-lg">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">error</span>
+<div class="text-xs">
+<div class="text-on-surface font-bold">Mismatched Digest</div>
+<div class="text-on-surface-variant">Image 'redis-latest' altered post-scan</div>
+</div>
+</div>
+<div class="flex items-center gap-3 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg">
+<span class="material-symbols-outlined text-on-surface-variant">no_encryption</span>
+<div class="text-xs">
+<div class="text-on-surface font-bold">Unsigned Image Deployment</div>
+<div class="text-on-surface-variant">Detected in namespace 'dev-ops'</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Bento Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Workload Distribution -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6">
+<h3 class="font-bold text-sm flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-on-surface-variant">pie_chart</span>
+                        Workload Distribution
+                    </h3>
+<div class="flex items-center justify-center h-48 relative">
+<svg class="w-40 h-40 transform -rotate-90">
+<circle cx="80" cy="80" fill="transparent" r="70" stroke="#27272a" stroke-width="12"></circle>
+<circle cx="80" cy="80" fill="transparent" r="70" stroke="#a78bfa" stroke-dasharray="440" stroke-dashoffset="110" stroke-width="12"></circle>
+<circle cx="80" cy="80" fill="transparent" r="70" stroke="#34d399" stroke-dasharray="440" stroke-dashoffset="330" stroke-width="12"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<div class="text-2xl font-black">2.4k</div>
+<div class="text-[10px] text-on-surface-variant">TOTAL</div>
+</div>
+</div>
+<div class="mt-6 flex justify-between px-4">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="text-xs text-on-surface-variant font-bold">EC2</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="text-xs text-on-surface-variant font-bold">K8s</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-outline-variant"></span>
+<span class="text-xs text-on-surface-variant font-bold">Serverless</span>
+</div>
+</div>
+</div>
+<!-- Threat Heatmap (Visual Placeholder) -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6 relative group overflow-hidden">
+<img class="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" data-alt="A sophisticated digital heatmap representation of a global server network, rendered in an obsidian dark aesthetic. Glowing nodes and data connection paths are illuminated in primary violet and emerald green, with pulsating red zones indicating high-threat activity. The background features deep zinc-gray textures, and the overall mood is technical, high-contrast, and focused on cybersecurity monitoring." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAeWkNgnFiCLUl98OO601IZWKaLFGS7fRtYMHUUhb-MGc3RUE0M9pbMgBzB8XgXaw8wnbvE4jgSAZoP9tzEjPiHsdkhrBtFX3LGsFgcikKHUWSV-VADUVatOf5KJMljIGxgng8UqP7e5TNPaOuIR2SAsbAB8hcF1SKxZjOcZmiYtexGOJerNKUH3dbw28IUjcncE0lzrUgXveQpSjzaLBNQ-9_502Cp_4OONMe9-fFDp5uMVs_yTYbLh7M4cUnpsGS_KRzmZVatdLgC"/>
+<div class="relative z-10 flex flex-col h-full">
+<h3 class="font-bold text-sm flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-error">language</span>
+                            Global Threat Vector
+                        </h3>
+<p class="text-xs text-on-surface-variant mb-auto">Visualizing origin points of runtime attacks over the last 24h.</p>
+<div class="mt-4 p-3 bg-surface-container-highest/80 backdrop-blur-md rounded-lg border border-outline-variant">
+<div class="flex justify-between items-center mb-1">
+<span class="text-[10px] font-black text-on-surface uppercase">Highest Intensity</span>
+<span class="text-[10px] text-error font-mono font-bold">IP: 185.122.XX.XX</span>
+</div>
+<div class="text-sm font-bold text-on-surface">Moscow, RU Cluster</div>
+</div>
+</div>
+</div>
+<!-- Quick Action Bento -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6 flex flex-col gap-4">
+<h3 class="font-bold text-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">bolt</span>
+                        Quick Remediation
+                    </h3>
+<button class="w-full text-left p-4 bg-surface-container-low hover:bg-surface-container-highest border border-outline-variant rounded-lg group transition-all">
+<div class="flex justify-between items-center">
+<span class="text-xs font-bold text-on-surface">Enforce Zero-Trust Pod Policy</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-1">Restrict inter-pod communication for staging.</p>
+</button>
+<button class="w-full text-left p-4 bg-surface-container-low hover:bg-surface-container-highest border border-outline-variant rounded-lg group transition-all">
+<div class="flex justify-between items-center">
+<span class="text-xs font-bold text-on-surface">Rotate Lambda Secrets</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-1">Emergency rotation for compromised functions.</p>
+</button>
+<button class="w-full text-left p-4 bg-surface-container-low hover:bg-surface-container-highest border border-outline-variant rounded-lg group transition-all">
+<div class="flex justify-between items-center">
+<span class="text-xs font-bold text-on-surface">Terminate Rogue EC2</span>
+<span class="material-symbols-outlined text-error group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-1">Instantly kill instances with Reverse Shells.</p>
+</button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

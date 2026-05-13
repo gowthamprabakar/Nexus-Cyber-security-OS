@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian | Data Security Posture Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://fonts.cdnfonts.com/s/93466/Geist-Regular.woff') format('woff');
+        }
+        body {
+            font-family: 'Geist', sans-serif;
+            background-color: #09090b;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0c0c0f;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 2px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "surface-container-low": "#0f0f12",
+                        "surface-variant": "#18181b",
+                        "surface-container-high": "#18181b",
+                        "error": "#ef4444",
+                        "outline-variant": "#27272a",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "surface": "#0c0c0f",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "error-container": "#3b1111",
+                        "surface-tint": "#a78bfa",
+                        "on-background": "#fafafa",
+                        "surface-container-lowest": "#09090b",
+                        "tertiary": "#34d399",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "on-tertiary": "#001a12",
+                        "background": "#09090b",
+                        "secondary-container": "#27272a",
+                        "on-error": "#1a0000",
+                        "on-tertiary-fixed": "#003318",
+                        "on-surface-variant": "#a1a1aa",
+                        "inverse-on-surface": "#09090b",
+                        "tertiary-container": "#065f46",
+                        "inverse-surface": "#fafafa",
+                        "on-primary": "#0a0012",
+                        "tertiary-fixed": "#bbf7d0",
+                        "surface-container-highest": "#1e1e22",
+                        "secondary-fixed-dim": "#71717a",
+                        "on-tertiary-container": "#bbf7d0",
+                        "on-secondary": "#09090b",
+                        "inverse-primary": "#5b21b6",
+                        "surface-dim": "#0c0c0f",
+                        "secondary-fixed": "#a1a1aa",
+                        "secondary": "#71717a",
+                        "surface-bright": "#18181b",
+                        "surface-container": "#121215",
+                        "on-surface": "#fafafa",
+                        "on-primary-container": "#ede9fe",
+                        "outline": "#52525b",
+                        "on-primary-fixed": "#2e1065",
+                        "primary-fixed": "#ede9fe",
+                        "on-secondary-container": "#a1a1aa",
+                        "on-secondary-fixed": "#18181b",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "on-error-container": "#fca5a5",
+                        "primary-container": "#7c3aed",
+                        "primary": "#a78bfa"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist"],
+                        "display": ["Geist"],
+                        "body": ["Geist"],
+                        "label": ["Geist"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col h-full py-4 bg-surface dark:bg-surface border-r border-outline-variant dark:border-outline-variant z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface dark:text-on-surface tracking-tighter uppercase">Obsidian</h1>
+<p class="text-[10px] font-body text-secondary dark:text-secondary uppercase tracking-[0.2em] mt-1">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary dark:text-primary bg-surface-container-highest dark:bg-surface-container-highest border-r-2 border-primary font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-xl">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-3 pt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary font-body text-label-sm tracking-tight transition-colors duration-150 ease-in-out hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-xl">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-40 flex justify-between items-center h-14 px-6 bg-surface-dim dark:bg-surface-dim border-b border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg py-1.5 pl-10 pr-4 text-sm font-body text-on-surface focus:outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Search data stores or classifications..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant"><span class="material-symbols-outlined">terminal</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant"><span class="material-symbols-outlined">account_tree</span></button>
+</div>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqorLu7vOHQKQ-ePF-xmmZ_TbSfCD8QCAYP9y2rzgEVZ2Lb3XjD1nJFFeFMmXgwyKCKqaasoH0n_btsPWehnAiMUdsY94Rt7Px5EjnhFl88iznDCKyb_dcs0wcI6O6kxWcqTunCB2HbkkMZFnlu4zaDqHw2mnJRko-EJWyAMEXiLA1Vw55ETS3HKKncHzR2yez4bcd0AOntug4t8iPV_gZUvHBn8oZUlwxQzfudRC7oMfgG6RvQxZ6RIz2lx-diTNoRzGtwnVu6XgI"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-14 min-h-screen">
+<div class="p-8 max-w-7xl mx-auto">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest mb-2">
+<span class="material-symbols-outlined text-sm">shield</span> DSPM Dashboard
+                    </div>
+<h2 class="text-3xl font-headline font-extrabold tracking-tight text-on-surface">Data Security Findings</h2>
+<p class="text-on-surface-variant mt-1">Page 20 / Global Asset Intelligence Reports</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-primary text-on-primary rounded font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">download</span> Export Findings
+                    </button>
+<button class="px-4 py-2 bg-transparent border border-outline-variant text-on-surface rounded font-bold text-sm hover:bg-surface-container transition-colors">
+                        Run New Scan
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Section 1: Summary Counters -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+<!-- Public Buckets Counter -->
+<div class="bg-surface-container border border-outline-variant p-6 rounded-xl flex flex-col justify-between relative overflow-hidden">
+<div class="absolute -right-4 -top-4 text-error opacity-10">
+<span class="material-symbols-outlined text-9xl">public_off</span>
+</div>
+<div>
+<span class="text-xs font-bold text-error uppercase tracking-widest block mb-4">Critical Exposure</span>
+<div class="text-5xl font-headline font-black text-on-surface">14</div>
+<div class="text-sm font-body text-on-surface-variant mt-2">Publicly Exposed Buckets</div>
+</div>
+<div class="mt-6 flex items-center gap-2 text-error text-xs font-bold">
+<span class="material-symbols-outlined text-xs">trending_up</span> +3 since last scan
+                    </div>
+</div>
+<!-- Sensitive Data Map Summary -->
+<div class="md:col-span-3 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">explore</span> Sensitive Data Map Summary
+                        </h3>
+<div class="flex gap-4">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="text-[10px] text-on-surface-variant uppercase">PII</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+<span class="text-[10px] text-on-surface-variant uppercase">PCI</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-on-surface"></div>
+<span class="text-[10px] text-on-surface-variant uppercase">Secrets</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-8">
+<div class="flex flex-col">
+<div class="flex justify-between mb-2">
+<span class="text-sm text-on-surface-variant">PII Found</span>
+<span class="text-sm font-bold text-on-surface">1.2k Assets</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 75%"></div>
+</div>
+<p class="text-[10px] text-secondary mt-2">SSNs, Emails, Phone Numbers detected</p>
+</div>
+<div class="flex flex-col">
+<div class="flex justify-between mb-2">
+<span class="text-sm text-on-surface-variant">PCI Compliance</span>
+<span class="text-sm font-bold text-on-surface">248 Assets</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 42%"></div>
+</div>
+<p class="text-[10px] text-secondary mt-2">CC Numbers, Transaction Logs</p>
+</div>
+<div class="flex flex-col">
+<div class="flex justify-between mb-2">
+<span class="text-sm text-on-surface-variant">Secrets Leakage</span>
+<span class="text-sm font-bold text-on-surface">12 Instances</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-on-surface h-full" style="width: 15%"></div>
+</div>
+<p class="text-[10px] text-secondary mt-2">API Keys, Private SSH Keys</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Findings Table Section -->
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center">
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface">Data Store Inventory &amp; Findings</h3>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container-highest transition-colors"><span class="material-symbols-outlined text-sm text-on-surface-variant">filter_list</span></button>
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container-highest transition-colors"><span class="material-symbols-outlined text-sm text-on-surface-variant">sort</span></button>
+</div>
+</div>
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low">
+<th class="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Data Store</th>
+<th class="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Sensitivity</th>
+<th class="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Exposure Status</th>
+<th class="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Encryption Status</th>
+<th class="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Last Scan</th>
+<th class="px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">storage</span>
+<div>
+<div class="text-sm font-bold text-on-surface">prod-user-vault-s3</div>
+<div class="text-[10px] text-secondary">AWS • us-east-1</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-error-container text-error border border-error/20">HIGH • PII</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-error text-xs font-medium">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">warning</span> Public
+                                </div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-on-surface-variant text-xs">
+<span class="material-symbols-outlined text-sm text-tertiary">lock</span> AES-256
+                                </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">2 hours ago</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-xs font-bold">Investigate</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">database</span>
+<div>
+<div class="text-sm font-bold text-on-surface">customer-db-cluster</div>
+<div class="text-[10px] text-secondary">Azure • West Europe</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-surface-container-highest text-tertiary border border-tertiary/20">MED • PCI</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-tertiary text-xs font-medium">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span> Internal
+                                </div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-on-surface-variant text-xs">
+<span class="material-symbols-outlined text-sm text-tertiary">lock</span> TLS 1.3
+                                </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">5 hours ago</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-xs font-bold">Investigate</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">folder_zip</span>
+<div>
+<div class="text-sm font-bold text-on-surface">legacy-backups-01</div>
+<div class="text-[10px] text-secondary">GCP • asia-northeast1</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-surface-container-highest text-on-surface-variant border border-outline-variant">LOW • Internal</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-error text-xs font-medium">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">warning</span> Public
+                                </div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-error text-xs">
+<span class="material-symbols-outlined text-sm">lock_open</span> Unencrypted
+                                </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">12 hours ago</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-xs font-bold">Investigate</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">key</span>
+<div>
+<div class="text-sm font-bold text-on-surface">app-configs-secrets</div>
+<div class="text-[10px] text-secondary">AWS • us-east-1</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-error-container text-error border border-error/20">CRITICAL • Secrets</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-tertiary text-xs font-medium">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span> Private
+                                </div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2 text-on-surface-variant text-xs">
+<span class="material-symbols-outlined text-sm text-tertiary">lock</span> KMS Encrypted
+                                </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Just now</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-xs font-bold">Investigate</button>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="p-4 bg-surface-container-low border-t border-outline-variant flex justify-center">
+<button class="text-xs font-bold text-secondary hover:text-on-surface transition-colors flex items-center gap-1 uppercase tracking-widest">
+                        View all 428 findings <span class="material-symbols-outlined text-xs">arrow_downward</span>
+</button>
+</div>
+</div>
+<!-- Bottom Visualizer Bento Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+<!-- Data Sensitivity Growth Chart -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6 relative">
+<h4 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Sensitivity Growth Trend</h4>
+<div class="h-48 w-full flex items-end gap-2 px-2">
+<div class="bg-primary/20 hover:bg-primary/40 transition-colors w-full h-[40%] rounded-t-sm relative group">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest px-2 py-1 rounded text-[10px] hidden group-hover:block whitespace-nowrap">Mon: 120</div>
+</div>
+<div class="bg-primary/20 hover:bg-primary/40 transition-colors w-full h-[45%] rounded-t-sm relative group"></div>
+<div class="bg-primary/20 hover:bg-primary/40 transition-colors w-full h-[55%] rounded-t-sm relative group"></div>
+<div class="bg-primary/20 hover:bg-primary/40 transition-colors w-full h-[50%] rounded-t-sm relative group"></div>
+<div class="bg-primary/40 hover:bg-primary/60 transition-colors w-full h-[70%] rounded-t-sm relative group"></div>
+<div class="bg-primary/60 hover:bg-primary/80 transition-colors w-full h-[85%] rounded-t-sm relative group"></div>
+<div class="bg-primary h-full w-full rounded-t-sm relative group">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest px-2 py-1 rounded text-[10px] hidden group-hover:block whitespace-nowrap">Today: 248</div>
+</div>
+</div>
+<div class="flex justify-between mt-4 text-[10px] text-secondary font-bold uppercase tracking-tighter">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+<!-- Exposure Map Thumbnail -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6 relative overflow-hidden group">
+<div class="relative z-10">
+<h4 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Geographic Sensitive Data Clusters</h4>
+<div class="flex items-center gap-6">
+<div class="w-32 h-32 rounded-full border-4 border-primary/20 flex items-center justify-center relative">
+<div class="w-24 h-24 rounded-full border-4 border-tertiary/20 flex items-center justify-center">
+<div class="text-center">
+<div class="text-2xl font-black text-on-surface">32</div>
+<div class="text-[8px] text-secondary uppercase font-bold">Regions</div>
+</div>
+</div>
+<div class="absolute -right-2 top-0 w-4 h-4 bg-error rounded-full animate-pulse border-4 border-surface"></div>
+</div>
+<div class="flex-1 space-y-3">
+<div>
+<div class="flex justify-between text-[10px] font-bold uppercase mb-1">
+<span>North America</span>
+<span class="text-on-surface">62%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[62%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[10px] font-bold uppercase mb-1">
+<span>Europe</span>
+<span class="text-on-surface">28%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="bg-tertiary h-full w-[28%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[10px] font-bold uppercase mb-1">
+<span>Asia Pacific</span>
+<span class="text-on-surface">10%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[10%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Abstract Background Map Placeholder -->
+<div class="absolute inset-0 opacity-10 grayscale pointer-events-none group-hover:grayscale-0 transition-all duration-700">
+<img class="w-full h-full object-cover" data-alt="A dark-themed world map with glowing neon violet and emerald data points connected by thin silver lines. The aesthetic is high-tech and minimalist, featuring a dark zinc background with subtle grid lines representing a global security monitoring network. The lighting is low-key with sharp, high-contrast highlights on the active data hubs." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPNwQ9VkyYw3SyGxRmTVZSom98LHXr7uTZfjRS6u5O8Y_OYTO2fICezdd9NPWcXLiZGdfyoUhIM8iUxl--vdrWGMDAQHKV6In0-fFki04w3I7ZgPqnnQsmqSXL3JD0QHWeWZAEeUwvto4WLrBKlBFgNIWYU6tCwKJ3DjfWcYjtUsCTAgmc9eWukv-FhZx5Y9yml9-0T22T3vpSXJXDwecbFdAeUbYw2xAbh0XQWkg4Ph1qtEp88W0MJmqEJNKJnIAI9vhwJkRWT9y5"/>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

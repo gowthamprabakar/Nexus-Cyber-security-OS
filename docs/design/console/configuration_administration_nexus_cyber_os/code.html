@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#18181b",
+                    "on-tertiary-container": "#bbf7d0",
+                    "surface-dim": "#0c0c0f",
+                    "on-surface-variant": "#a1a1aa",
+                    "secondary": "#71717a",
+                    "on-tertiary-fixed": "#003318",
+                    "on-primary-container": "#ede9fe",
+                    "inverse-surface": "#fafafa",
+                    "on-error-container": "#fca5a5",
+                    "surface-container-low": "#0f0f12",
+                    "primary-fixed": "#ede9fe",
+                    "surface-tint": "#a78bfa",
+                    "primary": "#a78bfa",
+                    "on-error": "#1a0000",
+                    "on-surface": "#fafafa",
+                    "surface-container-high": "#18181b",
+                    "surface-bright": "#18181b",
+                    "secondary-container": "#27272a",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "surface-container-lowest": "#09090b",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-primary": "#0a0012",
+                    "tertiary-container": "#065f46",
+                    "surface": "#0c0c0f",
+                    "primary-container": "#7c3aed",
+                    "tertiary-fixed": "#bbf7d0",
+                    "secondary-fixed-dim": "#71717a",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "error-container": "#3b1111",
+                    "error": "#ef4444",
+                    "tertiary": "#34d399",
+                    "outline-variant": "#27272a",
+                    "outline": "#52525b",
+                    "surface-container": "#121215",
+                    "inverse-on-surface": "#09090b",
+                    "on-tertiary": "#001a12",
+                    "on-background": "#fafafa",
+                    "inverse-primary": "#5b21b6",
+                    "background": "#09090b",
+                    "on-secondary-fixed": "#18181b",
+                    "secondary-fixed": "#a1a1aa",
+                    "on-secondary-container": "#a1a1aa",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "surface-container-highest": "#1e1e22",
+                    "on-primary-fixed": "#2e1065",
+                    "on-secondary": "#09090b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist"],
+                    "display": ["Geist"],
+                    "body": ["Geist"],
+                    "label": ["Geist"],
+                    "mono": ["JetBrains Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .mono-tech { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- SideNavBar (Authority: Shared Components JSON) -->
+<aside class="bg-surface dark:bg-surface text-primary dark:text-primary font-body text-label-sm tracking-tight h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline-variant flex flex-col h-full py-4 z-[60]">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary">shield</span>
+</div>
+<div>
+<h1 class="text-xl font-headline font-black text-on-surface dark:text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Cloud Security</p>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="mt-auto px-3 space-y-1 pt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2 text-primary dark:text-primary bg-surface-container-highest dark:bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out rounded-l-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar (Authority: Shared Components JSON) -->
+<header class="bg-surface-dim dark:bg-surface-dim text-primary dark:text-primary font-body text-label-md fixed top-0 right-0 w-[calc(100%-16rem)] z-50 border-b border-outline-variant dark:border-outline-variant flex justify-between items-center h-14 px-6">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="Search parameters..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">account_tree</span>
+</button>
+</div>
+<div class="flex items-center gap-3 border-l border-outline-variant pl-6">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Admin_Root</p>
+<p class="text-[10px] text-on-surface-variant mono-tech">#74-XRAY-ALPHA</p>
+</div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border border-outline-variant overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A close-up portrait of a professional system administrator in a high-tech environment. The lighting is low-key with cool blue and violet undertones, reflecting the Obsidian dark-mode aesthetic. The individual is wearing modern tech-wear and has a focused expression, representing precision and technical expertise in a developer-centric atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDByU8OFoIMErPQd9KAvWP1WKMpFP9XxXEfAK4EAYfzQLJdplxtNgivKjWgt0PhvnFVDVU7JbJseMg9lszH72DZ2LG-G4g9aUnOAmjo4VJUSECLyP0gQMxrAvsJpe12EKzZ8dUrWsazTNAVIr5KO_QwZZMwig8lvaeWI2iEauTp30JDWCeXibow4filalnooDPN4nmP8IfeOu2hrVNxzQpVK_2E6kUneYgLEfUhP7J4faxKZJI3lFLx4Qk-kLz_uTR_vb30dZxi64dk"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-20 p-8 min-h-screen">
+<div class="max-w-7xl mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-4">
+<div>
+<h2 class="text-3xl font-headline font-black tracking-tight text-on-surface mb-1">Configuration &amp; Administration</h2>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="mono-tech text-xs bg-surface-container px-2 py-0.5 rounded border border-outline-variant">v2.4.0-stable</span>
+                        Platform-wide policy orchestration and resource governance.
+                    </p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface-container border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high transition-colors text-sm font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">history</span> Audit Log
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-lg">save</span> Apply Changes
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Section -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Global Security Policies (Bento Item 1) -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6 flex flex-col">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">gpp_maybe</span>
+</div>
+<h3 class="font-headline font-bold text-on-surface">Global Security Policies</h3>
+</div>
+<div class="space-y-5 flex-1">
+<div class="flex items-center justify-between group">
+<div>
+<p class="text-sm font-bold text-on-surface">Multi-Factor Auth (MFA)</p>
+<p class="text-xs text-on-surface-variant">Enforce for all root accounts</p>
+</div>
+<button class="w-12 h-6 bg-primary rounded-full relative transition-all flex items-center px-1">
+<div class="w-4 h-4 bg-on-primary rounded-full translate-x-6"></div>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold text-on-surface">Zero-Trust Tunneling</p>
+<p class="text-xs text-on-surface-variant">Verify all internal requests</p>
+</div>
+<button class="w-12 h-6 bg-outline-variant rounded-full relative transition-all flex items-center px-1">
+<div class="w-4 h-4 bg-on-surface-variant rounded-full"></div>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold text-on-surface">Automated IP Ban</p>
+<p class="text-xs text-on-surface-variant">After 5 failed auth attempts</p>
+</div>
+<button class="w-12 h-6 bg-primary rounded-full relative transition-all flex items-center px-1">
+<div class="w-4 h-4 bg-on-primary rounded-full translate-x-6"></div>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold text-on-surface">Session Persistence</p>
+<p class="text-xs text-on-surface-variant">Logout after 30m inactivity</p>
+</div>
+<button class="w-12 h-6 bg-outline-variant rounded-full relative transition-all flex items-center px-1">
+<div class="w-4 h-4 bg-on-surface-variant rounded-full"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- System Resource Allocation (Bento Item 2) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container border border-outline-variant rounded-xl p-6 overflow-hidden relative">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">memory</span>
+</div>
+<h3 class="font-headline font-bold text-on-surface">System Resource Allocation</h3>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-xs text-tertiary mono-tech">Status: Nominal</span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="space-y-4">
+<div class="flex justify-between items-end">
+<span class="text-xs text-on-surface-variant uppercase font-bold tracking-wider">Compute / CPU</span>
+<span class="mono-tech text-tertiary text-sm">42%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary rounded-full" style="width: 42%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant italic">Scaling cluster: <span class="mono-tech">us-east-1a</span></p>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-end">
+<span class="text-xs text-on-surface-variant uppercase font-bold tracking-wider">Memory / RAM</span>
+<span class="mono-tech text-primary text-sm">78%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 78%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant italic">Threshold: <span class="mono-tech">90.0 GiB</span></p>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-end">
+<span class="text-xs text-on-surface-variant uppercase font-bold tracking-wider">Object Storage</span>
+<span class="mono-tech text-on-surface text-sm">14%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-on-surface rounded-full" style="width: 14%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant italic">Active Buckets: <span class="mono-tech">1,204</span></p>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-outline-variant grid grid-cols-4 gap-4">
+<div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant/50">
+<p class="text-[10px] text-on-surface-variant mb-1 uppercase font-bold">Latency</p>
+<p class="mono-tech text-lg text-tertiary">22ms</p>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant/50">
+<p class="text-[10px] text-on-surface-variant mb-1 uppercase font-bold">Throughput</p>
+<p class="mono-tech text-lg text-on-surface">1.2GB/s</p>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant/50">
+<p class="text-[10px] text-on-surface-variant mb-1 uppercase font-bold">Uptime</p>
+<p class="mono-tech text-lg text-on-surface">99.99%</p>
+</div>
+<div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant/50">
+<p class="text-[10px] text-on-surface-variant mb-1 uppercase font-bold">Region</p>
+<p class="mono-tech text-lg text-on-surface">Global</p>
+</div>
+</div>
+</div>
+<!-- API Key Management (Bento Item 3) -->
+<div class="col-span-12 lg:col-span-5 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined">key</span>
+</div>
+<h3 class="font-headline font-bold text-on-surface">API Key Management</h3>
+</div>
+<button class="text-primary hover:underline text-xs font-bold">Revoke All</button>
+</div>
+<div class="space-y-4">
+<div class="p-3 bg-surface-container-low border border-outline-variant rounded-lg group">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-bold text-on-surface">Production_Main</span>
+<span class="text-[10px] bg-tertiary-container/30 text-tertiary px-1.5 rounded mono-tech uppercase">Active</span>
+</div>
+<div class="flex items-center justify-between gap-4">
+<code class="mono-tech text-xs text-on-surface-variant tracking-wider">obs_live_••••••••••••••••7x9K</code>
+<button class="material-symbols-outlined text-sm text-secondary hover:text-primary">refresh</button>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low border border-outline-variant rounded-lg group">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-bold text-on-surface">Staging_Xray</span>
+<span class="text-[10px] bg-tertiary-container/30 text-tertiary px-1.5 rounded mono-tech uppercase">Active</span>
+</div>
+<div class="flex items-center justify-between gap-4">
+<code class="mono-tech text-xs text-on-surface-variant tracking-wider">obs_test_••••••••••••••••4a2P</code>
+<button class="material-symbols-outlined text-sm text-secondary hover:text-primary">refresh</button>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low border border-outline-variant rounded-lg opacity-50">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-bold text-on-surface line-through">Legacy_Mobile</span>
+<span class="text-[10px] bg-error-container/30 text-error px-1.5 rounded mono-tech uppercase">Revoked</span>
+</div>
+<div class="flex items-center justify-between gap-4">
+<code class="mono-tech text-xs text-on-surface-variant tracking-wider">obs_rev_••••••••••••••••0000</code>
+<span class="material-symbols-outlined text-sm text-secondary">block</span>
+</div>
+</div>
+<button class="w-full py-2 border-2 border-dashed border-outline-variant rounded-lg text-on-surface-variant text-xs hover:border-primary hover:text-primary transition-all font-bold">
+                            + Generate New Key
+                        </button>
+</div>
+</div>
+<!-- User & Role Management (Bento Item 4) -->
+<div class="col-span-12 lg:col-span-7 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">group</span>
+</div>
+<h3 class="font-headline font-bold text-on-surface">User &amp; Role Management</h3>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant font-mono">14 Total</span>
+<span class="text-outline">|</span>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">filter_list</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-3 px-2 text-[10px] uppercase tracking-wider text-on-surface-variant font-black">User Identity</th>
+<th class="py-3 px-2 text-[10px] uppercase tracking-wider text-on-surface-variant font-black">Access Role</th>
+<th class="py-3 px-2 text-[10px] uppercase tracking-wider text-on-surface-variant font-black text-center">Permissions</th>
+<th class="py-3 px-2 text-[10px] uppercase tracking-wider text-on-surface-variant font-black">Last Active</th>
+<th class="py-3 px-2"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="py-4 px-2">
+<div class="flex items-center gap-3">
+<div class="w-7 h-7 rounded bg-secondary-container flex items-center justify-center text-[10px] font-bold text-on-secondary-container">JD</div>
+<div>
+<p class="text-xs font-bold text-on-surface">James D. @jdev</p>
+<p class="text-[10px] text-on-surface-variant mono-tech">id_5542_alpha</p>
+</div>
+</div>
+</td>
+<td class="py-4 px-2">
+<span class="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20 uppercase">Global Admin</span>
+</td>
+<td class="py-4 px-2 text-center">
+<div class="flex justify-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary" title="Read"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary" title="Write"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary" title="Execute"></span>
+</div>
+</td>
+<td class="py-4 px-2">
+<p class="text-[10px] mono-tech text-on-surface">2 mins ago</p>
+</td>
+<td class="py-4 px-2 text-right">
+<button class="material-symbols-outlined text-secondary hover:text-on-surface">more_vert</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="py-4 px-2">
+<div class="flex items-center gap-3">
+<div class="w-7 h-7 rounded bg-secondary-container flex items-center justify-center text-[10px] font-bold text-on-secondary-container">SR</div>
+<div>
+<p class="text-xs font-bold text-on-surface">Sarah R. @secops</p>
+<p class="text-[10px] text-on-surface-variant mono-tech">id_9102_beta</p>
+</div>
+</div>
+</td>
+<td class="py-4 px-2">
+<span class="text-[10px] font-bold bg-tertiary/10 text-tertiary px-2 py-0.5 rounded border border-tertiary/20 uppercase">Sec Analyst</span>
+</td>
+<td class="py-4 px-2 text-center">
+<div class="flex justify-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary" title="Read"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline" title="Write"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline" title="Execute"></span>
+</div>
+</td>
+<td class="py-4 px-2">
+<p class="text-[10px] mono-tech text-on-surface">45 mins ago</p>
+</td>
+<td class="py-4 px-2 text-right">
+<button class="material-symbols-outlined text-secondary hover:text-on-surface">more_vert</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="py-4 px-2">
+<div class="flex items-center gap-3">
+<div class="w-7 h-7 rounded bg-secondary-container flex items-center justify-center text-[10px] font-bold text-on-secondary-container">ML</div>
+<div>
+<p class="text-xs font-bold text-on-surface">Marcus L. @audit</p>
+<p class="text-[10px] text-on-surface-variant mono-tech">id_2288_gamma</p>
+</div>
+</div>
+</td>
+<td class="py-4 px-2">
+<span class="text-[10px] font-bold bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded border border-outline-variant uppercase">ReadOnly</span>
+</td>
+<td class="py-4 px-2 text-center">
+<div class="flex justify-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary" title="Read"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline" title="Write"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline" title="Execute"></span>
+</div>
+</td>
+<td class="py-4 px-2">
+<p class="text-[10px] mono-tech text-on-surface">Yesterday</p>
+</td>
+<td class="py-4 px-2 text-right">
+<button class="material-symbols-outlined text-secondary hover:text-on-surface">more_vert</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Footer Details -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 pt-8 border-t border-outline-variant">
+<div class="flex flex-col gap-2">
+<p class="text-[10px] uppercase font-black text-secondary tracking-widest">Storage Redundancy</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-lg">verified</span>
+<p class="text-sm font-bold text-on-surface">Triple-Zonal Active</p>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<p class="text-[10px] uppercase font-black text-secondary tracking-widest">Compliance Status</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">workspace_premium</span>
+<p class="text-sm font-bold text-on-surface">SOC2 / PCI Compliant</p>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<p class="text-[10px] uppercase font-black text-secondary tracking-widest">Active Orchestrator</p>
+<p class="text-sm font-bold text-on-surface mono-tech">kubernetes-v1.28.2</p>
+</div>
+<div class="flex flex-col gap-2">
+<p class="text-[10px] uppercase font-black text-secondary tracking-widest">Environment</p>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<p class="text-sm font-bold text-on-surface">High-Availability Production</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB Suppression Rule Followed: No FAB on Settings/Admin screens -->
+</body></html>

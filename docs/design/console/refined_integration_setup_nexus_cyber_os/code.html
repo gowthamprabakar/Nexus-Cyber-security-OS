@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian AI | Integration Setup</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#18181b",
+                        "on-tertiary-container": "#bbf7d0",
+                        "surface-dim": "#0c0c0f",
+                        "on-surface-variant": "#a1a1aa",
+                        "secondary": "#71717a",
+                        "on-tertiary-fixed": "#003318",
+                        "on-primary-container": "#ede9fe",
+                        "inverse-surface": "#fafafa",
+                        "on-error-container": "#fca5a5",
+                        "surface-container-low": "#0f0f12",
+                        "primary-fixed": "#ede9fe",
+                        "surface-tint": "#a78bfa",
+                        "primary": "#a78bfa",
+                        "on-error": "#1a0000",
+                        "on-surface": "#fafafa",
+                        "surface-container-high": "#18181b",
+                        "surface-bright": "#18181b",
+                        "secondary-container": "#27272a",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "surface-container-lowest": "#09090b",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "on-primary": "#0a0012",
+                        "tertiary-container": "#065f46",
+                        "surface": "#0c0c0f",
+                        "primary-container": "#7c3aed",
+                        "tertiary-fixed": "#bbf7d0",
+                        "secondary-fixed-dim": "#71717a",
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "error-container": "#3b1111",
+                        "error": "#ef4444",
+                        "tertiary": "#34d399",
+                        "outline-variant": "#27272a",
+                        "outline": "#52525b",
+                        "surface-container": "#121215",
+                        "inverse-on-surface": "#09090b",
+                        "on-tertiary": "#001a12",
+                        "on-background": "#fafafa",
+                        "inverse-primary": "#5b21b6",
+                        "background": "#09090b",
+                        "on-secondary-fixed": "#18181b",
+                        "secondary-fixed": "#a1a1aa",
+                        "on-secondary-container": "#a1a1aa",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "surface-container-highest": "#1e1e22",
+                        "on-primary-fixed": "#2e1065",
+                        "on-secondary": "#09090b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist"],
+                        "display": ["Geist"],
+                        "body": ["Geist"],
+                        "label": ["Geist"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- Sidebar Navigation (JSON Integration) -->
+<aside class="bg-surface dark:bg-surface h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline-variant flex flex-col h-full py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface dark:text-on-surface tracking-tighter uppercase">Obsidian</h1>
+<p class="text-[10px] text-secondary uppercase tracking-[0.2em] font-bold">Cloud Security</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Command Center
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary dark:text-primary bg-surface-container-highest dark:bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-l-lg" href="#">
+<span class="material-symbols-outlined">security</span>
+                Threat Hunter
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+                Asset Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">cloud_done</span>
+                Cloud Posture
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+                Compliance
+            </a>
+</nav>
+<div class="px-4 mt-auto space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-lg" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+                Support
+            </a>
+</div>
+</aside>
+<!-- Top Navigation (JSON Integration) -->
+<header class="bg-surface-dim dark:bg-surface-dim fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-outline-variant dark:border-outline-variant flex justify-between items-center h-14 px-6">
+<div class="flex items-center gap-4 flex-1">
+<span class="text-lg font-headline font-bold text-on-surface dark:text-on-surface">Obsidian AI</span>
+<div class="flex-1 max-w-md ml-4">
+<div class="relative flex items-center group">
+<span class="material-symbols-outlined absolute left-3 text-secondary text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="Search resources..." type="text"/>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">account_tree</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="Close-up professional portrait of a software engineer with a neutral expression, set against a dark, tech-oriented studio background with subtle violet ambient lighting. The aesthetic is clean, sharp, and high-contrast, matching a sophisticated developer-focused dark mode user interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPEDcsIz2xxtKDYXSx1u-0XEymf62NwwPCCfVXuiDHxuWTQA5YKtUZ_vuV8QeS-TKzv8ojg1VD1W-kR0sa2nmbWJWkA3lll3XQUZoohSDxz4J4G3ysZj7YPVsWfAEQ-heaizfj27Gb91EVplBMz5NgBF_HsjIXPI4YF8VQHNUkXAZQElACD1Hi1wGoDJieGxxa6IgmweWTFT1bt5lGrPdep77JbOd2RO1fd2cZgP6WlQ47RA1l7hmgP3lkkIC_J3d31YJQWS9BetqZ"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-14 min-h-screen">
+<div class="p-8 max-w-7xl mx-auto">
+<!-- Breadcrumbs & Header -->
+<div class="mb-8">
+<div class="flex items-center gap-2 text-secondary text-sm mb-2">
+<span>Integrations</span>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span>Cloud Providers</span>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span class="text-primary">AWS Connection</span>
+</div>
+<h2 class="text-3xl font-bold tracking-tight">Connect AWS Account</h2>
+<p class="text-secondary mt-1">Configure Obsidian's autonomous agents to monitor and secure your cloud infrastructure.</p>
+</div>
+<div class="grid grid-cols-12 gap-8">
+<!-- Main Flow -->
+<div class="col-span-8 space-y-6">
+<!-- Progress Stepper -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-center relative">
+<div class="absolute top-4 left-0 w-full h-[2px] bg-outline-variant z-0"></div>
+<div class="absolute top-4 left-0 w-1/3 h-[2px] bg-primary z-0"></div>
+<!-- Step 1 -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-bold">1</div>
+<span class="text-[10px] mt-2 font-bold uppercase tracking-wider text-primary">Auth</span>
+</div>
+<!-- Step 2 -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border-2 border-primary text-primary flex items-center justify-center text-sm font-bold">2</div>
+<span class="text-[10px] mt-2 font-bold uppercase tracking-wider text-primary">Scope</span>
+</div>
+<!-- Step 3 -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-low border border-outline-variant text-secondary flex items-center justify-center text-sm font-bold">3</div>
+<span class="text-[10px] mt-2 font-bold uppercase tracking-wider text-secondary">Regions</span>
+</div>
+<!-- Step 4 -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-low border border-outline-variant text-secondary flex items-center justify-center text-sm font-bold">4</div>
+<span class="text-[10px] mt-2 font-bold uppercase tracking-wider text-secondary">Verify</span>
+</div>
+</div>
+</div>
+<!-- 1. Authentication Method -->
+<section class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant">
+<h3 class="text-lg font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">fingerprint</span>
+                                Authentication Method
+                            </h3>
+</div>
+<div class="p-6 grid grid-cols-2 gap-4">
+<label class="relative flex flex-col p-4 border-2 border-primary bg-surface-container-highest rounded-lg cursor-pointer group">
+<input checked="" class="absolute right-4 top-4 text-primary focus:ring-primary h-4 w-4" name="auth" type="radio"/>
+<span class="font-bold text-on-surface">IAM Role (Recommended)</span>
+<span class="text-xs text-secondary mt-1 leading-relaxed">Cross-account trust relationship using AWS STS. No long-lived credentials required.</span>
+</label>
+<label class="relative flex flex-col p-4 border border-outline-variant hover:border-outline bg-surface-container-low rounded-lg cursor-pointer group">
+<input class="absolute right-4 top-4 text-primary focus:ring-primary h-4 w-4" name="auth" type="radio"/>
+<span class="font-bold text-on-surface-variant">Access Keys</span>
+<span class="text-xs text-secondary mt-1 leading-relaxed">Standard AWS access key ID and secret access key. Use with dedicated service accounts.</span>
+</label>
+</div>
+</section>
+<!-- 2. Scope Configuration -->
+<section class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant">
+<h3 class="text-lg font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">visibility</span>
+                                Scope Configuration
+                            </h3>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex items-start gap-4 p-4 rounded-lg bg-surface-container-low border border-outline-variant">
+<div class="mt-1">
+<input class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+</div>
+<div>
+<h4 class="font-bold text-sm">Autonomous Remediation</h4>
+<p class="text-xs text-secondary mt-1">Allow Obsidian AI to automatically patch vulnerabilities and isolate compromised instances. Requires <code>ec2:TerminateInstances</code> and <code>iam:AttachRolePolicy</code>.</p>
+</div>
+<span class="ml-auto text-[10px] bg-tertiary-container text-on-tertiary-container px-2 py-0.5 rounded font-bold">POWERFUL</span>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-lg bg-surface-container-low border border-outline-variant">
+<div class="mt-1">
+<input checked="" class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+</div>
+<div>
+<h4 class="font-bold text-sm">Read-Only Asset Inventory</h4>
+<p class="text-xs text-secondary mt-1">Continuous monitoring and compliance auditing. Standard security posture management without write access.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- 3. Region Selection -->
+<section class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center">
+<h3 class="text-lg font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">public</span>
+                                Region Selection
+                            </h3>
+<button class="text-xs text-primary font-bold hover:underline">Select All Global</button>
+</div>
+<div class="p-6 grid grid-cols-3 gap-y-3">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">us-east-1 (N. Virginia)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">us-west-2 (Oregon)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">eu-central-1 (Frankfurt)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">ap-southeast-1 (Singapore)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">me-south-1 (Bahrain)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded text-primary focus:ring-primary bg-background border-outline-variant" type="checkbox"/>
+<span class="text-sm group-hover:text-primary transition-colors">sa-east-1 (São Paulo)</span>
+</label>
+</div>
+</section>
+<!-- Form Actions -->
+<div class="flex justify-between items-center py-4 border-t border-outline-variant">
+<button class="px-6 py-2 border border-outline-variant text-sm font-bold rounded-lg hover:bg-surface-container transition-all">Cancel</button>
+<div class="flex gap-4">
+<button class="px-6 py-2 border border-primary text-primary text-sm font-bold rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">wifi_tethering</span>
+                                Test Connection
+                            </button>
+<button class="px-8 py-2 bg-primary text-on-primary text-sm font-bold rounded-lg hover:brightness-110 transition-all">Continue to Verification</button>
+</div>
+</div>
+</div>
+<!-- Reasoning Sidebar -->
+<div class="col-span-4 space-y-6">
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6 sticky top-20">
+<h4 class="text-xs font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">info</span>
+                            Setup Reasoning
+                        </h4>
+<div class="space-y-6">
+<div>
+<h5 class="text-sm font-bold mb-1">Why IAM Roles?</h5>
+<p class="text-xs text-secondary leading-relaxed">
+                                    Obsidian utilizes the <strong>AssumeRole</strong> pattern to minimize risk. By using cross-account roles, you never share permanent secret keys with our platform, and access can be revoked instantly from your AWS Console.
+                                </p>
+</div>
+<div class="p-3 bg-tertiary-container/10 border border-tertiary/20 rounded-lg">
+<h5 class="text-sm font-bold text-tertiary flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                                    Autonomous Agents
+                                </h5>
+<p class="text-xs text-on-tertiary-container leading-relaxed">
+                                    To provide sub-second threat response, agents require permissions to modify Security Groups and IAM policies. This allows Obsidian to isolate a compromised S3 bucket or EC2 instance before data exfiltration occurs.
+                                </p>
+</div>
+<div class="pt-4 border-t border-outline-variant">
+<h5 class="text-sm font-bold mb-3">Service Dependencies</h5>
+<ul class="space-y-2">
+<li class="flex items-center gap-2 text-xs text-secondary">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        CloudTrail Log Analysis
+                                    </li>
+<li class="flex items-center gap-2 text-xs text-secondary">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        VPC Flow Log Monitoring
+                                    </li>
+<li class="flex items-center gap-2 text-xs text-secondary">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        IAM Access Analyzer Data
+                                    </li>
+</ul>
+</div>
+</div>
+</div>
+<div class="rounded-xl overflow-hidden border border-outline-variant">
+<img class="w-full h-48 object-cover" data-alt="A highly detailed 3D visualization of a complex cloud infrastructure network. Glowing purple and emerald circuit lines connect floating translucent data nodes representing AWS services. The background is a deep matte black, emphasizing a sophisticated, high-security technological environment. Dramatic studio lighting with violet rim lights creates a sense of depth and advanced cyber-security precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuClaXWz6zZeoB2q8kj-QlGK6PwjSPG-OGcfmJn56QZnT1qN7EFDmzG4ixT9w8d6L175HJJ16VkYi9WbR8oMbD79Jcf5x5kLBD3huEJUe5sso_zj8IuEmp1xiU4Bz0raDN3vR7pz5nZK9i_bErra6o3OM-fe8qL7vEEsSJnJ7OhRkAvL-JTB62YYaqrSuoBAkYDR9k9B_sjhQGK5iqFZCNDsRixDu8upAwv66sux0lUVORmof_i5W7ElxGVjbcRFApZCUdaABHo7OOgo"/>
+<div class="p-4 bg-surface-container">
+<p class="text-xs font-medium text-secondary italic">"Obsidian reduced our mean time to remediation by 94% across 14 global regions."</p>
+<p class="text-[10px] text-primary mt-2 font-bold">— CTO, Genesis Systems</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Developer Logs Footer -->
+<footer class="mt-12">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-t-xl overflow-hidden">
+<div class="px-4 py-2 bg-surface-container-high flex items-center justify-between border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="text-[10px] font-black uppercase tracking-widest">Initialization Logs</span>
+<span class="flex items-center gap-1 text-[10px] text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                AGENT_LISTENING
+                            </span>
+</div>
+<span class="text-[10px] font-mono text-secondary">v4.2.0-stable</span>
+</div>
+<div class="p-4 font-mono text-[11px] text-on-surface-variant space-y-1 max-h-32 overflow-y-auto">
+<p><span class="text-secondary">[14:22:01]</span> <span class="text-tertiary">INFO:</span> Initializing IAM handshake with us-east-1 endpoint...</p>
+<p><span class="text-secondary">[14:22:02]</span> <span class="text-tertiary">INFO:</span> Awaiting External ID generation from STS...</p>
+<p><span class="text-secondary">[14:22:04]</span> <span class="text-primary">WARN:</span> Policy 'CloudWatchReadOnly' detected in scope, merging with active plan.</p>
+<p><span class="text-secondary">[14:22:05]</span> <span class="text-on-surface">TRACE:</span> User selected role_arn: arn:aws:iam::442211993300:role/ObsidianCollector</p>
+<p><span class="text-secondary">[14:22:06]</span> <span class="text-tertiary">SUCCESS:</span> Pre-flight check complete. Ready for integration.</p>
+</div>
+</div>
+</footer>
+</div>
+</main>
+</body></html>

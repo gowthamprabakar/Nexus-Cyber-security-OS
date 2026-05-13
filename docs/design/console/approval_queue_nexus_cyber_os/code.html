@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Approval Queue - Nexus Cyber OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://cdn.jsdelivr.net/npm/geist-font@1.0.0/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
+        }
+        body {
+            font-family: 'Geist', sans-serif;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+            font-size: 1.25rem;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed": "#003318",
+                      "on-surface": "#fafafa",
+                      "surface-tint": "#a78bfa",
+                      "on-primary-fixed-variant": "#5b21b6",
+                      "on-primary-container": "#ede9fe",
+                      "surface-container-low": "#0f0f12",
+                      "on-surface-variant": "#a1a1aa",
+                      "tertiary-fixed": "#bbf7d0",
+                      "primary": "#a78bfa",
+                      "secondary-fixed-dim": "#71717a",
+                      "surface-container": "#121215",
+                      "primary-fixed": "#ede9fe",
+                      "background": "#09090b",
+                      "error-container": "#3b1111",
+                      "on-error": "#1a0000",
+                      "surface-container-highest": "#1e1e22",
+                      "surface-container-high": "#18181b",
+                      "on-primary-fixed": "#2e1065",
+                      "tertiary-container": "#065f46",
+                      "surface-variant": "#18181b",
+                      "secondary-container": "#27272a",
+                      "on-secondary": "#09090b",
+                      "tertiary": "#34d399",
+                      "secondary-fixed": "#a1a1aa",
+                      "secondary": "#71717a",
+                      "on-tertiary-container": "#bbf7d0",
+                      "error": "#ef4444",
+                      "on-secondary-fixed": "#18181b",
+                      "on-background": "#fafafa",
+                      "outline-variant": "#27272a",
+                      "on-error-container": "#fca5a5",
+                      "inverse-surface": "#fafafa",
+                      "surface-container-lowest": "#09090b",
+                      "on-primary": "#0a0012",
+                      "on-tertiary": "#001a12",
+                      "outline": "#52525b",
+                      "inverse-primary": "#5b21b6",
+                      "on-secondary-container": "#a1a1aa",
+                      "surface": "#0c0c0f",
+                      "primary-fixed-dim": "#c4b5fd",
+                      "tertiary-fixed-dim": "#6ee7b7",
+                      "primary-container": "#7c3aed",
+                      "on-secondary-fixed-variant": "#3f3f46",
+                      "inverse-on-surface": "#09090b",
+                      "on-tertiary-fixed-variant": "#047857",
+                      "surface-bright": "#18181b",
+                      "surface-dim": "#0c0c0f"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="flex flex-col h-full py-4 h-screen w-64 border-r border-outline-variant bg-surface-container-lowest font-body text-label-sm tracking-tight">
+<div class="px-6 mb-8">
+<h1 class="font-headline font-bold text-xl tracking-tighter text-on-surface">Nexus Cyber OS</h1>
+<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Autonomous Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<!-- Command Center -->
+<a class="flex items-center gap-3 px-3 py-2 rounded transition-colors duration-150 text-on-surface-variant hover:bg-surface-container hover:text-on-surface active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Command Center</span>
+</a>
+<!-- Threat Hunter -->
+<a class="flex items-center gap-3 px-3 py-2 rounded transition-colors duration-150 text-on-surface-variant hover:bg-surface-container hover:text-on-surface active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">security</span>
+<span>Threat Hunter</span>
+</a>
+<!-- Agent Workshop (Active context for Approval Queue) -->
+<a class="flex items-center gap-3 px-3 py-2 rounded transition-colors duration-150 text-on-surface bg-surface-container-high border-r-2 border-primary" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span>Agent Workshop</span>
+</a>
+<!-- Network Map -->
+<a class="flex items-center gap-3 px-3 py-2 rounded transition-colors duration-150 text-on-surface-variant hover:bg-surface-container hover:text-on-surface active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span>Network Map</span>
+</a>
+<!-- System Logs -->
+<a class="flex items-center gap-3 px-3 py-2 rounded transition-colors duration-150 text-on-surface-variant hover:bg-surface-container hover:text-on-surface active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">list_alt</span>
+<span>System Logs</span>
+</a>
+</nav>
+<div class="mt-auto px-3 space-y-1">
+<button class="w-full bg-primary text-on-primary font-bold py-2 rounded-lg mb-4 hover:opacity-90 transition-opacity">
+                Deploy Agent
+            </button>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container" href="#">
+<span class="material-symbols-outlined">description</span>
+<span>Docs</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container" href="#">
+<span class="material-symbols-outlined">help</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
+<!-- TopAppBar (Shared Component) -->
+<header class="flex justify-between items-center h-16 px-6 w-full sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-outline-variant font-body text-on-surface">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all" placeholder="Search remediatons, assets, or agents..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-all">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-all">settings</button>
+<div class="h-8 w-8 rounded-full bg-surface-container border border-outline-variant overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional close-up headshot of a cybersecurity analyst in a dark, high-tech environment. The lighting is moody with subtle violet rim light reflecting off the subject's face, aligning with the Obsidian dark UI theme. The background features blurred digital displays and server rack lights in emerald and violet tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDIxzxf3v5I8CgLezVAzCLQ1okLtBG3js--n_LbyKYvtCJ0hmxQoAD7TS5IkVGfwM_p9FMXCDshAHwniNVGZWIydrCKx4RST7945e1TZpEbe7UvId3NZKM29A-Vlcgg22lu7ITlGkkinuGWgeqOgp9epxSyWph_kHWT4ZkYNo830GrvadtARaXcpUwRED6m3MpuT-aGW-sa1A5yWuVkoZqX-CSWfqVMD8Z5duXoswpr89T8SezWHObgP7_HyZeK_ixGAwzXYw7QvHz"/>
+</div>
+</div>
+</header>
+<!-- Page Header Section -->
+<div class="p-6 border-b border-outline-variant bg-surface">
+<div class="flex justify-between items-end mb-6">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-primary tracking-widest uppercase">Remediation Engine</span>
+<span class="h-1 w-1 bg-outline rounded-full"></span>
+<span class="text-xs text-on-surface-variant">v4.2.0-stable</span>
+</div>
+<h2 class="text-3xl font-black tracking-tight text-on-surface">Approval Queue</h2>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container border border-outline-variant rounded-lg text-sm font-medium hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-sm">layers</span>
+                        Bulk Actions
+                        <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                        Auto-Approve All Low
+                    </button>
+</div>
+</div>
+<!-- Filters -->
+<div class="flex items-center gap-1 p-1 bg-surface-container-low border border-outline-variant rounded-xl w-fit">
+<button class="px-4 py-1.5 rounded-lg text-xs font-bold bg-surface-container-highest text-primary border border-outline-variant shadow-sm">Pending (14)</button>
+<button class="px-4 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors">Scheduled (3)</button>
+<button class="px-4 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors">Approved (142)</button>
+<button class="px-4 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors">Rejected (12)</button>
+</div>
+</div>
+<!-- Content Split View -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Queue Table -->
+<div class="flex-1 overflow-y-auto border-r border-outline-variant">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface border-b border-outline-variant z-10">
+<tr class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
+<th class="px-6 py-4 w-8"><input class="rounded border-outline-variant bg-surface-container focus:ring-primary text-primary" type="checkbox"/></th>
+<th class="px-4 py-4">Severity</th>
+<th class="px-4 py-4">Remediation Type</th>
+<th class="px-4 py-4">Target Asset</th>
+<th class="px-4 py-4">Agent</th>
+<th class="px-4 py-4">Queue Time</th>
+<th class="px-4 py-4 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1: Selected/Active -->
+<tr class="bg-surface-container-high border-l-4 border-l-primary group cursor-pointer">
+<td class="px-6 py-4"><input checked="" class="rounded border-outline-variant bg-surface-container focus:ring-primary text-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<span class="flex items-center gap-1.5 text-error font-bold text-xs">
+<span class="h-2 w-2 rounded-full bg-error"></span>
+                                    CRITICAL
+                                </span>
+</td>
+<td class="px-4 py-4">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-on-surface">Quarantine Host</span>
+<span class="text-[10px] mono text-on-surface-variant">ID: REM-9021-X</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest border border-outline-variant text-[11px] mono text-on-surface">prod-db-01.internal</span>
+</td>
+<td class="px-4 py-4 text-xs font-medium text-on-surface-variant">Nexus Sentinel</td>
+<td class="px-4 py-4 text-xs text-on-surface-variant">2m 14s</td>
+<td class="px-4 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-tertiary/10 hover:text-tertiary transition-colors"><span class="material-symbols-outlined text-sm">check</span></button>
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-error/10 hover:text-error transition-colors"><span class="material-symbols-outlined text-sm">close</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container transition-colors group cursor-pointer">
+<td class="px-6 py-4"><input class="rounded border-outline-variant bg-surface-container focus:ring-primary text-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<span class="flex items-center gap-1.5 text-amber-500 font-bold text-xs">
+<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                                    HIGH
+                                </span>
+</td>
+<td class="px-4 py-4">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-on-surface">Rotate API Key</span>
+<span class="text-[10px] mono text-on-surface-variant">ID: REM-8812-Y</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest border border-outline-variant text-[11px] mono text-on-surface">iam-role-admin</span>
+</td>
+<td class="px-4 py-4 text-xs font-medium text-on-surface-variant">Cloud Ops Bot</td>
+<td class="px-4 py-4 text-xs text-on-surface-variant">12m 45s</td>
+<td class="px-4 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-tertiary/10 hover:text-tertiary transition-colors"><span class="material-symbols-outlined text-sm">check</span></button>
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-error/10 hover:text-error transition-colors"><span class="material-symbols-outlined text-sm">close</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container transition-colors group cursor-pointer">
+<td class="px-6 py-4"><input class="rounded border-outline-variant bg-surface-container focus:ring-primary text-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<span class="flex items-center gap-1.5 text-tertiary font-bold text-xs">
+<span class="h-2 w-2 rounded-full bg-tertiary"></span>
+                                    MEDIUM
+                                </span>
+</td>
+<td class="px-4 py-4">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-on-surface">Update Security Group</span>
+<span class="text-[10px] mono text-on-surface-variant">ID: REM-7721-Z</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest border border-outline-variant text-[11px] mono text-on-surface">sg-099281ff</span>
+</td>
+<td class="px-4 py-4 text-xs font-medium text-on-surface-variant">Network Guard</td>
+<td class="px-4 py-4 text-xs text-on-surface-variant">18m 02s</td>
+<td class="px-4 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-tertiary/10 hover:text-tertiary transition-colors"><span class="material-symbols-outlined text-sm">check</span></button>
+<button class="h-8 w-8 rounded border border-outline-variant flex items-center justify-center hover:bg-error/10 hover:text-error transition-colors"><span class="material-symbols-outlined text-sm">close</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Detail Preview Sidebar -->
+<div class="w-[450px] bg-surface-container-low flex flex-col border-l border-outline-variant">
+<!-- Sidebar Header -->
+<div class="p-6 border-b border-outline-variant">
+<div class="flex justify-between items-start mb-4">
+<h3 class="text-lg font-bold text-on-surface">Remediation Details</h3>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">close</button>
+</div>
+<!-- Confidence Score Meter -->
+<div class="p-4 bg-surface-container rounded-xl border border-outline-variant mb-4">
+<div class="flex justify-between items-center mb-2">
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">AI Confidence Score</span>
+<span class="text-sm font-black text-tertiary">98.4%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary" style="width: 98.4%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2 leading-relaxed">
+                            Confidence high based on 1,402 similar patterns and verified outbound traffic anomalies.
+                        </p>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="p-3 bg-surface-container-high rounded-lg border border-outline-variant">
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Impact Radius</span>
+<span class="text-xs font-bold text-error">Isolated Service</span>
+</div>
+<div class="p-3 bg-surface-container-high rounded-lg border border-outline-variant">
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Estimated Downtime</span>
+<span class="text-xs font-bold text-on-surface">&lt; 200ms</span>
+</div>
+</div>
+</div>
+<!-- Reasoning Trace (Log Style) -->
+<div class="flex-1 overflow-y-auto p-6 bg-surface-container-lowest mono text-[11px] leading-relaxed">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary text-sm">psychology</span>
+<span class="font-bold text-on-surface">AGENT REASONING TRACE</span>
+</div>
+<div class="space-y-2 text-on-surface-variant">
+<p><span class="text-tertiary">[08:42:01]</span> INITIATING ANALYSIS: Target <span class="text-on-surface">prod-db-01.internal</span></p>
+<p><span class="text-tertiary">[08:42:02]</span> DETECTED: Unauthorized outbound connection to <span class="text-error">192.168.1.104:443</span> (Known C2)</p>
+<p><span class="text-tertiary">[08:42:04]</span> EVALUATING: Current IAM policies allow egress on port 443.</p>
+<p><span class="text-tertiary">[08:42:05]</span> THREAT_SCORE: 88/100 (High Risk Elevation)</p>
+<p><span class="text-tertiary">[08:42:07]</span> RECOMMENDATION: Immediate quarantine of network interface <span class="text-primary">eth0</span> to prevent exfiltration.</p>
+<p><span class="text-tertiary">[08:42:08]</span> PREDICTED IMPACT: Read-only replicas will remain available. Write latency may increase by 0.2% on failover node.</p>
+<div class="h-4"></div>
+<div class="p-2 bg-surface border border-outline-variant rounded">
+<p class="text-on-surface font-bold">proposed_payload:</p>
+<p class="mt-1 text-primary">"action": "isolate",</p>
+<p class="text-primary">"target_arn": "arn:aws:ec2:us-east-1:1234:instance/i-0a2b3c",</p>
+<p class="text-primary">"security_group": "sg-isolated-quarantine"</p>
+</div>
+<p class="animate-pulse">_</p>
+</div>
+</div>
+<!-- Sticky Sidebar Actions -->
+<div class="p-6 border-t border-outline-variant bg-surface gap-3 flex">
+<button class="flex-1 bg-surface-container border border-error/50 text-error font-bold py-2.5 rounded-lg hover:bg-error/10 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">block</span>
+                        Reject
+                    </button>
+<button class="flex-[2] bg-primary text-on-primary font-bold py-2.5 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+                        Approve Remediation
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Suppressed on Details according to rules, but here as it's the main queue) -->
+<button class="fixed bottom-8 right-[480px] h-14 w-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 700;">add</span>
+</button>
+</body></html>

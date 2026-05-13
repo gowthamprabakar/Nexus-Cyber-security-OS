@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Security Graph | Nexus Cyber OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#065f46",
+                    "surface-variant": "#18181b",
+                    "surface": "#0c0c0f",
+                    "error-container": "#3b1111",
+                    "on-secondary-fixed": "#18181b",
+                    "on-secondary": "#09090b",
+                    "on-primary-fixed": "#2e1065",
+                    "background": "#09090b",
+                    "on-tertiary-container": "#bbf7d0",
+                    "on-error-container": "#fca5a5",
+                    "surface-container-high": "#18181b",
+                    "primary": "#a78bfa",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "on-error": "#1a0000",
+                    "secondary-fixed": "#a1a1aa",
+                    "secondary": "#71717a",
+                    "on-surface-variant": "#a1a1aa",
+                    "on-background": "#fafafa",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-primary-container": "#ede9fe",
+                    "surface-container-low": "#0f0f12",
+                    "outline-variant": "#27272a",
+                    "surface-container-lowest": "#09090b",
+                    "tertiary": "#34d399",
+                    "secondary-container": "#27272a",
+                    "surface-tint": "#a78bfa",
+                    "on-primary": "#0a0012",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "secondary-fixed-dim": "#71717a",
+                    "surface-bright": "#18181b",
+                    "inverse-on-surface": "#09090b",
+                    "surface-dim": "#0c0c0f",
+                    "outline": "#52525b",
+                    "inverse-surface": "#fafafa",
+                    "error": "#ef4444",
+                    "on-surface": "#fafafa",
+                    "on-tertiary-fixed": "#003318",
+                    "primary-fixed": "#ede9fe",
+                    "tertiary-fixed": "#bbf7d0",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "on-tertiary": "#001a12",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-secondary-container": "#a1a1aa",
+                    "surface-container-highest": "#1e1e22",
+                    "primary-container": "#7c3aed",
+                    "surface-container": "#121215",
+                    "inverse-primary": "#5b21b6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist", "sans-serif"],
+                    "display": ["Geist", "sans-serif"],
+                    "body": ["Geist", "sans-serif"],
+                    "label": ["Geist", "sans-serif"],
+                    "mono": ["JetBrains Mono", "monospace"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+            font-size: 20px;
+        }
+        .graph-canvas {
+            background-image: radial-gradient(#1e1e22 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30 antialiased overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-secondary font-bold">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="mt-auto px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 bg-surface-dim border-b border-outline-variant flex justify-between items-center px-6 z-40">
+<div class="flex items-center gap-4 flex-1">
+<div class="text-lg font-headline font-bold text-on-surface">Obsidian AI</div>
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-full pl-10 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="Search assets, paths, or vulnerabilities..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">account_tree</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6IcDZy3qZ3slR3y9ZKALw7cX1_wOXs6HvI3lwciccnJ1LDXDtMC4MsLBO5GPVpYWZTHCZN6Gb2bfW23h8kKgRN87PzbDizljKvJWGFuFPYhDq-0fPhrMUuSAxdySO6kDXN15cYjb_SJLat15OYO48N63RaB7VAy9MphrGGHD1F-QbSllH0AowwjeuXNk86qivLbDpAzy-H_bPcRmIlP2CUkSTeTMTDt2D3YNnnuz_IB7EYzzbKiMqjYlqi9gOyf8qQIZ1lLRmjaMd"/>
+</div>
+</div>
+</header>
+<!-- Main Canvas Area -->
+<main class="ml-64 mt-14 h-[calc(100vh-3.5rem)] relative overflow-hidden bg-background">
+<!-- Graph Canvas Background Mockup -->
+<div class="absolute inset-0 graph-canvas opacity-40"></div>
+<!-- SVG Mockup of Force-Directed Graph -->
+<div class="absolute inset-0 flex items-center justify-center p-20 pointer-events-none">
+<svg class="w-full h-full" viewbox="0 0 1000 600">
+<!-- Connections (Edges) -->
+<line stroke="#27272a" stroke-dasharray="4" stroke-width="1.5" x1="200" x2="400" y1="300" y2="200"></line>
+<line stroke="#27272a" stroke-width="1.5" x1="200" x2="400" y1="300" y2="400"></line>
+<line stroke="#ef4444" stroke-width="2" x1="400" x2="600" y1="200" y2="150"></line>
+<line stroke="#27272a" stroke-width="1.5" x1="400" x2="600" y1="200" y2="250"></line>
+<line stroke="#27272a" stroke-width="1.5" x1="400" x2="600" y1="400" y2="450"></line>
+<!-- Nodes -->
+<!-- Internet Gateway -->
+<g class="pointer-events-auto cursor-pointer">
+<circle cx="200" cy="300" fill="#18181b" r="24" stroke="#a78bfa" stroke-width="2"></circle>
+<text fill="#fafafa" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="200" y="340">IGW-MAIN</text>
+<text class="material-symbols-outlined" fill="#fafafa" font-size="20" text-anchor="middle" x="200" y="306">public</text>
+</g>
+<!-- EC2 Instance (Healthy) -->
+<g class="pointer-events-auto cursor-pointer">
+<rect fill="#18181b" height="48" rx="4" stroke="#0891B2" stroke-width="2" width="48" x="376" y="176"></rect>
+<text fill="#fafafa" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="400" y="240">EC2-PROD-API-01</text>
+<text class="material-symbols-outlined" fill="#0891B2" font-size="20" text-anchor="middle" x="400" y="206">dns</text>
+</g>
+<!-- RDS (Compromised Node Path) -->
+<g class="pointer-events-auto cursor-pointer">
+<circle cx="600" cy="150" fill="#3b1111" r="24" stroke="#ef4444" stroke-width="2"></circle>
+<text fill="#fca5a5" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="600" y="190">RDS-USER-DB</text>
+<text class="material-symbols-outlined" fill="#ef4444" font-size="20" text-anchor="middle" x="600" y="156">database</text>
+</g>
+<!-- S3 Bucket -->
+<g class="pointer-events-auto cursor-pointer">
+<rect fill="#18181b" height="40" rx="4" stroke="#a1a1aa" stroke-width="1.5" width="40" x="580" y="230"></rect>
+<text fill="#fafafa" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="600" y="285">S3-LOGS-VAULT</text>
+<text class="material-symbols-outlined" fill="#fafafa" font-size="18" text-anchor="middle" x="600" y="255">folder_shared</text>
+</g>
+</svg>
+</div>
+<!-- Graph Controls Overlay -->
+<div class="absolute left-6 top-6 flex flex-col gap-2">
+<div class="bg-surface-container-high border border-outline-variant p-1.5 rounded-lg shadow-xl flex flex-col gap-1">
+<button class="w-8 h-8 flex items-center justify-center hover:bg-surface-container-highest rounded text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">add</span>
+</button>
+<div class="h-px bg-outline-variant mx-1"></div>
+<button class="w-8 h-8 flex items-center justify-center hover:bg-surface-container-highest rounded text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">remove</span>
+</button>
+</div>
+<button class="bg-surface-container-high border border-outline-variant w-11 h-11 flex items-center justify-center rounded-lg shadow-xl text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+<button class="bg-surface-container-high border border-outline-variant w-11 h-11 flex items-center justify-center rounded-lg shadow-xl text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">route</span>
+</button>
+</div>
+<!-- Graph Legend & Filters (Bottom Left) -->
+<div class="absolute left-6 bottom-16 w-64 bg-surface-container-high border border-outline-variant rounded-xl shadow-2xl p-4">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-xs font-bold uppercase tracking-widest text-secondary">Layers &amp; Filter</h3>
+<span class="material-symbols-outlined text-sm text-secondary">filter_list</span>
+</div>
+<div class="space-y-3">
+<label class="flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-[#0891B2]"></div>
+<span class="text-xs text-on-surface-variant group-hover:text-on-surface">Compute Assets</span>
+</div>
+<input checked="" class="w-3.5 h-3.5 rounded bg-surface border-outline-variant text-primary focus:ring-0" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="text-xs text-on-surface-variant group-hover:text-on-surface">IAM Roles</span>
+</div>
+<input checked="" class="w-3.5 h-3.5 rounded bg-surface border-outline-variant text-primary focus:ring-0" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<span class="text-xs text-on-surface-variant group-hover:text-on-surface">High Risk Paths</span>
+</div>
+<input checked="" class="w-3.5 h-3.5 rounded bg-surface border-outline-variant text-primary focus:ring-0" type="checkbox"/>
+</label>
+<div class="h-px bg-outline-variant my-2"></div>
+<div class="flex gap-2">
+<span class="px-2 py-1 bg-tertiary/10 text-tertiary text-[10px] rounded border border-tertiary/20">PROD</span>
+<span class="px-2 py-1 bg-surface-container-highest text-secondary text-[10px] rounded border border-outline-variant">STAGING</span>
+</div>
+</div>
+</div>
+<!-- Asset Inspector (Right Sidebar) -->
+<aside class="absolute top-0 right-0 h-full w-80 bg-surface-container-low border-l border-outline-variant flex flex-col shadow-2xl z-10">
+<div class="p-6 border-b border-outline-variant bg-surface-container">
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] bg-error-container text-on-error-container px-2 py-0.5 rounded font-bold uppercase tracking-tighter">Critical Finding</span>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg">close</span>
+</button>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest border border-error flex items-center justify-center">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">database</span>
+</div>
+<div>
+<h2 class="text-on-surface font-bold font-headline">RDS-USER-DB</h2>
+<code class="text-[10px] text-secondary font-mono">arn:aws:rds:us-east-1:77...</code>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-6 space-y-8">
+<!-- Metadata -->
+<section>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Resource Metadata</h4>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-[10px] text-secondary">Engine</p>
+<p class="text-xs font-mono text-on-surface">PostgreSQL 14.7</p>
+</div>
+<div>
+<p class="text-[10px] text-secondary">VPC</p>
+<p class="text-xs font-mono text-on-surface">vpc-0a2b1c</p>
+</div>
+<div>
+<p class="text-[10px] text-secondary">Public Access</p>
+<p class="text-xs font-bold text-error">ENABLED</p>
+</div>
+<div>
+<p class="text-[10px] text-secondary">Encrypted</p>
+<p class="text-xs font-bold text-tertiary">AES-256</p>
+</div>
+</div>
+</section>
+<!-- Connectivity -->
+<section>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Ingress / Egress</h4>
+<div class="space-y-2">
+<div class="p-2.5 rounded border border-outline-variant bg-surface-container-lowest flex items-center justify-between group hover:border-error transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error text-sm">link_off</span>
+<div class="text-xs">
+<p class="text-on-surface font-mono">TCP:5432</p>
+<p class="text-[10px] text-secondary">From: 0.0.0.0/0</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100">chevron_right</span>
+</div>
+<div class="p-2.5 rounded border border-outline-variant bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
+<div class="text-xs">
+<p class="text-on-surface font-mono">TCP:443</p>
+<p class="text-[10px] text-secondary">To: s3.amazon.aws</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Evidence Card -->
+<section>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Blast Radius Analysis</h4>
+<div class="relative h-24 w-full bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex items-center justify-center p-4">
+<img class="absolute inset-0 w-full h-full object-cover opacity-30" data-alt="A complex technical security visualization showing a radial heat map of potential exploit paths in a dark mode cyber security interface. The center is bright red indicating a high risk database node, with spreading lines representing connections to other servers and cloud resources in a sleek, minimalist data design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATSvEUs-ZVNwBMeESsrMBE50591fMfE_lstLZpz7oM9qb27cMMvUdbFIT3cDXBcZkdTtW4MxK2_9HYQXfI-wrKarDCgAPDOmEEuhl8qJSUyMbeXgEgBd4kL_L7xfbllmq3IFJHseKutS9ao2Oh_xDSdUhLQOn_I4KvXBdo8jQWXMTEY2MAwUr0mgQMTDzXcSsQ8eUa4YlnYj6lwcslECryUmakUwW21KN0xuSAqEgLasdyN_apRZfrLxhWjEs0TBycc1x6SyD25eS0"/>
+<p class="relative z-10 text-[10px] font-bold text-on-surface bg-background/80 px-2 py-1 rounded">12 downstream nodes at risk</p>
+</div>
+</section>
+</div>
+<div class="p-6 bg-surface-container border-t border-outline-variant">
+<button class="w-full py-2.5 bg-primary text-on-primary font-bold text-xs rounded hover:brightness-110 transition-all uppercase tracking-tighter">Isolate Resource</button>
+</div>
+</aside>
+<!-- Timeline Scrubber (Bottom Bar) -->
+<div class="absolute bottom-4 left-6 right-[340px] h-10 bg-surface-container-high border border-outline-variant rounded-lg shadow-2xl flex items-center px-4 gap-4">
+<button class="text-secondary hover:text-on-surface">
+<span class="material-symbols-outlined">play_arrow</span>
+</button>
+<div class="flex-1 relative h-6 flex items-center">
+<div class="absolute w-full h-1 bg-outline-variant rounded-full"></div>
+<div class="absolute w-2/3 h-1 bg-primary/40 rounded-full"></div>
+<!-- Marks -->
+<div class="absolute left-0 w-1 h-3 bg-secondary rounded-full"></div>
+<div class="absolute left-1/4 w-1 h-3 bg-secondary rounded-full"></div>
+<div class="absolute left-1/2 w-1 h-3 bg-secondary rounded-full"></div>
+<div class="absolute left-[66%] w-2 h-4 bg-primary rounded-full shadow-[0_0_8px_rgba(167,139,250,0.5)] cursor-grab active:cursor-grabbing"></div>
+<div class="absolute right-0 w-1 h-3 bg-secondary rounded-full"></div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-mono text-secondary">T-MINUS</span>
+<span class="text-[10px] font-mono text-on-surface font-bold">14:02:44</span>
+</div>
+<div class="h-4 w-px bg-outline-variant"></div>
+<button class="text-[10px] font-bold text-primary uppercase tracking-tighter flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">history</span>
+                Live
+            </button>
+</div>
+</main>
+</body></html>

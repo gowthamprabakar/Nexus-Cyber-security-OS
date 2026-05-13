@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Suppressed Findings | Obsidian</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        body {
+            font-family: 'Geist', sans-serif;
+            background-color: #09090b;
+            color: #fafafa;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* Custom Scrollbar for High Density UI */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0c0c0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error-container": "#fca5a5",
+                      "inverse-surface": "#fafafa",
+                      "surface-tint": "#a78bfa",
+                      "outline": "#52525b",
+                      "outline-variant": "#27272a",
+                      "on-surface": "#fafafa",
+                      "primary-fixed": "#ede9fe",
+                      "surface-dim": "#0c0c0f",
+                      "secondary-fixed": "#a1a1aa",
+                      "on-secondary-fixed": "#18181b",
+                      "tertiary-container": "#065f46",
+                      "on-primary-fixed": "#2e1065",
+                      "inverse-primary": "#5b21b6",
+                      "tertiary": "#34d399",
+                      "surface-container-highest": "#1e1e22",
+                      "surface-variant": "#18181b",
+                      "tertiary-fixed": "#bbf7d0",
+                      "on-secondary-container": "#a1a1aa",
+                      "surface-container-low": "#0f0f12",
+                      "surface": "#0c0c0f",
+                      "on-tertiary-fixed": "#003318",
+                      "on-secondary-fixed-variant": "#3f3f46",
+                      "secondary-fixed-dim": "#71717a",
+                      "on-background": "#fafafa",
+                      "secondary": "#71717a",
+                      "primary": "#a78bfa",
+                      "surface-bright": "#18181b",
+                      "on-primary": "#0a0012",
+                      "on-surface-variant": "#a1a1aa",
+                      "surface-container": "#121215",
+                      "on-error": "#1a0000",
+                      "surface-container-lowest": "#09090b",
+                      "on-secondary": "#09090b",
+                      "inverse-on-surface": "#09090b",
+                      "primary-container": "#7c3aed",
+                      "on-tertiary-container": "#bbf7d0",
+                      "on-tertiary-fixed-variant": "#047857",
+                      "primary-fixed-dim": "#c4b5fd",
+                      "secondary-container": "#27272a",
+                      "error-container": "#3b1111",
+                      "error": "#ef4444",
+                      "on-primary-container": "#ede9fe",
+                      "tertiary-fixed-dim": "#6ee7b7",
+                      "surface-container-high": "#18181b",
+                      "on-primary-fixed-variant": "#5b21b6",
+                      "background": "#09090b",
+                      "on-tertiary": "#001a12"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Geist"],
+                      "display": ["Geist"],
+                      "body": ["Geist"],
+                      "label": ["Geist"]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background antialiased selection:bg-primary/30">
+<!-- Sidebar Navigation -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-[60]">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-secondary font-bold">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">dashboard</span>
+                Command Center
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">security</span>
+                Threat Hunter
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">inventory_2</span>
+                Asset Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-xl">cloud_done</span>
+                Cloud Posture
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">fact_check</span>
+                Compliance
+            </a>
+</nav>
+<div class="px-3 pt-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded" href="#">
+<span class="material-symbols-outlined text-xl">help_outline</span>
+                Support
+            </a>
+</div>
+</aside>
+<!-- Top Navigation -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 bg-surface-dim border-b border-outline-variant flex justify-between items-center px-6 z-50">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-lg py-1.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Search suppressed findings, rules, or resources..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-tertiary/10 border border-tertiary/20 rounded-full">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-[10px] font-mono font-bold text-tertiary uppercase tracking-wider">System Optimal</span>
+</div>
+<div class="flex items-center gap-3 ml-4">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-on-primary font-bold text-xs">
+                    JD
+                </div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 pt-14 min-h-screen flex">
+<div class="flex-1 p-8">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="text-3xl font-headline font-bold text-on-surface tracking-tight">Suppressed Findings</h2>
+<p class="text-on-surface-variant mt-1">Manage and audit silenced alerts and accepted risks across your multi-cloud infrastructure.</p>
+</div>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-lg">add</span>
+                    Create Suppression Rule
+                </button>
+</div>
+<!-- KPI Summary Cards -->
+<div class="grid grid-cols-3 gap-6 mb-8">
+<div class="bg-surface-container border border-outline-variant p-5 rounded-lg flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">visibility_off</span>
+</div>
+<div>
+<p class="text-xs font-bold text-secondary uppercase tracking-widest">Active Suppressions</p>
+<p class="text-2xl font-headline font-black text-on-surface">1,284</p>
+</div>
+</div>
+<div class="bg-surface-container border border-outline-variant p-5 rounded-lg flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-error-container flex items-center justify-center">
+<span class="material-symbols-outlined text-error">event_upcoming</span>
+</div>
+<div>
+<p class="text-xs font-bold text-secondary uppercase tracking-widest">Expiring Soon</p>
+<p class="text-2xl font-headline font-black text-on-surface">42</p>
+</div>
+</div>
+<div class="bg-surface-container border border-outline-variant p-5 rounded-lg flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">sync_alt</span>
+</div>
+<div>
+<p class="text-xs font-bold text-secondary uppercase tracking-widest">Auto-Renewal Active</p>
+<p class="text-2xl font-headline font-black text-on-surface">812</p>
+</div>
+</div>
+</div>
+<!-- Filters & Controls Bar -->
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-3 mb-6 flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-secondary uppercase px-1">Cloud Provider</span>
+<select class="bg-surface-container border border-outline-variant rounded px-3 py-1 text-xs text-on-surface focus:ring-1 focus:ring-primary">
+<option>All Providers</option>
+<option>AWS</option>
+<option>Azure</option>
+<option>GCP</option>
+</select>
+</div>
+<div class="h-6 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-secondary uppercase px-1">Reason</span>
+<select class="bg-surface-container border border-outline-variant rounded px-3 py-1 text-xs text-on-surface focus:ring-1 focus:ring-primary">
+<option>All Reasons</option>
+<option>False Positive</option>
+<option>Accepted Risk</option>
+<option>Compensating Control</option>
+</select>
+</div>
+<div class="h-6 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-secondary uppercase px-1">Severity</span>
+<select class="bg-surface-container border border-outline-variant rounded px-3 py-1 text-xs text-on-surface focus:ring-1 focus:ring-primary">
+<option>All Severities</option>
+<option>Critical</option>
+<option>High</option>
+<option>Medium</option>
+</select>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<label class="flex items-center gap-2 cursor-pointer group">
+<div class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-8 h-4 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</div>
+<span class="text-xs font-bold text-on-surface group-hover:text-primary transition-colors uppercase">Show Expired Rules</span>
+</label>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined">tune</span>
+</button>
+</div>
+</div>
+<!-- Findings Grid (Table) -->
+<div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container-high/50">
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Finding Name</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Type</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Reason</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Resource ID</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Account</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest">Suppressed On</th>
+<th class="px-4 py-3 text-[10px] font-bold text-secondary uppercase tracking-widest text-right">Expiry</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1: Active/Permanent -->
+<tr class="hover:bg-surface-container-highest cursor-pointer transition-colors group">
+<td class="px-4 py-3">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-sm font-bold text-on-surface">S3 Bucket Public Access</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="text-[10px] font-bold px-2 py-0.5 rounded border border-outline text-secondary uppercase">Permanent</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs text-on-surface">Accepted Risk</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs font-mono text-primary/80">arn:aws:s3:::prod-assets-static</span>
+</td>
+<td class="px-4 py-3 text-xs text-on-surface-variant">Production (AWS)</td>
+<td class="px-4 py-3 text-xs font-mono">2023-11-14</td>
+<td class="px-4 py-3 text-right">
+<span class="text-[10px] font-bold text-secondary tracking-tighter">—</span>
+</td>
+</tr>
+<!-- Row 2: Selected/Active -->
+<tr class="bg-primary/5 hover:bg-primary/10 cursor-pointer border-l-2 border-l-primary">
+<td class="px-4 py-3">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span class="text-sm font-bold text-on-surface">Unrestricted SSH Access</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="text-[10px] font-bold px-2 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary uppercase">Temporary</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs text-on-surface">False Positive</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs font-mono text-primary/80">sg-04a291f9bc9a721</span>
+</td>
+<td class="px-4 py-3 text-xs text-on-surface-variant">Dev-Staging (Azure)</td>
+<td class="px-4 py-3 text-xs font-mono">2024-05-20</td>
+<td class="px-4 py-3 text-right">
+<div class="flex flex-col items-end">
+<span class="text-xs font-mono text-tertiary">2024-08-20</span>
+<span class="text-[9px] font-bold uppercase text-tertiary/60">92 Days Left</span>
+</div>
+</td>
+</tr>
+<!-- Row 3: Expiring Soon -->
+<tr class="hover:bg-surface-container-highest cursor-pointer transition-colors">
+<td class="px-4 py-3">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-sm font-bold text-on-surface">IAM Admin Privileges</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="text-[10px] font-bold px-2 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary uppercase">Temporary</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs text-on-surface">Compensating Control</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs font-mono text-primary/80">user/super-admin-root</span>
+</td>
+<td class="px-4 py-3 text-xs text-on-surface-variant">Corp-Ops (AWS)</td>
+<td class="px-4 py-3 text-xs font-mono">2024-02-10</td>
+<td class="px-4 py-3 text-right">
+<div class="flex flex-col items-end">
+<span class="text-xs font-mono text-error">2024-05-25</span>
+<span class="text-[9px] font-bold uppercase text-error/60">3 Days Left</span>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-highest cursor-pointer transition-colors">
+<td class="px-4 py-3">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-blue-500"></span>
+<span class="text-sm font-bold text-on-surface">Default VPC Security Group</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="text-[10px] font-bold px-2 py-0.5 rounded border border-outline text-secondary uppercase">Permanent</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs text-on-surface">Accepted Risk</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs font-mono text-primary/80">vpc-91823abf22</span>
+</td>
+<td class="px-4 py-3 text-xs text-on-surface-variant">Global-Net (GCP)</td>
+<td class="px-4 py-3 text-xs font-mono">2023-01-05</td>
+<td class="px-4 py-3 text-right">
+<span class="text-[10px] font-bold text-secondary tracking-tighter">—</span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-highest cursor-pointer transition-colors">
+<td class="px-4 py-3">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-sm font-bold text-on-surface">RDGW Overloaded Policy</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="text-[10px] font-bold px-2 py-0.5 rounded border border-outline text-secondary uppercase">Permanent</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs text-on-surface">False Positive</span>
+</td>
+<td class="px-4 py-3">
+<span class="text-xs font-mono text-primary/80">pol-449x-security-12</span>
+</td>
+<td class="px-4 py-3 text-xs text-on-surface-variant">Enterprise-Prod (AWS)</td>
+<td class="px-4 py-3 text-xs font-mono">2024-03-22</td>
+<td class="px-4 py-3 text-right">
+<span class="text-[10px] font-bold text-secondary tracking-tighter">—</span>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="px-4 py-2 bg-surface-container-high/30 border-t border-outline-variant flex justify-between items-center">
+<span class="text-[10px] font-bold text-secondary uppercase">Showing 5 of 1,284 suppressed findings</span>
+<div class="flex gap-2">
+<button class="p-1 hover:bg-surface-container-highest rounded border border-outline-variant">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-1 hover:bg-surface-container-highest rounded border border-outline-variant">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Detail Sidebar (On Selection) -->
+<aside class="w-96 border-l border-outline-variant bg-surface-container-low flex flex-col">
+<div class="p-6 border-b border-outline-variant flex justify-between items-start">
+<div>
+<span class="text-[10px] font-bold text-secondary uppercase tracking-[0.2em] mb-1 block">Suppression Detail</span>
+<h3 class="text-lg font-bold text-on-surface leading-tight">Unrestricted SSH Access</h3>
+<p class="text-[11px] font-mono text-primary mt-1">ID: SUP-942-881-BZ</p>
+</div>
+<button class="p-1 hover:bg-surface-container rounded">
+<span class="material-symbols-outlined text-on-surface-variant">close</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto p-6 space-y-8">
+<!-- Reasoning -->
+<div>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Justification</h4>
+<div class="bg-surface-container border border-outline-variant p-4 rounded-lg">
+<p class="text-sm leading-relaxed text-on-surface">
+                            This security group is part of a temporary sandbox environment where SSH is restricted at the network edge firewall, despite the rule appearing open in the AWS console. This has been verified by the NetOps team.
+                        </p>
+</div>
+</div>
+<!-- Approval Data -->
+<div>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Approval Information</h4>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-sm">person</span>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface">Approved By</p>
+<p class="text-xs text-on-surface-variant">sarah.chen@obsidian.ai</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-sm">gavel</span>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface">Policy Type</p>
+<p class="text-xs text-on-surface-variant">Global Suppression Rule</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Audit Trail -->
+<div>
+<h4 class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3">Audit Trail</h4>
+<div class="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-outline-variant">
+<div class="relative pl-8">
+<div class="absolute left-[9px] top-1.5 w-1.5 h-1.5 rounded-full bg-primary ring-4 ring-background"></div>
+<p class="text-xs font-bold text-on-surface">Suppression Created</p>
+<p class="text-[10px] font-mono text-on-surface-variant mt-0.5">2024-05-20 14:22:04 UTC</p>
+</div>
+<div class="relative pl-8">
+<div class="absolute left-[9px] top-1.5 w-1.5 h-1.5 rounded-full bg-outline ring-4 ring-background"></div>
+<p class="text-xs font-bold text-on-surface-variant">Review Status Updated</p>
+<p class="text-[10px] text-on-surface-variant italic">System automatically flagged for quarterly review.</p>
+<p class="text-[10px] font-mono text-on-surface-variant mt-0.5">2024-05-21 09:00:12 UTC</p>
+</div>
+<div class="relative pl-8">
+<div class="absolute left-[9px] top-1.5 w-1.5 h-1.5 rounded-full bg-outline ring-4 ring-background"></div>
+<p class="text-xs font-bold text-on-surface-variant">Resource Tag Modified</p>
+<p class="text-[10px] font-mono text-on-surface-variant mt-0.5">2024-05-22 11:45:55 UTC</p>
+</div>
+</div>
+</div>
+</div>
+<div class="p-6 bg-surface-container border-t border-outline-variant flex gap-3">
+<button class="flex-1 border border-outline-variant text-on-surface py-2 rounded font-bold text-xs hover:bg-surface-container-highest transition-colors">
+                    Edit Rule
+                </button>
+<button class="flex-1 bg-primary text-on-primary py-2 rounded font-bold text-xs hover:opacity-90 transition-opacity">
+                    Unsuppress
+                </button>
+</div>
+</aside>
+</main>
+</body></html>

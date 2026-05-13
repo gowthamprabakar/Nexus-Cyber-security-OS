@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian | System Operations</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "primary": "#a78bfa",
+            "on-error": "#1a0000",
+            "surface-tint": "#a78bfa",
+            "surface-container-lowest": "#09090b",
+            "primary-fixed-dim": "#c4b5fd",
+            "on-primary": "#0a0012",
+            "on-surface": "#fafafa",
+            "surface-container-high": "#18181b",
+            "surface-bright": "#18181b",
+            "secondary-container": "#27272a",
+            "on-secondary-fixed-variant": "#3f3f46",
+            "secondary": "#71717a",
+            "on-tertiary-fixed": "#003318",
+            "surface-variant": "#18181b",
+            "on-tertiary-container": "#bbf7d0",
+            "surface-dim": "#0c0c0f",
+            "on-surface-variant": "#a1a1aa",
+            "on-error-container": "#fca5a5",
+            "surface-container-low": "#0f0f12",
+            "primary-fixed": "#ede9fe",
+            "on-primary-container": "#ede9fe",
+            "inverse-surface": "#fafafa",
+            "inverse-on-surface": "#09090b",
+            "on-tertiary": "#001a12",
+            "on-background": "#fafafa",
+            "inverse-primary": "#5b21b6",
+            "background": "#09090b",
+            "on-secondary-fixed": "#18181b",
+            "secondary-fixed": "#a1a1aa",
+            "on-secondary-container": "#a1a1aa",
+            "outline-variant": "#27272a",
+            "outline": "#52525b",
+            "surface-container": "#121215",
+            "surface-container-highest": "#1e1e22",
+            "on-primary-fixed": "#2e1065",
+            "on-secondary": "#09090b",
+            "on-tertiary-fixed-variant": "#047857",
+            "on-primary-fixed-variant": "#5b21b6",
+            "tertiary-container": "#065f46",
+            "surface": "#0c0c0f",
+            "primary-container": "#7c3aed",
+            "error": "#ef4444",
+            "tertiary": "#34d399",
+            "tertiary-fixed": "#bbf7d0",
+            "secondary-fixed-dim": "#71717a",
+            "tertiary-fixed-dim": "#6ee7b7",
+            "error-container": "#3b1111"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "headline": ["Geist"],
+            "display": ["Geist"],
+            "body": ["Geist"],
+            "label": ["Geist"],
+            "mono": ["JetBrains Mono"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body { font-family: 'Geist', sans-serif; }
+    .mono-text { font-family: 'JetBrains Mono', monospace; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #09090b; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+  </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden">
+<!-- SideNavBar Component -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-50">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">deployed_code</span>
+</div>
+<div>
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">Cloud Security</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-4 pt-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 flex flex-col h-screen">
+<!-- TopNavBar Component -->
+<header class="h-14 px-6 flex justify-between items-center bg-surface-dim border-b border-outline-variant sticky top-0 z-40">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container border-none rounded text-label-md pl-10 focus:ring-2 focus:ring-primary text-on-surface placeholder:text-on-surface-variant" placeholder="Search operational telemetry..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6 h-full">
+<div class="flex items-center gap-4 border-r border-outline-variant pr-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_tree</span>
+</button>
+</div>
+<div class="flex items-center gap-3 pl-2">
+<div class="text-right">
+<p class="text-label-md font-bold text-on-surface">Admin Console</p>
+<p class="text-[10px] text-tertiary">System Health: Optimal</p>
+</div>
+<div class="w-8 h-8 rounded-full border border-outline-variant bg-surface-container-highest overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlF9xBfc42WS3E0Op-ptMhQmgCQ7rMkPRVCA3RoloxeGlK59ZC8YBfF3a7HZyYGitm6qe9z-9X_SANkXmNX-nE-9brKYG61XwAyCdv-aueAztb-RCHBWfpPUBsmsysSZiAUGfQSNJGD77R2XmDNfVAwd4PpbE9CbPnASHXeLLMv93_xtLdnIRUBmGSJerCvO4WSan8ICgOtxW50wmF0vzxiDwBwSHvPYJw3KzLC4zndg6nlb5o-euywcinRCmW4AnTIEHuMbdnzpEG"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<div class="flex-1 overflow-y-auto p-6 bg-background space-y-6">
+<!-- Top Section: System Pulse & Region Map -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Resource Telemetry (Left) -->
+<div class="col-span-12 lg:col-span-4 space-y-4">
+<div class="p-5 bg-surface-container border border-outline-variant rounded-xl flex items-center justify-between">
+<div class="space-y-1">
+<span class="text-on-surface-variant text-xs uppercase tracking-widest">Global CPU Load</span>
+<h2 class="text-3xl font-headline font-black text-on-surface">34.2<span class="text-primary text-sm ml-1">%</span></h2>
+</div>
+<div class="w-24 h-12 flex items-end gap-1">
+<div class="w-2 bg-primary h-[40%] rounded-t-sm"></div>
+<div class="w-2 bg-primary h-[60%] rounded-t-sm"></div>
+<div class="w-2 bg-primary h-[45%] rounded-t-sm"></div>
+<div class="w-2 bg-primary h-[35%] rounded-t-sm"></div>
+<div class="w-2 bg-primary h-[50%] rounded-t-sm"></div>
+</div>
+</div>
+<div class="p-5 bg-surface-container border border-outline-variant rounded-xl flex items-center justify-between">
+<div class="space-y-1">
+<span class="text-on-surface-variant text-xs uppercase tracking-widest">Memory Commit</span>
+<h2 class="text-3xl font-headline font-black text-on-surface">86.1<span class="text-primary text-sm ml-1">GB</span></h2>
+</div>
+<div class="w-24 h-12 flex items-end gap-1">
+<div class="w-2 bg-secondary h-[70%] rounded-t-sm"></div>
+<div class="w-2 bg-secondary h-[75%] rounded-t-sm"></div>
+<div class="w-2 bg-secondary h-[80%] rounded-t-sm"></div>
+<div class="w-2 bg-secondary h-[85%] rounded-t-sm"></div>
+<div class="w-2 bg-secondary h-[82%] rounded-t-sm"></div>
+</div>
+</div>
+<div class="p-5 bg-surface-container border border-outline-variant rounded-xl flex items-center justify-between">
+<div class="space-y-1">
+<span class="text-on-surface-variant text-xs uppercase tracking-widest">I/O Throughput</span>
+<h2 class="text-3xl font-headline font-black text-on-surface">1.2<span class="text-primary text-sm ml-1">GB/s</span></h2>
+</div>
+<div class="w-24 h-12 flex items-end gap-1">
+<div class="w-2 bg-tertiary h-[20%] rounded-t-sm"></div>
+<div class="w-2 bg-tertiary h-[30%] rounded-t-sm"></div>
+<div class="w-2 bg-tertiary h-[25%] rounded-t-sm"></div>
+<div class="w-2 bg-tertiary h-[40%] rounded-t-sm"></div>
+<div class="w-2 bg-tertiary h-[35%] rounded-t-sm"></div>
+</div>
+</div>
+</div>
+<!-- Region Distribution (Right) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container border border-outline-variant rounded-xl overflow-hidden relative min-h-[400px]">
+<div class="absolute inset-0 opacity-40 grayscale pointer-events-none">
+<div class="w-full h-full bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&amp;fit=crop&amp;q=80&amp;w=1000')] bg-cover bg-center" data-alt="A high-tech digital world map visualization with glowing data nodes and interconnected neural network lines over a dark zinc background. The map features subtle violet and emerald highlights representing active cloud regions. The overall atmosphere is sophisticated, precise, and cinematic, reflecting a global mission-control dashboard for autonomous operations."></div>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-transparent"></div>
+<div class="relative z-10 p-6 h-full flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="text-lg font-headline font-bold text-on-surface">Regional Orchestration</h3>
+<p class="text-on-surface-variant text-sm">Active clusters in 12 global zones</p>
+</div>
+<div class="bg-surface-container-lowest/80 backdrop-blur-md px-3 py-1 rounded border border-outline-variant flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-xs font-mono text-tertiary uppercase tracking-tighter">Live Sync</span>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="bg-surface-container-highest/60 backdrop-blur-xl p-4 rounded-lg border border-outline-variant flex-1">
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">US-East-1</p>
+<div class="flex justify-between items-end">
+<span class="text-xl font-bold">98% Health</span>
+<span class="text-xs text-tertiary">Normal</span>
+</div>
+</div>
+<div class="bg-surface-container-highest/60 backdrop-blur-xl p-4 rounded-lg border border-outline-variant flex-1">
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">EU-Central-1</p>
+<div class="flex justify-between items-end">
+<span class="text-xl font-bold">72% Health</span>
+<span class="text-xs text-primary">Heavy Load</span>
+</div>
+</div>
+<div class="bg-surface-container-highest/60 backdrop-blur-xl p-4 rounded-lg border border-outline-variant flex-1">
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">AP-South-1</p>
+<div class="flex justify-between items-end">
+<span class="text-xl font-bold">100% Health</span>
+<span class="text-xs text-tertiary">Ideal</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Section: Agent Health & Terminal -->
+<div class="grid grid-cols-12 gap-6 pb-6">
+<!-- Agent Health Grid -->
+<div class="col-span-12 xl:col-span-7 bg-surface-container border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-headline font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">robot_2</span>
+              Agent Health Status
+            </h3>
+<button class="text-xs text-on-surface-variant hover:text-primary uppercase tracking-widest flex items-center gap-1">
+              View All <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="p-4 bg-surface-dim border border-outline-variant rounded-lg group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-3">
+<div class="w-10 h-10 bg-surface-container-highest rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">memory</span>
+</div>
+<span class="text-[8px] font-mono text-tertiary px-1.5 py-0.5 border border-tertiary/30 rounded">ACTIVE</span>
+</div>
+<p class="font-bold text-sm mb-1">Inference-01</p>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full w-[94%]"></div>
+</div>
+</div>
+<div class="p-4 bg-surface-dim border border-outline-variant rounded-lg group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-3">
+<div class="w-10 h-10 bg-surface-container-highest rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">shield</span>
+</div>
+<span class="text-[8px] font-mono text-tertiary px-1.5 py-0.5 border border-tertiary/30 rounded">ACTIVE</span>
+</div>
+<p class="font-bold text-sm mb-1">Sentinel-X</p>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full w-[98%]"></div>
+</div>
+</div>
+<div class="p-4 bg-surface-dim border border-outline-variant rounded-lg group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-3">
+<div class="w-10 h-10 bg-surface-container-highest rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">leak_add</span>
+</div>
+<span class="text-[8px] font-mono text-primary px-1.5 py-0.5 border border-primary/30 rounded">SCANNING</span>
+</div>
+<p class="font-bold text-sm mb-1">Crawler-Delta</p>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[45%]"></div>
+</div>
+</div>
+<div class="p-4 bg-surface-dim border border-outline-variant rounded-lg group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-3">
+<div class="w-10 h-10 bg-surface-container-highest rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">hourglass_empty</span>
+</div>
+<span class="text-[8px] font-mono text-secondary px-1.5 py-0.5 border border-secondary/30 rounded">IDLE</span>
+</div>
+<p class="font-bold text-sm mb-1">Archive-V2</p>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[0%]"></div>
+</div>
+</div>
+</div>
+<!-- Kernel Orchestration Controls -->
+<div class="mt-6 pt-6 border-t border-outline-variant flex flex-wrap gap-3">
+<button class="bg-primary hover:bg-primary-container text-on-primary font-bold text-xs px-6 py-2.5 rounded transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+              RESTART KERNEL
+            </button>
+<button class="border border-outline-variant hover:bg-surface-container-highest text-on-surface font-bold text-xs px-6 py-2.5 rounded transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+              RECONFIGURE NODES
+            </button>
+<button class="border border-error/50 text-error hover:bg-error-container/20 font-bold text-xs px-6 py-2.5 rounded transition-all flex items-center gap-2 ml-auto">
+<span class="material-symbols-outlined text-sm">emergency_home</span>
+              EMERGENCY SHUTDOWN
+            </button>
+</div>
+</div>
+<!-- Live Technical Log Feed (JetBrains Mono) -->
+<div class="col-span-12 xl:col-span-5 flex flex-col h-[400px]">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col h-full">
+<div class="px-4 py-2 bg-surface-container border-b border-outline-variant flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant font-bold uppercase tracking-widest">Live Operations Log</span>
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+</div>
+</div>
+<div class="flex-1 p-4 font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1">
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:01]</span>
+<span class="text-tertiary">CORE_KERNEL:</span>
+<span class="text-on-surface">Initializing heuristic evaluation for Node-US-04...</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:03]</span>
+<span class="text-primary">NET_AUTH:</span>
+<span class="text-on-surface">Verified mTLS handshake for regional cluster EU-Central-1.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:05]</span>
+<span class="text-error">SYSCALL_WARN:</span>
+<span class="text-on-error-container">Rate limit approach on Asset_Crawler_Delta. Adjusting throttle.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:08]</span>
+<span class="text-tertiary">CORE_KERNEL:</span>
+<span class="text-on-surface">Memory reclamation successful. Freed 12.4GB from ephemeral buffers.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:12]</span>
+<span class="text-on-surface-variant">INFRA_METRIC:</span>
+<span class="text-on-surface">Global average latency stabilized at 42ms.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:15]</span>
+<span class="text-primary">SENTINEL_X:</span>
+<span class="text-on-surface">Neutralizing lateral movement attempt in VNET-722.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:18]</span>
+<span class="text-tertiary">CORE_KERNEL:</span>
+<span class="text-on-surface">Task migration initiated: US-EAST-1 -&gt; US-WEST-2.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:20]</span>
+<span class="text-on-surface-variant">EVENT_BUS:</span>
+<span class="text-on-surface">Heartbeat signal received from 1,204 autonomous nodes.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-secondary">[14:22:24]</span>
+<span class="text-tertiary">ORCH_SVC:</span>
+<span class="text-on-surface">Auto-scaling group expanded by +2 instances in AP-SOUTH-1.</span>
+</div>
+</div>
+<div class="p-3 bg-surface-container border-t border-outline-variant">
+<div class="flex items-center gap-2 bg-background border border-outline-variant px-3 py-1.5 rounded text-[11px] font-mono">
+<span class="text-primary">λ</span>
+<input class="bg-transparent border-none focus:ring-0 w-full p-0 text-on-surface placeholder:text-on-surface-variant" placeholder="Execute kernel command..." type="text"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Restricted to Dashboard) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center group hover:scale-110 transition-transform z-50">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">terminal</span>
+<span class="absolute right-16 bg-surface-container-highest border border-outline-variant px-3 py-1.5 rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+      Open Debug Console
+    </span>
+</button>
+</body></html>

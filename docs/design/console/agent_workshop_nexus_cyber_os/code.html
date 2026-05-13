@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS - Agent Workshop</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#27272a",
+                        "outline": "#52525b",
+                        "surface-bright": "#18181b",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "on-tertiary-container": "#bbf7d0",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "surface-dim": "#0c0c0f",
+                        "primary": "#a78bfa",
+                        "error-container": "#3b1111",
+                        "on-primary": "#0a0012",
+                        "on-error-container": "#fca5a5",
+                        "surface-tint": "#a78bfa",
+                        "on-background": "#fafafa",
+                        "secondary-fixed": "#a1a1aa",
+                        "surface-container-high": "#18181b",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "inverse-surface": "#fafafa",
+                        "surface": "#0c0c0f",
+                        "tertiary-container": "#065f46",
+                        "secondary-fixed-dim": "#71717a",
+                        "on-primary-fixed": "#2e1065",
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "inverse-primary": "#5b21b6",
+                        "background": "#09090b",
+                        "surface-container-lowest": "#09090b",
+                        "surface-container-low": "#0f0f12",
+                        "surface-container": "#121215",
+                        "secondary-container": "#27272a",
+                        "on-secondary-fixed": "#18181b",
+                        "on-secondary": "#09090b",
+                        "tertiary-fixed": "#bbf7d0",
+                        "on-primary-container": "#ede9fe",
+                        "surface-variant": "#18181b",
+                        "on-surface-variant": "#a1a1aa",
+                        "inverse-on-surface": "#09090b",
+                        "on-error": "#1a0000",
+                        "on-tertiary": "#001a12",
+                        "primary-container": "#7c3aed",
+                        "on-surface": "#fafafa",
+                        "tertiary": "#34d399",
+                        "secondary": "#71717a",
+                        "on-tertiary-fixed": "#003318",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "on-secondary-container": "#a1a1aa",
+                        "error": "#ef4444",
+                        "primary-fixed": "#ede9fe",
+                        "surface-container-highest": "#1e1e22"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist", "sans-serif"],
+                        "display": ["Geist", "sans-serif"],
+                        "body": ["Geist", "sans-serif"],
+                        "label": ["Geist", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Geist', sans-serif; }
+        .mono-font { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0c0c0f; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+    </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden">
+<div class="flex h-screen w-full">
+<!-- SideNavBar (Shared Component) -->
+<aside class="flex flex-col h-screen border-r border-outline-variant z-40 bg-surface-container-lowest dark:bg-surface-container-lowest w-64 flex-shrink-0">
+<div class="p-6">
+<span class="text-xl font-headline font-black text-primary tracking-tighter">Nexus OS</span>
+<p class="text-[10px] text-tertiary tracking-widest mt-1 uppercase font-bold">Root Access Active</p>
+</div>
+<nav class="flex-1 flex flex-col mt-4">
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="font-body text-label-md">Command Center</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="security">security</span>
+<span class="font-body text-label-md">Threat Hunter</span>
+</a>
+<!-- Active Tab: Agent Workshop -->
+<a class="bg-surface-container dark:bg-surface-container text-primary border-r-2 border-primary px-4 py-3 flex items-center gap-3 active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="psychology" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<span class="font-body text-label-md font-bold">Agent Workshop</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="hub">hub</span>
+<span class="font-body text-label-md">Network Map</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="terminal">terminal</span>
+<span class="font-body text-label-md">System Logs</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-4 pb-6">
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-2 flex items-center gap-3 hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+<span class="font-body text-label-md">Support</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant px-4 py-2 flex items-center gap-3 hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="description">description</span>
+<span class="font-body text-label-md">Documentation</span>
+</a>
+<div class="px-4 mt-4 flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="shield_person">shield_person</span>
+</div>
+<div>
+<p class="text-[11px] font-bold text-on-surface leading-none">Security Analyst</p>
+<p class="text-[10px] text-secondary">Level 4 Clearance</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Dashboard Area -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden">
+<!-- TopNavBar (Shared Component) -->
+<header class="flex justify-between items-center w-full h-14 px-4 z-50 border-b border-outline-variant bg-background dark:bg-background">
+<div class="flex items-center gap-4">
+<span class="text-lg font-headline font-bold tracking-tighter text-on-surface dark:text-on-surface">Agent Workshop</span>
+<div class="h-4 w-[1px] bg-outline-variant mx-2"></div>
+<div class="relative group">
+<input class="bg-surface-container border border-outline-variant rounded px-3 py-1 text-xs w-64 focus:outline-none focus:ring-1 focus:ring-primary transition-all" placeholder="Search parameters..." type="text"/>
+<span class="material-symbols-outlined absolute right-2 top-1.5 text-[14px] text-outline" data-icon="search">search</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-8 h-8 flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined text-[20px]" data-icon="notifications">notifications</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined text-[20px]" data-icon="terminal">terminal</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+</button>
+<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+<img alt="Security Analyst Profile" class="w-8 h-8 rounded-full border border-primary object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsOrP_5YEfVmLowebAJYuZTuGcSW6xn6RJSuYTegp_AJ9YB4REW3VsNxSiaw8h7YgvICgjsXop-q2lMz4O1KRrWxFj_PNH2C1_CtEicwD7Un6280fV8RyncqOLtVZaDw4eLz-LB7I-GpI6UquPbZsSb4SWvWvdtIRR1A8slkjZCLSw_RKIJ3FHKnirKA3ReGH0pOauvxP1wAmEXzEtPx9Wh9Wsf2PzHqZ0zbIKsHBJjvBT2iaC7bAA9xMohHzwFWGuJ1iKprWkaFpR"/>
+</div>
+</header>
+<!-- Agent Workshop Content -->
+<div class="flex flex-1 overflow-hidden">
+<!-- Internal Left Sidebar: Agent List -->
+<aside class="w-72 border-r border-outline-variant flex flex-col bg-surface-dim">
+<div class="p-4 border-b border-outline-variant bg-surface-container-low">
+<div class="flex items-center justify-between">
+<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-secondary">Active Agents</h3>
+<button class="text-primary hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[16px]" data-icon="add_circle">add_circle</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto">
+<!-- Agent Item: Nexus Sentinel (Active) -->
+<button class="w-full text-left p-4 border-b border-outline-variant bg-surface-container-high relative group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded border border-primary/30 flex items-center justify-center bg-primary/5">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="shield_lock" style="font-variation-settings: 'FILL' 1;">shield_lock</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-bold text-on-surface">Nexus Sentinel</p>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-tertiary/10 text-tertiary border border-tertiary/20">Active</span>
+</div>
+<p class="text-[11px] text-secondary line-clamp-1">Primary perimeter enforcement agent</p>
+</div>
+</div>
+</button>
+<!-- Agent Item: Cloud Ops -->
+<button class="w-full text-left p-4 border-b border-outline-variant hover:bg-surface-container-low transition-colors group">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center bg-surface-container">
+<span class="material-symbols-outlined text-outline text-[24px]" data-icon="cloud_done">cloud_done</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-bold text-on-surface">Cloud Ops</p>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">Training</span>
+</div>
+<p class="text-[11px] text-secondary line-clamp-1">Optimizing AWS/GCP resource logic</p>
+</div>
+</div>
+</button>
+<!-- Agent Item: Asset Auditor -->
+<button class="w-full text-left p-4 border-b border-outline-variant hover:bg-surface-container-low transition-colors group">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center bg-surface-container">
+<span class="material-symbols-outlined text-outline text-[24px]" data-icon="fact_check">fact_check</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-bold text-on-surface">Asset Auditor</p>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">Idle</span>
+</div>
+<p class="text-[11px] text-secondary line-clamp-1">Inventory management &amp; drift detection</p>
+</div>
+</div>
+</button>
+<!-- Agent Item: Identity Governance -->
+<button class="w-full text-left p-4 border-b border-outline-variant hover:bg-surface-container-low transition-colors group">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center bg-surface-container">
+<span class="material-symbols-outlined text-outline text-[24px]" data-icon="fingerprint">fingerprint</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-bold text-on-surface">IAM Guard</p>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-tertiary/10 text-tertiary border border-tertiary/20">Active</span>
+</div>
+<p class="text-[11px] text-secondary line-clamp-1">Analyzing permission escalation paths</p>
+</div>
+</div>
+</button>
+</div>
+<div class="p-4 bg-surface-container-lowest border-t border-outline-variant">
+<div class="flex items-center gap-4">
+<div class="flex-1 h-1 bg-outline-variant rounded-full overflow-hidden">
+<div class="w-3/4 h-full bg-primary"></div>
+</div>
+<span class="text-[10px] text-secondary">Workload: 75%</span>
+</div>
+</div>
+</aside>
+<!-- Workspace Area -->
+<div class="flex-1 flex flex-col overflow-hidden">
+<!-- Workspace Header -->
+<div class="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-lowest">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary/10 border border-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="shield_lock" style="font-variation-settings: 'FILL' 1;">shield_lock</span>
+</div>
+<div>
+<h1 class="text-2xl font-black tracking-tight text-on-surface">Nexus Sentinel</h1>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-xs text-secondary">Currently monitoring VPC Edge: us-east-1</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 text-sm font-bold border border-outline-variant text-on-surface hover:bg-surface-container transition-all">Save Draft</button>
+<button class="px-5 py-2 text-sm font-bold bg-primary text-on-primary rounded flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[18px]" data-icon="bolt" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                                Deploy to Production
+                            </button>
+</div>
+</div>
+<!-- Main Scrollable Workspace -->
+<div class="flex-1 overflow-y-auto p-6 space-y-6 bg-surface-dim">
+<!-- Configuration Grid -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Capability Tuners -->
+<div class="col-span-8 space-y-6">
+<div class="bg-surface-container border border-outline-variant rounded-xl p-6">
+<h3 class="text-[11px] font-black uppercase tracking-[0.2em] text-secondary mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="tune">tune</span>
+                                        Capability Tuners
+                                    </h3>
+<div class="space-y-8">
+<!-- Reasoning Depth Slider -->
+<div>
+<div class="flex justify-between items-center mb-3">
+<label class="text-sm font-bold text-on-surface">Reasoning Depth</label>
+<span class="text-xs mono-font text-primary">0.85 - Ultra High</span>
+</div>
+<input class="w-full h-1 bg-outline-variant rounded-lg appearance-none cursor-pointer accent-primary" type="range"/>
+<div class="flex justify-between text-[10px] text-outline mt-2">
+<span>Heuristic</span>
+<span>Deep Chain</span>
+<span>Recursive Analysis</span>
+</div>
+</div>
+<!-- Autonomous Action Tier -->
+<div>
+<label class="text-sm font-bold text-on-surface block mb-3">Autonomous Action Level</label>
+<div class="grid grid-cols-3 gap-3">
+<button class="border border-outline-variant p-3 rounded text-left hover:border-primary transition-all">
+<p class="text-xs font-bold text-on-surface">Observational</p>
+<p class="text-[10px] text-secondary">ReadOnly Audit</p>
+</button>
+<button class="border-2 border-primary bg-primary/5 p-3 rounded text-left relative">
+<span class="material-symbols-outlined absolute right-2 top-2 text-[14px] text-primary" data-icon="check_circle">check_circle</span>
+<p class="text-xs font-bold text-on-surface">Co-Pilot</p>
+<p class="text-[10px] text-secondary">Approval Required</p>
+</button>
+<button class="border border-outline-variant p-3 rounded text-left hover:border-primary transition-all">
+<p class="text-xs font-bold text-on-surface">Autonomous</p>
+<p class="text-[10px] text-secondary">Auto-Remediate</p>
+</button>
+</div>
+</div>
+<!-- Skill Toggles -->
+<div>
+<label class="text-sm font-bold text-on-surface block mb-3">Skill Toggles</label>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-3 border border-outline-variant rounded bg-surface-container-low">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="cloud">cloud</span>
+<span class="text-xs font-medium">Cloud Infrastructure Security</span>
+</div>
+<div class="w-10 h-5 bg-primary rounded-full relative">
+<div class="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 border border-outline-variant rounded bg-surface-container-low">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="router">router</span>
+<span class="text-xs font-medium">Network Traffic Analysis</span>
+</div>
+<div class="w-10 h-5 bg-primary rounded-full relative">
+<div class="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 border border-outline-variant rounded bg-surface-container-low">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="vpn_key">vpn_key</span>
+<span class="text-xs font-medium text-secondary">Identity Governance</span>
+</div>
+<div class="w-10 h-5 bg-outline-variant rounded-full relative">
+<div class="absolute left-1 top-1 w-3 h-3 bg-secondary rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Analytics Widgets (Right Column) -->
+<div class="col-span-4 space-y-6">
+<div class="bg-surface-container border border-outline-variant rounded-xl p-5">
+<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mb-4">Performance Metrics</h3>
+<div class="space-y-4">
+<div class="p-4 border border-outline-variant bg-surface-container-low rounded-lg">
+<p class="text-[10px] text-secondary font-bold mb-1">SUCCESS RATE</p>
+<div class="flex items-end justify-between">
+<span class="text-2xl font-black text-on-surface">98.4%</span>
+<div class="flex items-center gap-1 mb-1">
+<div class="h-2 w-1 bg-tertiary"></div>
+<div class="h-4 w-1 bg-tertiary"></div>
+<div class="h-3 w-1 bg-tertiary"></div>
+<div class="h-6 w-1 bg-tertiary"></div>
+<div class="h-5 w-1 bg-tertiary"></div>
+</div>
+</div>
+</div>
+<div class="p-4 border border-outline-variant bg-surface-container-low rounded-lg">
+<p class="text-[10px] text-secondary font-bold mb-1">AVG. REMEDIATION TIME</p>
+<div class="flex items-end justify-between">
+<span class="text-2xl font-black text-on-surface">12.4s</span>
+<div class="flex items-center gap-1 mb-1">
+<div class="h-6 w-1 bg-primary"></div>
+<div class="h-5 w-1 bg-primary"></div>
+<div class="h-4 w-1 bg-primary"></div>
+<div class="h-3 w-1 bg-primary"></div>
+<div class="h-2 w-1 bg-primary"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Identity Preview -->
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden group">
+<div class="h-40 bg-surface-container-high relative flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-30" data-alt="A futuristic cybersecurity terminal showing glowing violet data streams and abstract digital geometric patterns on a high-contrast dark background. The scene is illuminated by cinematic, atmospheric lighting with a sharp, professional developer-grade aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByilWL-AyIH-IljJRimrkcoLgkEmDCPOGqR8ycoA9PVWgXP18SocLKVSaZrUW0e2jPPw4TUBW3B5tjtGIVOIh8ZxtHasZnu_BaNBAnwpQvQWr4M1VjK--O5mFJEPG02SBQg00YEzLe69zxIGLZLAKZNaqXhOOhJ5Zghhn80SZP_aORCcXEv6yyxZNlIZaDXutyzQn5RuiwpRNlIr11NyaDF6t3IS8FRQFlrIHFIYJUD_I3Y-XnFl2hw0VFxVs0RITmGewd5mBhwNIe"/>
+<div class="z-10 text-center">
+<div class="w-16 h-16 rounded-full border-2 border-primary/40 border-dashed flex items-center justify-center mx-auto mb-2 animate-[spin_10s_linear_infinite]">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="hub">hub</span>
+</div>
+<p class="text-[10px] mono-font text-primary uppercase font-bold">Neural Engine Core</p>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant">
+<button class="w-full text-center py-2 border border-outline-variant text-[11px] font-bold uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-all">Re-generate Seed</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Training Lab (Terminal Section) -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden">
+<div class="bg-surface-container px-4 py-2 border-b border-outline-variant flex justify-between items-center">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1">
+<div class="w-2.5 h-2.5 rounded-full bg-error"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-[#EAB308]"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-tertiary"></div>
+</div>
+<div class="h-4 w-[1px] bg-outline-variant"></div>
+<span class="text-[10px] mono-font font-bold text-secondary uppercase tracking-widest">Training Lab: scenario_test_04.sh</span>
+</div>
+<div class="flex gap-2">
+<span class="text-[10px] text-outline mono-font">LATENCY: 42ms</span>
+<span class="text-[10px] text-tertiary mono-font">STATUS: RUNNING</span>
+</div>
+</div>
+<div class="p-4 h-64 overflow-y-auto bg-black mono-font text-xs space-y-2 text-on-surface/80">
+<p class="text-tertiary">[09:24:01] INITIALIZING SIMULATION: "UNAUTHORIZED_S3_ACCESS_ATTEMPT"</p>
+<p class="text-secondary">[09:24:02] Agent context loaded. Identity: Nexus Sentinel.</p>
+<div class="pl-4 border-l border-outline-variant ml-2 space-y-1 py-1">
+<p><span class="text-primary font-bold">Reasoning Step 1:</span> Analyzing source IP (192.168.1.45) against known whitelists...</p>
+<p><span class="text-primary font-bold">Reasoning Step 2:</span> Detected mismatch in IAM Role 'S3-Admin-Temporary'. Role should not be active outside business hours.</p>
+<p><span class="text-primary font-bold">Reasoning Step 3:</span> Cross-referencing with network logs... anomalous egress traffic detected.</p>
+<p><span class="text-tertiary font-bold">Action Recommendation:</span> Immediate revocation of 'S3-Admin-Temporary' tokens and firewall isolation of source IP.</p>
+</div>
+<p class="text-on-surface">[09:24:05] Simulation complete. Remediation accuracy: 99.1%.</p>
+<div class="flex gap-2 pt-2 items-center">
+<span class="text-primary font-bold animate-pulse">&gt;</span>
+<span class="w-1.5 h-4 bg-primary animate-blink"></span>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant bg-surface-container">
+<div class="flex items-center gap-3 bg-background border border-outline-variant rounded px-4 py-2">
+<span class="material-symbols-outlined text-outline text-[18px]" data-icon="terminal">terminal</span>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-sm mono-font placeholder:text-outline" placeholder="Input test prompt (e.g. 'Simulate brute force on port 22')" type="text"/>
+<button class="bg-primary text-on-primary w-8 h-8 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Floating Tooltip / Notification -->
+<div class="fixed bottom-6 right-6 z-50">
+<div class="bg-surface-container-high border border-primary/50 text-primary px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 backdrop-blur-md">
+<span class="material-symbols-outlined animate-bounce" data-icon="lightbulb" style="font-variation-settings: 'FILL' 1;">lightbulb</span>
+<div class="text-xs">
+<p class="font-bold">Optimization Available</p>
+<p class="text-on-surface-variant">Nexus Sentinel's "Identity Governance" skill is 12% underutilized.</p>
+</div>
+<button class="ml-4 hover:bg-primary/10 p-1 rounded">
+<span class="material-symbols-outlined text-[16px]" data-icon="close">close</span>
+</button>
+</div>
+</div>
+</body></html>

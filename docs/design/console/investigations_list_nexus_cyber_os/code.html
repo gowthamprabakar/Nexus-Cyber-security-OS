@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for forensic look */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0c0c0f; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a78bfa; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#27272a",
+                      "inverse-primary": "#5b21b6",
+                      "surface-container-highest": "#1e1e22",
+                      "primary-fixed": "#ede9fe",
+                      "on-tertiary-container": "#bbf7d0",
+                      "surface": "#0c0c0f",
+                      "on-surface-variant": "#a1a1aa",
+                      "on-error": "#1a0000",
+                      "on-background": "#fafafa",
+                      "surface-tint": "#a78bfa",
+                      "surface-container-low": "#0f0f12",
+                      "on-secondary": "#09090b",
+                      "on-primary": "#0a0012",
+                      "error": "#ef4444",
+                      "on-secondary-fixed-variant": "#3f3f46",
+                      "on-secondary-container": "#a1a1aa",
+                      "primary": "#a78bfa",
+                      "outline": "#52525b",
+                      "inverse-surface": "#fafafa",
+                      "inverse-on-surface": "#09090b",
+                      "background": "#09090b",
+                      "primary-container": "#7c3aed",
+                      "secondary-container": "#27272a",
+                      "on-tertiary-fixed": "#003318",
+                      "surface-bright": "#18181b",
+                      "primary-fixed-dim": "#c4b5fd",
+                      "on-primary-fixed": "#2e1065",
+                      "secondary": "#71717a",
+                      "surface-container": "#121215",
+                      "secondary-fixed": "#a1a1aa",
+                      "on-tertiary": "#001a12",
+                      "tertiary-fixed": "#bbf7d0",
+                      "surface-variant": "#18181b",
+                      "on-error-container": "#fca5a5",
+                      "surface-container-lowest": "#09090b",
+                      "on-primary-container": "#ede9fe",
+                      "surface-dim": "#0c0c0f",
+                      "secondary-fixed-dim": "#71717a",
+                      "on-tertiary-fixed-variant": "#047857",
+                      "tertiary": "#34d399",
+                      "on-surface": "#fafafa",
+                      "tertiary-container": "#065f46",
+                      "surface-container-high": "#18181b",
+                      "on-secondary-fixed": "#18181b",
+                      "tertiary-fixed-dim": "#6ee7b7",
+                      "error-container": "#3b1111",
+                      "on-primary-fixed-variant": "#5b21b6"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Geist"],
+                      "display": ["Geist"],
+                      "body": ["Geist"],
+                      "label": ["Geist"]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background selection:bg-primary selection:text-on-primary">
+<!-- SIDE NAV BAR (Shared Component) -->
+<aside class="fixed left-0 top-0 h-full z-40 w-64 flex flex-col border-r border-outline-variant bg-surface-container-low">
+<div class="px-6 py-8">
+<h1 class="font-headline font-black text-xl text-primary tracking-tighter">Nexus Cyber OS</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold mt-1">Autonomous Security</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container border-r-2 border-primary font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-3 pb-6 border-t border-outline-variant pt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body text-label-sm tracking-tight group" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-primary">help</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TOP NAV BAR (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-16 flex items-center justify-between px-6 z-30 bg-surface border-b border-outline-variant">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-10 pr-4 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Search investigations, entities, or SID..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 border-r border-outline-variant pr-4 mr-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors active:scale-95 duration-100">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors active:scale-95 duration-100">
+<span class="material-symbols-outlined">sensors</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors active:scale-95 duration-100">
+<span class="material-symbols-outlined">dns</span>
+</button>
+</div>
+<button class="bg-primary text-on-primary px-4 py-1.5 rounded text-sm font-bold active:scale-95 transition-transform">
+                Deploy Agent
+            </button>
+<div class="w-8 h-8 rounded bg-surface-container-highest overflow-hidden border border-outline-variant">
+<img alt="System Administrator" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2V5rdDSXXVFSwgyIuLPder7cHL32BMls2Hgu_xSyt4YTOD4jwIu0ebtz0JCogEPOd_R_o3GMyfviJdo_k4lPYFNKmGFZo6ZYF5dhqob6mNnykDCqmJs3m8tfiirZh1nYq8thT5G3d6PXJXHKqoIW5KMX6luNM1QyZU7dD5uR3PK2kO25bbJAsEHHoyE-1iLmotb1AXXWuv6ceo-9GMSexwc4Hvaxr5dbHRwJgopKwCnRYCbMxqSxzjhZs25RmIump4BlwvF2UVh0h"/>
+</div>
+</div>
+</header>
+<!-- MAIN CONTENT -->
+<main class="ml-64 pt-16 min-h-screen bg-background">
+<div class="p-8">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+<div>
+<div class="flex items-center gap-2 text-primary mb-1">
+<span class="material-symbols-outlined text-sm">terminal</span>
+<span class="text-[10px] uppercase tracking-widest font-bold">Investigation Repository</span>
+</div>
+<h2 class="text-3xl font-black font-headline tracking-tighter text-on-surface">Active Investigations</h2>
+<p class="text-on-surface-variant text-sm mt-1">Forensic analysis of 124 concurrent security events across global infrastructure.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="bg-surface-container-high p-1 rounded-lg flex border border-outline-variant">
+<button class="px-4 py-1.5 text-xs font-bold bg-primary text-on-primary rounded shadow-sm">Real-time</button>
+<button class="px-4 py-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface">Archived</button>
+</div>
+<button class="flex items-center gap-2 border border-outline-variant px-4 py-2 rounded text-xs font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-all">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                        Filters
+                    </button>
+</div>
+</div>
+<!-- Bento Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+<div class="bg-surface-container p-4 rounded-lg border border-outline-variant relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl">warning</span>
+</div>
+<p class="text-on-surface-variant text-[10px] uppercase font-bold tracking-wider">Critical Incidents</p>
+<p class="text-2xl font-black text-error mt-1">04</p>
+<div class="mt-2 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-error w-[40%]"></div>
+</div>
+</div>
+<div class="bg-surface-container p-4 rounded-lg border border-outline-variant relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl">history</span>
+</div>
+<p class="text-on-surface-variant text-[10px] uppercase font-bold tracking-wider">Replaying Live</p>
+<p class="text-2xl font-black text-primary mt-1">18</p>
+<div class="mt-2 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[75%] animate-pulse"></div>
+</div>
+</div>
+<div class="bg-surface-container p-4 rounded-lg border border-outline-variant relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl">memory</span>
+</div>
+<p class="text-on-surface-variant text-[10px] uppercase font-bold tracking-wider">Memory Forensics</p>
+<p class="text-2xl font-black text-tertiary mt-1">2.4 TB</p>
+<div class="mt-2 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[60%]"></div>
+</div>
+</div>
+<div class="bg-surface-container p-4 rounded-lg border border-outline-variant relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl">cloud_queue</span>
+</div>
+<p class="text-on-surface-variant text-[10px] uppercase font-bold tracking-wider">Cross-Cloud Drift</p>
+<p class="text-2xl font-black text-on-surface mt-1">09</p>
+<div class="mt-2 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-on-surface-variant w-[25%]"></div>
+</div>
+</div>
+</div>
+<!-- Main Workspace Grid -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Table Column (8 Cols) -->
+<div class="col-span-12 lg:col-span-8">
+<div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+<!-- Table Filters Header -->
+<div class="p-4 bg-surface-container-high border-b border-outline-variant flex flex-wrap gap-4 items-center justify-between">
+<div class="flex gap-2">
+<span class="bg-surface-container-low border border-outline-variant px-3 py-1 rounded text-[10px] font-bold text-on-surface-variant uppercase flex items-center gap-1">
+                                    Type: <span class="text-on-surface">Incident</span>
+<span class="material-symbols-outlined text-[12px] cursor-pointer">close</span>
+</span>
+<span class="bg-surface-container-low border border-outline-variant px-3 py-1 rounded text-[10px] font-bold text-on-surface-variant uppercase flex items-center gap-1">
+                                    Account: <span class="text-on-surface">AWS-PROD-01</span>
+<span class="material-symbols-outlined text-[12px] cursor-pointer">close</span>
+</span>
+</div>
+<div class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+                                Showing 8 of 124 results
+                            </div>
+</div>
+<!-- Forensics Table -->
+<div class="overflow-x-auto">
+<table class="w-full border-collapse">
+<thead>
+<tr class="text-left border-b border-outline-variant">
+<th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Investigation ID</th>
+<th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Priority</th>
+<th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Status</th>
+<th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Lead Agent</th>
+<th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-on-surface-variant text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-highest transition-colors group cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="mono text-sm text-primary font-bold">SID-2024-00128</span>
+<span class="text-[10px] text-on-surface-variant mt-0.5">Runtime Escape Attempt</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<span class="text-xs font-bold text-error">CRITICAL</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="bg-error/10 text-error text-[10px] font-black px-2 py-1 rounded border border-error/20 uppercase tracking-tighter">Active</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-primary/20 flex items-center justify-center border border-primary/30">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<span class="text-xs text-on-surface font-bold">Sentinel-9</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-highest transition-colors group cursor-pointer bg-surface-container-low/50">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="mono text-sm text-on-surface font-bold">SID-2024-00127</span>
+<span class="text-[10px] text-on-surface-variant mt-0.5">IAM Privilege Escalation</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-orange-500"></div>
+<span class="text-xs font-bold text-on-surface">HIGH</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-1 rounded border border-primary/20 uppercase tracking-tighter">Replaying</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-primary/20 flex items-center justify-center border border-primary/30">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<span class="text-xs text-on-surface font-bold">Nova-Alpha</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-highest transition-colors group cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="mono text-sm text-on-surface font-bold">SID-2024-00125</span>
+<span class="text-[10px] text-on-surface-variant mt-0.5">Large Data Outbound</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+<span class="text-xs font-bold text-on-surface">MEDIUM</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] font-black px-2 py-1 rounded border border-outline-variant uppercase tracking-tighter">Evidence Collection</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-primary/20 flex items-center justify-center border border-primary/30">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<span class="text-xs text-on-surface font-bold">Core-Zero</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-highest transition-colors group cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="mono text-sm text-on-surface font-bold">SID-2024-00122</span>
+<span class="text-[10px] text-on-surface-variant mt-0.5">PCI-DSS Drift Detected</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<span class="text-xs font-bold text-on-surface">LOW</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="bg-tertiary/10 text-tertiary text-[10px] font-black px-2 py-1 rounded border border-tertiary/20 uppercase tracking-tighter">Resolved</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-primary/20 flex items-center justify-center border border-primary/30">
+<span class="material-symbols-outlined text-xs text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<span class="text-xs text-on-surface font-bold">Compliance-Bot</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-6 py-4 border-t border-outline-variant flex items-center justify-between">
+<span class="text-xs text-on-surface-variant">Page 1 of 16</span>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container-highest disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Live Replay Column (4 Cols) -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Live Replay Card -->
+<div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+<div class="p-4 border-b border-outline-variant flex items-center justify-between">
+<h3 class="text-xs font-black uppercase tracking-widest text-on-surface">Live Replay</h3>
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></div>
+<span class="text-[10px] font-bold text-error">LIVE</span>
+</div>
+</div>
+<div class="aspect-video relative group">
+<img class="w-full h-full object-cover grayscale opacity-50 contrast-125" data-alt="A high-tech digital security monitoring screen displaying scrolling lines of forensic code, packet capture data, and glowing lavender terminal windows against a deep black background. The interface is crowded with complex data visualizations, including a nodes-and-edges graph of network traffic, reflecting a sophisticated cyber security investigation in progress. The lighting is low and cinematic with a focus on violet and emerald green data streams." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtBNo1JeoAcTxnyafo6-VjC4p8YKsG_W2HHYKzF-Mu-NuikfuwiJD5EGq0voodkfhOvmCVXtRltZrijpieUGMFv4vEFzThPEqyunukkIOW49SWOot0zr0V3bKVjcz_21l_EGTC2ZOsTh_kg7Dq2XomfFHYRwZXSCe__zWhj1-SU-08ara_2i112ThEl_K8oaZ2blmRR0FsmJfI8m8c1K5u6AcaPxAST-EL6P0joEsyRxwii7W_x8QytC4_yA0heK6O4IILiRRtmbCK"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex items-center justify-center">
+<button class="w-12 h-12 bg-primary/20 backdrop-blur-sm border border-primary/50 rounded-full flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<!-- Overlay Stats -->
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<div>
+<p class="mono text-[10px] text-primary">TARGET: ec2-prod-db-04</p>
+<p class="mono text-[10px] text-on-surface-variant">EVENT: /usr/bin/nc -e /bin/sh</p>
+</div>
+<div class="text-right">
+<p class="mono text-[10px] text-error font-bold">EXPLOIT DETECTED</p>
+</div>
+</div>
+</div>
+<div class="p-4 bg-surface-container-high">
+<div class="flex justify-between items-center mb-3">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Timeline Scan</span>
+<span class="mono text-[10px] text-primary">T+ 00:04:12:89</span>
+</div>
+<div class="flex gap-1 h-8">
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-primary/20 h-[20%]"></div>
+</div>
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-primary/40 h-[45%]"></div>
+</div>
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-error h-[90%]"></div>
+</div>
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-primary/60 h-[30%]"></div>
+</div>
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-primary/30 h-[15%]"></div>
+</div>
+<div class="flex-1 bg-surface-container border-x border-outline-variant flex items-end">
+<div class="w-full bg-primary/10 h-[5%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Filter Panel -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-5">
+<h3 class="text-xs font-black uppercase tracking-widest text-on-surface mb-6">Quick Filters</h3>
+<div class="space-y-6">
+<div>
+<label class="text-[10px] font-bold text-on-surface-variant uppercase mb-3 block">Investigation Type</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="px-3 py-2 border border-outline-variant rounded text-[10px] font-bold text-on-surface hover:border-primary transition-colors text-left flex justify-between items-center bg-surface-container-low">
+                                        Incident <span class="text-primary font-mono">42</span>
+</button>
+<button class="px-3 py-2 border border-outline-variant rounded text-[10px] font-bold text-on-surface-variant hover:border-primary transition-colors text-left flex justify-between items-center">
+                                        Drift <span class="font-mono">18</span>
+</button>
+<button class="px-3 py-2 border border-outline-variant rounded text-[10px] font-bold text-on-surface-variant hover:border-primary transition-colors text-left flex justify-between items-center">
+                                        Breach <span class="font-mono">03</span>
+</button>
+<button class="px-3 py-2 border border-outline-variant rounded text-[10px] font-bold text-on-surface-variant hover:border-primary transition-colors text-left flex justify-between items-center">
+                                        Audit <span class="font-mono">61</span>
+</button>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold text-on-surface-variant uppercase mb-3 block">Lead Agent</label>
+<div class="space-y-2">
+<div class="flex items-center gap-3 p-2 bg-surface-container-high rounded border border-outline-variant">
+<div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div class="flex-1">
+<p class="text-[11px] font-bold text-on-surface">Sentinel Series</p>
+<p class="text-[9px] text-on-surface-variant">8 active cases</p>
+</div>
+<input checked="" class="rounded border-outline-variant bg-surface text-primary focus:ring-primary ring-offset-background" type="checkbox"/>
+</div>
+<div class="flex items-center gap-3 p-2 hover:bg-surface-container-highest rounded border border-transparent transition-colors">
+<div class="w-8 h-8 rounded bg-surface-container-low flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div class="flex-1">
+<p class="text-[11px] font-bold text-on-surface-variant">Nova Core</p>
+<p class="text-[9px] text-on-surface-variant">12 active cases</p>
+</div>
+<input class="rounded border-outline-variant bg-surface text-primary focus:ring-primary ring-offset-background" type="checkbox"/>
+</div>
+</div>
+</div>
+<button class="w-full py-2.5 bg-surface-container-highest border border-outline-variant text-on-surface text-[10px] font-black uppercase tracking-widest rounded hover:bg-primary hover:text-on-primary transition-all">
+                                Reset All Filters
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

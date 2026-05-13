@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CSPM Findings | Obsidian AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "on-tertiary": "#001a12",
+                    "on-primary": "#0a0012",
+                    "surface-container-lowest": "#09090b",
+                    "on-secondary-container": "#a1a1aa",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "surface-dim": "#0c0c0f",
+                    "secondary-fixed": "#a1a1aa",
+                    "tertiary-container": "#065f46",
+                    "surface-container-low": "#0f0f12",
+                    "surface-bright": "#18181b",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-background": "#fafafa",
+                    "tertiary-fixed": "#bbf7d0",
+                    "secondary-container": "#27272a",
+                    "secondary": "#71717a",
+                    "primary-container": "#7c3aed",
+                    "on-surface-variant": "#a1a1aa",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "tertiary": "#34d399",
+                    "on-secondary-fixed": "#18181b",
+                    "error": "#ef4444",
+                    "surface": "#0c0c0f",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "on-error": "#1a0000",
+                    "surface-container-highest": "#1e1e22",
+                    "primary": "#a78bfa",
+                    "surface-container-high": "#18181b",
+                    "primary-fixed": "#ede9fe",
+                    "outline-variant": "#27272a",
+                    "secondary-fixed-dim": "#71717a",
+                    "outline": "#52525b",
+                    "error-container": "#3b1111",
+                    "on-surface": "#fafafa",
+                    "on-tertiary-container": "#bbf7d0",
+                    "on-primary-container": "#ede9fe",
+                    "inverse-primary": "#5b21b6",
+                    "surface-tint": "#a78bfa",
+                    "on-secondary": "#09090b",
+                    "on-primary-fixed": "#2e1065",
+                    "background": "#09090b",
+                    "inverse-surface": "#fafafa",
+                    "surface-variant": "#18181b",
+                    "on-error-container": "#fca5a5",
+                    "inverse-on-surface": "#09090b",
+                    "surface-container": "#121215",
+                    "on-tertiary-fixed": "#003318"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Geist"],
+                    "display": ["Geist"],
+                    "body": ["Geist"],
+                    "label": ["Geist"],
+                    "mono": ["JetBrains Mono"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background selection:bg-primary/30 antialiased">
+<!-- SideNavBar (Shared Component) -->
+<aside class="bg-surface dark:bg-surface text-primary dark:text-primary font-body text-label-sm tracking-tight h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline-variant flex flex-col py-4 z-[60]">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface dark:text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] text-secondary tracking-widest uppercase mt-1">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<!-- Active Navigation -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-primary dark:text-primary bg-surface-container-highest dark:bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">cloud_done</span>
+<span class="font-bold">Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-3 mt-auto space-y-1 pt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-50 bg-surface-dim dark:bg-surface-dim border-b border-outline-variant dark:border-outline-variant flex justify-between items-center h-14 px-6">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full bg-surface-container border-none rounded-lg pl-10 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-primary transition-all" placeholder="Search resources, findings, or IAM..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-r border-outline-variant pr-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined text-[20px]">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined text-[20px]">account_tree</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right hidden sm:block">
+<p class="text-xs font-bold text-on-surface">Admin User</p>
+<p class="text-[10px] text-secondary">SecOps Team</p>
+</div>
+<div class="h-8 w-8 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a cybersecurity analyst with a focused expression, wearing a minimalist dark turtleneck. The lighting is moody and cool-toned, reflecting a high-tech obsidian dark theme. The background is a blurred server room with violet and emerald status indicators glowing softly." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYyFZfm0nO3lEJSW377U4dx5CjW4xYOdCcpXRX6uRwM-q9_co2w2caYnhowTMg51vkMOc2TGyp492M3x-R54D1q3pjEZyt7z51m6fMw6jLf29gXWGCYgAzE3adt6OCh-9xYCFyZTm5W1KI--WSpKIrMkKO3xhO1HApcNOYxG3Cpi5EHLbpQkA5VOAMCHo7vfVYZYYI4waO4BJQlGGwA8IW9A4rmBx63-DeRYVaZL1cqhtxcL07ffIKgXTmlo-h8Jt9wQQII_RjbkMV"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pl-64 pt-14 min-h-screen">
+<div class="p-8 max-w-[1600px] mx-auto">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+<div>
+<h2 class="text-3xl font-headline font-bold text-on-surface tracking-tight">CSPM Findings</h2>
+<p class="text-on-surface-variant mt-1">Real-time posture analysis and drift detection across multi-cloud infrastructure.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 bg-surface-container border border-outline-variant text-on-surface text-sm font-medium rounded-lg hover:bg-surface-container-high transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">download</span> Export Report
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary text-sm font-bold rounded-lg hover:brightness-110 transition-all flex items-center gap-2 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[18px]">sync</span> Rescan Global
+                    </button>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-6">
+<!-- Left Content: Metrics & Table -->
+<div class="col-span-12 lg:col-span-9 space-y-6">
+<!-- Posture Score Cards (Bento Grid) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- AWS Card -->
+<div class="bg-surface-container border border-outline-variant p-6 rounded-xl relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl">cloud</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-8 h-8 rounded bg-[#FF9900]/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[#FF9900] text-[20px]" style="font-variation-settings: 'FILL' 1;">cloud_queue</span>
+</div>
+<span class="text-sm font-bold text-secondary uppercase tracking-wider">AWS Posture</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-black text-tertiary">84</span>
+<span class="text-secondary text-sm">/ 100</span>
+</div>
+<div class="mt-4 h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary rounded-full" style="width: 84%"></div>
+</div>
+<p class="text-xs text-on-surface-variant mt-3 flex items-center gap-1">
+<span class="material-symbols-outlined text-tertiary text-[14px]">trending_up</span> +2.4% from last week
+                            </p>
+</div>
+<!-- Azure Card -->
+<div class="bg-surface-container border border-outline-variant p-6 rounded-xl relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl">grid_view</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-8 h-8 rounded bg-[#0078D4]/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[#0078D4] text-[20px]" style="font-variation-settings: 'FILL' 1;">apps</span>
+</div>
+<span class="text-sm font-bold text-secondary uppercase tracking-wider">Azure Posture</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-black text-primary">62</span>
+<span class="text-secondary text-sm">/ 100</span>
+</div>
+<div class="mt-4 h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 62%"></div>
+</div>
+<p class="text-xs text-on-surface-variant mt-3 flex items-center gap-1">
+<span class="material-symbols-outlined text-error text-[14px]">trending_down</span> -5.1% critical drift
+                            </p>
+</div>
+<!-- GCP Card -->
+<div class="bg-surface-container border border-outline-variant p-6 rounded-xl relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl">stream</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-8 h-8 rounded bg-[#4285F4]/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[#4285F4] text-[20px]" style="font-variation-settings: 'FILL' 1;">dns</span>
+</div>
+<span class="text-sm font-bold text-secondary uppercase tracking-wider">GCP Posture</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-black text-on-surface">91</span>
+<span class="text-secondary text-sm">/ 100</span>
+</div>
+<div class="mt-4 h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-on-surface rounded-full" style="width: 91%"></div>
+</div>
+<p class="text-xs text-on-surface-variant mt-3 flex items-center gap-1">
+<span class="material-symbols-outlined text-tertiary text-[14px]">check_circle</span> Optimized environment
+                            </p>
+</div>
+</div>
+<!-- Findings Table -->
+<div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-high/50">
+<h3 class="font-bold text-on-surface">Active Findings <span class="ml-2 text-xs font-mono bg-error-container text-on-error-container px-2 py-0.5 rounded-full">12 Critical</span></h3>
+<div class="flex items-center gap-2">
+<button class="p-1.5 hover:bg-surface-container rounded transition-colors text-secondary"><span class="material-symbols-outlined text-[20px]">refresh</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded transition-colors text-secondary"><span class="material-symbols-outlined text-[20px]">settings</span></button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container text-xs font-bold uppercase tracking-widest text-secondary border-b border-outline-variant">
+<tr>
+<th class="px-6 py-4">Finding Name</th>
+<th class="px-6 py-4">Severity</th>
+<th class="px-6 py-4">Resource ID</th>
+<th class="px-6 py-4">Account</th>
+<th class="px-6 py-4 text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="text-on-surface font-semibold text-sm">S3 Bucket Public Access</span>
+<span class="text-xs text-secondary mt-0.5">Policy permits global read/write access</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-error-container text-on-error-container text-[10px] font-bold rounded flex items-center w-fit gap-1 uppercase tracking-tight">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">error</span> CRITICAL
+                                            </span>
+</td>
+<td class="px-6 py-4 font-mono text-[11px] text-primary">
+                                            arn:aws:s3:::prod-customer-data-01
+                                        </td>
+<td class="px-6 py-4 text-sm text-on-surface-variant">
+                                            AWS (9021-0012)
+                                        </td>
+<td class="px-6 py-4 text-right">
+<span class="text-xs font-bold text-error">OPEN</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="text-on-surface font-semibold text-sm">Unencrypted EBS Volume</span>
+<span class="text-xs text-secondary mt-0.5">Storage volume lacks KMS encryption</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-surface-container-highest text-secondary text-[10px] font-bold rounded flex items-center w-fit gap-1 uppercase tracking-tight border border-outline-variant">
+<span class="material-symbols-outlined text-[12px]">warning</span> MEDIUM
+                                            </span>
+</td>
+<td class="px-6 py-4 font-mono text-[11px] text-primary">
+                                            vol-0af92bc8d122e
+                                        </td>
+<td class="px-6 py-4 text-sm text-on-surface-variant">
+                                            AWS (1120-4554)
+                                        </td>
+<td class="px-6 py-4 text-right">
+<span class="text-xs font-bold text-on-surface-variant">IGNORED</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="text-on-surface font-semibold text-sm">GCP SQL Instance Open to All</span>
+<span class="text-xs text-secondary mt-0.5">Cloud SQL authorized networks allow 0.0.0.0/0</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-error-container text-on-error-container text-[10px] font-bold rounded flex items-center w-fit gap-1 uppercase tracking-tight">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">error</span> HIGH
+                                            </span>
+</td>
+<td class="px-6 py-4 font-mono text-[11px] text-primary">
+                                            sql-postgres-central-02
+                                        </td>
+<td class="px-6 py-4 text-sm text-on-surface-variant">
+                                            GCP (project-x-9)
+                                        </td>
+<td class="px-6 py-4 text-right">
+<span class="text-xs font-bold text-tertiary">REMEDIATING</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="text-on-surface font-semibold text-sm">Azure Key Vault Soft-Delete Disabled</span>
+<span class="text-xs text-secondary mt-0.5">Secrets can be permanently deleted immediately</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-surface-container-highest text-secondary text-[10px] font-bold rounded flex items-center w-fit gap-1 uppercase tracking-tight border border-outline-variant">
+<span class="material-symbols-outlined text-[12px]">info</span> LOW
+                                            </span>
+</td>
+<td class="px-6 py-4 font-mono text-[11px] text-primary">
+                                            /subscriptions/kv-corp-prod
+                                        </td>
+<td class="px-6 py-4 text-sm text-on-surface-variant">
+                                            Azure (sub-8812)
+                                        </td>
+<td class="px-6 py-4 text-right">
+<span class="text-xs font-bold text-on-surface-variant">OPEN</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-4 border-t border-outline-variant bg-surface-dim flex justify-between items-center">
+<p class="text-xs text-secondary">Showing 4 of 42 findings</p>
+<div class="flex gap-2">
+<button class="p-1 px-3 border border-outline-variant rounded text-xs hover:bg-surface-container transition-colors">Prev</button>
+<button class="p-1 px-3 border border-outline-variant rounded text-xs bg-primary text-on-primary">1</button>
+<button class="p-1 px-3 border border-outline-variant rounded text-xs hover:bg-surface-container transition-colors">Next</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Sidebar: Filters & Pulse -->
+<div class="col-span-12 lg:col-span-3 space-y-6">
+<!-- Filter Sidebar -->
+<div class="bg-surface-container border border-outline-variant rounded-xl p-5 sticky top-20">
+<div class="flex items-center justify-between mb-6">
+<h4 class="font-bold text-sm uppercase tracking-widest text-on-surface">Filters</h4>
+<button class="text-primary text-[11px] font-bold hover:underline">Clear All</button>
+</div>
+<div class="space-y-6">
+<!-- Cloud Provider -->
+<div>
+<label class="text-[10px] font-black text-secondary uppercase tracking-tighter mb-3 block">Cloud Provider</label>
+<div class="space-y-2">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded border-outline-variant bg-surface-container-highest text-primary focus:ring-primary h-4 w-4" type="checkbox"/>
+<span class="text-sm text-on-surface group-hover:text-primary transition-colors">Amazon Web Services</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded border-outline-variant bg-surface-container-highest text-primary focus:ring-primary h-4 w-4" type="checkbox"/>
+<span class="text-sm text-on-surface group-hover:text-primary transition-colors">Microsoft Azure</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded border-outline-variant bg-surface-container-highest text-primary focus:ring-primary h-4 w-4" type="checkbox"/>
+<span class="text-sm text-on-surface group-hover:text-primary transition-colors">Google Cloud Platform</span>
+</label>
+</div>
+</div>
+<!-- Severity -->
+<div>
+<label class="text-[10px] font-black text-secondary uppercase tracking-tighter mb-3 block">Severity</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="text-[10px] font-bold py-1.5 border border-error/50 bg-error-container/20 text-error rounded hover:bg-error-container transition-colors">CRITICAL</button>
+<button class="text-[10px] font-bold py-1.5 border border-outline-variant text-on-surface-variant rounded hover:bg-surface-container-highest transition-colors">HIGH</button>
+<button class="text-[10px] font-bold py-1.5 border border-outline-variant text-on-surface-variant rounded hover:bg-surface-container-highest transition-colors">MEDIUM</button>
+<button class="text-[10px] font-bold py-1.5 border border-outline-variant text-on-surface-variant rounded hover:bg-surface-container-highest transition-colors">LOW</button>
+</div>
+</div>
+<!-- Misconfiguration Pulse Feed -->
+<div class="pt-6 border-t border-outline-variant">
+<div class="flex items-center gap-2 mb-4">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+</span>
+<label class="text-[10px] font-black text-secondary uppercase tracking-tighter">Misconfiguration Pulse</label>
+</div>
+<div class="space-y-4">
+<div class="relative pl-4 border-l border-outline-variant pb-4">
+<div class="absolute -left-1.5 top-0 w-3 h-3 bg-error rounded-full border-2 border-surface"></div>
+<p class="text-[11px] font-bold text-on-surface">Resource Drift Detected</p>
+<p class="text-[10px] text-secondary mt-0.5">SG-091a updated: Port 22 opened to 0.0.0.0/0</p>
+<span class="text-[9px] font-mono text-secondary-fixed-dim mt-1 block">Just now • AWS Prod</span>
+</div>
+<div class="relative pl-4 border-l border-outline-variant pb-4">
+<div class="absolute -left-1.5 top-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface"></div>
+<p class="text-[11px] font-bold text-on-surface">Auto-Remediation Complete</p>
+<p class="text-[10px] text-secondary mt-0.5">Encrypted S3 bucket: data-sync-temp</p>
+<span class="text-[9px] font-mono text-secondary-fixed-dim mt-1 block">2m ago • GCP Dev</span>
+</div>
+<div class="relative pl-4 border-l border-outline-variant">
+<div class="absolute -left-1.5 top-0 w-3 h-3 bg-primary rounded-full border-2 border-surface"></div>
+<p class="text-[11px] font-bold text-on-surface">IAM Policy Change</p>
+<p class="text-[10px] text-secondary mt-0.5">Admin access granted to 'temp-ci-cd'</p>
+<span class="text-[9px] font-mono text-secondary-fixed-dim mt-1 block">15m ago • Azure Prod</span>
+</div>
+</div>
+<button class="w-full mt-6 py-2 border border-outline-variant rounded-lg text-[10px] font-bold text-secondary hover:text-primary hover:border-primary transition-all">VIEW FULL AUDIT LOG</button>
+</div>
+</div>
+</div>
+<!-- Security Insights Visual -->
+<div class="bg-gradient-to-br from-primary-container/20 to-surface-container border border-outline-variant rounded-xl p-6 overflow-hidden relative">
+<div class="relative z-10">
+<h4 class="text-sm font-bold text-on-surface mb-2">AI Posture Tip</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">We noticed 14 instances with missing tags. Properly tagging resources can improve security monitoring coverage by 22%.</p>
+<button class="mt-4 text-[11px] font-black text-primary hover:underline uppercase tracking-widest">Apply Tags Now</button>
+</div>
+<div class="absolute -bottom-6 -right-6 opacity-20 pointer-events-none">
+<span class="material-symbols-outlined text-8xl text-primary">auto_awesome</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Hidden as per rule: Suppressed on Details/Transactional screens, but this is a dashboard context) -->
+<button class="fixed bottom-8 right-8 h-14 w-14 rounded-full bg-primary text-on-primary shadow-2xl flex items-center justify-center hover:scale-105 transition-transform z-[70] shadow-primary/40 group">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">add</span>
+<div class="absolute right-16 px-3 py-1.5 bg-surface-bright border border-outline-variant rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">New Audit Job</div>
+</button>
+</body></html>

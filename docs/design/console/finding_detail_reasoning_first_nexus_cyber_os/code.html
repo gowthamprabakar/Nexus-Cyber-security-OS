@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Finding Detail | Nexus Cyber OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-bright": "#18181b",
+                    "secondary-fixed": "#a1a1aa",
+                    "surface-dim": "#0c0c0f",
+                    "outline-variant": "#27272a",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "surface-container-highest": "#1e1e22",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "on-primary": "#0a0012",
+                    "on-secondary": "#09090b",
+                    "surface-variant": "#18181b",
+                    "on-surface-variant": "#a1a1aa",
+                    "error": "#ef4444",
+                    "inverse-primary": "#5b21b6",
+                    "surface-container-low": "#0f0f12",
+                    "inverse-on-surface": "#09090b",
+                    "secondary-fixed-dim": "#71717a",
+                    "surface": "#0c0c0f",
+                    "on-error-container": "#fca5a5",
+                    "on-tertiary-container": "#bbf7d0",
+                    "tertiary": "#34d399",
+                    "on-tertiary-fixed": "#003318",
+                    "on-secondary-container": "#a1a1aa",
+                    "primary-container": "#7c3aed",
+                    "on-surface": "#fafafa",
+                    "on-primary-fixed": "#2e1065",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "primary": "#a78bfa",
+                    "background": "#09090b",
+                    "secondary": "#71717a",
+                    "surface-container-high": "#18181b",
+                    "on-background": "#fafafa",
+                    "error-container": "#3b1111",
+                    "surface-container": "#121215",
+                    "on-tertiary": "#001a12",
+                    "outline": "#52525b",
+                    "surface-tint": "#a78bfa",
+                    "on-primary-container": "#ede9fe",
+                    "tertiary-container": "#065f46",
+                    "primary-fixed": "#ede9fe",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "on-error": "#1a0000",
+                    "on-secondary-fixed": "#18181b",
+                    "tertiary-fixed": "#bbf7d0",
+                    "surface-container-lowest": "#09090b",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "secondary-container": "#27272a",
+                    "inverse-surface": "#fafafa"
+            },
+            "fontFamily": {
+                    "headline": ["Geist", "sans-serif"],
+                    "display": ["Geist", "sans-serif"],
+                    "body": ["Geist", "sans-serif"],
+                    "label": ["Geist", "sans-serif"],
+                    "mono": ["JetBrains Mono", "monospace"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #09090b; color: #fafafa; font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0c0c0f; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 2px; }
+    </style>
+</head>
+<body class="overflow-hidden">
+<!-- SideNavBar (Shared Component JSON) -->
+<aside class="SideNavBar bg-surface dark:bg-surface text-primary dark:text-primary font-body text-label-sm tracking-tight h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline-variant flex flex-col h-full py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface dark:text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-widest text-secondary">Cloud Security</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-6 py-3 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span> Command Center
+            </a>
+<a class="flex items-center px-6 py-3 text-primary dark:text-primary bg-surface-container-highest dark:bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">security</span> Threat Hunter
+            </a>
+<a class="flex items-center px-6 py-3 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">inventory_2</span> Asset Inventory
+            </a>
+<a class="flex items-center px-6 py-3 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">cloud_done</span> Cloud Posture
+            </a>
+<a class="flex items-center px-6 py-3 text-secondary dark:text-secondary hover:bg-surface-container dark:hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">fact_check</span> Compliance
+            </a>
+</nav>
+<div class="mt-auto space-y-1">
+<a class="flex items-center px-6 py-3 text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">settings</span> Settings
+            </a>
+<a class="flex items-center px-6 py-3 text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">help_outline</span> Support
+            </a>
+<div class="px-6 pt-4 mt-4 border-t border-outline-variant flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-xs">JD</div>
+<div class="overflow-hidden">
+<p class="text-xs font-bold text-on-surface truncate">John Doe</p>
+<p class="text-[10px] text-secondary truncate">SecOps Lead</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component JSON) -->
+<header class="TopNavBar bg-surface-dim dark:bg-surface-dim text-primary dark:text-primary font-body text-label-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-outline-variant dark:border-outline-variant flex justify-between items-center h-14 px-6">
+<div class="flex items-center gap-4">
+<span class="text-lg font-headline font-bold text-on-surface dark:text-on-surface">Obsidian AI</span>
+<div class="h-4 w-[1px] bg-outline-variant"></div>
+<div class="flex items-center bg-surface-container rounded px-3 py-1 text-on-surface-variant focus-within:ring-2 focus-within:ring-primary transition-all">
+<span class="material-symbols-outlined text-sm mr-2">search</span>
+<input class="bg-transparent border-none text-xs focus:ring-0 p-0 w-64" placeholder="Search finding ID, asset, or IP..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors"><span class="material-symbols-outlined">terminal</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors"><span class="material-symbols-outlined">account_tree</span></button>
+<div class="w-8 h-8 rounded-full border border-outline-variant overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a cyber security expert with short hair, wearing a dark navy blazer, set against a blurred office background with subtle blue and violet lighting. The image maintains a high-contrast, professional aesthetic consistent with a modern, developer-grade enterprise application interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWIKfOMIkBA4M4ABQ6k2X4tFBvaEkQGepbjsv-exbiE5hkmhOluhQj7XObCQi-PBNCEgmC1j3ABGKUPyYmAYHCB_YscHpGuO-6dogFz8bUBsmVwmmHrwtX5KUcs955zZzUPeo6u8ioDxVQWCom9kTzcFXF0Xj0dsPPmbz7aFOg37hOA0G9yCSgZ9YbFr63YhUG-4BLVU2w56F8jbQ8xWTSA9PImlQYEp4U9XBMNErmi9lUcL_HhjfZNOxqhDSp_da3ehCCZKPjz9FV"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-14 p-8 h-[calc(100vh-3.5rem)] overflow-y-auto custom-scrollbar bg-background">
+<!-- Finding Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+<div class="space-y-2">
+<div class="flex items-center gap-3">
+<span class="bg-error-container text-error px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase">Critical</span>
+<span class="bg-surface-container text-secondary px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase border border-outline-variant">Open</span>
+<span class="text-secondary text-[10px] font-mono tracking-tighter">ID: FIND-882-QX</span>
+</div>
+<h2 class="text-3xl font-headline font-bold text-on-surface tracking-tight">Unrestricted SSH Access from 0.0.0.0/0</h2>
+<div class="flex items-center gap-4 text-secondary text-sm">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm">dns</span>
+<span class="font-mono text-xs">i-0a2b3c4d5e6f</span>
+</div>
+<div class="w-1 h-1 rounded-full bg-outline"></div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm">public</span>
+<span class="font-mono text-xs">us-east-1 (Production)</span>
+</div>
+</div>
+</div>
+<div class="flex gap-3">
+<button class="bg-surface-container border border-outline-variant text-on-surface px-4 py-2 rounded-lg text-sm font-bold hover:bg-surface-container-high transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">share</span> Share Report
+                </button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition-opacity flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">bolt</span> Auto-Remediate
+                </button>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-8">
+<!-- Left Column: AI Reasoning Trace (Reasoning-First) -->
+<div class="col-span-12 lg:col-span-8 space-y-8">
+<!-- AI Reasoning Trace -->
+<section class="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<h3 class="font-bold text-on-surface">AI Reasoning Trace</h3>
+</div>
+<span class="text-[10px] font-mono text-secondary tracking-widest uppercase">Agent: Obsidian-LLM-v4</span>
+</div>
+<div class="p-6 font-mono text-sm leading-relaxed text-secondary-fixed">
+<div class="space-y-6">
+<!-- Trace Step 1 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+<div class="w-px flex-1 bg-outline-variant my-1"></div>
+</div>
+<div>
+<div class="text-xs text-secondary mb-1">T+0.00s | INGESTION</div>
+<p class="text-on-surface">CloudWatch event detected: <span class="text-tertiary">ModifySecurityGroupRules</span> on <code class="bg-surface-container px-1 rounded">sg-0994f31c</code>.</p>
+</div>
+</div>
+<!-- Trace Step 2 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+<div class="w-px flex-1 bg-outline-variant my-1"></div>
+</div>
+<div>
+<div class="text-xs text-secondary mb-1">T+1.42s | ANALYSIS</div>
+<p class="text-on-surface">Rule analysis confirms CIDR <code class="bg-surface-container px-1 rounded">0.0.0.0/0</code> applied to Port <code class="bg-surface-container px-1 rounded">22 (TCP)</code>. Cross-referencing with VPC <code class="bg-surface-container px-1 rounded">vpc-0a2b3</code> environment tags: <span class="text-primary">TAG:PROD</span>.</p>
+</div>
+</div>
+<!-- Trace Step 3 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+<div class="w-px flex-1 bg-outline-variant my-1"></div>
+</div>
+<div>
+<div class="text-xs text-secondary mb-1">T+2.05s | CORRELATION</div>
+<p class="text-on-surface">Scanning active sessions. Detected 4 outbound connections from unknown IPs in Moscow, RU and Beijing, CN. <span class="text-error">Potential Brute Force attempt in progress.</span></p>
+</div>
+</div>
+<!-- Trace Step 4 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+</div>
+<div>
+<div class="text-xs text-secondary mb-1">T+3.11s | CONCLUSION</div>
+<p class="text-on-surface">Configuration violates <span class="text-primary underline">CIS AWS Foundations Benchmark 1.2</span>. High confidence of malicious exposure. Escalating to <span class="text-error font-bold">CRITICAL</span>.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Evidence Locker -->
+<section>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-secondary">folder_zip</span>
+<h3 class="font-bold text-on-surface">Evidence Locker</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="bg-surface-container border border-outline-variant rounded-lg p-4 hover:border-primary transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-3">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">receipt_long</span>
+<span class="material-symbols-outlined text-xs text-secondary">open_in_new</span>
+</div>
+<p class="text-xs font-bold text-on-surface mb-1">CloudTrail JSON</p>
+<p class="text-[10px] text-secondary truncate">trail-log-2023-10-24.json</p>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded-lg p-4 hover:border-primary transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-3">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">analytics</span>
+<span class="material-symbols-outlined text-xs text-secondary">open_in_new</span>
+</div>
+<p class="text-xs font-bold text-on-surface mb-1">VPC Flow Logs</p>
+<p class="text-[10px] text-secondary truncate">flow-vpc-0a2b3-001.csv</p>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded-lg p-4 hover:border-primary transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-3">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">image</span>
+<span class="material-symbols-outlined text-xs text-secondary">open_in_new</span>
+</div>
+<p class="text-xs font-bold text-on-surface mb-1">Config Snapshot</p>
+<p class="text-[10px] text-secondary truncate">sg-screenshot-t0.png</p>
+</div>
+</div>
+</section>
+<!-- Forensic Screenshot -->
+<div class="rounded-xl border border-outline-variant overflow-hidden bg-surface-container-lowest">
+<div class="p-2 bg-surface-container border-b border-outline-variant flex items-center justify-between">
+<span class="text-[10px] font-mono text-secondary ml-2">TERMINAL_OUTPUT_SNAPSHOT_240.JPG</span>
+<div class="flex gap-1.5">
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+</div>
+</div>
+<img alt="Cyber Security Infrastructure" class="w-full h-64 object-cover opacity-60" data-alt="A macro close-up of computer server rack lights in a data center, glowing with intense green and deep violet colors against a dark background. The lighting is moody and sharp, with shallow depth of field focusing on the intricate wiring and blinking LEDs, reflecting a high-tech, developer-oriented cybersecurity environment with a sophisticated obsidian aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0GRG-rf5xeSvDHmUrcCnWwlhKztzYW1BPd5px7XBEWnhSvMEDDpSc-mkjmB3Qv2bb4jileNdXmV7nBWsXJ-r35wTUYgAD4a_Y7Iprpv2dLABmlJM9UEzuZia7ntrE6mXz-I4_qApTJKrRM136KBWtvFeyTPpwzpWMtLCMiio-9Sl5ASGzK-mETgbbNcko0LrGDKYcEIb3E10i6kWxTkLmMvgsLwQw7pEyPR9F5svvktWVapemd1uRANQ2pQkTGh7rlRJ9ChmFBFsE"/>
+</div>
+</div>
+<!-- Right Column: Asset Context & Metadata -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Asset Context Card -->
+<div class="bg-surface border border-outline-variant rounded-xl p-6">
+<h4 class="text-xs font-bold text-secondary uppercase tracking-widest mb-4">Asset Context</h4>
+<div class="space-y-5">
+<div>
+<p class="text-[10px] text-secondary-fixed mb-1 uppercase tracking-tighter">Ownership</p>
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center border border-outline-variant text-[10px]">DS</div>
+<span class="text-sm text-on-surface font-medium">DevOps-Security-Pod</span>
+</div>
+</div>
+<div>
+<p class="text-[10px] text-secondary-fixed mb-2 uppercase tracking-tighter">Tags</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-2 py-0.5 bg-surface-container-high border border-outline-variant rounded text-[10px] font-mono text-secondary-fixed">env:production</span>
+<span class="px-2 py-0.5 bg-surface-container-high border border-outline-variant rounded text-[10px] font-mono text-secondary-fixed">compliance:hipaa</span>
+<span class="px-2 py-0.5 bg-surface-container-high border border-outline-variant rounded text-[10px] font-mono text-secondary-fixed">app:trading-engine</span>
+</div>
+</div>
+<div class="pt-4 border-t border-outline-variant">
+<p class="text-[10px] text-secondary-fixed mb-3 uppercase tracking-tighter">Blast Radius Analysis</p>
+<div class="space-y-3">
+<div class="flex justify-between items-center text-xs">
+<span class="text-on-surface-variant">Connected Databases</span>
+<span class="text-error font-bold">12</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full w-[85%]"></div>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="text-on-surface-variant">Peered VPCs</span>
+<span class="text-on-surface">3</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[25%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Related Findings -->
+<div class="bg-surface border border-outline-variant rounded-xl p-6">
+<h4 class="text-xs font-bold text-secondary uppercase tracking-widest mb-4">Related Findings</h4>
+<div class="space-y-4">
+<div class="group cursor-pointer">
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">IAM Policy: Overly Permissive</p>
+<p class="text-[10px] text-secondary">Asset: arn:aws:iam::882:role/admin</p>
+</div>
+<div class="group cursor-pointer">
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">S3 Bucket Public Access</p>
+<p class="text-[10px] text-secondary">Asset: prod-data-lake-01</p>
+</div>
+</div>
+</div>
+<!-- Threat Intelligence -->
+<div class="bg-surface border border-outline-variant rounded-xl p-6 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-2">
+<span class="material-symbols-outlined text-tertiary text-sm">verified_user</span>
+</div>
+<h4 class="text-xs font-bold text-secondary uppercase tracking-widest mb-3">Threat Intel</h4>
+<p class="text-xs leading-relaxed text-on-surface-variant mb-3">IP <code class="text-tertiary">194.26.135.x</code> matches known botnet <span class="text-on-surface font-bold">MIRAI_VARIANT_G</span> signatures. Previous sightings: 48h ago in US-WEST-2.</p>
+<button class="w-full py-2 bg-surface-container border border-outline-variant rounded text-[10px] font-bold uppercase tracking-widest text-on-surface hover:bg-surface-container-high transition-all">View Full Dossier</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Action Bar (Transactional Suppression Override) -->
+<div class="fixed bottom-0 right-0 w-[calc(100%-16rem)] h-16 bg-surface-dim border-t border-outline-variant px-8 flex items-center justify-between z-50">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+<span class="text-xs font-mono text-secondary">Awaiting Remediation Consensus</span>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="px-5 py-2 rounded text-xs font-bold text-secondary-fixed hover:text-on-surface hover:bg-surface-container transition-all">Ignore Finding</button>
+<button class="px-5 py-2 rounded text-xs font-bold text-on-surface border border-outline-variant hover:bg-surface-container-high transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">person</span> Assign to Human
+            </button>
+<button class="px-6 py-2 bg-primary text-on-primary rounded text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span> Approve Remediation
+            </button>
+</div>
+</div>
+</body></html>

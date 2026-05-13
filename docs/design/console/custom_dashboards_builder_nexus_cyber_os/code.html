@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS | Custom Dashboard Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary": "#0a0012",
+                      "on-primary-fixed": "#2e1065",
+                      "on-secondary-fixed-variant": "#3f3f46",
+                      "primary": "#a78bfa",
+                      "surface-container-highest": "#1e1e22",
+                      "outline": "#52525b",
+                      "secondary-container": "#27272a",
+                      "primary-fixed-dim": "#c4b5fd",
+                      "on-primary-fixed-variant": "#5b21b6",
+                      "primary-fixed": "#ede9fe",
+                      "on-surface": "#fafafa",
+                      "background": "#09090b",
+                      "on-error": "#1a0000",
+                      "error": "#ef4444",
+                      "on-tertiary": "#001a12",
+                      "outline-variant": "#27272a",
+                      "on-secondary": "#09090b",
+                      "secondary": "#71717a",
+                      "surface-dim": "#0c0c0f",
+                      "primary-container": "#7c3aed",
+                      "tertiary-fixed": "#bbf7d0",
+                      "surface-container": "#121215",
+                      "on-tertiary-fixed-variant": "#047857",
+                      "surface-bright": "#18181b",
+                      "surface-tint": "#a78bfa",
+                      "surface-variant": "#18181b",
+                      "on-background": "#fafafa",
+                      "surface": "#0c0c0f",
+                      "on-error-container": "#fca5a5",
+                      "inverse-primary": "#5b21b6",
+                      "surface-container-high": "#18181b",
+                      "secondary-fixed": "#a1a1aa",
+                      "on-tertiary-fixed": "#003318",
+                      "secondary-fixed-dim": "#71717a",
+                      "tertiary-container": "#065f46",
+                      "tertiary": "#34d399",
+                      "on-secondary-fixed": "#18181b",
+                      "on-surface-variant": "#a1a1aa",
+                      "on-tertiary-container": "#bbf7d0",
+                      "inverse-on-surface": "#09090b",
+                      "surface-container-lowest": "#09090b",
+                      "surface-container-low": "#0f0f12",
+                      "on-primary-container": "#ede9fe",
+                      "tertiary-fixed-dim": "#6ee7b7",
+                      "on-secondary-container": "#a1a1aa",
+                      "inverse-surface": "#fafafa",
+                      "error-container": "#3b1111"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Geist"],
+                      "display": ["Geist"],
+                      "body": ["Geist"],
+                      "label": ["Geist"],
+                      "mono": ["JetBrains Mono"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+        body { font-family: 'Geist', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .grid-bg {
+            background-image: radial-gradient(#27272a 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .mono-text { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden">
+<!-- Side Navigation Shell (Shared Component: SideNavBar) -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-[60]">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-primary-container flex items-center justify-center rounded">
+<span class="material-symbols-outlined text-on-primary-container text-lg" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Cloud Security</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Command Center
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">security</span>
+                Threat Hunter
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+                Asset Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">cloud_done</span>
+                Cloud Posture
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+                Compliance
+            </a>
+</nav>
+<div class="px-3 pt-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+                Support
+            </a>
+</div>
+</aside>
+<!-- Top Navigation Shell (Shared Component: TopNavBar) -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 px-6 border-b border-outline-variant bg-surface-dim flex justify-between items-center z-50">
+<div class="flex items-center gap-4 flex-1">
+<span class="text-lg font-headline font-bold text-on-surface">Obsidian AI</span>
+<div class="max-w-md w-full relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+<input class="w-full bg-surface-container border border-outline-variant rounded-md py-1.5 pl-10 pr-4 text-xs focus:outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Search commands or data streams..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 border-r border-outline-variant pr-4">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-xl">account_tree</span>
+</button>
+</div>
+<div class="flex items-center gap-3 pl-2">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Admin User</p>
+<p class="text-[10px] text-secondary">SecOps Level 4</p>
+</div>
+<div class="w-8 h-8 rounded bg-primary overflow-hidden border border-outline">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBb_wfHbc25Z7Dqd_dsfdQlsQp4Te3tqc7wC85tzcK1Ezg4IXyIBGtbPuvFzSbu_Wh2J_H1d6xJc2u2zG5I2jFvECpKczf6Jh83lpOz4f9xr0pAhHNUdfsQGH_mxWN-LQ3AyWMsemM1IJRZn-b-aJRMZaxPyIBVZ56RkuCr_2G1iv8wY_G_mkWa9FHAKkKYZCwsFptT65BWvYsoYieOXnsPhz3LPp10iyWV7ZaqhRt2akcSpoUdwLHSDCG339341U_ojOi7a5dl7DsB"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Workspace Canvas -->
+<main class="ml-64 mt-14 h-[calc(100vh-3.5rem)] flex flex-col relative">
+<!-- Top Toolbar -->
+<div class="h-12 bg-surface-container-low border-b border-outline-variant flex items-center justify-between px-6 shrink-0">
+<div class="flex items-center gap-4">
+<h2 class="text-sm font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">edit_note</span>
+                    Cloud Security Posture - Q3 Report
+                </h2>
+<div class="h-4 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-1">
+<button class="px-3 py-1 text-[11px] font-bold text-on-surface bg-surface-container border border-outline-variant hover:border-primary transition-colors rounded flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">add</span>
+                        Add Widget
+                    </button>
+<button class="px-3 py-1 text-[11px] font-bold text-on-surface bg-surface-container border border-outline-variant hover:border-primary transition-colors rounded flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">lock_open</span>
+                        Layout Lock
+                    </button>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center bg-surface-container-lowest rounded border border-outline-variant p-0.5">
+<button class="px-3 py-1 text-[10px] font-bold text-on-surface-variant hover:text-on-surface transition-colors">Last 24h</button>
+<button class="px-3 py-1 text-[10px] font-bold text-on-primary bg-primary rounded-sm">7d</button>
+<button class="px-3 py-1 text-[10px] font-bold text-on-surface-variant hover:text-on-surface transition-colors">30d</button>
+</div>
+<button class="px-4 py-1.5 text-[11px] font-black text-on-primary bg-primary rounded uppercase tracking-tighter hover:bg-primary-fixed-dim transition-colors">
+                    Save Dashboard
+                </button>
+</div>
+</div>
+<div class="flex flex-1 overflow-hidden">
+<!-- Left Side Library -->
+<aside class="w-64 border-r border-outline-variant bg-surface flex flex-col shrink-0">
+<div class="p-4 flex flex-col gap-4 overflow-y-auto">
+<div>
+<h3 class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-3">Widget Templates</h3>
+<div class="space-y-2">
+<div class="group p-2.5 rounded bg-surface-container border border-outline-variant hover:border-primary cursor-grab transition-all">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-primary text-sm">map</span>
+<span class="text-xs font-bold text-on-surface">Attack Surface Map</span>
+</div>
+<p class="text-[10px] text-secondary leading-tight">Geographic visualization of incoming threat vectors.</p>
+</div>
+<div class="group p-2.5 rounded bg-surface-container border border-outline-variant hover:border-primary cursor-grab transition-all">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-tertiary text-sm">trending_up</span>
+<span class="text-xs font-bold text-on-surface">Risk Trend</span>
+</div>
+<p class="text-[10px] text-secondary leading-tight">Long-term analysis of aggregate risk scoring.</p>
+</div>
+<div class="group p-2.5 rounded bg-surface-container border border-outline-variant hover:border-primary cursor-grab transition-all">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-error text-sm">warning</span>
+<span class="text-xs font-bold text-on-surface">Top 10 Vulns</span>
+</div>
+<p class="text-[10px] text-secondary leading-tight">Priority list of unpatched CVEs in the fleet.</p>
+</div>
+</div>
+</div>
+<div>
+<h3 class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-3">Data Sources</h3>
+<div class="space-y-1.5">
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-low border border-outline-variant text-[11px] hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">cloud_queue</span>
+<span>AWS CloudTrail</span>
+</div>
+<div class="w-1.5 h-1.5 rounded-full bg-tertiary shadow-[0_0_8px_rgba(52,211,153,0.5)]"></div>
+</div>
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-low border border-outline-variant text-[11px] hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">shield_with_heart</span>
+<span>GuardDuty</span>
+</div>
+<div class="w-1.5 h-1.5 rounded-full bg-tertiary shadow-[0_0_8px_rgba(52,211,153,0.5)]"></div>
+</div>
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-low border border-outline-variant text-[11px] hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">storage</span>
+<span>S3 Audit Logs</span>
+</div>
+<div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Central Canvas Grid -->
+<div class="flex-1 bg-surface-container-lowest overflow-hidden relative">
+<div class="absolute inset-0 grid-bg opacity-30"></div>
+<div class="relative h-full p-6 grid grid-cols-12 grid-rows-12 gap-4">
+<!-- Widget 1: Temporal Risk Heatmap -->
+<div class="col-span-8 row-span-5 bg-surface border border-primary rounded-lg shadow-xl shadow-primary/5 flex flex-col overflow-hidden">
+<div class="h-10 border-b border-outline-variant flex items-center justify-between px-4 bg-surface-container-high/50">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">grid_view</span>
+<span class="text-xs font-bold text-on-surface">Temporal Risk Heatmap</span>
+</div>
+<div class="flex gap-2">
+<button class="material-symbols-outlined text-sm text-secondary hover:text-on-surface">drag_pan</button>
+<button class="material-symbols-outlined text-sm text-secondary hover:text-on-surface">close</button>
+</div>
+</div>
+<div class="flex-1 p-4 grid grid-cols-24 grid-rows-7 gap-1">
+<!-- Mimicking a heatmap grid -->
+<div class="col-span-full h-full flex flex-col gap-1">
+<div class="flex justify-between text-[8px] text-secondary mb-1">
+<span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span>
+</div>
+<div class="flex-1 flex flex-wrap gap-1">
+<!-- Generating a bunch of squares -->
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<div class="w-4 h-4 bg-primary-container border border-outline-variant"></div>
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<div class="w-4 h-4 bg-primary-container/60 border border-outline-variant"></div>
+<div class="w-4 h-4 bg-primary border border-outline-variant"></div>
+<div class="w-4 h-4 bg-primary-container/20 border border-outline-variant"></div>
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<div class="w-4 h-4 bg-error-container border border-outline-variant"></div>
+<div class="w-4 h-4 bg-error border border-outline-variant"></div>
+<div class="w-4 h-4 bg-error-container border border-outline-variant"></div>
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div>
+<!-- ... (repeat squares for visual effect) -->
+<div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary-container border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary-container/60 border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary-container border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-surface-container-highest border border-outline-variant"></div><div class="w-4 h-4 bg-primary-container/60 border border-outline-variant"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Widget 2: Global Asset Exposure -->
+<div class="col-span-4 row-span-5 bg-surface border border-outline-variant rounded-lg flex flex-col">
+<div class="h-10 border-b border-outline-variant flex items-center justify-between px-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm">donut_large</span>
+<span class="text-xs font-bold text-on-surface">Global Asset Exposure</span>
+</div>
+</div>
+<div class="flex-1 p-6 flex flex-col items-center justify-center relative">
+<div class="relative w-32 h-32">
+<svg class="w-full h-full -rotate-90" viewbox="0 0 36 36">
+<circle class="stroke-surface-container-highest" cx="18" cy="18" fill="none" r="16" stroke-width="4"></circle>
+<circle class="stroke-primary" cx="18" cy="18" fill="none" r="16" stroke-dasharray="75, 100" stroke-linecap="round" stroke-width="4"></circle>
+<circle class="stroke-tertiary" cx="18" cy="18" fill="none" r="16" stroke-dasharray="30, 100" stroke-dashoffset="-75" stroke-linecap="round" stroke-width="4"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-lg font-black tracking-tighter">842</span>
+<span class="text-[8px] uppercase tracking-widest text-secondary">Total Nodes</span>
+</div>
+</div>
+<div class="mt-6 w-full space-y-2">
+<div class="flex justify-between items-center text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-primary"></div><span>Exposed Publicly</span></div>
+<span class="font-bold">412</span>
+</div>
+<div class="flex justify-between items-center text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-tertiary"></div><span>VPC Isolated</span></div>
+<span class="font-bold">298</span>
+</div>
+<div class="flex justify-between items-center text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-secondary"></div><span>Undefined</span></div>
+<span class="font-bold">132</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Drop Zone Placeholder -->
+<div class="col-span-12 row-span-4 border-2 border-dashed border-outline-variant rounded-lg flex flex-col items-center justify-center bg-surface-container-low/20 hover:bg-surface-container-low/40 transition-colors group">
+<span class="material-symbols-outlined text-secondary group-hover:text-primary mb-2">add_circle</span>
+<p class="text-xs font-bold text-secondary group-hover:text-on-surface">Drop a widget here to expand dashboard</p>
+</div>
+</div>
+</div>
+<!-- Configuration Right Sidebar -->
+<aside class="w-80 border-l border-outline-variant bg-surface flex flex-col shrink-0">
+<div class="h-10 border-b border-outline-variant px-4 flex items-center justify-between bg-surface-container-high/30">
+<span class="text-[10px] font-bold uppercase tracking-widest text-secondary">Widget Settings</span>
+<button class="material-symbols-outlined text-sm text-secondary">more_vert</button>
+</div>
+<div class="p-4 flex-1 overflow-y-auto space-y-6">
+<section>
+<label class="text-[10px] font-bold uppercase tracking-widest text-secondary block mb-3">Data Query (SQL-Builder)</label>
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-3 mono-text text-[11px] leading-relaxed relative">
+<div class="absolute top-2 right-2 text-primary">
+<span class="material-symbols-outlined text-sm">code</span>
+</div>
+<span class="text-primary">SELECT</span> avg(risk_score) <br/>
+<span class="text-primary">FROM</span> event_stream <br/>
+<span class="text-primary">WHERE</span> src_ip != <span class="text-tertiary">'10.0.0.0/8'</span> <br/>
+<span class="text-primary">GROUP BY</span> timeslice(5m) <br/>
+<span class="text-primary">ORDER BY</span> _time DESC
+                        </div>
+<button class="mt-2 w-full py-1 text-[10px] font-bold text-primary border border-primary/20 hover:bg-primary/5 transition-colors rounded">Run Test Query</button>
+</section>
+<section>
+<label class="text-[10px] font-bold uppercase tracking-widest text-secondary block mb-3">Visualization</label>
+<div class="grid grid-cols-4 gap-2">
+<button class="p-2 border border-primary bg-primary/10 rounded flex flex-col items-center gap-1 group">
+<span class="material-symbols-outlined text-sm text-primary">show_chart</span>
+<span class="text-[9px] text-on-surface">Line</span>
+</button>
+<button class="p-2 border border-outline-variant hover:border-primary rounded flex flex-col items-center gap-1 group transition-colors">
+<span class="material-symbols-outlined text-sm text-secondary group-hover:text-primary">bar_chart</span>
+<span class="text-[9px] text-secondary group-hover:text-on-surface">Bar</span>
+</button>
+<button class="p-2 border border-outline-variant hover:border-primary rounded flex flex-col items-center gap-1 group transition-colors">
+<span class="material-symbols-outlined text-sm text-secondary group-hover:text-primary">speed</span>
+<span class="text-[9px] text-secondary group-hover:text-on-surface">Gauge</span>
+</button>
+<button class="p-2 border border-outline-variant hover:border-primary rounded flex flex-col items-center gap-1 group transition-colors">
+<span class="material-symbols-outlined text-sm text-secondary group-hover:text-primary">scatter_plot</span>
+<span class="text-[9px] text-secondary group-hover:text-on-surface">Scatter</span>
+</button>
+</div>
+</section>
+<section class="space-y-4">
+<div>
+<div class="flex justify-between items-center mb-1.5">
+<label class="text-[10px] font-bold text-on-surface">Refresh Interval</label>
+<span class="text-[10px] mono-text text-primary">60s</span>
+</div>
+<input class="w-full accent-primary bg-surface-container h-1 rounded-full appearance-none" type="range"/>
+</div>
+<div>
+<label class="text-[10px] font-bold text-on-surface block mb-1.5">Alert Thresholds</label>
+<div class="flex gap-2 items-center">
+<div class="flex-1 bg-surface-container border border-outline-variant rounded flex items-center px-2 py-1.5 gap-2">
+<span class="text-[10px] text-secondary">Critical &gt;</span>
+<input class="bg-transparent border-none p-0 text-[10px] font-bold text-on-surface focus:ring-0 w-8" type="text" value="85.0"/>
+</div>
+<div class="w-4 h-4 rounded bg-error shadow-[0_0_8px_rgba(239,68,68,0.4)]"></div>
+</div>
+</div>
+</section>
+<section class="pt-4 border-t border-outline-variant">
+<button class="w-full py-2 bg-on-surface text-background text-xs font-black uppercase tracking-tighter rounded hover:bg-surface-bright transition-colors">Apply Changes</button>
+<button class="w-full mt-2 py-2 text-secondary text-xs font-bold hover:text-error transition-colors">Discard Draft</button>
+</section>
+</div>
+</aside>
+</div>
+</main>
+<!-- Floating Map View Trigger (Visual Accent) -->
+<button class="fixed bottom-6 right-8 w-12 h-12 bg-primary rounded-full shadow-lg shadow-primary/20 flex items-center justify-center text-on-primary hover:scale-105 transition-transform z-[100]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">language</span>
+</button>
+</body></html>

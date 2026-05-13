@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Compliance Theatre | Obsidian AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#09090b",
+                    "surface-tint": "#a78bfa",
+                    "primary-fixed-dim": "#c4b5fd",
+                    "error-container": "#3b1111",
+                    "outline": "#52525b",
+                    "secondary-fixed-dim": "#71717a",
+                    "surface-variant": "#18181b",
+                    "surface-dim": "#0c0c0f",
+                    "surface": "#0c0c0f",
+                    "outline-variant": "#27272a",
+                    "tertiary-container": "#065f46",
+                    "on-secondary-container": "#a1a1aa",
+                    "on-error-container": "#fca5a5",
+                    "inverse-on-surface": "#09090b",
+                    "on-background": "#fafafa",
+                    "on-secondary-fixed": "#18181b",
+                    "on-primary-container": "#ede9fe",
+                    "surface-container-highest": "#1e1e22",
+                    "primary-fixed": "#ede9fe",
+                    "primary-container": "#7c3aed",
+                    "secondary-fixed": "#a1a1aa",
+                    "on-tertiary-fixed": "#003318",
+                    "tertiary": "#34d399",
+                    "on-surface": "#fafafa",
+                    "surface-bright": "#18181b",
+                    "on-tertiary": "#001a12",
+                    "error": "#ef4444",
+                    "surface-container-high": "#18181b",
+                    "secondary": "#71717a",
+                    "on-primary-fixed": "#2e1065",
+                    "tertiary-fixed": "#bbf7d0",
+                    "secondary-container": "#27272a",
+                    "on-secondary-fixed-variant": "#3f3f46",
+                    "background": "#09090b",
+                    "tertiary-fixed-dim": "#6ee7b7",
+                    "surface-container-low": "#0f0f12",
+                    "surface-container": "#121215",
+                    "primary": "#a78bfa",
+                    "on-secondary": "#09090b",
+                    "on-primary": "#0a0012",
+                    "on-tertiary-fixed-variant": "#047857",
+                    "inverse-surface": "#fafafa",
+                    "on-tertiary-container": "#bbf7d0",
+                    "inverse-primary": "#5b21b6",
+                    "on-surface-variant": "#a1a1aa",
+                    "on-primary-fixed-variant": "#5b21b6",
+                    "on-error": "#1a0000"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter", "sans-serif"],
+                    "display": ["Inter", "sans-serif"],
+                    "body": ["Inter", "sans-serif"],
+                    "label": ["Inter", "sans-serif"],
+                    "mono": ["JetBrains Mono", "monospace"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #09090b; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .scan-line { background: linear-gradient(to bottom, transparent, #a78bfa33, transparent); height: 100px; width: 100%; position: absolute; top: -100px; }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-4 z-[60]">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-headline font-black text-on-surface tracking-tighter">Obsidian</h1>
+<p class="text-xs text-secondary font-mono uppercase tracking-widest">Cloud Security</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">dashboard</span>
+<span>Command Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">security</span>
+<span>Threat Hunter</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">inventory_2</span>
+<span>Asset Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">cloud_done</span>
+<span>Cloud Posture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-r-2 border-primary font-body text-label-sm tracking-tight rounded-l-md" href="#">
+<span class="material-symbols-outlined text-sm">fact_check</span>
+<span>Compliance</span>
+</a>
+</nav>
+<div class="px-3 border-t border-outline-variant pt-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary hover:bg-surface-container hover:text-on-surface transition-colors duration-150 ease-in-out font-body text-label-sm tracking-tight rounded-md" href="#">
+<span class="material-symbols-outlined text-sm">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-14 px-6 border-b border-outline-variant bg-surface-dim flex justify-between items-center z-50">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md focus-within:ring-2 focus-within:ring-primary rounded-md overflow-hidden">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+<input class="w-full bg-surface-container border-none text-on-surface text-label-md pl-10 pr-4 py-1.5 focus:ring-0" placeholder="Search compliance controls..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="text-lg font-headline font-bold text-on-surface">Obsidian AI</span>
+<div class="flex items-center gap-4 border-l border-outline-variant pl-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</button>
+<div class="w-8 h-8 rounded-full border border-outline-variant bg-surface-container overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a cybersecurity analyst looking directly into the camera with a neutral expression. The background is a dimly lit, high-tech server room with soft purple and blue ambient lighting. The lighting on the face is crisp and cinematic, matching a dark-mode obsidian aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIXlXOkhzq6lI3ob-rlER_bKe8ET6nB2poK_Nmd-KYVgWHqG__YYz8vejpdKxmZA4soSvi8i4nDRjrJU_EpSoi4yvw8oY2sJ6kVBXuFTvueyiY9rSgaCN-vXYt7WeP0ZxbS7H_jgVWZQL8qk2zOEo4akRiDKI6dvKgyYHxuNTAu2zX8pFzAk4THL7h2YPgV43tgqfqujvOEnnwBoqKTGrcngrXZbv7BC5Oreh_8ESRm3pReZddGPjbmF9HS5B9zVAVcaVL3A5e3D7N"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pl-64 pt-14 min-h-screen">
+<div class="p-6 space-y-6">
+<!-- Framework Overview -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="bg-surface-container border border-outline-variant p-4 rounded-lg flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">SOC2 TYPE II</span>
+<span class="text-tertiary font-mono text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            No Drift
+                        </span>
+</div>
+<div class="mt-2">
+<div class="text-2xl font-bold text-on-surface">98.4<span class="text-secondary text-sm">%</span></div>
+<div class="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary h-full" style="width: 98.4%"></div>
+</div>
+</div>
+<p class="text-[10px] text-secondary mt-1">42/43 Controls Validated</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-4 rounded-lg flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">HIPAA</span>
+<span class="text-error font-mono text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+                            2 Drifts
+                        </span>
+</div>
+<div class="mt-2">
+<div class="text-2xl font-bold text-on-surface">82.1<span class="text-secondary text-sm">%</span></div>
+<div class="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-error h-full" style="width: 82.1%"></div>
+</div>
+</div>
+<p class="text-[10px] text-secondary mt-1">115/140 Controls Validated</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-4 rounded-lg flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">ISO 27001</span>
+<span class="text-on-surface-variant font-mono text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]">sync</span>
+                            Updating
+                        </span>
+</div>
+<div class="mt-2">
+<div class="text-2xl font-bold text-on-surface">94.0<span class="text-secondary text-sm">%</span></div>
+<div class="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary h-full" style="width: 94%"></div>
+</div>
+</div>
+<p class="text-[10px] text-secondary mt-1">107/114 Controls Validated</p>
+</div>
+<div class="bg-surface-container border border-outline-variant p-4 rounded-lg flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">PCI-DSS v4</span>
+<span class="text-tertiary font-mono text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            No Drift
+                        </span>
+</div>
+<div class="mt-2">
+<div class="text-2xl font-bold text-on-surface">100<span class="text-secondary text-sm">%</span></div>
+<div class="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 100%"></div>
+</div>
+</div>
+<p class="text-[10px] text-secondary mt-1">212/212 Controls Validated</p>
+</div>
+</div>
+<!-- Dashboard Center Content -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Theatre Visualization -->
+<div class="col-span-12 lg:col-span-8 space-y-6">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden relative group">
+<div class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-10 bg-gradient-to-b from-background to-transparent">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></div>
+<h3 class="font-bold text-sm uppercase tracking-widest text-on-surface">Live Continuous Audit Theatre</h3>
+</div>
+<div class="flex gap-4">
+<div class="text-right">
+<p class="text-[10px] text-secondary mono uppercase">Active Agents</p>
+<p class="text-xs font-bold text-on-surface mono">24/24</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-secondary mono uppercase">Validation Rate</p>
+<p class="text-xs font-bold text-tertiary mono">1.4k/min</p>
+</div>
+</div>
+</div>
+<!-- Map Visualization Layer -->
+<div class="aspect-video relative overflow-hidden flex items-center justify-center bg-surface-container-low">
+<img alt="Global Audit Map" class="w-full h-full object-cover opacity-20" data-alt="A stylized global digital map with glowing connections and data nodes appearing as bright violet dots on a deep black background. The continents are outlined with subtle, thin lines in zinc-gray. Small pulses of light travel between the nodes, representing real-time automated audit traffic. The lighting is low-key with high-contrast violet and emerald accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfKRI32hMoQWKD6ZhsP2fOUZPA7FRiq3Vhcn_n0ZJJagsS81g5vH9nsV3-PpPJ0FvX7N5u0zKN_AxDB1Vd2Pd_dl4Tx8Z-V8UOqOdbgFWMZA5J72yO19Nbys60O7Nn-M2JpgWpgTVkC2FgC2vNSQ0N-T_nGx8a2Q3OBfi-XqxzYHYu0OWj6d4iusmeV3p6qc3-jVJx2X0o82dVoxV9h-Yl9kl-Mm31ms8kk8-QmSTZXH29B97PDdzFNgkJh-L2G-d4gCujejfDCydH"/>
+<!-- Overlay Visuals for Theatre -->
+<div class="absolute inset-0 p-8 flex flex-wrap gap-4 pointer-events-none items-center justify-center">
+<div class="bg-surface/80 backdrop-blur border border-primary/40 px-3 py-2 rounded text-[10px] mono flex items-center gap-2">
+<span class="w-1 h-1 rounded-full bg-primary shadow-[0_0_8px_#a78bfa]"></span>
+                                    AWS-US-EAST-1: Validating IAM_ROOT_MFA
+                                </div>
+<div class="bg-surface/80 backdrop-blur border border-tertiary/40 px-3 py-2 rounded text-[10px] mono flex items-center gap-2">
+<span class="w-1 h-1 rounded-full bg-tertiary shadow-[0_0_8px_#34d399]"></span>
+                                    GCP-EUROPE-WEST: Evidence Collected
+                                </div>
+<div class="bg-surface/80 backdrop-blur border border-error/40 px-3 py-2 rounded text-[10px] mono flex items-center gap-2">
+<span class="w-1 h-1 rounded-full bg-error shadow-[0_0_8px_#ef4444]"></span>
+                                    AZURE-ASIA: DRIFT DETECTED IN KV_09
+                                </div>
+<div class="bg-surface/80 backdrop-blur border border-primary/40 px-3 py-2 rounded text-[10px] mono flex items-center gap-2">
+<span class="w-1 h-1 rounded-full bg-primary shadow-[0_0_8px_#a78bfa]"></span>
+                                    AWS-SA-EAST-1: Checking S3_PUBLIC_ACCESS
+                                </div>
+</div>
+</div>
+</div>
+<!-- Drift Timeline (Compact) -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-4">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface">30D Compliance Drift</h3>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="text-[10px] text-secondary mono">Score</span>
+</div>
+<div class="flex items-center gap-1">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<span class="text-[10px] text-secondary mono">Drifts</span>
+</div>
+</div>
+</div>
+<div class="h-24 flex items-end gap-1 px-2">
+<!-- Mock Bar Chart -->
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 80%">
+<div class="absolute bottom-0 w-full bg-primary/20 h-full"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[85%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 85%">
+<div class="absolute bottom-0 w-full bg-primary/20 h-full"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[90%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 90%">
+<div class="absolute bottom-0 w-full bg-primary/20 h-full"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[95%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 70%">
+<div class="absolute bottom-0 w-full bg-error h-1.5 opacity-60"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[70%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 75%">
+<div class="absolute bottom-0 w-full bg-primary/20 h-full"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[80%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 95%">
+<div class="absolute bottom-0 w-full bg-primary/20 h-full"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[100%] group-hover:bg-primary-fixed transition-colors"></div>
+</div>
+<!-- Repeat for density... -->
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 88%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[90%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 92%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[95%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 80%">
+<div class="absolute bottom-0 w-full bg-error h-2 opacity-60"></div>
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[82%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 85%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[88%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 90%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[92%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 95%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[100%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 85%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[88%]"></div>
+</div>
+<div class="flex-1 bg-surface-container-highest group relative" style="height: 82%">
+<div class="absolute inset-x-0 bottom-0 bg-primary h-[84%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Evidence Automation Tracker -->
+<div class="col-span-12 lg:col-span-4 space-y-4">
+<div class="bg-surface-container border border-outline-variant rounded-lg p-4 h-full flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface">Evidence Collection</h3>
+<button class="text-[10px] text-primary hover:underline mono font-bold">RE-SCAN ALL</button>
+</div>
+<div class="flex-1 space-y-4">
+<div class="flex items-center gap-4 p-3 bg-surface-dim border border-outline-variant rounded-md">
+<div class="p-2 rounded bg-tertiary/10 text-tertiary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">cloud_sync</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface font-bold">AWS_CLOUD_TRAIL_EN_01</span>
+<span class="text-[9px] text-secondary mono">2m ago</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="px-1.5 py-0.5 rounded-sm bg-tertiary/20 text-tertiary text-[9px] mono font-bold">PASS</span>
+<span class="text-[10px] text-on-surface-variant truncate">Logging enabled on all regions</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 p-3 bg-surface-dim border border-outline-variant rounded-md">
+<div class="p-2 rounded bg-tertiary/10 text-tertiary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">policy</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface font-bold">GCP_IAM_OWNER_CHK</span>
+<span class="text-[9px] text-secondary mono">14m ago</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="px-1.5 py-0.5 rounded-sm bg-tertiary/20 text-tertiary text-[9px] mono font-bold">PASS</span>
+<span class="text-[10px] text-on-surface-variant truncate">Least privilege audit complete</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 p-3 bg-surface-dim border border-outline-variant rounded-md border-error/50">
+<div class="p-2 rounded bg-error/10 text-error">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">database</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface font-bold">AZURE_KV_ENC_STATUS</span>
+<span class="text-[9px] text-error mono font-bold">FAILED</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="px-1.5 py-0.5 rounded-sm bg-error/20 text-error text-[9px] mono font-bold">FAIL</span>
+<span class="text-[10px] text-error/80 truncate font-mono">ENCRYPTION_DISABLED: KV-09</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 p-3 bg-surface-dim border border-outline-variant rounded-md">
+<div class="p-2 rounded bg-tertiary/10 text-tertiary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface font-bold">MFA_COMPLIANCE_SYNC</span>
+<span class="text-[9px] text-secondary mono">1h ago</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="px-1.5 py-0.5 rounded-sm bg-tertiary/20 text-tertiary text-[9px] mono font-bold">PASS</span>
+<span class="text-[10px] text-on-surface-variant truncate">99.8% User enrollment verified</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant">
+<div class="flex justify-between text-[10px] mono text-secondary mb-2">
+<span>TOTAL COLLECTED (24H)</span>
+<span class="text-on-surface">12,492</span>
+</div>
+<div class="flex justify-between text-[10px] mono text-secondary">
+<span>STORAGE USAGE</span>
+<span class="text-on-surface">1.2 TB</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Control Mapping Grid -->
+<div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface">Control Mapping Grid</h3>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest border border-outline-variant text-xs text-on-surface px-3 py-1 rounded flex items-center gap-2 hover:bg-surface-variant">
+<span class="material-symbols-outlined text-xs">filter_list</span>
+                            Filter
+                        </button>
+<button class="bg-primary text-on-primary text-xs px-3 py-1 rounded font-bold hover:bg-primary-container transition-colors">
+                            Export Artifacts
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-dim text-[10px] uppercase font-mono tracking-widest text-secondary border-b border-outline-variant">
+<tr>
+<th class="px-6 py-3 font-normal">Control ID</th>
+<th class="px-6 py-3 font-normal">Description</th>
+<th class="px-6 py-3 font-normal">Frameworks</th>
+<th class="px-6 py-3 font-normal">Cloud Assets</th>
+<th class="px-6 py-3 font-normal">Status</th>
+<th class="px-6 py-3 font-normal">Actions</th>
+</tr>
+</thead>
+<tbody class="text-xs font-body divide-y divide-outline-variant/30">
+<tr class="hover:bg-surface-container-highest transition-colors">
+<td class="px-6 py-3 font-mono font-bold text-primary">CC-6.1.1</td>
+<td class="px-6 py-3 text-on-surface">Access Control: Logical Separation of Duties</td>
+<td class="px-6 py-3">
+<div class="flex gap-1">
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">SOC2</span>
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">ISO</span>
+</div>
+</td>
+<td class="px-6 py-3 text-on-surface-variant">424 Assets</td>
+<td class="px-6 py-3">
+<span class="flex items-center gap-1.5 text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                        Compliant
+                                    </span>
+</td>
+<td class="px-6 py-3">
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors">
+<td class="px-6 py-3 font-mono font-bold text-primary">CC-7.2.2</td>
+<td class="px-6 py-3 text-on-surface">Vulnerability Management: Scan &amp; Remediation</td>
+<td class="px-6 py-3">
+<div class="flex gap-1">
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">SOC2</span>
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">PCI</span>
+</div>
+</td>
+<td class="px-6 py-3 text-on-surface-variant">1,210 Assets</td>
+<td class="px-6 py-3">
+<span class="flex items-center gap-1.5 text-error">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                        Non-Compliant
+                                    </span>
+</td>
+<td class="px-6 py-3">
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors">
+<td class="px-6 py-3 font-mono font-bold text-primary">DS-1.4.1</td>
+<td class="px-6 py-3 text-on-surface">Data at Rest: AES-256 Encryption</td>
+<td class="px-6 py-3">
+<div class="flex gap-1">
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">HIPAA</span>
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">PCI</span>
+</div>
+</td>
+<td class="px-6 py-3 text-on-surface-variant">88 Assets</td>
+<td class="px-6 py-3">
+<span class="flex items-center gap-1.5 text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                        Manual Review
+                                    </span>
+</td>
+<td class="px-6 py-3">
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors">
+<td class="px-6 py-3 font-mono font-bold text-primary">IR-1.1.2</td>
+<td class="px-6 py-3 text-on-surface">Incident Response: Log Retention Policies</td>
+<td class="px-6 py-3">
+<div class="flex gap-1">
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">ISO</span>
+<span class="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] mono">SOC2</span>
+</div>
+</td>
+<td class="px-6 py-3 text-on-surface-variant">Global S3</td>
+<td class="px-6 py-3">
+<span class="flex items-center gap-1.5 text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                        Compliant
+                                    </span>
+</td>
+<td class="px-6 py-3">
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-3 border-t border-outline-variant bg-surface-dim flex justify-between items-center">
+<span class="text-[10px] text-secondary mono">Page 1 of 12</span>
+<div class="flex gap-1">
+<button class="p-1 rounded hover:bg-surface-variant text-secondary">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-1 rounded hover:bg-surface-variant text-secondary">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (FAB) for contextual compliance tasks -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-container transition-transform active:scale-95 group z-[100]">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-12 transition-transform">add_task</span>
+<span class="absolute right-16 bg-surface-container border border-outline-variant px-3 py-1.5 rounded text-xs text-on-surface font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            Generate Compliance Report
+        </span>
+</button>
+</body></html>

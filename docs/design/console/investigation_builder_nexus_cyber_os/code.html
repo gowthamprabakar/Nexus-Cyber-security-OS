@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexus Cyber OS - Investigation Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#71717a",
+                        "on-secondary-fixed": "#18181b",
+                        "inverse-primary": "#5b21b6",
+                        "on-primary-container": "#ede9fe",
+                        "on-surface-variant": "#a1a1aa",
+                        "background": "#09090b",
+                        "surface-container-low": "#0f0f12",
+                        "on-secondary-container": "#a1a1aa",
+                        "tertiary-fixed": "#bbf7d0",
+                        "inverse-on-surface": "#09090b",
+                        "on-surface": "#fafafa",
+                        "on-primary": "#0a0012",
+                        "surface-container-high": "#18181b",
+                        "on-tertiary-container": "#bbf7d0",
+                        "secondary-fixed": "#a1a1aa",
+                        "primary-container": "#7c3aed",
+                        "tertiary": "#34d399",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "surface-bright": "#18181b",
+                        "on-error": "#1a0000",
+                        "on-background": "#fafafa",
+                        "surface-variant": "#18181b",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "on-error-container": "#fca5a5",
+                        "tertiary-container": "#065f46",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "on-primary-fixed": "#2e1065",
+                        "error-container": "#3b1111",
+                        "error": "#ef4444",
+                        "primary": "#a78bfa",
+                        "surface-container": "#121215",
+                        "inverse-surface": "#fafafa",
+                        "surface-container-highest": "#1e1e22",
+                        "secondary-fixed-dim": "#71717a",
+                        "on-tertiary-fixed": "#003318",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "surface-tint": "#a78bfa",
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "primary-fixed": "#ede9fe",
+                        "surface": "#0c0c0f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist"],
+                        "display": ["Geist"],
+                        "body": ["Geist"],
+                        "label": ["Geist"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Geist', sans-serif;
+            background-color: #09090b;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .canvas-grid {
+            background-image: radial-gradient(#27272a 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="text-on-surface overflow-hidden">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-6 h-16 z-50 bg-background border-b border-outline-variant fixed top-0 left-0">
+<div class="flex items-center gap-8">
+<h1 class="text-xl font-headline font-bold text-on-surface tracking-tighter">Nexus Cyber OS</h1>
+<div class="hidden md:flex items-center bg-surface-container px-3 py-1.5 rounded border border-outline-variant w-80">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface placeholder:text-on-surface-variant w-full" placeholder="Search investigations..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="hover:bg-surface-container-high transition-colors p-2 rounded cursor-pointer active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+</button>
+<button class="hover:bg-surface-container-high transition-colors p-2 rounded cursor-pointer active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">history</span>
+</button>
+<button class="hover:bg-surface-container-high transition-colors p-2 rounded cursor-pointer active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">help</span>
+</button>
+<div class="h-8 w-8 rounded-full border border-primary/50 overflow-hidden ml-2">
+<img alt="Security Analyst Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7TarphSZ7uPVziBEiENXw3hazRhqqy2xvF4-RgHcYSn-ju9Nv3bWEiFJwZ_u4d2e1XJ_1h0DjAqLLAJbVLsqwZhknrgY2TMSn4w1tQ8UTeFikJPEQODyJa_7Etl82ppINnV0KEWYSvTGNbnCjj5UxGDbKpshucY5NFIKBIUdgZOFf5Efj5EvkbnXqe3I37T6rx-Brf3-u3m8podmg6XIT9OObshIgtruX2N0Si5ZXwu4L9l7a64gu-6_aJuHb3nwM6FsCQGmnZg7S"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 pt-16 bg-surface-container-lowest border-r border-outline-variant w-64 z-40">
+<div class="p-6">
+<div class="flex items-center gap-3 mb-8">
+<div class="h-8 w-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary">shield</span>
+</div>
+<div>
+<div class="text-lg font-headline font-black text-on-surface">Nexus OS</div>
+<div class="text-[10px] text-primary uppercase tracking-widest font-bold">Cloud Core v2.4</div>
+</div>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all font-body text-sm font-medium tracking-wide rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all font-body text-sm font-medium tracking-wide rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">security</span>
+<span>Asset Inventory</span>
+</a>
+<!-- Active Tab: Investigation Builder -->
+<a class="flex items-center gap-3 px-3 py-2 text-primary bg-secondary-container/30 border-r-2 border-primary font-body text-sm font-bold tracking-wide transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">query_stats</span>
+<span>Investigation Builder</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all font-body text-sm font-medium tracking-wide rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">auto_mode</span>
+<span>Playbooks</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all font-body text-sm font-medium tracking-wide rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">crisis_alert</span>
+<span>Alert Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all font-body text-sm font-medium tracking-wide rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>System Config</span>
+</a>
+</nav>
+<div class="mt-8">
+<button class="w-full bg-primary text-on-primary font-bold py-2 rounded flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all text-sm">
+<span class="material-symbols-outlined text-sm">rocket_launch</span>
+                    Deploy Sensor
+                </button>
+</div>
+</div>
+<div class="mt-auto p-6 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all text-sm font-medium rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">contact_support</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all text-sm font-medium rounded" href="#">
+<span class="material-symbols-outlined text-[20px]">menu_book</span>
+<span>Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="pl-64 pt-16 h-screen flex overflow-hidden">
+<!-- Component Library Sidebar (Left) -->
+<aside class="w-72 bg-surface-container-low border-r border-outline-variant flex flex-col shrink-0">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="text-xs font-bold uppercase tracking-widest text-secondary">Library</span>
+<span class="material-symbols-outlined text-sm text-secondary">filter_list</span>
+</div>
+<div class="flex-1 overflow-y-auto p-3 space-y-6">
+<!-- Triggers -->
+<section>
+<div class="text-[11px] font-bold text-primary mb-3 flex items-center gap-2">
+<span class="h-1 w-1 bg-primary rounded-full"></span>
+                        TRIGGERS
+                    </div>
+<div class="grid grid-cols-1 gap-2">
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">cloud_done</span>
+<span class="text-xs font-medium">CloudTrail Event</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">terminal</span>
+<span class="text-xs font-medium">Runtime Alert</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">schedule</span>
+<span class="text-xs font-medium">Cron Schedule</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Logic Blocks -->
+<section>
+<div class="text-[11px] font-bold text-tertiary mb-3 flex items-center gap-2">
+<span class="h-1 w-1 bg-tertiary rounded-full"></span>
+                        LOGIC BLOCKS
+                    </div>
+<div class="grid grid-cols-1 gap-2">
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-tertiary/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-lg">alt_route</span>
+<span class="text-xs font-medium">Condition (IF/ELSE)</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-tertiary/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-lg">join_inner</span>
+<span class="text-xs font-medium">Data Join</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-tertiary/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-lg">filter_alt</span>
+<span class="text-xs font-medium">Value Filter</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Actions -->
+<section>
+<div class="text-[11px] font-bold text-error mb-3 flex items-center gap-2">
+<span class="h-1 w-1 bg-error rounded-full"></span>
+                        AGENT ACTIONS
+                    </div>
+<div class="grid grid-cols-1 gap-2">
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-error/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error text-lg">save</span>
+<span class="text-xs font-medium">Snapshot Memory</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-error/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error text-lg">block</span>
+<span class="text-xs font-medium">Quarantine Instance</span>
+</div>
+</div>
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant cursor-grab hover:border-error/50 transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error text-lg">notifications_active</span>
+<span class="text-xs font-medium">Slack Webhook</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Playbook Testing Action -->
+<div class="p-4 bg-surface-container border-t border-outline-variant">
+<button class="w-full border border-primary text-primary hover:bg-primary/10 font-bold py-2 rounded flex items-center justify-center gap-2 transition-all text-xs active:scale-95">
+<span class="material-symbols-outlined text-sm">play_circle</span>
+                    Dry Run Simulation
+                </button>
+</div>
+</aside>
+<!-- Visual Query Canvas (Center) -->
+<div class="flex-1 bg-background relative overflow-hidden canvas-grid">
+<div class="absolute top-4 left-4 flex gap-2">
+<div class="bg-surface-container/80 backdrop-blur px-3 py-1.5 rounded border border-outline-variant flex items-center gap-2 text-xs">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span>Status: Draft</span>
+</div>
+<div class="bg-surface-container/80 backdrop-blur px-3 py-1.5 rounded border border-outline-variant flex items-center gap-2 text-xs">
+<span class="text-secondary">Node Count: 04</span>
+</div>
+</div>
+<div class="absolute bottom-4 left-4 flex gap-2">
+<div class="bg-surface-container border border-outline-variant rounded flex">
+<button class="p-2 hover:bg-surface-container-high border-r border-outline-variant"><span class="material-symbols-outlined text-sm">add</span></button>
+<button class="p-2 hover:bg-surface-container-high border-r border-outline-variant"><span class="material-symbols-outlined text-sm">remove</span></button>
+<button class="p-2 hover:bg-surface-container-high"><span class="material-symbols-outlined text-sm">fit_screen</span></button>
+</div>
+</div>
+<!-- Nodes -->
+<div class="relative w-full h-full flex items-center justify-center gap-12">
+<!-- Trigger Node -->
+<div class="w-64 bg-surface-container border-2 border-primary rounded-lg shadow-2xl relative">
+<div class="p-3 bg-primary/10 border-b border-primary/20 flex items-center justify-between rounded-t-lg">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">cloud_done</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-primary">Trigger</span>
+</div>
+<span class="material-symbols-outlined text-sm text-secondary">more_vert</span>
+</div>
+<div class="p-4">
+<div class="text-sm font-bold mb-1">CloudTrail Event</div>
+<div class="text-[10px] text-on-surface-variant font-mono">ID: CT_TR_019</div>
+</div>
+<!-- Connection Port -->
+<div class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-4 border-background">
+<div class="w-2 h-2 bg-background rounded-full"></div>
+</div>
+</div>
+<!-- Connection Line (SVG) -->
+<svg class="absolute w-full h-full pointer-events-none">
+<path d="M 450 400 L 580 400" fill="none" stroke="#a78bfa" stroke-dasharray="4 4" stroke-width="2"></path>
+<path d="M 830 400 L 960 400" fill="none" stroke="#34d399" stroke-width="2"></path>
+</svg>
+<!-- Condition Node -->
+<div class="w-64 bg-surface-container border border-outline-variant rounded-lg shadow-2xl relative">
+<div class="p-3 bg-tertiary/10 border-b border-tertiary/20 flex items-center justify-between rounded-t-lg">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm">alt_route</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-tertiary">Logic Block</span>
+</div>
+<span class="material-symbols-outlined text-sm text-secondary">more_vert</span>
+</div>
+<div class="p-4 space-y-3">
+<div class="text-sm font-bold">Source IP Filter</div>
+<div class="bg-surface-container-low p-2 rounded border border-outline-variant">
+<code class="text-[10px] text-tertiary">Source IP != Internal</code>
+</div>
+</div>
+<!-- Connection Ports -->
+<div class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-4 border-background">
+<div class="w-2 h-2 bg-background rounded-full"></div>
+</div>
+<div class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-tertiary rounded-full flex items-center justify-center border-4 border-background">
+<div class="w-2 h-2 bg-background rounded-full"></div>
+</div>
+</div>
+<!-- Action Node -->
+<div class="w-64 bg-surface-container-highest border border-error/50 rounded-lg shadow-2xl relative">
+<div class="p-3 bg-error/10 border-b border-error/20 flex items-center justify-between rounded-t-lg">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">block</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-error">Response Action</span>
+</div>
+<span class="material-symbols-outlined text-sm text-secondary">more_vert</span>
+</div>
+<div class="p-4">
+<div class="text-sm font-bold mb-1">Quarantine Instance</div>
+<div class="text-[10px] text-on-surface-variant italic">Risk Level: High</div>
+</div>
+<!-- Connection Port -->
+<div class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-tertiary rounded-full flex items-center justify-center border-4 border-background">
+<div class="w-2 h-2 bg-background rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Parameter Configuration Panel (Right) -->
+<aside class="w-80 bg-surface-container-low border-l border-outline-variant flex flex-col shrink-0">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="text-xs font-bold uppercase tracking-widest text-secondary">Configuration</span>
+<span class="material-symbols-outlined text-sm text-secondary">close</span>
+</div>
+<div class="p-5 flex-1 overflow-y-auto space-y-6">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-secondary uppercase tracking-wider">Node Name</label>
+<input class="w-full bg-surface-container border border-outline-variant rounded p-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary" type="text" value="Source IP Filter"/>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<label class="text-[10px] font-bold text-secondary uppercase tracking-wider">Parameters</label>
+<span class="material-symbols-outlined text-xs text-primary">add_circle</span>
+</div>
+<div class="space-y-3">
+<div class="bg-surface-container border border-outline-variant rounded p-3">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-mono text-on-surface-variant">cidr_range</span>
+<span class="material-symbols-outlined text-xs text-error/60">delete</span>
+</div>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded py-1 px-2 text-xs font-mono text-tertiary" type="text" value="10.0.0.0/8"/>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded p-3">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-mono text-on-surface-variant">confidence_threshold</span>
+<span class="material-symbols-outlined text-xs text-error/60">delete</span>
+</div>
+<div class="flex items-center gap-4">
+<input class="flex-1 accent-primary" type="range"/>
+<span class="text-[11px] font-mono">0.85</span>
+</div>
+</div>
+<div class="bg-surface-container border border-outline-variant rounded p-3">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-mono text-on-surface-variant">action_on_match</span>
+<span class="material-symbols-outlined text-xs text-error/60">delete</span>
+</div>
+<select class="w-full bg-surface-container-low border border-outline-variant rounded py-1 px-2 text-xs">
+<option>PROCEED_TO_NEXT</option>
+<option>HALT_PLAYBOOK</option>
+<option>ALERT_ONLY</option>
+</select>
+</div>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant">
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-wider">Advanced Logic</span>
+<div class="w-8 h-4 bg-primary/20 rounded-full relative">
+<div class="absolute right-0.5 top-0.5 w-3 h-3 bg-primary rounded-full"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded border border-outline-variant font-mono text-[10px] text-on-surface-variant leading-relaxed">
+<span class="text-secondary"># Custom Regex Parser</span><br/>
+                        IF <span class="text-primary">event.metadata.origin</span> MATCHES <span class="text-tertiary">/^AWS_ROOT/</span> THEN <span class="text-error">TRIGGER_ELEVATED_RESPONSE</span>
+</div>
+</div>
+</div>
+<!-- Save Action -->
+<div class="p-4 bg-surface-container border-t border-outline-variant">
+<button class="w-full bg-primary text-on-primary font-bold py-2.5 rounded flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all text-sm">
+<span class="material-symbols-outlined text-sm">cloud_sync</span>
+                    Save Investigation
+                </button>
+</div>
+</aside>
+</main>
+<!-- Visual Polish: Overlay Data-Alt Images in Background (Hidden) -->
+<div class="hidden">
+<img data-alt="A highly detailed close-up of a digital forensic workstation in a secure operations center. The room is dark, illuminated only by the cool blue and soft violet glow of high-resolution monitors displaying complex node-based logic diagrams and real-time streaming security telemetry. The atmosphere is professional, cinematic, and technically focused with a sharp Obsidian-inspired aesthetic of deep blacks and precise neon accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuChmmsoXs-mTOZUpFt5g1CDC8nWxmjCqMrQLfBQDmf-yk6Wp7MVD3oFV9ix5lAWN2cebgA0FB0n5hHHtZLhHPFx3SLzaQOdPE7XNriCbjZuBw1HIKT6qOdprocGds_1emn49iKaMbswEI3Fc7vWNOaYrlQASfK0ZkG0iPZFQa018cVka0M4QWJjrO4FUsHDVqHqLyuJyCHScS---HViIV6XXHCwkwQiO7TplUC0Qb92munFMFGLrYgWc8xY04awEyPtPKFVZswATvTe"/>
+<img data-alt="An abstract visualization of a neural security network, featuring glowing data packets moving along crystalline pathways in a deep dark space. The color scheme is dominated by soft lavender violet and emerald green highlights against a near-black background. The lighting is low-key with intense specular highlights on the geometric connections, conveying a sense of advanced artificial intelligence and cyber-security protection." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5KTFMI2FenkoedFGYJnN7h6ZgT4ETPNgqxHljQGu-Yxvpumdbb-iKc6yP8jDEY_kQ7VcV1W1gTAO-gHtVXS8koA0bF9bB0ts9DnnolQDkMT8HG4wcO73lDewj6iH6fNWzd0srmiwJ83Sl2_zimzxPpOME1WB8najQzEsA6smcIywsPKhDlMYMQ47DoEWGHaFl2usNSABTOlzIOoHDtnSCZf_1CUKYKd9myK2qxDoRyYWMDGJYRf800BE_qy6DVNUEcx7n9Ce1UFDy"/>
+</div>
+</body></html>
