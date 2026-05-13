@@ -12,6 +12,7 @@ members = [
     "nexus-eval-framework",
     "nexus-identity",
     "nexus-investigation-agent",
+    "nexus-network-threat-agent",
     "nexus-runtime-threat",
     "nexus-shared",
     "nexus-vulnerability",
@@ -1005,6 +1006,46 @@ requires-dist = [
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-audit-agent", editable = "packages/agents/audit" },
+    { name = "nexus-charter", editable = "packages/charter" },
+    { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-shared", editable = "packages/shared" },
+    { name = "pydantic", specifier = ">=2.9.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "structlog", specifier = ">=24.4.0" },
+    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "nexus-network-threat-agent"
+version = "0.1.0"
+source = { editable = "packages/agents/network-threat" }
+dependencies = [
+    { name = "click" },
+    { name = "nexus-charter" },
+    { name = "nexus-eval-framework" },
+    { name = "nexus-shared" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "types-pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
     { name = "nexus-shared", editable = "packages/shared" },

@@ -15,6 +15,7 @@ members = [
     "packages/agents/runtime-threat",
     "packages/agents/audit",
     "packages/agents/investigation",
+    "packages/agents/network-threat",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -53,6 +54,7 @@ files = [
     "packages/agents/runtime-threat/src",
     "packages/agents/audit/src",
     "packages/agents/investigation/src",
+    "packages/agents/network-threat/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
