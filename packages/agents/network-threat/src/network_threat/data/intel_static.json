@@ -1,0 +1,62 @@
+{
+  "schema_version": "0.1",
+  "snapshot_date": "2026-05-13",
+  "notes": "Static threat-intel snapshot bundled with D.4 v0.1. Phase 1c replaces this with live feed integration via D.8 Threat Intel Agent (VirusTotal + OTX + CISA KEV + abuse.ch).",
+  "sources": [
+    "CISA Known Exploited Vulnerabilities (KEV) catalog — IPs extracted from advisories",
+    "abuse.ch — Feodo Tracker (botnet C2 IP list)",
+    "abuse.ch — URLhaus (C2 + malware-hosting domain list)",
+    "MITRE ATT&CK Group/Software references — known threat-actor infrastructure"
+  ],
+  "known_bad_domains": [
+    "duckdns.org",
+    "no-ip.com",
+    "no-ip.org",
+    "noip.com",
+    "freedns.afraid.org",
+    "ddns.net",
+    "hopto.org",
+    "zapto.org",
+    "mooo.com",
+    "bit.ly",
+    "tinyurl.com",
+    "is.gd",
+    "ngrok.io",
+    "serveo.net",
+    "localtunnel.me",
+    "pagekite.me"
+  ],
+  "known_bad_ip_cidrs": [
+    "185.220.100.0/22",
+    "185.220.101.0/24",
+    "185.220.102.0/24",
+    "192.42.116.0/22",
+    "199.249.230.0/24",
+    "199.249.224.0/22",
+    "193.218.118.0/24",
+    "194.61.55.0/24",
+    "23.129.64.0/24",
+    "23.146.88.0/24",
+    "162.247.74.0/24",
+    "171.25.193.0/24"
+  ],
+  "tor_exit_node_cidrs": [
+    "23.129.64.0/24",
+    "23.146.88.0/24",
+    "162.247.74.0/24",
+    "171.25.193.0/24",
+    "185.220.100.0/22",
+    "185.220.101.0/24",
+    "185.220.102.0/24",
+    "192.42.116.0/22",
+    "199.249.230.0/24",
+    "199.249.224.0/22"
+  ],
+  "tag_legend": {
+    "tor_exit": "IP belongs to a published Tor exit-node range; not inherently malicious, but inbound from one is a strong signal for further review.",
+    "known_bad": "IP / domain has appeared in at least one of: CISA KEV, abuse.ch Feodo Tracker, MITRE ATT&CK Group infrastructure list.",
+    "dynamic_dns": "Domain uses a public dynamic-DNS provider — common in C2 channel hosting (attackers use them to rotate infrastructure quickly).",
+    "url_shortener": "Shortened URL — usually benign, but a leading indicator for phishing campaigns.",
+    "tunnel": "Public tunnel/relay service — operators rarely whitelist these; their appearance in egress traffic is a strong signal."
+  }
+}
