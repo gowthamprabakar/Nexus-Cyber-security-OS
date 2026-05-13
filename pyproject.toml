@@ -17,6 +17,7 @@ members = [
     "packages/agents/investigation",
     "packages/agents/network-threat",
     "packages/agents/multi-cloud-posture",
+    "packages/agents/k8s-posture",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -57,6 +58,7 @@ files = [
     "packages/agents/investigation/src",
     "packages/agents/network-threat/src",
     "packages/agents/multi-cloud-posture/src",
+    "packages/agents/k8s-posture/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
