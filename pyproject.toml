@@ -16,6 +16,7 @@ members = [
     "packages/agents/audit",
     "packages/agents/investigation",
     "packages/agents/network-threat",
+    "packages/agents/multi-cloud-posture",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -55,6 +56,7 @@ files = [
     "packages/agents/audit/src",
     "packages/agents/investigation/src",
     "packages/agents/network-threat/src",
+    "packages/agents/multi-cloud-posture/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
