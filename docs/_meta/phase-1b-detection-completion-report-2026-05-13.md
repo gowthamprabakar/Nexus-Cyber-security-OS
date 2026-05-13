@@ -147,15 +147,17 @@ INGEST → NORMALIZE → SCORE → SUMMARIZE → HANDOFF
 
 ### For the platform / capability surface
 
-| Surface                       | Pre-session | Post-session |         Delta |
-| ----------------------------- | ----------: | -----------: | ------------: |
-| Production agents             |      6 / 18 |       8 / 18 |     +2 agents |
-| Wiz weighted coverage         |      ~30.8% |       ~46.8% |     **+16pp** |
-| Tests passing                 |        1340 |         1785 |    +445 tests |
-| Source LOC                    |      41,496 |       53,193 | +11,697 lines |
-| Sub-plans complete            |          13 |           15 |            +2 |
-| Phase 1b detection completion |       1 / 4 |        3 / 4 |     +2 agents |
-| Cross-cloud demo surfaces     |           1 |            3 |   +Azure +GCP |
+Baseline is **2026-05-12 EOD** (post-F.6, pre-D.7) — the start of the Phase-1b detection shipping spree this report covers. The +22pp delta reconciles to the executive-summary table (D.7 +6pp + D.4 +4pp + D.5 +12pp).
+
+| Surface                       | Pre-session (2026-05-12 EOD) | Post-session (2026-05-13 EOD) |          Delta |
+| ----------------------------- | ---------------------------: | ----------------------------: | -------------: |
+| Production agents             |                       5 / 18 |                        8 / 18 |      +3 agents |
+| Wiz weighted coverage         |                       ~24.8% |                        ~46.8% |      **+22pp** |
+| Tests passing                 |                         1168 |                          1785 |     +617 tests |
+| Source LOC                    |                      ~32,000 |                        53,193 | +~21,000 lines |
+| Sub-plans complete            |                           11 |                            15 |             +4 |
+| Phase 1b detection completion |                        0 / 4 |                         3 / 4 |      +3 agents |
+| Cross-cloud demo surfaces     |                            1 |                             3 |    +Azure +GCP |
 
 ### For the broader vision (VISION §4)
 
