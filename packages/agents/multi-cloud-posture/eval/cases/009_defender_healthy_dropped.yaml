@@ -1,0 +1,32 @@
+case_id: 009_defender_healthy_dropped
+description: Defender status="Healthy" assessment is dropped (configuration is correct)
+fixture:
+  defender:
+    - kind: assessment
+      record_id: /subscriptions/aaa-bbb/providers/Microsoft.Security/assessments/asmt-009-healthy
+      display_name: Restrict storage public access
+      severity: High
+      status: Healthy
+      description: Already configured correctly.
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1
+      subscription_id: aaa-bbb
+      assessment_type: BuiltIn
+      detected_at: '2026-05-13T12:00:00Z'
+    - kind: assessment
+      record_id: /subscriptions/aaa-bbb/providers/Microsoft.Security/assessments/asmt-009-unhealthy
+      display_name: Restrict subscription owner MFA
+      severity: Medium
+      status: Unhealthy
+      description: Owners need MFA.
+      resource_id: /subscriptions/aaa-bbb
+      subscription_id: aaa-bbb
+      assessment_type: BuiltIn
+      detected_at: '2026-05-13T12:00:00Z'
+  activity: []
+  scc: []
+  iam: []
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0

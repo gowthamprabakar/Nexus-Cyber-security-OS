@@ -1,0 +1,22 @@
+case_id: 002_azure_defender_high
+description: One Azure Defender HIGH assessment — emits 1 HIGH finding (cspm_azure_defender)
+fixture:
+  defender:
+    - kind: assessment
+      record_id: /subscriptions/aaa-bbb/providers/Microsoft.Security/assessments/asmt-001
+      display_name: Restrict public storage access
+      severity: High
+      status: Unhealthy
+      description: Storage account allows public access; restrict to known IPs.
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1
+      subscription_id: aaa-bbb
+      assessment_type: BuiltIn
+      detected_at: '2026-05-13T12:00:00Z'
+  activity: []
+  scc: []
+  iam: []
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0

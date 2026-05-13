@@ -1,0 +1,21 @@
+case_id: 010_gcp_iam_editor_medium
+description: GCP IAM roles/editor on user → MEDIUM (per the analyser's grade table)
+fixture:
+  defender: []
+  activity: []
+  scc: []
+  iam:
+    - asset_name: //cloudresourcemanager.googleapis.com/projects/proj-xyz
+      asset_type: cloudresourcemanager.googleapis.com/Project
+      project_id: proj-xyz
+      role: roles/editor
+      member: user:carol@example.com
+      severity: MEDIUM
+      reason: User granted roles/editor — broad write access.
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0
+    critical: 0

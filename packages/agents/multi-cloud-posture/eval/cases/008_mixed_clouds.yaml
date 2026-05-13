@@ -1,0 +1,51 @@
+case_id: 008_mixed_clouds
+description: All four feeds contribute findings concurrently — one per source
+fixture:
+  defender:
+    - kind: assessment
+      record_id: /subscriptions/aaa-bbb/providers/Microsoft.Security/assessments/asmt-008
+      display_name: Restrict storage public access
+      severity: High
+      status: Unhealthy
+      description: x
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1
+      subscription_id: aaa-bbb
+      assessment_type: BuiltIn
+      detected_at: '2026-05-13T12:00:00Z'
+  activity:
+    - record_id: /subscriptions/aaa-bbb/providers/microsoft.insights/eventtypes/management/values/evt-008
+      operation_name: Microsoft.Network/networkSecurityGroups/write
+      operation_class: network
+      category: Administrative
+      level: Warning
+      status: Succeeded
+      caller: user@example.com
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Network/networkSecurityGroups/nsg1
+      subscription_id: aaa-bbb
+      resource_group: rg1
+      detected_at: '2026-05-13T12:00:00Z'
+  scc:
+    - finding_name: organizations/123/sources/456/findings/finding-008
+      parent: organizations/123/sources/456
+      resource_name: //storage.googleapis.com/projects/proj-xyz/buckets/public-bucket
+      category: PUBLIC_BUCKET
+      state: ACTIVE
+      severity: HIGH
+      description: x
+      project_id: proj-xyz
+      detected_at: '2026-05-13T12:00:00Z'
+  iam:
+    - asset_name: //cloudresourcemanager.googleapis.com/projects/proj-xyz
+      asset_type: cloudresourcemanager.googleapis.com/Project
+      project_id: proj-xyz
+      role: roles/owner
+      member: user:bob@external.com
+      severity: CRITICAL
+      reason: External user granted roles/owner.
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 4
+  by_severity:
+    critical: 1
+    high: 2
+    medium: 1

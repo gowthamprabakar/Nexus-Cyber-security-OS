@@ -1,0 +1,23 @@
+case_id: 006_gcp_iam_public_impersonation
+description: GCP IAM allUsers + serviceAccountUser → CRITICAL via analyser
+fixture:
+  defender: []
+  activity: []
+  scc: []
+  iam:
+    - asset_name: //cloudresourcemanager.googleapis.com/projects/proj-xyz
+      asset_type: cloudresourcemanager.googleapis.com/Project
+      project_id: proj-xyz
+      role: roles/iam.serviceAccountUser
+      member: allUsers
+      severity: CRITICAL
+      reason: >-
+        Public principal 'allUsers' granted impersonation role
+        'roles/iam.serviceAccountUser' — anyone on the internet can impersonate
+        service accounts.
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0

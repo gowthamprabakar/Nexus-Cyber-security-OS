@@ -1,0 +1,18 @@
+case_id: 007_gcp_scc_inactive_dropped
+description: SCC INACTIVE-state findings are dropped by the normalizer (closed history)
+fixture:
+  defender: []
+  activity: []
+  scc:
+    - finding_name: organizations/123/sources/456/findings/finding-007
+      parent: organizations/123/sources/456
+      resource_name: //storage.googleapis.com/projects/proj-xyz/buckets/closed-bucket
+      category: PUBLIC_BUCKET
+      state: INACTIVE
+      severity: HIGH
+      description: Closed bucket finding.
+      project_id: proj-xyz
+      detected_at: '2026-05-13T12:00:00Z'
+  iam: []
+expected:
+  finding_count: 0

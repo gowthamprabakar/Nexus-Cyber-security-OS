@@ -1,0 +1,22 @@
+case_id: 004_azure_compute_filtered
+description: Activity Log compute-class operations are filtered (start/stop VM is benign noise)
+fixture:
+  defender: []
+  activity:
+    - record_id: /subscriptions/aaa-bbb/providers/microsoft.insights/eventtypes/management/values/evt-004
+      operation_name: Microsoft.Compute/virtualMachines/start/action
+      operation_class: compute
+      category: Administrative
+      level: Informational
+      status: Succeeded
+      caller: user@example.com
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1
+      subscription_id: aaa-bbb
+      resource_group: rg1
+      detected_at: '2026-05-13T12:00:00Z'
+  scc: []
+  iam: []
+expected:
+  finding_count: 0
+  by_severity:
+    info: 0

@@ -1,0 +1,21 @@
+case_id: 005_gcp_scc_critical
+description: One GCP SCC CRITICAL finding — emits 1 CRITICAL (cspm_gcp_scc)
+fixture:
+  defender: []
+  activity: []
+  scc:
+    - finding_name: organizations/123/sources/456/findings/finding-005
+      parent: organizations/123/sources/456
+      resource_name: //storage.googleapis.com/projects/proj-xyz/buckets/public-bucket
+      category: PUBLIC_BUCKET
+      state: ACTIVE
+      severity: CRITICAL
+      description: Bucket allows public access via allUsers.
+      project_id: proj-xyz
+      detected_at: '2026-05-13T12:00:00Z'
+  iam: []
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0

@@ -1,0 +1,33 @@
+case_id: 003_azure_iam_overpermissive
+description: Azure Defender HIGH + Activity Log IAM-write Critical — emits 2 findings (one HIGH + one HIGH)
+fixture:
+  defender:
+    - kind: assessment
+      record_id: /subscriptions/aaa-bbb/providers/Microsoft.Security/assessments/asmt-002
+      display_name: Subscription owners should have MFA
+      severity: High
+      status: Unhealthy
+      description: Subscription owners must use MFA.
+      resource_id: /subscriptions/aaa-bbb
+      subscription_id: aaa-bbb
+      assessment_type: BuiltIn
+      detected_at: '2026-05-13T12:00:00Z'
+  activity:
+    - record_id: /subscriptions/aaa-bbb/providers/microsoft.insights/eventtypes/management/values/evt-002
+      operation_name: Microsoft.Authorization/roleAssignments/write
+      operation_class: iam
+      category: Administrative
+      level: Critical
+      status: Succeeded
+      caller: user@example.com
+      resource_id: /subscriptions/aaa-bbb/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1
+      subscription_id: aaa-bbb
+      resource_group: rg1
+      detected_at: '2026-05-13T12:00:00Z'
+  scc: []
+  iam: []
+expected:
+  finding_count: 2
+  by_severity:
+    high: 2
+    critical: 0
