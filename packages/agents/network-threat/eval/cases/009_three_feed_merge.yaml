@@ -1,0 +1,36 @@
+case_id: 009_three_feed_merge
+description: All three feeds contribute findings concurrently — port_scan + DGA + Suricata
+fixture:
+  flow_records_scan:
+    src_ip: 10.0.0.5
+    dst_ip: 203.0.113.5
+    count: 60
+    spacing_ms: 100
+    start_time: '2026-05-13T12:00:00Z'
+    base_dst_port: 1024
+  dns_events:
+    - {
+        timestamp: '2026-05-13T12:00:00Z',
+        kind: query,
+        query_name: qhxwzkpfvjbgmcnyl.tld,
+        src_ip: 10.0.5.17,
+        query_type: A,
+      }
+  suricata_alerts:
+    - timestamp: '2026-05-13T12:00:00Z'
+      src_ip: 203.0.113.5
+      dst_ip: 10.0.1.42
+      src_port: 54321
+      dst_port: 443
+      protocol: TCP
+      signature_id: 2001234
+      signature: ET MALWARE Suspicious TLS
+      category: A Network Trojan was Detected
+      severity: '1'
+expected:
+  finding_count: 3
+  by_finding_type:
+    network_port_scan: 1
+    network_dga: 1
+    network_suricata: 1
+    network_beacon: 0

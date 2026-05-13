@@ -1,0 +1,26 @@
+case_id: 002_port_scan_at_threshold
+description: 50 distinct dst-ports from one src in 5s — emits 1 PORT_SCAN MEDIUM
+fixture:
+  suricata_alerts: []
+  dns_events: []
+  # Helper directive: synthesise a port-scan via a count + ramp_spacing_ms
+  # The eval runner expands this into 50 individual FlowRecords with
+  # spaced start_times. Keeps the YAML compact.
+  flow_records_scan:
+    src_ip: 10.0.0.5
+    dst_ip: 203.0.113.5
+    count: 50
+    spacing_ms: 100
+    start_time: '2026-05-13T12:00:00Z'
+    base_dst_port: 1024
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0
+    critical: 0
+  by_finding_type:
+    network_port_scan: 1
+    network_beacon: 0
+    network_dga: 0
+    network_suricata: 0

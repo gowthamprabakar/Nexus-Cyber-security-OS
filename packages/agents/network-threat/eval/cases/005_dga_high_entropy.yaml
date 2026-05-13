@@ -1,0 +1,23 @@
+case_id: 005_dga_high_entropy
+description: Random-looking second-level label with no common bigrams — emits 1 DGA HIGH
+fixture:
+  suricata_alerts: []
+  flow_records: []
+  dns_events:
+    - {
+        timestamp: '2026-05-13T12:00:00Z',
+        kind: query,
+        query_name: qhxwzkpfvjbgmcnyl.tld,
+        query_type: A,
+        src_ip: 10.0.5.17,
+      }
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    medium: 0
+  by_finding_type:
+    network_dga: 1
+    network_port_scan: 0
+    network_beacon: 0
+    network_suricata: 0

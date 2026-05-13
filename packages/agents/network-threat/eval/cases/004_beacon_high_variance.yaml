@@ -1,0 +1,66 @@
+case_id: 004_beacon_high_variance
+description: Erratic-spacing flows (CoV > max) — no BEACON emitted
+fixture:
+  suricata_alerts: []
+  dns_events: []
+  flow_records:
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:00:00Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:00:01Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:01:01Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:01:03Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:02:03Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:02:05Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+    - {
+        src_ip: 10.0.0.5,
+        dst_ip: 203.0.113.5,
+        dst_port: 443,
+        start_time: '2026-05-13T12:03:05Z',
+        duration_seconds: 0.5,
+        action: ACCEPT,
+      }
+expected:
+  finding_count: 0
+  by_finding_type:
+    network_beacon: 0

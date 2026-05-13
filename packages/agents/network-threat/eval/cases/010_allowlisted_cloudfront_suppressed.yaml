@@ -1,0 +1,24 @@
+case_id: 010_allowlisted_cloudfront_suppressed
+description: High-entropy CloudFront label suppressed by suffix allowlist (Q2 false-positive guard)
+fixture:
+  suricata_alerts: []
+  flow_records: []
+  dns_events:
+    - {
+        timestamp: '2026-05-13T12:00:00Z',
+        kind: query,
+        query_name: d2xkfvqpzwhgmpls.cloudfront.net,
+        src_ip: 10.0.5.17,
+        query_type: A,
+      }
+    - {
+        timestamp: '2026-05-13T12:00:01Z',
+        kind: query,
+        query_name: randomlookingbucketxyz.s3.amazonaws.com,
+        src_ip: 10.0.5.17,
+        query_type: A,
+      }
+expected:
+  finding_count: 0
+  by_finding_type:
+    network_dga: 0

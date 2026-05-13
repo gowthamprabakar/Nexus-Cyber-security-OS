@@ -1,0 +1,31 @@
+case_id: 006_dga_low_entropy_skipped
+description: Readable English domains — no DGA emitted (legitimate names below entropy threshold)
+fixture:
+  suricata_alerts: []
+  flow_records: []
+  dns_events:
+    - {
+        timestamp: '2026-05-13T12:00:00Z',
+        kind: query,
+        query_name: github.com,
+        query_type: A,
+        src_ip: 10.0.5.17,
+      }
+    - {
+        timestamp: '2026-05-13T12:00:01Z',
+        kind: query,
+        query_name: wikipedia.org,
+        query_type: A,
+        src_ip: 10.0.5.17,
+      }
+    - {
+        timestamp: '2026-05-13T12:00:02Z',
+        kind: query,
+        query_name: login.microsoftonline.com,
+        query_type: A,
+        src_ip: 10.0.5.17,
+      }
+expected:
+  finding_count: 0
+  by_finding_type:
+    network_dga: 0

@@ -1,0 +1,22 @@
+case_id: 008_intel_uplift_tor_exit
+description: Beacon to Tor-exit-range IP — base HIGH severity uplifts to CRITICAL via enrichment
+fixture:
+  suricata_alerts: []
+  dns_events: []
+  flow_records_beacon:
+    src_ip: 10.0.0.5
+    dst_ip: 185.220.101.42 # in 185.220.101.0/24 — Tor exit
+    dst_port: 443
+    count: 20
+    period_seconds: 60.0
+    start_time: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+  by_finding_type:
+    network_beacon: 1
+    network_port_scan: 0
+    network_dga: 0
+    network_suricata: 0

@@ -1,0 +1,26 @@
+case_id: 007_suricata_alert_only
+description: One Suricata HIGH alert — lifted to a NETWORK-SURICATA finding (no enrichment)
+fixture:
+  flow_records: []
+  dns_events: []
+  suricata_alerts:
+    - timestamp: '2026-05-13T12:00:00Z'
+      src_ip: 203.0.113.5
+      dst_ip: 10.0.1.42
+      src_port: 54321
+      dst_port: 443
+      protocol: TCP
+      signature_id: 2001234
+      signature: ET MALWARE Suspicious TLS
+      category: A Network Trojan was Detected
+      severity: '1' # Suricata HIGH
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0
+  by_finding_type:
+    network_suricata: 1
+    network_port_scan: 0
+    network_beacon: 0
+    network_dga: 0

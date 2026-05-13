@@ -1,0 +1,22 @@
+case_id: 003_beacon_low_variance
+description: 20 periodic flows (60s, CoV ~0) to one dst:port — emits 1 BEACON HIGH
+fixture:
+  suricata_alerts: []
+  dns_events: []
+  flow_records_beacon:
+    src_ip: 10.0.0.5
+    dst_ip: 203.0.113.5
+    dst_port: 443
+    count: 20
+    period_seconds: 60.0
+    start_time: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0
+  by_finding_type:
+    network_beacon: 1
+    network_port_scan: 0
+    network_dga: 0
+    network_suricata: 0
