@@ -1,0 +1,46 @@
+case_id: 010_three_feed_merge
+description: |
+  All three feeds emit one finding each — confirms the agent driver wires
+  kube-bench / Polaris / manifest concurrently and dedup does NOT collapse
+  cross-tool findings (different arn schemes ensure they stay distinct).
+fixture:
+  kube_bench:
+    - control_id: '5.1.1'
+      control_text: Ensure that the cluster-admin role is only used where required
+      section_id: '5.1'
+      section_desc: RBAC and Service Accounts
+      node_type: policies
+      status: WARN
+      severity_marker: ''
+      audit: kubectl get clusterrolebindings
+      actual_value: cluster-admin granted to 3 subjects
+      remediation: Audit cluster-admin bindings.
+      scored: true
+      detected_at: '2026-05-13T12:00:00Z'
+  polaris:
+    - check_id: privilegeEscalationAllowed
+      message: Allow privilege escalation should not be set
+      severity: danger
+      category: Security
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      check_level: container
+      detected_at: '2026-05-13T12:00:00Z'
+  manifest:
+    - rule_id: image-pull-policy-not-always
+      rule_title: imagePullPolicy not explicitly Always
+      severity: medium
+      workload_kind: Deployment
+      workload_name: web
+      namespace: staging
+      container_name: nginx
+      manifest_path: /manifests/web.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 3
+  by_severity:
+    critical: 0
+    high: 1
+    medium: 2

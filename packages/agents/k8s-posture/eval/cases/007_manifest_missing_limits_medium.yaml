@@ -1,0 +1,20 @@
+case_id: 007_manifest_missing_limits_medium
+description: Manifest analyser flags `missing-resource-limits` — emits 1 MEDIUM finding
+fixture:
+  kube_bench: []
+  polaris: []
+  manifest:
+    - rule_id: missing-resource-limits
+      rule_title: Missing resource limits
+      severity: medium
+      workload_kind: Deployment
+      workload_name: cache
+      namespace: production
+      container_name: redis
+      manifest_path: /manifests/cache.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    medium: 1
+    high: 0

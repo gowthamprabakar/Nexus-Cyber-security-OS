@@ -1,0 +1,20 @@
+case_id: 005_manifest_root_container
+description: Manifest analyser flags `run-as-root` on a container — emits 1 HIGH finding (cspm_k8s_manifest)
+fixture:
+  kube_bench: []
+  polaris: []
+  manifest:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: payments
+      container_name: api
+      manifest_path: /manifests/api.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0

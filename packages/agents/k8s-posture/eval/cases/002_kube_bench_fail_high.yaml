@@ -1,0 +1,23 @@
+case_id: 002_kube_bench_fail_high
+description: One kube-bench FAIL on master — emits 1 HIGH finding (cspm_k8s_cis)
+fixture:
+  kube_bench:
+    - control_id: '1.1.1'
+      control_text: Ensure API server pod spec file permissions are 644 or more restrictive
+      section_id: '1.1'
+      section_desc: Master Node Configuration Files
+      node_type: master
+      status: FAIL
+      severity_marker: ''
+      audit: stat -c %a /etc/kubernetes/manifests/kube-apiserver.yaml
+      actual_value: '777'
+      remediation: Run chmod 644 on the file.
+      scored: true
+      detected_at: '2026-05-13T12:00:00Z'
+  polaris: []
+  manifest: []
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0

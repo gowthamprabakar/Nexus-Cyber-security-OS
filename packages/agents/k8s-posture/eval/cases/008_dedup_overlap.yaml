@@ -1,0 +1,31 @@
+case_id: 008_dedup_overlap
+description: Two Polaris findings on the same workload+rule within 5min → collapse to 1 HIGH (highest severity wins)
+fixture:
+  kube_bench: []
+  polaris:
+    - check_id: runAsRootAllowed
+      message: Should not be allowed to run as root
+      severity: warning
+      category: Security
+      workload_kind: Deployment
+      workload_name: frontend
+      namespace: production
+      container_name: nginx
+      check_level: container
+      detected_at: '2026-05-13T12:00:00Z'
+    - check_id: runAsRootAllowed
+      message: Should not be allowed to run as root
+      severity: danger
+      category: Security
+      workload_kind: Deployment
+      workload_name: frontend
+      namespace: production
+      container_name: nginx
+      check_level: container
+      detected_at: '2026-05-13T12:02:00Z'
+  manifest: []
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    medium: 0

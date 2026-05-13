@@ -1,0 +1,20 @@
+case_id: 006_manifest_privileged
+description: Manifest analyser flags `privileged-container` — emits 1 HIGH finding (cspm_k8s_manifest)
+fixture:
+  kube_bench: []
+  polaris: []
+  manifest:
+    - rule_id: privileged-container
+      rule_title: Privileged container
+      severity: high
+      workload_kind: DaemonSet
+      workload_name: node-exporter
+      namespace: monitoring
+      container_name: exporter
+      manifest_path: /manifests/node-exporter.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0

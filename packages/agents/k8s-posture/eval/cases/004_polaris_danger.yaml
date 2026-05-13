@@ -1,0 +1,21 @@
+case_id: 004_polaris_danger
+description: Polaris danger on a Deployment container — emits 1 HIGH finding (cspm_k8s_polaris)
+fixture:
+  kube_bench: []
+  polaris:
+    - check_id: runAsRootAllowed
+      message: Should not be allowed to run as root
+      severity: danger
+      category: Security
+      workload_kind: Deployment
+      workload_name: frontend
+      namespace: production
+      container_name: nginx
+      check_level: container
+      detected_at: '2026-05-13T12:00:00Z'
+  manifest: []
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+    critical: 0

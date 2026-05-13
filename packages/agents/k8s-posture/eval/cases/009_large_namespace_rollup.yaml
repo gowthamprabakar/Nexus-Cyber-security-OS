@@ -1,0 +1,52 @@
+case_id: 009_large_namespace_rollup
+description: |
+  Many findings across one namespace exercise the per-namespace rollup in the summarizer.
+  Three distinct manifest rules on three containers in `production` + one Polaris finding.
+  Expected: 4 findings, all in `production`, mix of HIGH (3) + MEDIUM (1).
+fixture:
+  kube_bench: []
+  polaris:
+    - check_id: hostNetworkSet
+      message: Host network namespace is shared with the host
+      severity: danger
+      category: Networking
+      workload_kind: DaemonSet
+      workload_name: cni
+      namespace: production
+      container_name: cni-agent
+      check_level: container
+      detected_at: '2026-05-13T12:00:00Z'
+  manifest:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: web
+      namespace: production
+      container_name: nginx
+      manifest_path: /manifests/web.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+    - rule_id: privileged-container
+      rule_title: Privileged container
+      severity: high
+      workload_kind: Deployment
+      workload_name: web
+      namespace: production
+      container_name: sidecar
+      manifest_path: /manifests/web.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+    - rule_id: missing-resource-limits
+      rule_title: Missing resource limits
+      severity: medium
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: /manifests/api.yaml
+      detected_at: '2026-05-13T12:00:00Z'
+expected:
+  finding_count: 4
+  by_severity:
+    high: 3
+    medium: 1
+    critical: 0

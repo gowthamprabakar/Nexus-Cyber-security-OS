@@ -1,0 +1,23 @@
+case_id: 003_kube_bench_critical_marker
+description: A FAIL with upstream severity-critical marker promotes the finding to CRITICAL
+fixture:
+  kube_bench:
+    - control_id: '4.2.1'
+      control_text: Ensure that the --anonymous-auth argument is set to false on the kubelet
+      section_id: '4.2'
+      section_desc: Kubelet
+      node_type: worker
+      status: FAIL
+      severity_marker: critical
+      audit: ps -ef | grep kubelet
+      actual_value: --anonymous-auth=true
+      remediation: Set --anonymous-auth=false in kubelet config.
+      scored: true
+      detected_at: '2026-05-13T12:00:00Z'
+  polaris: []
+  manifest: []
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
