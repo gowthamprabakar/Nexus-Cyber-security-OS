@@ -1,7 +1,8 @@
 """`read_cluster_workloads` — live K8s cluster ingest via the kubernetes SDK.
 
-D.6 v0.2. Replaces the file-based `read_manifests` for operators who want
-to point at a kubeconfig and run, rather than pre-staging YAML snapshots.
+D.6 v0.2 (kubeconfig mode) + v0.3 (in-cluster ServiceAccount mode).
+Replaces the file-based `read_manifests` for operators who want to point
+at a live cluster instead of pre-staging YAML snapshots.
 
 **Pipeline contract is unchanged.** The reader emits the same
 `ManifestFinding` shape as `read_manifests` (the file reader), so the
@@ -10,7 +11,13 @@ change. Same 10-rule analyser; same severity table.
 
 **How it works:**
 
-1. Loads kubeconfig from the explicit path (Q4 — no in-cluster fallback in v0.2).
+1. Loads cluster config from **one** of two sources (Q1 — explicit opt-in,
+   no auto-detect; v0.3):
+   - `kubeconfig: Path | str` → `config.load_kube_config(...)` (v0.2)
+   - `in_cluster: bool = True` → `config.load_incluster_config()` (v0.3)
+
+   The two sources are **mutually exclusive** (Q2). Neither set → error.
+
 2. Walks 7 workload kinds via `CoreV1Api` / `AppsV1Api` / `BatchV1Api`:
    Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob.
 3. Per kind: cluster-wide list when `namespace is None`, else namespace-scoped.
@@ -28,6 +35,15 @@ clear failure (the operator-runbook says "fix RBAC, then rerun"). Other
 non-2xx (e.g. `404` on a cluster that lacks `batch/v1 CronJob`) are
 skipped per-kind so the run still completes against the kinds we can
 read.
+
+**In-cluster mode (v0.3) RBAC:** the Pod's ServiceAccount needs the same
+`nexus-k8s-posture-reader` ClusterRole defined in the operator runbook
+(list verb on pods / deployments / statefulsets / daemonsets / replicasets
+/ jobs / cronjobs). `config.load_incluster_config()` raises
+`ConfigException` when called outside a real cluster (missing
+`KUBERNETES_SERVICE_HOST` / `KUBERNETES_SERVICE_PORT` env vars OR missing
+CA cert / token files) — the reader catches that and re-raises as
+`ClusterReaderError` (Q3).
 """
 
 from __future__ import annotations
@@ -70,14 +86,18 @@ _WORKLOAD_CALLS_NS: tuple[tuple[str, str, str], ...] = (
 
 async def read_cluster_workloads(
     *,
-    kubeconfig: Path | str,
+    kubeconfig: Path | str | None = None,
+    in_cluster: bool = False,
     namespace: str | None = None,
 ) -> tuple[ManifestFinding, ...]:
     """Read live K8s workloads and emit `ManifestFinding`s via the v0.1 10-rule analyser.
 
     Args:
-        kubeconfig: Explicit path to a kubeconfig file. v0.2 has no
-            in-cluster fallback (Q4) — operators must pass this.
+        kubeconfig: Optional explicit path to a kubeconfig file (v0.2 mode).
+            Mutually exclusive with `in_cluster` (Q2).
+        in_cluster: When True, load config from the Pod's mounted
+            ServiceAccount token (v0.3 mode). Mutually exclusive with
+            `kubeconfig` (Q2).
         namespace: Optional namespace scope. `None` → cluster-wide list APIs;
             a string → namespace-scoped list APIs.
 
@@ -87,23 +107,48 @@ async def read_cluster_workloads(
         lifts these to OCSF 2003 without modification.
 
     Raises:
-        ClusterReaderError: kubeconfig missing or malformed; or RBAC denies
-            the list permission on any required workload kind.
+        ClusterReaderError: neither config source set; both set;
+            kubeconfig missing or malformed; in-cluster config unavailable
+            (not running in a real cluster); or RBAC denies the list
+            permission on any required workload kind.
     """
     return await asyncio.to_thread(
         _read_sync,
-        kubeconfig=Path(kubeconfig),
+        kubeconfig=Path(kubeconfig) if kubeconfig is not None else None,
+        in_cluster=in_cluster,
         namespace=namespace,
     )
 
 
-def _read_sync(*, kubeconfig: Path, namespace: str | None) -> tuple[ManifestFinding, ...]:
-    if not kubeconfig.exists():
-        raise ClusterReaderError(f"kubeconfig not found: {kubeconfig}")
-    try:
-        config.load_kube_config(config_file=str(kubeconfig))
-    except Exception as exc:
-        raise ClusterReaderError(f"failed to load kubeconfig {kubeconfig}: {exc}") from exc
+def _read_sync(
+    *,
+    kubeconfig: Path | None,
+    in_cluster: bool,
+    namespace: str | None,
+) -> tuple[ManifestFinding, ...]:
+    if kubeconfig is not None and in_cluster:
+        raise ClusterReaderError(
+            "kubeconfig and in_cluster are mutually exclusive — pick one source (Q2)"
+        )
+    if kubeconfig is None and not in_cluster:
+        raise ClusterReaderError(
+            "no cluster config source — pass kubeconfig=... or in_cluster=True"
+        )
+
+    if in_cluster:
+        try:
+            config.load_incluster_config()
+        except Exception as exc:  # ConfigException, FileNotFoundError, etc.
+            raise ClusterReaderError(
+                f"failed to load in-cluster config (not running in a cluster?): {exc}"
+            ) from exc
+    elif kubeconfig is not None:
+        if not kubeconfig.exists():
+            raise ClusterReaderError(f"kubeconfig not found: {kubeconfig}")
+        try:
+            config.load_kube_config(config_file=str(kubeconfig))
+        except Exception as exc:
+            raise ClusterReaderError(f"failed to load kubeconfig {kubeconfig}: {exc}") from exc
 
     serializer = client.ApiClient()
     detected_at = datetime.now(UTC)
