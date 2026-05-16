@@ -97,8 +97,9 @@ def _read_chain(path: Path) -> list[dict]:
 
 
 def test_action_vocabulary_count() -> None:
-    """v0.1 emits exactly 11 distinct action names — keep the table in audit.py in sync."""
-    assert len(all_action_names()) == 11
+    """A.1 v0.1 + v0.1.1 emit exactly 20 distinct action names (11 remediation
+    + 9 promotion). Keep the tables in audit.py in sync if this fails."""
+    assert len(all_action_names()) == 20
 
 
 def test_action_names_are_unique() -> None:
@@ -107,11 +108,22 @@ def test_action_names_are_unique() -> None:
     assert len(names) == len(set(names))
 
 
-def test_all_action_names_carry_remediation_prefix() -> None:
-    """Every A.1 action string is namespaced under `remediation.*` so the F.6 query
-    surface can filter A.1's contribution from D.6's audit trail."""
+def test_all_action_names_use_a1_namespaces() -> None:
+    """Every A.1 action string is under `remediation.*` (v0.1) or
+    `promotion.*` (v0.1.1) so the F.6 query surface can filter A.1's
+    contribution from D.6's audit trail."""
     for name in all_action_names():
-        assert name.startswith("remediation.")
+        assert name.startswith(("remediation.", "promotion.")), (
+            f"action {name!r} is outside the A.1 namespace contract"
+        )
+
+
+def test_remediation_vocabulary_unchanged() -> None:
+    """The 11 v0.1 remediation actions remain in the vocabulary — adding
+    promotion events must not displace any of them. This is the
+    backward-compatibility guard for downstream subscribers."""
+    remediation_actions = {n for n in all_action_names() if n.startswith("remediation.")}
+    assert len(remediation_actions) == 11
 
 
 # ---------------------------- PipelineAuditor construction ----------------
@@ -347,8 +359,10 @@ def test_audit_chain_tail_hash_matches_last_entry(tmp_path: Path) -> None:
 # ---------------------------- end-to-end full-pipeline audit --------------
 
 
-def test_full_pipeline_audit_chain_records_all_11_actions(tmp_path: Path) -> None:
-    """A run that traverses every stage emits one entry per action type."""
+def test_full_pipeline_audit_chain_records_all_11_remediation_actions(tmp_path: Path) -> None:
+    """A run that traverses every stage emits one entry per remediation
+    action. Promotion actions (v0.1.1) are emitted from different call
+    sites — those are covered in test_promotion_audit.py."""
     auditor = PipelineAuditor(tmp_path / "audit.jsonl", run_id="run_001")
     artifact = _artifact()
     from k8s_posture.tools.manifests import ManifestFinding
@@ -386,8 +400,9 @@ def test_full_pipeline_audit_chain_records_all_11_actions(tmp_path: Path) -> Non
     auditor.run_completed(outcome_counts={"executed_rolled_back": 1}, total_actions=1)
 
     chain = _read_chain(auditor.path)
-    actions_emitted = [entry["action"] for entry in chain]
-    assert set(actions_emitted) == set(all_action_names())
+    actions_emitted = {entry["action"] for entry in chain}
+    remediation_actions = {n for n in all_action_names() if n.startswith("remediation.")}
+    assert actions_emitted == remediation_actions
 
 
 # ---------------------------- silence unused-import warning ---------------

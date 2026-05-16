@@ -2,7 +2,8 @@
 
 This module is a thin shim over `charter.audit.AuditLog` that defines:
 
-1. The **action-name vocabulary** A.1 emits (`remediation.*`).
+1. The **action-name vocabulary** A.1 emits (`remediation.*` and
+   `promotion.*`).
 2. A small helper, `PipelineAuditor`, that owns the per-run `AuditLog`
    instance and exposes one method per pipeline stage. The driver (Task 12)
    constructs one `PipelineAuditor` per run and calls the methods at each
@@ -14,7 +15,7 @@ strings here means downstream consumers (D.7 cross-incident correlation,
 S.1 console replay) can reason about A.1's audit trail without
 string-grep guessing.
 
-The 11 action strings v0.1 emits:
+A.1 v0.1's 11 `remediation.*` actions:
 
 | Stage | Action                              | Emitted by                                      |
 | ----- | ----------------------------------- | ----------------------------------------------- |
@@ -30,7 +31,23 @@ The 11 action strings v0.1 emits:
 | 7     | `remediation.rollback_completed`    | per artifact (only when Stage 6 said roll back) |
 | —     | `remediation.run_completed`         | driver, once per run                            |
 
-Every payload includes the artifact's `correlation_id` (when applicable) so
+A.1 v0.1.1 adds 9 `promotion.*` actions (see [earned-autonomy pipeline
+plan](../../../../../../docs/superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md)):
+
+| Phase           | Action                                  | Emitted by                                                   |
+| --------------- | --------------------------------------- | ------------------------------------------------------------ |
+| evidence        | `promotion.evidence.stage1`             | driver, per Stage-1 artifact emitted                         |
+| evidence        | `promotion.evidence.stage2`             | driver, per successful dry-run                               |
+| evidence        | `promotion.evidence.stage3`             | driver, per validated execute                                |
+| evidence        | `promotion.evidence.unexpected_rollback`| driver, per rollback NOT attributable to webhook             |
+| proposal        | `promotion.advance.proposed`            | reconciler, when criteria are met                            |
+| transition      | `promotion.advance.applied`             | CLI `remediation promotion advance`                          |
+| transition      | `promotion.demote.applied`              | CLI `remediation promotion demote`                           |
+| init            | `promotion.init.applied`                | CLI `remediation promotion init` on a fresh environment      |
+| reconcile       | `promotion.reconcile.completed`         | CLI `remediation promotion reconcile` after chain replay     |
+
+Total vocabulary: **20 actions** (11 remediation + 9 promotion). Every
+payload includes the artifact's `correlation_id` (when applicable) so
 operators can join an audit chain to a `RemediationFinding` via that ID.
 """
 
@@ -41,6 +58,20 @@ from typing import Any
 
 from charter.audit import AuditEntry, AuditLog
 
+from remediation.promotion.events import (
+    ACTION_PROMOTION_ADVANCE_APPLIED,
+    ACTION_PROMOTION_ADVANCE_PROPOSED,
+    ACTION_PROMOTION_DEMOTE_APPLIED,
+    ACTION_PROMOTION_EVIDENCE_STAGE1,
+    ACTION_PROMOTION_EVIDENCE_STAGE2,
+    ACTION_PROMOTION_EVIDENCE_STAGE3,
+    ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK,
+    ACTION_PROMOTION_INIT_APPLIED,
+    ACTION_PROMOTION_RECONCILE_COMPLETED,
+    PROMOTION_ACTIONS,
+)
+from remediation.promotion.schemas import PromotionSignOff
+from remediation.promotion.tracker import PromotionProposal
 from remediation.schemas import (
     RemediationActionType,
     RemediationArtifact,
@@ -62,6 +93,19 @@ ACTION_EXECUTE_FAILED = "remediation.execute_failed"
 ACTION_VALIDATE_COMPLETED = "remediation.validate_completed"
 ACTION_ROLLBACK_COMPLETED = "remediation.rollback_completed"
 ACTION_RUN_COMPLETED = "remediation.run_completed"
+
+
+# The 4 evidence events are the only ones `record_promotion_evidence`
+# accepts. Transition events (advance/demote/init/proposed/reconcile)
+# belong to dedicated methods on the auditor — see the table above.
+_EVIDENCE_EVENT_NAMES: frozenset[str] = frozenset(
+    {
+        ACTION_PROMOTION_EVIDENCE_STAGE1,
+        ACTION_PROMOTION_EVIDENCE_STAGE2,
+        ACTION_PROMOTION_EVIDENCE_STAGE3,
+        ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK,
+    }
+)
 
 
 def _artifact_handle(artifact: RemediationArtifact) -> dict[str, Any]:
@@ -275,9 +319,167 @@ class PipelineAuditor:
         payload["outcome"] = RemediationOutcome.EXECUTED_ROLLED_BACK.value
         return self._log.append(ACTION_ROLLBACK_COMPLETED, payload)
 
+    # ---------------------------- promotion (v0.1.1) ---------------------
+    #
+    # 5 methods covering the 9 `promotion.*` events. Per safety-verification
+    # §3, the F.6 audit chain is the source of truth for promotion state;
+    # `promotion.yaml` is a derived cache rebuilt from chain replay (Task 6).
+    # Every promotion-affecting operation MUST emit through one of these
+    # methods — otherwise the state file and the chain drift.
+
+    def record_promotion_evidence(
+        self,
+        action_type: RemediationActionType,
+        *,
+        event: str,
+        workload: str | None = None,
+        correlation_id: str | None = None,
+    ) -> AuditEntry:
+        """Emit one of the 4 evidence events for an action class.
+
+        Args:
+            action_type: which remediation action class the evidence is for.
+            event: one of the 4 `ACTION_PROMOTION_EVIDENCE_*` constants.
+                Transition events (advance/demote/init/proposed/reconcile)
+                are rejected — those use dedicated methods.
+            workload: required for `stage3` events (the
+                `"<namespace>/<workload_name>"` identifier the action acted
+                on). The reconciler relies on this field to rebuild
+                `stage3_distinct_workloads`.
+            correlation_id: optional pointer back to the originating
+                `RemediationArtifact`. Lets operators join an evidence event
+                to the underlying finding via F.6 5-axis query.
+
+        Raises:
+            ValueError: `event` is not one of the 4 evidence constants,
+                or `event == ACTION_PROMOTION_EVIDENCE_STAGE3` but
+                `workload` is None.
+        """
+        if event not in _EVIDENCE_EVENT_NAMES:
+            raise ValueError(
+                f"unknown evidence event {event!r}; expected one of "
+                f"{sorted(_EVIDENCE_EVENT_NAMES)} "
+                f"(transition events use dedicated record_promotion_* methods)"
+            )
+        if event == ACTION_PROMOTION_EVIDENCE_STAGE3 and (workload is None or not workload.strip()):
+            raise ValueError(
+                f"workload is required for {event!r} events "
+                f"(populates promotion.yaml's stage3_distinct_workloads on replay)"
+            )
+
+        payload: dict[str, Any] = {
+            "action_type": action_type.value,
+            "event": event,
+        }
+        if workload is not None:
+            payload["workload"] = workload
+        if correlation_id is not None:
+            payload["correlation_id"] = correlation_id
+        return self._log.append(event, payload)
+
+    def record_promotion_proposal(self, proposal: PromotionProposal) -> AuditEntry:
+        """Emit `promotion.advance.proposed` when criteria for the next stage are met.
+
+        Informational only — the operator applies the actual transition via
+        `record_promotion_transition`. The reconciler (Task 6) emits one of
+        these per proposal it discovers when replaying the chain.
+        """
+        return self._log.append(
+            ACTION_PROMOTION_ADVANCE_PROPOSED,
+            {
+                "action_type": proposal.action_type.value,
+                "from_stage": int(proposal.from_stage),
+                "to_stage": int(proposal.to_stage),
+                "reason": proposal.reason,
+                "evidence_summary": dict(proposal.evidence_summary),
+            },
+        )
+
+    def record_promotion_transition(
+        self,
+        action_type: RemediationActionType,
+        signoff: PromotionSignOff,
+    ) -> AuditEntry:
+        """Emit `promotion.advance.applied` OR `promotion.demote.applied`.
+
+        Dispatches on `signoff.event_kind`. Called by Task 7's CLI advance
+        and demote subcommands AFTER the in-memory tracker has been
+        updated; the chain entry is the persistence guarantee (the YAML
+        save in the CLI is just a cache write).
+        """
+        action_name = (
+            ACTION_PROMOTION_ADVANCE_APPLIED
+            if signoff.event_kind == "advance"
+            else ACTION_PROMOTION_DEMOTE_APPLIED
+        )
+        return self._log.append(
+            action_name,
+            {
+                "action_type": action_type.value,
+                "event_kind": signoff.event_kind,
+                "operator": signoff.operator,
+                "timestamp": signoff.timestamp.isoformat(),
+                "reason": signoff.reason,
+                "from_stage": int(signoff.from_stage),
+                "to_stage": int(signoff.to_stage),
+            },
+        )
+
+    def record_promotion_init(
+        self,
+        *,
+        cluster_id: str,
+        action_classes: list[str],
+    ) -> AuditEntry:
+        """Emit `promotion.init.applied` when the operator initialises a
+        fresh `promotion.yaml` in this environment.
+
+        Args:
+            cluster_id: the human-readable cluster label from the new file.
+            action_classes: the registered action_type values present in the
+                init payload (Stage 1 by default for all of them).
+        """
+        return self._log.append(
+            ACTION_PROMOTION_INIT_APPLIED,
+            {
+                "cluster_id": cluster_id,
+                "action_classes": list(action_classes),
+                "default_stage": 1,
+            },
+        )
+
+    def record_promotion_reconcile(
+        self,
+        *,
+        chain_entries_replayed: int,
+        state_changes: dict[str, Any],
+    ) -> AuditEntry:
+        """Emit `promotion.reconcile.completed` after the reconciler (Task 6)
+        rebuilds `promotion.yaml` from the audit chain.
+
+        Args:
+            chain_entries_replayed: how many `promotion.*` entries the
+                reconciler consumed (sanity-check + observability).
+            state_changes: dict summarising what changed during the
+                reconcile (e.g. `{"runAsNonRoot": {"stage": "2 → 3"}}`).
+                Empty when the in-place file already matched the chain.
+        """
+        return self._log.append(
+            ACTION_PROMOTION_RECONCILE_COMPLETED,
+            {
+                "chain_entries_replayed": chain_entries_replayed,
+                "state_changes": dict(state_changes),
+            },
+        )
+
 
 def all_action_names() -> tuple[str, ...]:
-    """Return the full vocabulary — F.6 5-axis query filters can use this list."""
+    """Return the full vocabulary — F.6 5-axis query filters can use this list.
+
+    Combines A.1 v0.1's 11 `remediation.*` actions with A.1 v0.1.1's 9
+    `promotion.*` actions for a total of 20. The order is stable so
+    downstream consumers can rely on it for documentation generation.
+    """
     return (
         ACTION_RUN_STARTED,
         ACTION_FINDINGS_INGESTED,
@@ -290,6 +492,15 @@ def all_action_names() -> tuple[str, ...]:
         ACTION_VALIDATE_COMPLETED,
         ACTION_ROLLBACK_COMPLETED,
         ACTION_RUN_COMPLETED,
+        ACTION_PROMOTION_EVIDENCE_STAGE1,
+        ACTION_PROMOTION_EVIDENCE_STAGE2,
+        ACTION_PROMOTION_EVIDENCE_STAGE3,
+        ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK,
+        ACTION_PROMOTION_ADVANCE_PROPOSED,
+        ACTION_PROMOTION_ADVANCE_APPLIED,
+        ACTION_PROMOTION_DEMOTE_APPLIED,
+        ACTION_PROMOTION_INIT_APPLIED,
+        ACTION_PROMOTION_RECONCILE_COMPLETED,
     )
 
 
@@ -301,10 +512,20 @@ __all__ = [
     "ACTION_EXECUTE_COMPLETED",
     "ACTION_EXECUTE_FAILED",
     "ACTION_FINDINGS_INGESTED",
+    "ACTION_PROMOTION_ADVANCE_APPLIED",
+    "ACTION_PROMOTION_ADVANCE_PROPOSED",
+    "ACTION_PROMOTION_DEMOTE_APPLIED",
+    "ACTION_PROMOTION_EVIDENCE_STAGE1",
+    "ACTION_PROMOTION_EVIDENCE_STAGE2",
+    "ACTION_PROMOTION_EVIDENCE_STAGE3",
+    "ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK",
+    "ACTION_PROMOTION_INIT_APPLIED",
+    "ACTION_PROMOTION_RECONCILE_COMPLETED",
     "ACTION_ROLLBACK_COMPLETED",
     "ACTION_RUN_COMPLETED",
     "ACTION_RUN_STARTED",
     "ACTION_VALIDATE_COMPLETED",
+    "PROMOTION_ACTIONS",
     "PipelineAuditor",
     "RemediationActionType",
     "all_action_names",
