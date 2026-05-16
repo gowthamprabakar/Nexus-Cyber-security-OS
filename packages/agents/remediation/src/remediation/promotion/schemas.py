@@ -15,11 +15,11 @@ Six public types form the contract every later task (3-8) operates on:
 Validation invariants enforced at the schema level:
 
 - All counters are non-negative.
-- `stage3_unexpected_rollbacks` ≤ `stage3_executes` (you cannot have more
-  unexpected rollbacks than executions; the agent emits exactly one of the
-  two per Stage-3 outcome).
 - `stage3_consecutive_executes` ≤ `stage3_executes` (consecutive run length
-  cannot exceed total count).
+  cannot exceed total count of validated executes).
+- (`stage3_unexpected_rollbacks` and `stage3_executes` are independent —
+  a Stage-3 attempt that validates bumps the former, one that rolls back
+  bumps the latter. Neither bounds the other.)
 - Sign-offs must be chronologically ordered (timestamps non-decreasing).
 - An `advance` sign-off must move stage by exactly +1.
 - A `demote` sign-off must move to a strictly lower stage.
@@ -176,13 +176,21 @@ class PromotionEvidence(BaseModel):
 
     @model_validator(mode="after")
     def _evidence_invariants(self) -> PromotionEvidence:
-        """Cross-field invariants — see module docstring for the rationale."""
-        if self.stage3_unexpected_rollbacks > self.stage3_executes:
-            raise ValueError(
-                f"stage3_unexpected_rollbacks ({self.stage3_unexpected_rollbacks}) > "
-                f"stage3_executes ({self.stage3_executes}) — the agent emits exactly "
-                f"one of the two per Stage-3 outcome, so the counters are bounded by total executes"
-            )
+        """Cross-field invariants — see module docstring for the rationale.
+
+        `stage3_executes` and `stage3_unexpected_rollbacks` are independent
+        counters: a Stage-3 attempt that validates bumps the former, an
+        attempt that rolls back bumps the latter. Neither bounds the other.
+        (Earlier schema versions had `unexpected_rollbacks <= stage3_executes`
+        as an invariant; that was wrong — it rejected the realistic case
+        where the first Stage-3 attempt for a new action class rolls back.
+        Removed when building the chain reconciler in Task 6, which
+        immediately produced this state from realistic chains.)
+
+        The remaining invariant — `stage3_consecutive_executes <=
+        stage3_executes` — IS correct because consecutive run-length cannot
+        exceed total count of validated executes.
+        """
         if self.stage3_consecutive_executes > self.stage3_executes:
             raise ValueError(
                 f"stage3_consecutive_executes ({self.stage3_consecutive_executes}) > "

@@ -21,6 +21,7 @@ Public API (stubbed in Task 1; filled in across Tasks 2-8 of the
   runs once the scheduler ships).
 """
 
+from remediation.promotion.replay import ReplayError, replay
 from remediation.promotion.schemas import (
     PROMOTION_FILE_SCHEMA_VERSION,
     ActionClassPromotion,
@@ -47,6 +48,8 @@ __all__ = [
     "PromotionSignOff",
     "PromotionStage",
     "PromotionTracker",
+    "ReplayError",
     "effective_mode_for_stage",
+    "replay",
     "stage_max_mode",
 ]

@@ -90,12 +90,22 @@ def test_evidence_rejects_extra_fields() -> None:
         PromotionEvidence(stage_three_executes=5)  # type: ignore[call-arg]
 
 
-def test_evidence_unexpected_rollbacks_bounded_by_executes() -> None:
-    """The agent emits exactly one of (stage3_executes, unexpected_rollbacks)
-    per Stage-3 outcome — so `unexpected_rollbacks > stage3_executes` is
-    structurally impossible and must be rejected."""
-    with pytest.raises(ValidationError, match="stage3_unexpected_rollbacks"):
-        PromotionEvidence(stage3_executes=3, stage3_unexpected_rollbacks=5)
+def test_evidence_unexpected_rollbacks_independent_of_executes() -> None:
+    """`stage3_unexpected_rollbacks` and `stage3_executes` are independent
+    counters. The realistic case "first Stage-3 attempt rolls back" produces
+    `unexpected_rollbacks=1, stage3_executes=0` — this must be a valid state.
+
+    An earlier schema rejected this with an `unexpected_rollbacks <= stage3_executes`
+    invariant; that was wrong (the chain reconciler in Task 6 hits this state
+    naturally). The invariant has been removed.
+    """
+    # Realistic case: rollback before any validated execute.
+    e = PromotionEvidence(stage3_executes=0, stage3_unexpected_rollbacks=1)
+    assert e.stage3_unexpected_rollbacks == 1
+    assert e.stage3_executes == 0
+    # Also valid: many rollbacks with zero validateds.
+    e2 = PromotionEvidence(stage3_executes=2, stage3_unexpected_rollbacks=10)
+    assert e2.stage3_unexpected_rollbacks == 10
 
 
 def test_evidence_consecutive_bounded_by_total() -> None:
