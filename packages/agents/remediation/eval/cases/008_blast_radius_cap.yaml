@@ -1,0 +1,65 @@
+case_id: 008_blast_radius_cap
+description: |
+  Five findings, cap of 2 → entire run refused with REFUSED_BLAST_RADIUS. The agent does
+  NOT partial-apply; operators see the blast-radius signal in OCSF + audit and either
+  trim the input set or raise the cap explicitly.
+fixture:
+  mode: recommend
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 2 # cap < 5 findings
+    rollback_window_sec: 300
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: w1
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/w1
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: w2
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/w2
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: w3
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/w3
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: w4
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/w4
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: w5
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/w5
+      detected_at: '2026-05-16T12:00:00Z'
+expected:
+  finding_count: 1
+  by_outcome:
+    refused_blast_radius: 1

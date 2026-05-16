@@ -1,0 +1,28 @@
+case_id: 007_unauthorized_mode_refused
+description: |
+  Mode-escalation gate (Stage 2-pre): requesting `execute` mode when the contract only
+  authorises `recommend` → AuthorizationError raised before any pipeline stage runs.
+  The eval runner asserts the error type, not the report (no report is produced).
+fixture:
+  mode: execute
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false # explicitly NOT authorised
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+expected:
+  raises: AuthorizationError
+  raises_match: 'execute.*not authorized'

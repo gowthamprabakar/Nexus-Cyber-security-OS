@@ -1,0 +1,15 @@
+case_id: 001_clean
+description: No findings — recommend mode emits an empty report; no actions attempted.
+fixture:
+  mode: recommend
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false
+    authorized_actions: []
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  findings: []
+expected:
+  finding_count: 0
+  by_outcome: {}

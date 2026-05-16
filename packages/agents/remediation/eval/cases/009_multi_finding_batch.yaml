@@ -1,0 +1,47 @@
+case_id: 009_multi_finding_batch
+description: |
+  Three findings, all the same action class, all authorised → recommend mode produces 3
+  RECOMMENDED_ONLY outcomes (one artifact per finding; per-container correlation_ids
+  remain distinct).
+fixture:
+  mode: recommend
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: web
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/web
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: StatefulSet
+      workload_name: cache
+      namespace: production
+      container_name: redis
+      manifest_path: cluster:///production/StatefulSet/cache
+      detected_at: '2026-05-16T12:00:00Z'
+expected:
+  finding_count: 3
+  by_outcome:
+    recommended_only: 3

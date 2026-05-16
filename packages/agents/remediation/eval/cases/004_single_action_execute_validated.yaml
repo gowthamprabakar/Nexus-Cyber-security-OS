@@ -1,0 +1,33 @@
+case_id: 004_single_action_execute_validated
+description: |
+  One finding; execute mode; dry-run + execute succeed; post-validation detector sees no
+  surviving findings → outcome EXECUTED_VALIDATED. No rollback.
+fixture:
+  mode: execute
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: true
+    mode_execute_authorized: true
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+  dry_run_result:
+    exit_code: 0
+  execute_result:
+    exit_code: 0
+  post_validate_findings: [] # clean → validated
+expected:
+  finding_count: 1
+  by_outcome:
+    executed_validated: 1
