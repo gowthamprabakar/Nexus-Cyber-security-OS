@@ -197,6 +197,47 @@ def _patch_driver(
     monkeypatch.setattr(agent_mod, "build_d6_detector", fake_factory)
 
 
+def _patch_driver_with_apply_spy(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    findings: tuple[ManifestFinding, ...] = (),
+    detector_output: tuple[ManifestFinding, ...] = (),
+) -> list[dict[str, Any]]:
+    """Like `_patch_driver` but records every `apply_patch` invocation in a
+    list the caller can inspect. The list is the proof artefact for the
+    "no cluster contact for refused findings" safety property.
+
+    Each entry: `{"correlation_id": str, "dry_run": bool}`.
+    """
+    calls: list[dict[str, Any]] = []
+
+    async def fake_read(*, path: Path | str) -> tuple[ManifestFinding, ...]:
+        del path
+        return findings
+
+    async def fake_apply(artifact: Any, *, dry_run: bool, **_: Any) -> PatchResult:
+        calls.append({"correlation_id": artifact.correlation_id, "dry_run": dry_run})
+        return _result_ok(dry_run=dry_run)
+
+    async def fake_detect() -> tuple[ManifestFinding, ...]:
+        return detector_output
+
+    def fake_factory(*, namespace: str, kubeconfig: Path | None, in_cluster: bool) -> Any:
+        del namespace, kubeconfig, in_cluster
+        return fake_detect
+
+    import remediation.validator as validator_mod
+    from remediation.tools import kubectl_executor as kc_mod
+
+    monkeypatch.setattr(agent_mod, "read_findings", fake_read)
+    monkeypatch.setattr(agent_mod, "apply_patch", fake_apply)
+    monkeypatch.setattr(validator_mod, "apply_patch", fake_apply)
+    monkeypatch.setattr(kc_mod, "apply_patch", fake_apply)
+    monkeypatch.setattr(kc_mod, "_kubectl_binary", lambda: "/usr/local/bin/kubectl")
+    monkeypatch.setattr(agent_mod, "build_d6_detector", fake_factory)
+    return calls
+
+
 @pytest.fixture(autouse=True)
 def fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     import remediation.validator as validator_mod
@@ -564,3 +605,170 @@ async def test_refused_promotion_gate_description_names_remedy(
     desc = report.findings[0]["finding_info"]["desc"]
     assert "STAGE_1" in desc
     assert "remediation promotion advance" in desc
+
+
+# ---------------------------- control-flow proof: zero kubectl for refusals ----
+#
+# These two tests demonstrate, with the actual control flow (call-count
+# spies on apply_patch, not prose), that the REFUSED_PROMOTION_GATE-outcome
+# design preserves the safety property the plan's "raise before the Charter
+# context" was meant to deliver:
+#
+#   (a) For any REFUSED finding, NO pipeline work occurs — zero apply_patch
+#       invocations, zero cluster contact.
+#   (b) In the partial-satisfaction path, each finding's cluster contact is
+#       capped at its effective_mode at the entry to `_process_artifact`;
+#       downgraded findings (Stage-1 under --mode execute) do zero kubectl
+#       calls before returning RECOMMENDED_ONLY.
+#
+# These are the proof artefacts the design accepts as a documented
+# improvement on the plan's original Q4. Without them, the divergence would
+# be a relabel rather than a real safety equivalence.
+
+
+@pytest.mark.asyncio
+async def test_proof_refused_findings_invoke_zero_kubectl_calls(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """**Proof of (a):** in the all-downgraded path, every finding gets
+    REFUSED_PROMOTION_GATE outcome AND apply_patch is never invoked.
+
+    Control-flow trace: agent.run computes effective modes after Stage 3
+    generate. The all-downgraded predicate fires, every artifact is
+    emitted as a REFUSED_PROMOTION_GATE finding, and `artifacts = ()` halts
+    the per-artifact loop BEFORE any `_process_artifact` call. The kubectl
+    executor is never reached.
+    """
+    findings = (
+        _manifest(rule_id="run-as-root", name="alpha"),
+        _manifest(rule_id="run-as-root", name="beta"),
+        _manifest(rule_id="run-as-root", name="gamma"),
+    )
+    apply_calls = _patch_driver_with_apply_spy(monkeypatch, findings=findings)
+
+    tracker = _tracker_at({RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT: PromotionStage.STAGE_1})
+    contract = _contract(tmp_path)
+
+    report = await run(
+        contract=contract,
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,  # Stage-1 caps at recommend → all downgraded
+        authorization=_auth_for_mode(RemediationMode.EXECUTE),
+        promotion=tracker,
+    )
+
+    # Every finding is REFUSED_PROMOTION_GATE.
+    outcomes = [f["finding_info"]["analytic"]["name"] for f in report.findings]
+    assert outcomes == [RemediationOutcome.REFUSED_PROMOTION_GATE.value] * 3, (
+        f"expected 3 REFUSED_PROMOTION_GATE outcomes, got {outcomes}"
+    )
+
+    # **The proof:** apply_patch was never called. Zero cluster contact.
+    assert apply_calls == [], (
+        f"REFUSED findings must trigger zero kubectl calls; got {len(apply_calls)} "
+        f"call(s): {apply_calls}. The gate is supposed to halt before Stages 4-7."
+    )
+
+    # No dry_run_diffs / execution_results / rollback_decisions files emitted
+    # for refused findings either (each is empty since `artifacts = ()`).
+    workspace = Path(contract.workspace)
+    dry_run_diffs = json.loads((workspace / "dry_run_diffs.json").read_text())
+    execution_results = json.loads((workspace / "execution_results.json").read_text())
+    rollback_decisions = json.loads((workspace / "rollback_decisions.json").read_text())
+    assert dry_run_diffs == []
+    assert execution_results == []
+    assert rollback_decisions == []
+
+
+@pytest.mark.asyncio
+async def test_proof_per_finding_split_caps_cluster_contact_at_effective_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """**Proof of (b):** in the partial-satisfaction path, each finding's
+    kubectl call count is exactly what its effective_mode permits — Stage-1
+    artifacts trigger ZERO calls, Stage-2 artifacts trigger ONE call
+    (dry-run), Stage-3 artifacts trigger TWO calls (dry-run + execute).
+
+    Control-flow trace: `_compute_effective_modes` runs before the per-
+    artifact loop, capping each artifact's mode. Inside `_process_artifact`,
+    the first check is `if effective_mode == RECOMMEND: return RECOMMENDED_ONLY`
+    — Stage-1 artifacts exit at that line with no apply_patch call. Stage-2
+    artifacts pass the recommend check, invoke apply_patch(dry_run=True),
+    then hit `if effective_mode == DRY_RUN: return DRY_RUN_ONLY` — exit
+    after exactly one call. Stage-3 artifacts traverse all four stages.
+
+    The downgrade is the gate. The cluster never sees a request the action
+    class hasn't earned.
+    """
+    findings = (
+        _manifest(rule_id="run-as-root", name="alpha"),  # → Stage 1
+        _manifest(rule_id="missing-resource-limits", name="beta"),  # → Stage 2
+        _manifest(rule_id="read-only-root-fs-missing", name="gamma"),  # → Stage 3
+    )
+    apply_calls = _patch_driver_with_apply_spy(
+        monkeypatch,
+        findings=findings,
+        detector_output=(),  # validator says rule no longer fires → Stage-3 validated
+    )
+
+    tracker = _tracker_at(
+        {
+            RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT: PromotionStage.STAGE_1,
+            RemediationActionType.K8S_PATCH_RESOURCE_LIMITS: PromotionStage.STAGE_2,
+            RemediationActionType.K8S_PATCH_READ_ONLY_ROOT_FS: PromotionStage.STAGE_3,
+        }
+    )
+    contract = _contract(tmp_path)
+
+    # Pre-compute correlation_ids so we can attribute calls back to artifacts.
+    artifacts = generate_artifacts(findings)
+    stage1_corr = artifacts[0].correlation_id
+    stage2_corr = artifacts[1].correlation_id
+    stage3_corr = artifacts[2].correlation_id
+
+    await run(
+        contract=contract,
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        authorization=_auth_for_mode(RemediationMode.EXECUTE),
+        promotion=tracker,
+    )
+
+    stage1_calls = [c for c in apply_calls if c["correlation_id"] == stage1_corr]
+    stage2_calls = [c for c in apply_calls if c["correlation_id"] == stage2_corr]
+    stage3_calls = [c for c in apply_calls if c["correlation_id"] == stage3_corr]
+
+    # Stage-1 artifact: effective_mode == RECOMMEND → returns immediately at
+    # the `if effective_mode == RECOMMEND` check. Zero apply_patch calls.
+    assert stage1_calls == [], (
+        f"Stage-1 artifact (capped at recommend) must trigger zero kubectl calls; "
+        f"got {stage1_calls}"
+    )
+
+    # Stage-2 artifact: effective_mode == DRY_RUN → one dry-run call, then
+    # returns at the `if effective_mode == DRY_RUN` check. Exactly one call.
+    assert len(stage2_calls) == 1, (
+        f"Stage-2 artifact (capped at dry_run) must trigger exactly one "
+        f"kubectl call; got {len(stage2_calls)}: {stage2_calls}"
+    )
+    assert stage2_calls[0]["dry_run"] is True, (
+        f"Stage-2 artifact's single call must be a dry-run; got dry_run="
+        f"{stage2_calls[0]['dry_run']}"
+    )
+
+    # Stage-3 artifact: effective_mode == EXECUTE → dry-run + execute (and
+    # rollback if validation fails, but detector_output=() so validation
+    # passes). Exactly two calls.
+    assert len(stage3_calls) == 2, (
+        f"Stage-3 artifact (validated execute path) must trigger exactly two "
+        f"kubectl calls (dry-run + execute); got {len(stage3_calls)}: {stage3_calls}"
+    )
+    # First call is dry-run, second is execute.
+    assert stage3_calls[0]["dry_run"] is True
+    assert stage3_calls[1]["dry_run"] is False
+
+    # Cross-check: total call count is 0 + 1 + 2 = 3. No silent extra contact.
+    assert len(apply_calls) == 3, (
+        f"total apply_patch calls must be exactly 3 across the three findings; "
+        f"got {len(apply_calls)}: {apply_calls}"
+    )
