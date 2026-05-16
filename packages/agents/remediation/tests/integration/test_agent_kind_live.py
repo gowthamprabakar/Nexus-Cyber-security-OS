@@ -433,6 +433,15 @@ async def test_rollback_window_matches_real_reconcile(
     agent_overhead = elapsed - auth.rollback_window_sec
     assert agent_overhead > 0, "elapsed wall-clock < rollback window — measurement bug"
 
+    # Surface the measurement so §8 of the safety-verification record can
+    # cite the actual number. Captured by `pytest -s`.
+    print(
+        f"\n[G3-MEASUREMENT] elapsed={elapsed:.2f}s "
+        f"rollback_window_sec={auth.rollback_window_sec} "
+        f"agent_overhead={agent_overhead:.2f}s "
+        f"cushion={auth.rollback_window_sec - agent_overhead:.2f}s"
+    )
+
     # Assert the default 300s window is at least 30s above what we needed.
     # If this fails, the runbook's "default 300s" claim needs revisiting.
     assert auth.rollback_window_sec - agent_overhead >= 30, (
