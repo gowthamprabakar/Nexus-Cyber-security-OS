@@ -42,13 +42,12 @@ def test_kubernetes_api_exception_class_available() -> None:
     assert issubclass(ApiException, Exception)
 
 
-def test_v0_2_module_not_yet_present() -> None:
-    """The live cluster reader module lands in Task 2 — Task 1 is dep-only.
+def test_v0_2_reader_module_present() -> None:
+    """The live cluster reader module ships in Task 2.
 
-    This anti-marker assertion documents the slice boundary explicitly so
-    a reader of the test trail can see what Task 1 deliberately did NOT
-    ship. The assertion flips to existence-asserting in Task 2.
+    The Task 1 anti-marker has flipped to existence-asserting.
     """
-    import importlib.util
-
-    assert importlib.util.find_spec("k8s_posture.tools.cluster_workloads") is None
+    from k8s_posture.tools.cluster_workloads import (  # noqa: F401
+        ClusterReaderError,
+        read_cluster_workloads,
+    )
