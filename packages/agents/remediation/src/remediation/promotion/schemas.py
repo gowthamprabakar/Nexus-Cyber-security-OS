@@ -85,6 +85,42 @@ def stage_max_mode(stage: PromotionStage) -> RemediationMode:
     return _STAGE_MAX_MODE[stage]
 
 
+# Mode strictness ordering. Lower index = less invasive. Used by the
+# pre-flight gate (Task 5) to compute effective mode = min(operator, stage).
+_MODE_ORDER: dict[RemediationMode, int] = {
+    RemediationMode.RECOMMEND: 0,
+    RemediationMode.DRY_RUN: 1,
+    RemediationMode.EXECUTE: 2,
+}
+
+
+def effective_mode_for_stage(
+    operator_mode: RemediationMode,
+    stage: PromotionStage,
+) -> RemediationMode:
+    """Return the actual mode the agent will operate in for an action class.
+
+    The operator names their maximum desired mode at the CLI; promotion.yaml
+    names the maximum the agent will honour per action class. The effective
+    mode is the floor:
+
+        effective = min(operator_mode, stage_max_mode(stage))
+
+    where "min" is the mode-strictness order
+    `recommend < dry_run < execute`. Examples:
+
+    - operator=execute + stage=Stage_3 → execute (no downgrade)
+    - operator=execute + stage=Stage_2 → dry_run (downgraded one notch)
+    - operator=execute + stage=Stage_1 → recommend (downgraded two notches)
+    - operator=dry_run + stage=Stage_4 → dry_run (no downgrade, stage caps higher)
+    - operator=recommend + stage=any → recommend (recommend is the floor)
+    """
+    stage_max = stage_max_mode(stage)
+    if _MODE_ORDER[operator_mode] <= _MODE_ORDER[stage_max]:
+        return operator_mode
+    return stage_max
+
+
 # ---------------------------- evidence + sign-off ------------------------
 
 
@@ -393,5 +429,6 @@ __all__ = [
     "PromotionFile",
     "PromotionSignOff",
     "PromotionStage",
+    "effective_mode_for_stage",
     "stage_max_mode",
 ]

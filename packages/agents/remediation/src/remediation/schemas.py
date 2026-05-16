@@ -92,6 +92,7 @@ class RemediationOutcome(StrEnum):
     )
     REFUSED_UNAUTHORIZED = "refused_unauthorized"  # action class not in contract allowlist
     REFUSED_BLAST_RADIUS = "refused_blast_radius"  # would exceed max_actions_per_run
+    REFUSED_PROMOTION_GATE = "refused_promotion_gate"  # v0.1.1 — promotion.yaml says action class isn't ready for requested mode AND no other finding satisfies the operator's intent
     DRY_RUN_FAILED = "dry_run_failed"  # kubectl --dry-run=server returned non-zero
     EXECUTE_FAILED = "execute_failed"  # kubectl apply returned non-zero (before validation)
 
@@ -105,6 +106,7 @@ _OUTCOME_TO_SEVERITY: dict[RemediationOutcome, Severity] = {
     RemediationOutcome.EXECUTED_ROLLED_BACK: Severity.MEDIUM,
     RemediationOutcome.REFUSED_UNAUTHORIZED: Severity.MEDIUM,
     RemediationOutcome.REFUSED_BLAST_RADIUS: Severity.MEDIUM,
+    RemediationOutcome.REFUSED_PROMOTION_GATE: Severity.MEDIUM,
     # Failures are HIGH — something's wrong with our apply path.
     RemediationOutcome.DRY_RUN_FAILED: Severity.HIGH,
     RemediationOutcome.EXECUTE_FAILED: Severity.HIGH,

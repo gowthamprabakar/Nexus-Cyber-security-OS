@@ -53,7 +53,13 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from remediation import __version__ as agent_version
-from remediation.audit import PipelineAuditor
+from remediation.audit import (
+    ACTION_PROMOTION_EVIDENCE_STAGE1,
+    ACTION_PROMOTION_EVIDENCE_STAGE2,
+    ACTION_PROMOTION_EVIDENCE_STAGE3,
+    ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK,
+    PipelineAuditor,
+)
 from remediation.authz import (
     Authorization,
     AuthorizationError,
@@ -62,6 +68,10 @@ from remediation.authz import (
     filter_authorized_findings,
 )
 from remediation.generator import generate_artifacts
+from remediation.promotion import (
+    PromotionTracker,
+    effective_mode_for_stage,
+)
 from remediation.schemas import (
     RemediationActionType,
     RemediationArtifact,
@@ -125,6 +135,7 @@ async def run(
     findings_path: Path | str,
     mode: RemediationMode = RemediationMode.RECOMMEND,
     authorization: Authorization | None = None,
+    promotion: PromotionTracker | None = None,
     kubeconfig: Path | str | None = None,
     in_cluster: bool = False,
     cluster_namespace: str | None = None,
@@ -142,6 +153,23 @@ async def run(
         authorization: An `Authorization` instance. Defaults to recommend-only
             with empty allowlist (the safest no-op). Operators load from
             `auth.yaml` via `Authorization.from_path()` and pass here.
+        promotion: Optional `PromotionTracker` (v0.1.1) carrying the per-
+            action-class graduation state. When provided, the agent applies
+            the earned-autonomy pre-flight gate: each artifact's effective
+            mode is downgraded to the action class's stage cap (Stage 1 →
+            recommend / Stage 2 → dry_run / Stage 3+ → execute). When
+            **all** artifacts would be downgraded and `mode != recommend`,
+            the run halts with per-finding `REFUSED_PROMOTION_GATE`
+            outcomes — the operator gets an unambiguous "blocked" signal
+            instead of a quiet downgrade. When `promotion` is `None`
+            (library default), the gate is skipped — used by tests and
+            library callers who explicitly opt out of the safety contract.
+            The CLI always passes a tracker (loaded from `--promotion` or
+            the safe-by-default `persistent_root/promotion.yaml`).
+            **Evidence accumulates regardless:** the audit chain emits
+            `promotion.evidence.*` events on every successful stage, and
+            the tracker (if provided) updates its in-memory counters so
+            the caller can save the file at run end.
         kubeconfig: Optional explicit kubeconfig path. Mutually exclusive with
             `in_cluster` (3-way exclusion shared with `manifest-target` mode).
         in_cluster: When True, kubectl uses default discovery (Pod SA token).
@@ -154,6 +182,9 @@ async def run(
     Returns:
         The `RemediationReport`. Side effects: writes 7 output files to the
         contract workspace and emits a hash-chained audit log at `audit.jsonl`.
+        When `promotion` is provided, the tracker is mutated in-place with
+        accumulated evidence; the caller saves to YAML at the appropriate
+        path.
 
     Raises:
         AuthorizationError: when the requested mode isn't opted-in OR the
@@ -249,6 +280,47 @@ async def run(
             auditor.artifact_generated(artifact)
         _write_artifact_files(workspace, artifacts)
 
+        # ---- Stage 0: PROMOTION-GATE (v0.1.1, fires AFTER generate so action
+        #              types are known). When promotion is None the gate is
+        #              skipped (library opt-out). When provided, each artifact
+        #              gets an effective mode = min(operator, stage_max). If
+        #              ALL artifacts would be downgraded AND the operator
+        #              asked for non-recommend, the whole run gets
+        #              REFUSED_PROMOTION_GATE outcomes — unambiguous "your
+        #              request was blocked" signal. If at least one artifact
+        #              satisfies, per-finding downgrade applies and the
+        #              downgraded ones emit their downgraded outcome
+        #              (RECOMMENDED_ONLY / DRY_RUN_ONLY).
+        effective_modes = _compute_effective_modes(artifacts, promotion, mode)
+        if (
+            promotion is not None
+            and mode != RemediationMode.RECOMMEND
+            and artifacts
+            and all(em != mode for em in effective_modes.values())
+        ):
+            for artifact in artifacts:
+                stage = promotion.stage_for(artifact.action_type)
+                report.add_finding(
+                    _build_finding(
+                        envelope=envelope,
+                        artifact=artifact,
+                        source_rule_id=artifact.source_finding_uid,
+                        namespace=artifact.namespace,
+                        workload_kind=artifact.kind,
+                        workload_name=artifact.name,
+                        outcome=RemediationOutcome.REFUSED_PROMOTION_GATE,
+                        description=(
+                            f"action class {artifact.action_type.value} is at "
+                            f"{stage.name} in this environment; --mode {mode.value} "
+                            f"requires Stage {2 if mode == RemediationMode.DRY_RUN else 3}+. "
+                            f"Promote via `remediation promotion advance` or "
+                            f"lower the mode."
+                        ),
+                        sequence=len(report.findings) + 1,
+                    )
+                )
+            artifacts = ()  # halt; do not partial-apply
+
         # ---- Stages 4-7 — one per artifact, in input order ----
         dry_run_diffs: list[dict[str, Any]] = []
         execution_results: list[dict[str, Any]] = []
@@ -257,12 +329,13 @@ async def run(
         for artifact in artifacts:
             outcome, description = await _process_artifact(
                 artifact=artifact,
-                mode=mode,
+                effective_mode=effective_modes[artifact.correlation_id],
                 auth=auth,
                 kubeconfig=Path(kubeconfig) if kubeconfig else None,
                 in_cluster=in_cluster,
                 cluster_namespace=cluster_namespace,
                 auditor=auditor,
+                promotion=promotion,
                 dry_run_diffs=dry_run_diffs,
                 execution_results=execution_results,
                 rollback_decisions=rollback_decisions,
@@ -320,12 +393,13 @@ async def run(
 async def _process_artifact(
     *,
     artifact: RemediationArtifact,
-    mode: RemediationMode,
+    effective_mode: RemediationMode,
     auth: Authorization,
     kubeconfig: Path | None,
     in_cluster: bool,
     cluster_namespace: str | None,
     auditor: PipelineAuditor,
+    promotion: PromotionTracker | None,
     dry_run_diffs: list[dict[str, Any]],
     execution_results: list[dict[str, Any]],
     rollback_decisions: list[dict[str, Any]],
@@ -333,11 +407,29 @@ async def _process_artifact(
 ) -> tuple[RemediationOutcome, str]:
     """Run Stages 4-7 for a single artifact, returning the final outcome + description.
 
-    The mode determines which stages fire (per the README mode/stage matrix).
-    Outputs are appended to the three side-effect lists for the workspace files.
+    `effective_mode` is the per-artifact mode after the promotion-gate
+    downgrade — see `_compute_effective_modes`. The mode determines which
+    stages fire (per the README mode/stage matrix). Outputs are appended
+    to the three side-effect lists for the workspace files.
+
+    On every successful stage that contributes to promotion evidence
+    (Stage 1 artifact, Stage 4 dry-run success, Stage 6 validated, Stage 7
+    rollback), the corresponding `promotion.evidence.*` audit entry is
+    emitted AND `promotion.record_evidence` is called if a tracker was
+    provided. The audit chain is the source of truth (safety-verification
+    §3); the tracker is a derived cache.
     """
+    workload_id = f"{artifact.namespace}/{artifact.name}"
+
     # ---- Stage 4: DRY-RUN (skipped in recommend mode) ----
-    if mode == RemediationMode.RECOMMEND:
+    if effective_mode == RemediationMode.RECOMMEND:
+        _emit_promotion_evidence(
+            auditor=auditor,
+            promotion=promotion,
+            artifact=artifact,
+            event=ACTION_PROMOTION_EVIDENCE_STAGE1,
+            workload=None,
+        )
         return (
             RemediationOutcome.RECOMMENDED_ONLY,
             f"Artifact built for {artifact.action_type.value}; no execution in recommend mode.",
@@ -365,7 +457,16 @@ async def _process_artifact(
             f"kubectl --dry-run=server failed (exit {dry_run.exit_code})",
         )
 
-    if mode == RemediationMode.DRY_RUN:
+    # Successful dry-run is Stage-2 evidence.
+    _emit_promotion_evidence(
+        auditor=auditor,
+        promotion=promotion,
+        artifact=artifact,
+        event=ACTION_PROMOTION_EVIDENCE_STAGE2,
+        workload=None,
+    )
+
+    if effective_mode == RemediationMode.DRY_RUN:
         return (
             RemediationOutcome.DRY_RUN_ONLY,
             "Dry-run validation passed; no execution in dry-run mode.",
@@ -419,6 +520,15 @@ async def _process_artifact(
                 "matched_findings_count": 0,
             }
         )
+        # Validated execute is Stage-3 evidence; the workload id participates
+        # in `stage3_distinct_workloads` (≥10 required for Stage 4).
+        _emit_promotion_evidence(
+            auditor=auditor,
+            promotion=promotion,
+            artifact=artifact,
+            event=ACTION_PROMOTION_EVIDENCE_STAGE3,
+            workload=workload_id,
+        )
         return (
             RemediationOutcome.EXECUTED_VALIDATED,
             "Patch validated; original finding no longer detected.",
@@ -435,11 +545,82 @@ async def _process_artifact(
             "rollback_succeeded": rollback_result.succeeded,
         }
     )
+    # **Webhook attribution is a Phase-1c follow-up** (the rolled-back-path
+    # xfail in `test_agent_kind_live.py`). Until that fixture lands, every
+    # rollback counts as `unexpected_rollback` — penalises Stage-3 promotion
+    # which is the deliberately-conservative default. This is named in
+    # safety-verification §6 item 3 as a Stage-4 prerequisite.
+    _emit_promotion_evidence(
+        auditor=auditor,
+        promotion=promotion,
+        artifact=artifact,
+        event=ACTION_PROMOTION_EVIDENCE_UNEXPECTED_ROLLBACK,
+        workload=None,
+    )
     return (
         RemediationOutcome.EXECUTED_ROLLED_BACK,
         f"Post-validation detected the rule still firing; "
         f"inverse patch applied (rollback exit {rollback_result.exit_code}).",
     )
+
+
+# ---------------------------- promotion-gate helpers ----------------------
+
+
+def _compute_effective_modes(
+    artifacts: Iterable[RemediationArtifact],
+    promotion: PromotionTracker | None,
+    operator_mode: RemediationMode,
+) -> dict[str, RemediationMode]:
+    """Return a dict mapping `correlation_id -> effective_mode` for every artifact.
+
+    When `promotion` is None (library opt-out), every artifact's effective
+    mode is just the operator's mode — no downgrade. When provided, each
+    artifact's mode is capped by the action class's stage via
+    `effective_mode_for_stage`.
+    """
+    if promotion is None:
+        return {a.correlation_id: operator_mode for a in artifacts}
+    return {
+        a.correlation_id: effective_mode_for_stage(
+            operator_mode,
+            promotion.stage_for(a.action_type),
+        )
+        for a in artifacts
+    }
+
+
+def _emit_promotion_evidence(
+    *,
+    auditor: PipelineAuditor,
+    promotion: PromotionTracker | None,
+    artifact: RemediationArtifact,
+    event: str,
+    workload: str | None,
+) -> None:
+    """Dual-emit one promotion evidence event: F.6 audit chain (always) +
+    in-memory tracker (when provided).
+
+    The audit chain is the source of truth — every successful stage's
+    promotion evidence lands there regardless of whether the caller supplied
+    a tracker. The reconciler (Task 6) can rebuild a `PromotionFile` from
+    the chain even if no tracker was active during the run.
+
+    The tracker's counters only mutate when a tracker is provided; this is
+    the in-memory side for the same-run save path.
+    """
+    auditor.record_promotion_evidence(
+        artifact.action_type,
+        event=event,
+        workload=workload,
+        correlation_id=artifact.correlation_id,
+    )
+    if promotion is not None:
+        promotion.record_evidence(
+            artifact.action_type,
+            event=event,
+            workload=workload,
+        )
 
 
 # ---------------------------- helpers -------------------------------------

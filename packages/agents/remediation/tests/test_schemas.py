@@ -102,6 +102,7 @@ def test_remediation_outcome_values() -> None:
         "executed_rolled_back",
         "refused_unauthorized",
         "refused_blast_radius",
+        "refused_promotion_gate",  # added in v0.1.1 — earned-autonomy pre-flight gate
         "dry_run_failed",
         "execute_failed",
     }

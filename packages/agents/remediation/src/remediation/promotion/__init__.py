@@ -28,6 +28,7 @@ from remediation.promotion.schemas import (
     PromotionFile,
     PromotionSignOff,
     PromotionStage,
+    effective_mode_for_stage,
     stage_max_mode,
 )
 from remediation.promotion.tracker import (
@@ -46,5 +47,6 @@ __all__ = [
     "PromotionSignOff",
     "PromotionStage",
     "PromotionTracker",
+    "effective_mode_for_stage",
     "stage_max_mode",
 ]
