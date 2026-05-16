@@ -30,7 +30,11 @@ from remediation.promotion.schemas import (
     PromotionStage,
     stage_max_mode,
 )
-from remediation.promotion.tracker import PromotionGateError, PromotionTracker
+from remediation.promotion.tracker import (
+    PromotionGateError,
+    PromotionProposal,
+    PromotionTracker,
+)
 
 __all__ = [
     "PROMOTION_FILE_SCHEMA_VERSION",
@@ -38,6 +42,7 @@ __all__ = [
     "PromotionEvidence",
     "PromotionFile",
     "PromotionGateError",
+    "PromotionProposal",
     "PromotionSignOff",
     "PromotionStage",
     "PromotionTracker",
