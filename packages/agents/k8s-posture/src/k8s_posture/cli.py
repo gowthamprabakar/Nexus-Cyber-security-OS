@@ -100,15 +100,24 @@ def eval_cmd(cases_dir: Path) -> None:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
     help="Optional path to a kubeconfig file for live cluster ingest (v0.2). "
-    "Mutually exclusive with --manifest-dir.",
+    "Mutually exclusive with --manifest-dir and --in-cluster.",
+)
+@click.option(
+    "--in-cluster",
+    "in_cluster",
+    is_flag=True,
+    default=False,
+    help="Load cluster config from the Pod's mounted ServiceAccount token (v0.3 "
+    "in-cluster mode). Mutually exclusive with --manifest-dir and --kubeconfig. "
+    "Use this when running the agent as a Pod inside the cluster being scanned.",
 )
 @click.option(
     "--cluster-namespace",
     "cluster_namespace",
     type=str,
     default=None,
-    help="Optional namespace scope for live cluster ingest (used with --kubeconfig). "
-    "Defaults to cluster-wide listing across all namespaces.",
+    help="Optional namespace scope for live cluster ingest (used with --kubeconfig "
+    "or --in-cluster). Defaults to cluster-wide listing across all namespaces.",
 )
 def run_cmd(
     contract_path: Path,
@@ -116,23 +125,27 @@ def run_cmd(
     polaris_feed: Path | None,
     manifest_dir: Path | None,
     kubeconfig: Path | None,
+    in_cluster: bool,
     cluster_namespace: str | None,
 ) -> None:
     """Run the Kubernetes Posture Agent against an ExecutionContract YAML."""
-    # Q6 — workload source XOR.
-    if manifest_dir is not None and kubeconfig is not None:
+    # Q6 / v0.3 Q2 — workload source XOR across all three sources.
+    workload_sources = sum(1 for x in (manifest_dir, kubeconfig) if x is not None) + (
+        1 if in_cluster else 0
+    )
+    if workload_sources > 1:
         raise click.UsageError(
-            "--manifest-dir and --kubeconfig are mutually exclusive — pick one "
-            "workload source per run"
+            "--manifest-dir, --kubeconfig, and --in-cluster are mutually exclusive — "
+            "pick one workload source per run"
         )
-    if cluster_namespace is not None and kubeconfig is None:
+    if cluster_namespace is not None and not (kubeconfig is not None or in_cluster):
         raise click.UsageError(
-            "--cluster-namespace requires --kubeconfig (it only scopes live ingest)"
+            "--cluster-namespace requires --kubeconfig or --in-cluster (it only scopes live ingest)"
         )
 
     contract = load_contract(contract_path)
 
-    if not (kube_bench_feed or polaris_feed or manifest_dir or kubeconfig):
+    if not (kube_bench_feed or polaris_feed or manifest_dir or kubeconfig or in_cluster):
         click.echo(
             "warning: no feed flags provided; agent will emit an empty report",
             err=True,
@@ -145,6 +158,7 @@ def run_cmd(
             polaris_feed=polaris_feed,
             manifest_dir=manifest_dir,
             kubeconfig=kubeconfig,
+            in_cluster=in_cluster,
             cluster_namespace=cluster_namespace,
         )
     )
