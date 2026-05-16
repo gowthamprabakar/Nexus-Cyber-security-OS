@@ -1,6 +1,6 @@
 """Remediation Agent CLI.
 
-Two subcommands (mirrors D.6's shape per ADR-007):
+Subcommand families:
 
 - `remediation eval CASES_DIR` — run the eval suite at CASES_DIR via the
   eval-framework's `run_suite` against `RemediationEvalRunner`. Prints
@@ -11,6 +11,10 @@ Two subcommands (mirrors D.6's shape per ADR-007):
   [--rollback-window-sec INT]` — run the agent against an `ExecutionContract`
   with findings produced by a detect agent (D.6 today; D.5/F.3/D.1 later).
   Writes 7 output files to the contract workspace.
+- `remediation promotion {status,init,advance,demote}` (v0.1.1) — the
+  operator-facing surface for the earned-autonomy pipeline. `status`
+  is read-only; `init`, `advance`, and `demote` mutate both
+  `promotion.yaml` and the audit chain.
 
 Mutual-exclusion gates and mode-escalation gates surface as `click.UsageError`
 (non-zero exit, but with a usage prompt rather than a stack trace).
@@ -19,6 +23,8 @@ Mutual-exclusion gates and mode-escalation gates surface as `click.UsageError`
 from __future__ import annotations
 
 import asyncio
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -28,9 +34,15 @@ from eval_framework.suite import run_suite
 
 from remediation import __version__
 from remediation.agent import run as agent_run
+from remediation.audit import PipelineAuditor
 from remediation.authz import Authorization, AuthorizationError
 from remediation.eval_runner import RemediationEvalRunner
-from remediation.schemas import RemediationMode
+from remediation.promotion import (
+    PromotionSignOff,
+    PromotionStage,
+    PromotionTracker,
+)
+from remediation.schemas import RemediationActionType, RemediationMode
 
 _MODE_CHOICES = [m.value for m in RemediationMode]
 
@@ -218,6 +230,361 @@ def run_cmd(
         if count > 0:
             click.echo(f"  {outcome_name}: {count}")
     click.echo(f"workspace: {contract.workspace}")
+
+
+# ---------------------- promotion subcommands (v0.1.1) -----------------
+
+_ACTION_TYPE_CHOICES = [m.value for m in RemediationActionType]
+_TO_STAGE_CHOICES_ADVANCE = ["stage_2", "stage_3", "stage_4"]
+_TO_STAGE_CHOICES_DEMOTE = ["stage_1", "stage_2", "stage_3"]
+
+
+def _parse_stage(label: str) -> PromotionStage:
+    """Parse `stage_N` (case-insensitive) into a `PromotionStage` enum."""
+    return PromotionStage[label.upper()]
+
+
+def _default_operator() -> str:
+    """Identifier for the human running this CLI invocation.
+
+    Resolution order: `$NEXUS_OPERATOR` (explicit override) → `$USER`
+    (Unix conventional) → `unknown`. The operator can always override at
+    the CLI with `--operator NAME`.
+    """
+    return os.environ.get("NEXUS_OPERATOR") or os.environ.get("USER") or "unknown"
+
+
+def _stage4_refusal_message(action_type_value: str) -> str:
+    """The Stage-3 → Stage-4 refusal text — pinned to safety-verification §6."""
+    return (
+        f"refusing to advance {action_type_value} to Stage 4: this version of A.1 "
+        f"holds Stage 4 globally closed until two Phase-1c prerequisites land:\n"
+        f"  (1) safety-verification §6 item 3 — the rolled-back-path webhook fixture "
+        f"(test_execute_rolled_back_against_live_cluster currently xfails);\n"
+        f"  (2) safety-verification §6 item 4 — ≥4 weeks of customer Stage-3 evidence "
+        f"without unexpected rollbacks.\n"
+        f"Until both are recorded, Stage 4 stays unreachable. Run Stage 3 in production "
+        f"and accumulate evidence; the gate lifts when the prerequisites lift."
+    )
+
+
+@main.group("promotion")
+def promotion_group() -> None:
+    """Per-action-class graduation tracking (earned-autonomy pipeline).
+
+    The CLI surface for safety-verification §3 promotion tracking. Every
+    mutation (init/advance/demote) writes to BOTH `promotion.yaml`
+    (the operator-readable cache) AND the audit chain (the F.6 source of
+    truth — the reconciler in Task 8 can rebuild the cache from the
+    chain). `status` is read-only.
+    """
+
+
+@promotion_group.command("status")
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+    help="Path to promotion.yaml.",
+)
+def promotion_status_cmd(promotion_path: Path) -> None:
+    """Print per-action-class state and any proposed promotions."""
+    tracker = PromotionTracker.from_path(promotion_path)
+    if tracker is None:
+        click.echo(
+            f"no promotion.yaml at {promotion_path}; run `remediation promotion init` first.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    click.echo(f"cluster_id:       {tracker.file.cluster_id}")
+    click.echo(f"schema_version:   {tracker.file.schema_version}")
+    click.echo(f"last_modified_at: {tracker.file.last_modified_at.isoformat()}")
+    click.echo("")
+
+    if not tracker.file.action_classes:
+        click.echo("(no action classes tracked yet — every action defaults to Stage 1)")
+    else:
+        click.echo(f"{'action_class':<55} {'stage':<10} {'evidence'}")
+        click.echo("-" * 110)
+        for key, entry in tracker.file.action_classes.items():
+            ev = entry.evidence
+            evidence_str = (
+                f"s1={ev.stage1_artifacts} s2={ev.stage2_dry_runs} "
+                f"s3={ev.stage3_executes} consec={ev.stage3_consecutive_executes} "
+                f"rb={ev.stage3_unexpected_rollbacks} "
+                f"workloads={len(ev.stage3_distinct_workloads)}"
+            )
+            click.echo(f"{key:<55} {entry.stage.name:<10} {evidence_str}")
+
+    proposals = tracker.propose_promotions()
+    if proposals:
+        click.echo("")
+        click.echo("Proposed promotions:")
+        for p in proposals:
+            click.echo(f"  {p.action_type.value}: {p.from_stage.name} → {p.to_stage.name}")
+            click.echo(f"    {p.reason}")
+
+
+@promotion_group.command("init")
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Path where promotion.yaml will be written. Must not already exist.",
+)
+@click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Path to the promotion audit log. Appended to (created if absent).",
+)
+@click.option(
+    "--cluster-id",
+    required=True,
+    help="Operator-supplied cluster label (e.g. 'prod-eu-1'). Surfaces in "
+    "audit logs and dashboards to disambiguate dev/staging/prod files.",
+)
+@click.option(
+    "--action-class",
+    "action_classes",
+    type=click.Choice(_ACTION_TYPE_CHOICES),
+    multiple=True,
+    help="Action classes to register at Stage 1 (repeat for multiple). "
+    "Defaults to all v0.1 action classes.",
+)
+def promotion_init_cmd(
+    promotion_path: Path,
+    audit_path: Path,
+    cluster_id: str,
+    action_classes: tuple[str, ...],
+) -> None:
+    """Initialise a fresh promotion.yaml with action classes at Stage 1.
+
+    Refuses to overwrite an existing file — use `remediation promotion reconcile`
+    (Task 8) to rebuild from the audit chain instead.
+    """
+    if promotion_path.exists():
+        raise click.UsageError(
+            f"{promotion_path} already exists; refusing to overwrite. "
+            f"Use `remediation promotion reconcile` to rebuild from the "
+            f"audit chain, or delete the file first if you really mean to "
+            f"start fresh (you will lose accumulated state)."
+        )
+
+    chosen = list(action_classes) if action_classes else list(_ACTION_TYPE_CHOICES)
+
+    # Build a tracker pre-populated at Stage 1.
+    tracker = PromotionTracker.empty(cluster_id=cluster_id)
+    from remediation.promotion import ActionClassPromotion
+
+    for ac in chosen:
+        tracker.file.action_classes[ac] = ActionClassPromotion(
+            action_type=RemediationActionType(ac),
+        )
+    tracker.save(promotion_path)
+
+    auditor = PipelineAuditor(audit_path, run_id=f"promotion-init-{_now_iso()}")
+    auditor.record_promotion_init(cluster_id=cluster_id, action_classes=chosen)
+
+    click.echo(f"promotion.yaml created: {promotion_path}")
+    click.echo(f"audit entry written:    {audit_path}")
+    click.echo(f"cluster_id:             {cluster_id}")
+    click.echo(f"action classes (Stage 1): {len(chosen)}")
+    for ac in chosen:
+        click.echo(f"  - {ac}")
+
+
+@promotion_group.command("advance")
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Promotion audit log path (appended to).",
+)
+@click.option(
+    "--action",
+    "action_type_str",
+    type=click.Choice(_ACTION_TYPE_CHOICES),
+    required=True,
+    help="Action class to advance.",
+)
+@click.option(
+    "--to",
+    "to_stage_str",
+    type=click.Choice(_TO_STAGE_CHOICES_ADVANCE, case_sensitive=False),
+    required=True,
+    help="Target stage. Must be exactly current+1 (no skipping).",
+)
+@click.option(
+    "--reason",
+    required=True,
+    help="Free-text justification. Appears in the audit log and promotion.yaml.",
+)
+@click.option(
+    "--operator",
+    default=None,
+    help="Operator identifier. Defaults to $NEXUS_OPERATOR or $USER.",
+)
+def promotion_advance_cmd(
+    promotion_path: Path,
+    audit_path: Path,
+    action_type_str: str,
+    to_stage_str: str,
+    reason: str,
+    operator: str | None,
+) -> None:
+    """Advance an action class by one stage with a signed sign-off."""
+    _apply_transition(
+        kind="advance",
+        promotion_path=promotion_path,
+        audit_path=audit_path,
+        action_type_str=action_type_str,
+        to_stage_str=to_stage_str,
+        reason=reason,
+        operator=operator,
+    )
+
+
+@promotion_group.command("demote")
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--action",
+    "action_type_str",
+    type=click.Choice(_ACTION_TYPE_CHOICES),
+    required=True,
+)
+@click.option(
+    "--to",
+    "to_stage_str",
+    type=click.Choice(_TO_STAGE_CHOICES_DEMOTE, case_sensitive=False),
+    required=True,
+    help="Target stage. Must be strictly less than the current stage.",
+)
+@click.option(
+    "--reason",
+    required=True,
+    help="Free-text justification. Required for the audit trail of any demotion.",
+)
+@click.option(
+    "--operator",
+    default=None,
+)
+def promotion_demote_cmd(
+    promotion_path: Path,
+    audit_path: Path,
+    action_type_str: str,
+    to_stage_str: str,
+    reason: str,
+    operator: str | None,
+) -> None:
+    """Demote an action class to a lower stage after an incident or regression."""
+    _apply_transition(
+        kind="demote",
+        promotion_path=promotion_path,
+        audit_path=audit_path,
+        action_type_str=action_type_str,
+        to_stage_str=to_stage_str,
+        reason=reason,
+        operator=operator,
+    )
+
+
+def _apply_transition(
+    *,
+    kind: str,
+    promotion_path: Path,
+    audit_path: Path,
+    action_type_str: str,
+    to_stage_str: str,
+    reason: str,
+    operator: str | None,
+) -> None:
+    """Shared implementation for `advance` and `demote`."""
+    tracker = PromotionTracker.from_path(promotion_path)
+    if tracker is None:
+        raise click.UsageError(
+            f"{promotion_path} does not exist; run `remediation promotion init` first."
+        )
+
+    action_type = RemediationActionType(action_type_str)
+    to_stage = _parse_stage(to_stage_str)
+    current_stage = tracker.stage_for(action_type)
+    operator_name = operator or _default_operator()
+
+    # Direction checks (Pydantic will also catch these on PromotionSignOff
+    # construction, but the CLI's error message is more actionable).
+    if kind == "advance":
+        if to_stage <= current_stage:
+            raise click.UsageError(
+                f"{action_type.value} is already at {current_stage.name}; "
+                f"--to {to_stage.name.lower()} is not an advance. To rerun a "
+                f"prior advance use `remediation promotion reconcile` to "
+                f"verify the chain state."
+            )
+        if int(to_stage) != int(current_stage) + 1:
+            next_stage = PromotionStage(int(current_stage) + 1)
+            raise click.UsageError(
+                f"advance must move exactly +1 stage (no skipping); "
+                f"{action_type.value} is currently at {current_stage.name}, "
+                f"the next legal target is --to {next_stage.name.lower()}."
+            )
+        # Global Stage-3 → Stage-4 gate (safety-verification §6 items 3+4).
+        if to_stage == PromotionStage.STAGE_4:
+            raise click.UsageError(_stage4_refusal_message(action_type.value))
+    else:  # demote
+        if to_stage >= current_stage:
+            raise click.UsageError(
+                f"demote must move to a strictly lower stage; "
+                f"{action_type.value} is currently at {current_stage.name}, "
+                f"--to {to_stage.name.lower()} is not lower."
+            )
+
+    signoff = PromotionSignOff(
+        event_kind=kind,  # type: ignore[arg-type]
+        operator=operator_name,
+        timestamp=datetime.now(UTC),
+        reason=reason,
+        from_stage=current_stage,
+        to_stage=to_stage,
+    )
+    tracker.apply_signoff(action_type, signoff)
+    tracker.save(promotion_path)
+
+    auditor = PipelineAuditor(audit_path, run_id=f"promotion-{kind}-{_now_iso()}")
+    auditor.record_promotion_transition(action_type, signoff)
+
+    click.echo(
+        f"{action_type.value}: {current_stage.name} → {to_stage.name} ({kind} by {operator_name})"
+    )
+    click.echo(f"reason: {reason}")
+    click.echo(f"promotion.yaml updated: {promotion_path}")
+    click.echo(f"audit entry written:    {audit_path}")
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 if __name__ == "__main__":

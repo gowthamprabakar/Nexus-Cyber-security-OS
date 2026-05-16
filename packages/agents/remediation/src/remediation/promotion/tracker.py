@@ -59,6 +59,7 @@ from remediation.promotion.events import (
 from remediation.promotion.schemas import (
     ActionClassPromotion,
     PromotionFile,
+    PromotionSignOff,
     PromotionStage,
 )
 from remediation.schemas import RemediationActionType
@@ -223,6 +224,52 @@ class PromotionTracker:
         return entry.stage
 
     # ---------------------------- mutators -------------------------------
+
+    def apply_signoff(
+        self,
+        action_type: RemediationActionType,
+        signoff: PromotionSignOff,
+    ) -> None:
+        """Apply a sign-off — append it to the action class's history and
+        update its stage atomically.
+
+        Used by Task 7's `remediation promotion advance` / `demote` CLI
+        subcommands. The audit chain emission is the caller's job (Task 7
+        calls `auditor.record_promotion_transition` alongside this).
+
+        Args:
+            action_type: which action class to update.
+            signoff: the Pydantic-validated sign-off (already enforces
+                +1-advance / strictly-lower-demote / no-op-rejection at
+                construction time).
+
+        Raises:
+            ValueError: signoff.from_stage doesn't match the tracker's
+                current stage for this action class — the operator passed
+                a stale state assumption, or promotion.yaml is out of sync
+                with the chain (run reconcile).
+        """
+        key = action_type.value
+        if key not in self._file.action_classes:
+            # Auto-register at Stage 1 if not yet tracked.
+            self._file.action_classes[key] = ActionClassPromotion(action_type=action_type)
+        entry = self._file.action_classes[key]
+        if entry.stage != signoff.from_stage:
+            raise ValueError(
+                f"sign-off from_stage ({signoff.from_stage.name}) does not match "
+                f"the tracker's current stage ({entry.stage.name}) for {key!r}. "
+                f"Either the CLI's --to value is stale, or promotion.yaml is out "
+                f"of sync with the audit chain (run `remediation promotion reconcile`)."
+            )
+        # Re-construct the entry via Pydantic so the "stage matches latest
+        # sign-off" invariant validates the new state in one step.
+        new_entry = ActionClassPromotion(
+            action_type=entry.action_type,
+            stage=signoff.to_stage,
+            evidence=entry.evidence.model_copy(deep=True),
+            sign_offs=[*entry.sign_offs, signoff],
+        )
+        self._file.action_classes[key] = new_entry
 
     def record_evidence(
         self,
