@@ -2,7 +2,7 @@
 
 Kubernetes Posture Agent — D.6; **fourth Phase-1b agent**; **ninth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / D.5 / **D.6**). **Closes the Phase-1b detection track.**
 
-> **Version:** v0.2 (2026-05-16) — **live cluster API ingest** ships alongside the v0.1 offline filesystem mode. v0.1 (2026-05-13) shipped offline-only.
+> **Version:** v0.3 (2026-05-16) — **in-cluster ServiceAccount mode** ships alongside v0.1 offline + v0.2 explicit-kubeconfig modes. v0.2 (2026-05-16) introduced live cluster API ingest. v0.1 (2026-05-13) shipped offline-only.
 
 ## What it does
 
@@ -16,9 +16,10 @@ Three concurrent input feeds (`asyncio.TaskGroup`):
 
 - **kube-bench** — CIS Kubernetes Benchmark JSON output (`kube-bench --json`). FAIL/WARN records become findings; PASS/INFO dropped. An upstream `severity: critical` marker promotes any FAIL/WARN to CRITICAL.
 - **Polaris** — workload-posture JSON output (`polaris audit --format=json`). Walks all three check levels (workload / pod / container). `Success: false` records with `danger`/`warning` severity become findings; `ignore` filtered.
-- **Workloads** — D.6's bundled **10-rule analyser** runs over every pod template. Two reader sources, mutually exclusive per run:
-  - **`--manifest-dir`** (v0.1, default) — flat `*.yaml` + `*.yml` files. Operators pre-stage manifests (works for CI / PR scans of rendered Helm charts).
-  - **`--kubeconfig`** (v0.2, live mode) — read live workloads via the kubernetes Python SDK. Pulls Pod / Deployment / StatefulSet / DaemonSet / ReplicaSet / Job / CronJob across all namespaces (or one, via `--cluster-namespace`). No pre-staging.
+- **Workloads** — D.6's bundled **10-rule analyser** runs over every pod template. Three reader sources, mutually exclusive per run:
+  - **`--manifest-dir`** (v0.1) — flat `*.yaml` + `*.yml` files. Operators pre-stage manifests (works for CI / PR scans of rendered Helm charts).
+  - **`--kubeconfig`** (v0.2) — read live workloads via the kubernetes Python SDK using an explicit kubeconfig file. Pulls Pod / Deployment / StatefulSet / DaemonSet / ReplicaSet / Job / CronJob across all namespaces (or one, via `--cluster-namespace`).
+  - **`--in-cluster`** (v0.3) — same live ingest, but config comes from the Pod's mounted ServiceAccount token. **The production deployment mode** — run the agent as a CronJob with a read-only SA; no external kubeconfig to manage.
 
 Three deterministic normalizers (`normalize_kube_bench` + `normalize_polaris` + `normalize_manifest`) lift the typed reader outputs into OCSF v1.3 Compliance Findings via **F.3's re-exported `build_finding`** — D.6 emits the **identical wire shape** (`class_uid 2003`) as F.3 cloud-posture and D.5 multi-cloud-posture. Downstream consumers (Meta-Harness, D.7 Investigation, fabric routing) already filter on `class_uid 2003`; D.6 is invisible at the schema level. The `finding_info.types[0]` discriminator carries `cspm_k8s_cis` / `cspm_k8s_polaris` / `cspm_k8s_manifest`.
 
@@ -53,16 +54,24 @@ uv run k8s-posture run \
     --polaris-feed /tmp/polaris.json \
     --manifest-dir /tmp/manifests/
 
-# 3b. Run against a live cluster (v0.2) — no manifest pre-staging
+# 3b. Run against a live cluster (v0.2) — explicit kubeconfig
 uv run k8s-posture run \
     --contract path/to/contract.yaml \
     --kube-bench-feed /tmp/kube-bench.json \
     --polaris-feed /tmp/polaris.json \
     --kubeconfig ~/.kube/config \
     --cluster-namespace production    # optional; cluster-wide if omitted
+
+# 3c. Run as a Pod inside the cluster (v0.3) — production deployment mode
+uv run k8s-posture run \
+    --contract path/to/contract.yaml \
+    --kube-bench-feed /tmp/kube-bench.json \
+    --polaris-feed /tmp/polaris.json \
+    --in-cluster \
+    --cluster-namespace production    # optional; cluster-wide if omitted
 ```
 
-`--manifest-dir` and `--kubeconfig` are **mutually exclusive** (Q6) — pick one workload source per run. `--cluster-namespace` requires `--kubeconfig`.
+The three workload sources (`--manifest-dir`, `--kubeconfig`, `--in-cluster`) are **mutually exclusive** — pick one per run. `--cluster-namespace` requires either `--kubeconfig` or `--in-cluster`.
 
 See [`runbooks/k8s_scan.md`](runbooks/k8s_scan.md) for the full operator workflow (staging the three feeds · interpreting the three artifacts · severity escalation rules · routing findings to D.7 Investigation + F.6 Audit · troubleshooting).
 

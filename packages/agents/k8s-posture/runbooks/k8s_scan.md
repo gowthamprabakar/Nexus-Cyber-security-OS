@@ -130,9 +130,103 @@ A `403 Forbidden` on any of these list calls raises `ClusterReaderError` immedia
 
 **v0.2 limitations** (Phase 1c+ work):
 
-- **No in-cluster fallback** (Q4) — `--kubeconfig` is required. The Pod-mounted ServiceAccount token path ships in v0.3 once we settle on the mount conventions.
+- **In-cluster ServiceAccount mode** shipped in v0.3 — see section 1c.iii below.
 - **Workloads only.** RBAC bindings, admission webhooks, Helm releases, OPA constraints, Pod Security Standards, and NetworkPolicy graphs each get their own follow-on agents/plans.
 - **No --kubeconfig + --manifest-dir combo.** Cross-source validation (reading both and asserting parity) is deferred — operators pick one source per run.
+
+#### 1c.iii. In-cluster ServiceAccount mode (v0.3; production deployment)
+
+When the agent runs **as a Pod inside the cluster being scanned**, it can read the kubeconfig directly from the mounted ServiceAccount token — no external `--kubeconfig` file is needed. This is the recommended production deployment pattern (CronJob / Deployment running with a least-privilege ClusterRole).
+
+Invocation:
+
+```bash
+# Inside the Pod (e.g. as a CronJob):
+uv run k8s-posture run \
+    --contract /etc/nexus/contract.yaml \
+    --in-cluster \
+    --cluster-namespace production    # optional; cluster-wide if omitted
+```
+
+**Required Kubernetes RBAC** (apply once per cluster):
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexus-k8s-posture
+  namespace: nexus-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nexus-k8s-posture-reader
+rules:
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets, replicasets]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nexus-k8s-posture-reader
+subjects:
+  - kind: ServiceAccount
+    name: nexus-k8s-posture
+    namespace: nexus-system
+roleRef:
+  kind: ClusterRole
+  name: nexus-k8s-posture-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+**Example CronJob deployment** (runs every 6 hours):
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-k8s-posture
+  namespace: nexus-system
+spec:
+  schedule: '0 */6 * * *'
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: nexus-k8s-posture
+          restartPolicy: OnFailure
+          containers:
+            - name: scan
+              image: ghcr.io/your-org/nexus-k8s-posture:0.3.0
+              args:
+                - run
+                - --contract
+                - /etc/nexus/contract.yaml
+                - --in-cluster
+              volumeMounts:
+                - name: contract
+                  mountPath: /etc/nexus
+                  readOnly: true
+                - name: workspace
+                  mountPath: /workspaces
+          volumes:
+            - name: contract
+              configMap:
+                name: nexus-k8s-posture-contract
+            - name: workspace
+              emptyDir: {}
+```
+
+**Error contract:** v0.3 deliberately does NOT auto-detect in-cluster mode by probing the SA token path (Q1 of the v0.3 plan). Operators must pass `--in-cluster` explicitly. If `config.load_incluster_config()` raises (because the agent is not actually inside a cluster — missing `KUBERNETES_SERVICE_HOST` env var, missing CA cert / token files), the reader catches it and raises `ClusterReaderError` with a clear message ("failed to load in-cluster config (not running in a cluster?)").
+
+**Mutual exclusion:** `--in-cluster` is mutually exclusive with both `--manifest-dir` and `--kubeconfig` — supplying more than one is a CLI error.
 
 ---
 
@@ -183,7 +277,7 @@ uv run k8s-posture run \
     --manifest-dir /tmp/manifests/
 ```
 
-**Live cluster mode (v0.2):**
+**Live cluster mode via explicit kubeconfig (v0.2):**
 
 ```bash
 uv run k8s-posture run \
@@ -194,7 +288,18 @@ uv run k8s-posture run \
     --cluster-namespace production    # optional; cluster-wide if omitted
 ```
 
-Each feed flag is optional — supply only what you have. With **no** feeds, the agent emits a clean empty report (useful for validating substrate plumbing). All three feeds run concurrently via `asyncio.TaskGroup`. `--manifest-dir` and `--kubeconfig` are mutually exclusive (Q6); `--cluster-namespace` requires `--kubeconfig`.
+**In-cluster mode (v0.3; production deployment):**
+
+```bash
+uv run k8s-posture run \
+    --contract /tmp/contract.yaml \
+    --kube-bench-feed /tmp/kube-bench.json \
+    --polaris-feed /tmp/polaris.json \
+    --in-cluster \
+    --cluster-namespace production    # optional; cluster-wide if omitted
+```
+
+Each feed flag is optional — supply only what you have. With **no** feeds, the agent emits a clean empty report (useful for validating substrate plumbing). All three feeds run concurrently via `asyncio.TaskGroup`. The three workload sources (`--manifest-dir`, `--kubeconfig`, `--in-cluster`) are **mutually exclusive**; `--cluster-namespace` requires either `--kubeconfig` or `--in-cluster`.
 
 Sample output:
 
