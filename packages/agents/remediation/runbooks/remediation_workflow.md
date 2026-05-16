@@ -101,6 +101,15 @@ authorized_actions:
 
 **Production action — applies for real with mandatory post-validation + rollback.** The most dangerous tier; the most safety primitives layered in front of it.
 
+### 4.0 Two-layer opt-in: auth.yaml AND the operational kill-switch flag
+
+As of A.1 v0.1, `--mode execute` is **locked OFF by default at the CLI layer**, independently of whatever `auth.yaml` says. To run execute mode, **both** of the following must be true:
+
+1. `auth.yaml` has `mode_execute_authorized: true` (the per-tenant policy gate).
+2. The CLI is invoked with `--i-understand-this-applies-patches-to-the-cluster` (the operational per-invocation gate).
+
+The operational flag is a deliberate "do you really mean it" guard. It exists because `auth.yaml` lives on disk and can be over-broad by accident; the CLI flag forces the operator to opt in **at the moment of invocation**. **Even an over-broad `auth.yaml` cannot apply patches without the flag also being supplied at the command line.** Until A.1's safety contract has been proven against a live cluster (gate G3 of the four-gate plan in the post-A.1 readiness report), the operational flag should remain unset in any environment that holds real workloads.
+
 ```bash
 uv run remediation run \
     --contract path/to/contract.yaml \
@@ -108,13 +117,16 @@ uv run remediation run \
     --auth path/to/auth.yaml \
     --mode execute \
     --kubeconfig ~/.kube/config \
-    --rollback-window-sec 300
+    --rollback-window-sec 300 \
+    --i-understand-this-applies-patches-to-the-cluster
 # → mode: execute
 # → findings: N
 # →   executed_validated: V
 # →   executed_rolled_back: R
 # →   execute_failed: F
 ```
+
+Without the operational flag, `--mode execute` exits non-zero with a `UsageError` pointing at the flag name; nothing touches the cluster. `--mode recommend` and `--mode dry_run` are unaffected by the lockdown — use those to preview the patches first.
 
 The opt-in line in `auth.yaml`:
 

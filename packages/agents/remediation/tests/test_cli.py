@@ -278,6 +278,109 @@ def test_run_refuses_execute_without_cluster_access(tmp_path: Path) -> None:
     assert "requires cluster access" in result.output
 
 
+# ---------------------------- run: execute lockdown (operational gate) --
+
+
+def test_run_refuses_execute_without_operational_flag(tmp_path: Path) -> None:
+    """`--mode execute` is locked OFF by default. The operational
+    `--i-understand-this-applies-patches-to-the-cluster` flag must be supplied
+    in addition to whatever `auth.yaml` says.
+
+    This is gate G2 of the four-gate plan in the post-A.1 readiness report.
+    Even an over-broad `auth.yaml` (mode_execute_authorized: true + every
+    action class in the allowlist) cannot bypass the CLI-level lockdown.
+    """
+    contract = _contract_yaml(tmp_path)
+    findings = _empty_findings_json(tmp_path)
+    kubeconfig = tmp_path / "kc.yaml"
+    kubeconfig.write_text("apiVersion: v1\nkind: Config\nclusters: []\n")
+    # auth.yaml that DOES authorise execute — the test proves the CLI flag
+    # blocks even when auth.yaml would otherwise allow.
+    auth = _auth_yaml(
+        tmp_path,
+        mode_recommend_authorized=True,
+        mode_dry_run_authorized=True,
+        mode_execute_authorized=True,
+        authorized_actions=[
+            "remediation_k8s_patch_runAsNonRoot",
+            "remediation_k8s_patch_resource_limits",
+        ],
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "run",
+            "--contract",
+            str(contract),
+            "--findings",
+            str(findings),
+            "--auth",
+            str(auth),
+            "--mode",
+            "execute",
+            "--kubeconfig",
+            str(kubeconfig),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "locked OFF by default" in result.output
+    assert "i-understand-this-applies-patches-to-the-cluster" in result.output
+
+
+def test_run_recommend_mode_does_not_require_operational_flag(tmp_path: Path) -> None:
+    """The lockdown only applies to `--mode execute`; recommend mode is free."""
+    contract = _contract_yaml(tmp_path)
+    findings = _empty_findings_json(tmp_path)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "run",
+            "--contract",
+            str(contract),
+            "--findings",
+            str(findings),
+            "--mode",
+            "recommend",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_run_dry_run_mode_does_not_require_operational_flag(tmp_path: Path) -> None:
+    """The lockdown only applies to `--mode execute`; dry_run mode is free."""
+    contract = _contract_yaml(tmp_path)
+    findings = _empty_findings_json(tmp_path)
+    kubeconfig = tmp_path / "kc.yaml"
+    kubeconfig.write_text("apiVersion: v1\nkind: Config\nclusters: []\n")
+    auth = _auth_yaml(
+        tmp_path,
+        mode_recommend_authorized=True,
+        mode_dry_run_authorized=True,
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "run",
+            "--contract",
+            str(contract),
+            "--findings",
+            str(findings),
+            "--auth",
+            str(auth),
+            "--mode",
+            "dry_run",
+            "--kubeconfig",
+            str(kubeconfig),
+        ],
+    )
+    # Dry-run will try to call kubectl; we don't expect success against a stub
+    # kubeconfig, but the CLI must NOT reject for missing operational flag.
+    assert "locked OFF by default" not in result.output
+
+
 # ---------------------------- run: mode-escalation gates ----------------
 
 

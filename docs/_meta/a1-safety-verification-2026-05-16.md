@@ -1,0 +1,230 @@
+# A.1 v0.1 safety verification record — 2026-05-16
+
+**What this is.** The standalone safety record for A.1 v0.1 (Remediation Agent, production-action mode). Distinct from the implementation-completeness record at [`a1-verification-2026-05-16.md`](a1-verification-2026-05-16.md) (which covers what shipped, test counts, ADR-007 conformance). This record answers the safety question the implementation record sidestepped:
+
+> **"Why is collapsing Tier-3 → Tier-2 → Tier-1 into one agent safe, and what specifically must be true before `--mode execute` runs unattended in a customer's production environment?"**
+
+**Why it exists.** The implementation record framed A.1's scope-collapse as a calendar win ("pulled ~10 weeks out of the critical path"). That framing buried the question of whether merging three planned safety tiers into one shippable agent is _safe_. This record makes the safety contract explicit and auditable.
+
+**Scope.** The contents below are load-bearing for any decision to enable `--mode execute` in a customer environment. If anything here is wrong, that decision is wrong.
+
+---
+
+## §1. The reframe — tiers are graduation stages, not separate agents
+
+The original Phase-1c plan named A.1 / A.2 / A.3 as three sequential **agents**. That framing was load-bearing on a hidden assumption: that the safety surface of remediation is so different per tier that each tier deserves its own agent and its own multi-week build cycle.
+
+That assumption is wrong. The three tiers share the same five primitives — patch builder, dry-run, executor, validator, rollback — and the only thing that differs between tiers is **how much human judgment is in the loop on any given action**:
+
+| Original Tier | Original framing          | Reframed as: per-action-class promotion stage                                             |
+| ------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
+| A.1 Tier-3    | Recommend-only agent      | Stage 1: artifact generation (operator reviews + hand-applies)                            |
+| A.2 Tier-2    | Approve-and-execute agent | Stage 3: human-approved execute (operator clicks "go" per action)                         |
+| A.3 Tier-1    | Autonomous agent          | Stage 4: unattended execute (operator owns policy + kill switch, not per-action approval) |
+
+The intermediate `dry_run` mode (originally absent from the A.1/A.2/A.3 split) is **stage 2**: server-side validation against a real cluster, no apply.
+
+**The three tiers were never three agents. They were graduation stages for each individual action class.** Once A.1 v0.1 collapses them into one agent's `--mode` flag space, the safety question shifts: it isn't "is this whole agent safe to ship" but rather "**which action classes have earned which stage of autonomy, in which environment**." That is the earned-autonomy pipeline.
+
+This record's claim: **the scope-collapse is safe only if the earned-autonomy pipeline is followed**. Without the pipeline, collapsing tiers means promoting every action class to Stage 4 by default, which is the failure mode A.1's safety contract exists to prevent.
+
+---
+
+## §2. The four-stage earned-autonomy pipeline
+
+Each action class lives in exactly one stage at any moment, **per customer environment**. (An action class may be at Stage 4 in customer X's environment and Stage 1 in customer Y's, depending on how much demonstrated reliability the action class has against each cluster's specifics.)
+
+### Stage 1 — `recommend`
+
+| Property                | Value                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **What runs**           | A.1 generates the artifact; operator reviews the diff in PR / change-management; operator hand-applies.                   |
+| **Blast radius**        | None at the platform level — A.1 never touches the cluster.                                                               |
+| **Human role**          | Reviews every artifact. Signs the change-management ticket. Applies the patch via their own change tooling.               |
+| **Failure mode**        | Operator applies a bad patch. Owned entirely by operator's change-management. A.1 is a recommender.                       |
+| **Auth required**       | `mode_recommend_authorized: true` (default).                                                                              |
+| **Operational flag**    | None.                                                                                                                     |
+| **Promotion criterion** | The operator has applied A.1's artifact for this action class at least once and confirms it produced the expected result. |
+
+This is the entry point for every action class. **No action class ships above Stage 1 in any customer environment without explicit graduation.**
+
+### Stage 2 — `dry_run`
+
+| Property                | Value                                                                                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **What runs**           | A.1 generates the artifact AND invokes `kubectl --dry-run=server` against the live cluster. Apply never happens.                                                                  |
+| **Blast radius**        | None at the workload level. The cluster's admission webhooks see the patch (which has side effects for some webhooks — e.g. policy engines may log the attempt).                  |
+| **Human role**          | Reviews the dry-run diff. Decides whether the diff matches expectation. Hand-applies if so.                                                                                       |
+| **Failure mode**        | Server-side dry-run rejects (good — caught before apply). Dry-run succeeds but apply behaves differently (mutating webhook strips fields — see Stage 3 risk).                     |
+| **Auth required**       | `mode_dry_run_authorized: true`. Cluster access (`--kubeconfig` or `--in-cluster`).                                                                                               |
+| **Operational flag**    | None.                                                                                                                                                                             |
+| **Promotion criterion** | Action class has run `dry_run` against the customer's actual cluster at least **5 times** for distinct workloads without rejection. Every dry-run output reviewed by an operator. |
+
+The promotion-out-of-Stage-1 evidence is the dry-run record. Stage 2 is where action classes prove they work against this customer's admission webhooks, this customer's RBAC, this customer's workload shapes — not the platform's hypothetical defaults.
+
+### Stage 3 — human-approved `execute`
+
+| Property                | Value                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What runs**           | A.1 generates + dry-runs + (on operator approval per action) executes. Rollback timer + post-validation re-detection fire.                                                                                                                                                                                                                                         |
+| **Blast radius**        | One workload per approval. The operator approves each individual action before A.1 applies.                                                                                                                                                                                                                                                                        |
+| **Human role**          | Approves each action individually. Reviews the rollback decision if it fires. Owns the kill switch.                                                                                                                                                                                                                                                                |
+| **Failure mode**        | Approved patch applies but webhook re-mutates spec → rolled-back automatically. Approved patch applies but breaks workload → rolled-back automatically. Operator approves a patch they didn't read → not A.1's failure to prevent; this is what change-management process is for.                                                                                  |
+| **Auth required**       | `mode_execute_authorized: true`. The specific action class in `authorized_actions`. Cluster access. **Per-action approval gate** (S.3 ChatOps in Phase-1c; for v0.1, manual CLI invocation per workload).                                                                                                                                                          |
+| **Operational flag**    | `--i-understand-this-applies-patches-to-the-cluster` MUST be passed.                                                                                                                                                                                                                                                                                               |
+| **Promotion criterion** | Action class has run successfully at Stage 3 against the customer's actual cluster for **at least 10 distinct workloads**, with **zero rolled-back outcomes** caused by an issue with the action class itself (rollbacks caused by external admission webhooks count separately — they validate the rollback contract works, not that the action class is broken). |
+
+This is the stage every action class graduates to once Stage 2 evidence exists. **No action class skips Stage 3 — there is no path from Stage 2 to Stage 4 without operator-approved execute time at Stage 3.**
+
+### Stage 4 — unattended `execute`
+
+| Property                | Value                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **What runs**           | A.1 runs on a schedule (Phase-1c scheduler), ingests D.6 findings, applies remediations for action classes that have reached Stage 4 in this environment, runs rollback validation, halts on first unexpected failure.                                                                                                                                                                                                    |
+| **Blast radius**        | Bounded by `max_actions_per_run` (1-50). Whole run halts if any action's rollback-decision fires unexpectedly. Operator-defined exclusion list per workload kind / namespace.                                                                                                                                                                                                                                             |
+| **Human role**          | Owns policy (which action classes are at Stage 4, in which namespaces, with what blast-radius cap). Owns the kill switch (single env-var or auth.yaml flip stops all Stage 4 execution platform-wide). Reviews rollback-decisions weekly. **Does not approve individual actions.**                                                                                                                                        |
+| **Failure mode**        | A.1 applies a patch that the admission webhook silently mutates → rolled back automatically. Cluster controller falls behind → measured rollback window exceeds default → caught by Stage-3 promotion criterion before reaching Stage 4. A previously-stable workload changes shape (HPA tuned, new sidecar added) → action class output may not match cluster expectation → rolled back, action class re-enters Stage 3. |
+| **Auth required**       | `mode_execute_authorized: true`. Action class in `authorized_actions`. Cluster access.                                                                                                                                                                                                                                                                                                                                    |
+| **Operational flag**    | `--i-understand-this-applies-patches-to-the-cluster` MUST be passed (for ad-hoc invocations). Scheduled runs (Phase-1c) use a separate Stage-4-only authorization scope.                                                                                                                                                                                                                                                  |
+| **Promotion criterion** | Action class has accumulated **30 consecutive successful Stage-3 executions** against the customer's cluster, with the customer's security lead signing off on the promotion. **No Stage-4 promotion is automatic.**                                                                                                                                                                                                      |
+
+The human never fully leaves. The shift between Stage 3 and Stage 4 is the human moving **from approving each action** to **owning policy and the kill switch**. Both stages have human authority over the agent; the granularity is different.
+
+---
+
+## §3. Promotion-tracking: where the per-action-class graduation state lives
+
+A.1 v0.1 does not yet have a per-action-class promotion state file. **This is a gap.** The v0.1 model is binary at the `auth.yaml` level: an action class is either in `authorized_actions` or not, with no record of what stage it's at or what evidence justified the listing.
+
+For the earned-autonomy pipeline to be auditable, A.1 v0.2 (or earlier) needs:
+
+1. **A `promotion.yaml` per customer environment** that records, per action class:
+   - Current stage (1-4).
+   - Promotion-evidence count (e.g. `stage2_dry_runs: 7`, `stage3_executes: 14`, `stage3_unexpected_rollbacks: 0`).
+   - Promotion-sign-off (who, when) for the most recent stage transition.
+   - Excluded namespaces / workload kinds / labels.
+2. **Per-action audit log emission** on every Stage-N event — incrementing the corresponding counter in `promotion.yaml`. Reuses A.1's F.6 audit hash chain; the promotion state is derivable from the chain replay.
+3. **A `remediation promotion` CLI subcommand** that prints the per-action-class state and proposes promotions to the operator (e.g. "action `runAsNonRoot` has accumulated 12 successful Stage-3 executions in `production`; ready for sign-off to Stage 4?").
+
+**Until promotion.yaml ships**, the human role for every Stage 3 and Stage 4 action is owned by manual operator discipline — the operator-of-record reviews the audit log + `findings.json` weekly and makes promotion decisions out-of-band. This is documented in the runbook ([§4 of `remediation_workflow.md`](../../packages/agents/remediation/runbooks/remediation_workflow.md)) but it is fragile. **Manual discipline is not a substitute for in-product tracking.**
+
+**Gap closure target:** Phase-1c, before any "do" agent expansion (A.1 v0.2, A.1 v0.3, A.2, etc.). The promotion model is the load-bearing contract every future cure-quadrant agent inherits; it must be in code before more action classes ship.
+
+---
+
+## §4. The kill switch — what stops Stage 3 / Stage 4 immediately
+
+In any customer environment with any action class at Stage 3 or Stage 4, the operator must be able to **halt all execute-mode runs platform-wide in under 60 seconds**. The mechanisms:
+
+| Mechanism                                                                   | Latency | Who can trigger                      | Scope                                                                                                   |
+| --------------------------------------------------------------------------- | ------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| **`auth.yaml`: `mode_execute_authorized: false`**                           | <60s    | Operator with auth.yaml write access | Per-customer (the auth.yaml is per-tenant)                                                              |
+| **`--i-understand-this-applies-patches-to-the-cluster` flag absent in CLI** | Instant | Operator at the CLI                  | Per-invocation (already true by default; the flag is the operational gate)                              |
+| **`authorized_actions: []` in auth.yaml**                                   | <60s    | Operator with auth.yaml write access | Per-customer; finer-grained — disables only the listed action classes, leaves recommend mode functional |
+| **`kubectl delete clusterrolebinding nexus-remediation-execute`**           | <60s    | Cluster admin                        | Per-cluster; cuts off A.1's RBAC at the K8s layer — survives even a misconfigured auth.yaml             |
+
+The last mechanism is the **defense-in-depth kill switch**: even if auth.yaml is over-broad AND the CLI flag is somehow inadvertently set, the cluster's RBAC will refuse the patch with a 403 and A.1's executor will emit `execute_failed`. **Three layers must align before any patch lands.**
+
+The runbook ([§6 of `remediation_workflow.md`](../../packages/agents/remediation/runbooks/remediation_workflow.md)) documents the ClusterRole. For Stage-4 customers, **the cluster admin should be a different individual than the `auth.yaml` operator** — the standard separation-of-duties pattern. Until that separation exists (no S.3 ChatOps yet, no separate admin role yet), A.1 v0.1 customers should treat Stage 4 as off-limits regardless of any other consideration.
+
+---
+
+## §5. Why scope-collapse is safe — the argument in writing
+
+The user's question, reproduced: _"Why is collapsing Tier-3 → Tier-2 → Tier-1 into one agent safe?"_
+
+**Answer.** The scope-collapse is safe **if and only if** every action class is gated by the four-stage promotion pipeline, every customer environment has explicit per-action-class stage assignments, and the kill switches at §4 are wired and tested.
+
+The original three-agent split would have enforced this pipeline at the **agent boundary**: customer adopts A.1 (recommend), then A.2 (approve-and-execute) ~weeks later, then A.3 (autonomous) ~weeks after that. The boundary was implicit; the pipeline was implicit; the customer's choice of which agent to deploy was the (very coarse) promotion gate.
+
+The unified A.1 v0.1 enforces the same pipeline at the **`--mode` flag + `auth.yaml` + operational flag boundaries**, with finer granularity. The risk shifts from "customer accidentally upgrades agent version" (low — agent versions are operator-managed) to "customer accidentally flips an auth.yaml field" (higher — config drift is everyone's problem). **The operational `--i-understand-this-applies-patches-to-the-cluster` flag exists precisely to close that risk:** even an over-broad auth.yaml cannot reach apply-time without the operator explicitly opting in at the CLI for each invocation.
+
+The collapse is therefore safe **conditional on**:
+
+1. **The four-stage promotion pipeline is documented and operator-visible.** ✅ This record + the runbook.
+2. **`--mode execute` is locked OFF by default behind the operational flag.** ✅ As of gate G2 closure today.
+3. **The execute path has been proven against a real cluster, not just mocked tests.** ⚠️ **PENDING — gate G3.** Scaffolding is in place ([`tests/integration/test_agent_kind_live.py`](../../packages/agents/remediation/tests/integration/test_agent_kind_live.py)) but not yet run green.
+4. **Promotion tracking exists in code, not just in operator memory.** ⚠️ **PENDING — Phase-1c task.** Documented gap in §3 above.
+5. **The kill switches are tested in customer environments before Stage-3 or Stage-4 enablement.** ⚠️ **PENDING — customer-onboarding task.** No customers at Stage 3 or 4 yet.
+
+**Until items 3-5 close, no action class graduates above Stage 2 in any customer environment.** Stage 1 (recommend) and Stage 2 (dry_run) are safe to ship today; they are by construction unable to apply patches to customer clusters.
+
+This is the bright line. Below it, A.1 v0.1 is shippable today. Above it, A.1 v0.1 is shippable only after items 3-5 close. The post-A.1 readiness report's "production-action mode" framing was — to the extent it suggested customers could enable Stage 3 or Stage 4 today — premature.
+
+---
+
+## §6. What must be true before `--mode execute` runs unattended in a customer's production environment
+
+The user's second question: _"What specifically must be true before `--mode execute` runs unattended in a customer's production environment?"_
+
+The complete list (every item must close; this is not "pick three"):
+
+### Platform-side prerequisites
+
+1. **Gate G3 closure** — the `NEXUS_LIVE_K8S=1` lane passes `test_execute_validated_against_live_cluster` and `test_rollback_window_matches_real_reconcile` against a `kind` cluster of the customer's K8s minor version. Recorded by appending a note to this file: date, kind version, measured reconcile latency, commit hash.
+2. **Promotion tracking in code (§3 gap)** — `promotion.yaml` ships; per-action audit emission lands; `remediation promotion` CLI exists. Phase-1c task; no Stage 4 customer enablement until done.
+3. **The mutating-admission-webhook fixture** lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`. This proves the rolled-back path works end-to-end, not just the validated path. Phase-1c follow-up after initial G3 closure.
+4. **At least one design-partner customer has run Stage 3 in their environment for ≥4 weeks without an unexpected rollback.** This is the empirical floor; no synthetic test substitutes for a real customer cluster's webhook landscape.
+
+### Customer-side prerequisites
+
+5. **A signed runbook acknowledging the four-stage pipeline.** Customer's security lead countersigns this record's §2 verbatim. The customer agrees that no action class reaches Stage 4 in their environment without the customer's own sign-off + 30 consecutive Stage-3 executions.
+6. **Separation of duties.** The individual who edits `auth.yaml` is different from the individual who holds the K8s ClusterRoleBinding-delete permission. Two-person control on the kill switch.
+7. **A defined kill-switch drill cadence.** Quarterly: customer triggers each of the four kill-switch mechanisms (§4) and verifies the platform halts Stage-3/Stage-4 execution within 60s. Recorded in the customer's compliance audit log.
+8. **A defined rollback-window-tuning process.** The default 300s `rollback_window_sec` was measured against `kind` (gate G3). If the customer's cluster has higher reconcile latency (large clusters, slow-reconciling controllers, OPA Gatekeeper-heavy webhook chain), the customer measures their actual latency and raises the value. **Stage 3 cannot graduate to Stage 4 until rollback_window_sec is empirically validated against the customer's cluster** — not the platform default.
+9. **A defined incident-response playbook for `execute_failed` and unexpected `executed_rolled_back` outcomes.** Customer's on-call rotation has a runbook entry for both. A.1 v0.1 produces structured audit logs; the customer's playbook must reference the F.6 5-axis query API to triage.
+
+### Process prerequisites
+
+10. **A.1 v0.2 OR equivalent has shipped with promotion tracking AND a live-cluster gate has been run for every customer environment.** The mocked-tests-only floor is too low for Stage 4.
+11. **The board/investor framing has been corrected** to reflect that A.1 v0.1 ships Stages 1 + 2, not "production action" in the unqualified sense. Stage 3 and Stage 4 are conditional on items 1-10.
+
+---
+
+## §7. Why this record exists and what's next
+
+This record exists because the implementation-completeness record at [`a1-verification-2026-05-16.md`](a1-verification-2026-05-16.md) said the safety primitives shipped without saying what counts as "shipped" for a production-action claim. It separates implementation hygiene (271 tests pass, mypy strict clean) from safety hygiene (promotion pipeline documented, kill switches drilled, real-cluster proof gathered).
+
+The next steps:
+
+1. **Close gate G3 (live `kind` run).** Operator runs the `NEXUS_LIVE_K8S=1` lane. Appends results to this file's §8 (Live-cluster proof log).
+2. **Write the Phase-1c plan for promotion tracking.** Per §3 above. Should land before A.1 v0.2 or any new "do" agent.
+3. **Write the customer-onboarding playbook addendum** that ratifies items 5-9 of §6. Required before any customer touches Stage 3.
+
+Only when all three of these complete does the post-A.1 readiness report's "first 'do' agent online" framing become accurate at the customer-environment level. Until then, the framing is accurate at the **platform-capability level** and should be qualified accordingly in board/investor comms.
+
+---
+
+## §8. Live-cluster proof log
+
+**This section is empty until gate G3 runs green.** Each successful `NEXUS_LIVE_K8S=1` run records:
+
+```
+DATE: YYYY-MM-DD
+COMMIT: <git sha at HEAD of the run>
+KIND VERSION: <kind --version output>
+K8S VERSION: <kubectl version output (server)>
+MEASURED RECONCILE LATENCY: <seconds, from test_rollback_window_matches_real_reconcile>
+TESTS PASSED: test_execute_validated_against_live_cluster | test_rollback_window_matches_real_reconcile
+OPERATOR: <name / GitHub handle>
+NOTES: <anything noteworthy about webhooks, RBAC quirks, etc.>
+```
+
+When this section has at least one entry, gate G3 is closed for that K8s minor version. Customers running a different K8s minor version need a separate entry — A.1 does not assume reconcile latency is the same across K8s versions.
+
+---
+
+## Sign-off
+
+**A.1 v0.1 is safe to ship at Stages 1 + 2 (recommend, dry_run) today.** Stage 3 (human-approved execute) becomes safe to ship per-customer once items 1, 5, 6, 7, 9 of §6 close. Stage 4 (unattended execute) becomes safe to ship per-customer once items 1-10 close.
+
+**The scope-collapse from three planned agents into one shipped agent is safe conditional on the four-stage promotion pipeline being followed.** Without the pipeline, the collapse would auto-promote every action class to Stage 4, which is the failure mode A.1's safety contract is designed to prevent. The pipeline is the product, not the cure-quadrant calendar compression.
+
+**Pending gates** before any v0.2 work or any further "do"-agent build:
+
+- ✅ G1: Math correction recorded — [`wiz-coverage-math-correction-2026-05-16.md`](wiz-coverage-math-correction-2026-05-16.md)
+- ✅ G2: `--mode execute` locked OFF by default
+- ⚠️ G3: `NEXUS_LIVE_K8S=1` lane scaffolded; actual run pending operator
+- ✅ G4: This record exists
+
+— recorded 2026-05-16 (post-A.1, safety-verification record)

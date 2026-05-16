@@ -138,6 +138,19 @@ def eval_cmd(cases_dir: Path) -> None:
     help="Override `rollback_window_sec` from auth.yaml (60-1800). The validator "
     "waits this long between apply and re-detect before deciding rollback.",
 )
+@click.option(
+    "--i-understand-this-applies-patches-to-the-cluster",
+    "enable_execute",
+    is_flag=True,
+    default=False,
+    help="REQUIRED to pass `--mode execute`. Operational kill-switch independent "
+    "of auth.yaml: even an over-broad `auth.yaml` cannot apply patches without "
+    "this flag also being supplied at the command line. Default is OFF; "
+    "`recommend` and `dry_run` modes do not require it. Until A.1's safety "
+    "contract has been proven against a live cluster (gate G3 of the four-gate "
+    "plan), this flag should remain unset in any environment that holds real "
+    "workloads. See: docs/_meta/a1-safety-verification-2026-05-16.md.",
+)
 def run_cmd(
     contract_path: Path,
     findings_path: Path,
@@ -147,6 +160,7 @@ def run_cmd(
     in_cluster: bool,
     cluster_namespace: str | None,
     rollback_window_sec: int | None,
+    enable_execute: bool,
 ) -> None:
     """Run the Remediation Agent end-to-end."""
     mode = RemediationMode(mode_str.lower())
@@ -159,6 +173,16 @@ def run_cmd(
     if mode != RemediationMode.RECOMMEND and not (kubeconfig or in_cluster):
         raise click.UsageError(
             f"--mode {mode.value} requires cluster access — supply --kubeconfig or --in-cluster"
+        )
+
+    if mode == RemediationMode.EXECUTE and not enable_execute:
+        raise click.UsageError(
+            "--mode execute is locked OFF by default. Pass "
+            "`--i-understand-this-applies-patches-to-the-cluster` to enable it. "
+            "This flag is an operational kill-switch independent of auth.yaml: "
+            "both layers must agree before the agent applies patches. "
+            "`recommend` and `dry_run` modes do not require this flag — use one "
+            "of those to preview the patches first."
         )
 
     auth = Authorization.from_path(auth_path) if auth_path else Authorization.recommend_only()
