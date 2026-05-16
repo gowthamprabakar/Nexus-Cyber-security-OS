@@ -45,6 +45,7 @@ from k8s_posture.normalizers.manifest import normalize_manifest
 from k8s_posture.normalizers.polaris import normalize_polaris
 from k8s_posture.schemas import FindingsReport
 from k8s_posture.summarizer import render_summary
+from k8s_posture.tools.cluster_workloads import read_cluster_workloads
 from k8s_posture.tools.kube_bench import KubeBenchFinding, read_kube_bench
 from k8s_posture.tools.manifests import ManifestFinding, read_manifests
 from k8s_posture.tools.polaris import PolarisFinding, read_polaris
@@ -58,6 +59,10 @@ def build_registry() -> ToolRegistry:
     reg.register("read_kube_bench", read_kube_bench, version="0.1.0", cloud_calls=0)
     reg.register("read_polaris", read_polaris, version="0.1.0", cloud_calls=0)
     reg.register("read_manifests", read_manifests, version="0.1.0", cloud_calls=0)
+    # v0.2 — live cluster reader. cloud_calls=1 marks it as making outbound API
+    # calls so the Charter budget tracks it (kube-bench/polaris/manifests are all
+    # filesystem reads).
+    reg.register("read_cluster_workloads", read_cluster_workloads, version="0.2.0", cloud_calls=1)
     return reg
 
 
@@ -84,6 +89,8 @@ async def run(
     kube_bench_feed: Path | str | None = None,
     polaris_feed: Path | str | None = None,
     manifest_dir: Path | str | None = None,
+    kubeconfig: Path | str | None = None,
+    cluster_namespace: str | None = None,
 ) -> FindingsReport:
     """Run the Kubernetes Posture Agent end-to-end under the runtime charter.
 
@@ -93,13 +100,31 @@ async def run(
         kube_bench_feed: Optional path to `kube-bench --json` output. Skipped if None.
         polaris_feed: Optional path to `polaris audit --format=json` output. Skipped if None.
         manifest_dir: Optional directory of `*.yaml` manifests. Skipped if None.
+            **Mutually exclusive with `kubeconfig`** (Q6 — operators pick a workload
+            source per run).
+        kubeconfig: Optional path to a kubeconfig file. When set, workload findings
+            come from the live cluster via `read_cluster_workloads` instead of the
+            file-based `read_manifests`. v0.2 has no in-cluster fallback (Q4).
+        cluster_namespace: Optional namespace scope for live-cluster ingest (Q3).
+            `None` → cluster-wide list APIs; a string → namespace-scoped APIs.
+            Only honoured when `kubeconfig` is set.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
         `report.md` to the charter workspace; emits a hash-chained audit
         log at `audit.jsonl`.
+
+    Raises:
+        ValueError: when both `manifest_dir` and `kubeconfig` are supplied
+            (mutually exclusive per Q6).
     """
     del llm_provider  # reserved for future iterations
+
+    if manifest_dir is not None and kubeconfig is not None:
+        raise ValueError(
+            "manifest_dir and kubeconfig are mutually exclusive — pick one workload "
+            "source per run (Q6)"
+        )
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -115,6 +140,8 @@ async def run(
             kube_bench_feed=kube_bench_feed,
             polaris_feed=polaris_feed,
             manifest_dir=manifest_dir,
+            kubeconfig=kubeconfig,
+            cluster_namespace=cluster_namespace,
         )
 
         # Stage 2/3: NORMALIZE + SCORE.
@@ -173,12 +200,20 @@ async def _ingest(
     kube_bench_feed: Path | str | None,
     polaris_feed: Path | str | None,
     manifest_dir: Path | str | None,
+    kubeconfig: Path | str | None,
+    cluster_namespace: str | None,
 ) -> tuple[
     Sequence[KubeBenchFinding],
     Sequence[PolarisFinding],
     Sequence[ManifestFinding],
 ]:
-    """Stage 1 — fan out the three feeds via TaskGroup. Skipped feeds → empty tuple."""
+    """Stage 1 — fan out the three feeds via TaskGroup. Skipped feeds → empty tuple.
+
+    Workload source routing (Q6 — mutual exclusion enforced upstream in `run`):
+    - `kubeconfig` set → live cluster via `read_cluster_workloads` (v0.2).
+    - `manifest_dir` set → filesystem snapshots via `read_manifests` (v0.1).
+    - Neither set → no workload findings.
+    """
     async with asyncio.TaskGroup() as tg:
         kb_task = (
             tg.create_task(ctx.call_tool("read_kube_bench", path=Path(kube_bench_feed)))
@@ -190,15 +225,22 @@ async def _ingest(
             if polaris_feed
             else None
         )
-        manifest_task = (
-            tg.create_task(ctx.call_tool("read_manifests", path=Path(manifest_dir)))
-            if manifest_dir
-            else None
-        )
+        if kubeconfig:
+            workload_task = tg.create_task(
+                ctx.call_tool(
+                    "read_cluster_workloads",
+                    kubeconfig=Path(kubeconfig),
+                    namespace=cluster_namespace,
+                )
+            )
+        elif manifest_dir:
+            workload_task = tg.create_task(ctx.call_tool("read_manifests", path=Path(manifest_dir)))
+        else:
+            workload_task = None
 
     kb: Sequence[KubeBenchFinding] = kb_task.result() if kb_task else ()
     polaris: Sequence[PolarisFinding] = polaris_task.result() if polaris_task else ()
-    manifest: Sequence[ManifestFinding] = manifest_task.result() if manifest_task else ()
+    manifest: Sequence[ManifestFinding] = workload_task.result() if workload_task else ()
     return kb, polaris, manifest
 
 

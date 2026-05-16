@@ -91,18 +91,48 @@ def eval_cmd(cases_dir: Path) -> None:
     "manifest_dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     default=None,
-    help="Optional directory of Kubernetes manifests (*.yaml + *.yml).",
+    help="Optional directory of Kubernetes manifests (*.yaml + *.yml). "
+    "Mutually exclusive with --kubeconfig.",
+)
+@click.option(
+    "--kubeconfig",
+    "kubeconfig",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional path to a kubeconfig file for live cluster ingest (v0.2). "
+    "Mutually exclusive with --manifest-dir.",
+)
+@click.option(
+    "--cluster-namespace",
+    "cluster_namespace",
+    type=str,
+    default=None,
+    help="Optional namespace scope for live cluster ingest (used with --kubeconfig). "
+    "Defaults to cluster-wide listing across all namespaces.",
 )
 def run_cmd(
     contract_path: Path,
     kube_bench_feed: Path | None,
     polaris_feed: Path | None,
     manifest_dir: Path | None,
+    kubeconfig: Path | None,
+    cluster_namespace: str | None,
 ) -> None:
     """Run the Kubernetes Posture Agent against an ExecutionContract YAML."""
+    # Q6 — workload source XOR.
+    if manifest_dir is not None and kubeconfig is not None:
+        raise click.UsageError(
+            "--manifest-dir and --kubeconfig are mutually exclusive — pick one "
+            "workload source per run"
+        )
+    if cluster_namespace is not None and kubeconfig is None:
+        raise click.UsageError(
+            "--cluster-namespace requires --kubeconfig (it only scopes live ingest)"
+        )
+
     contract = load_contract(contract_path)
 
-    if not (kube_bench_feed or polaris_feed or manifest_dir):
+    if not (kube_bench_feed or polaris_feed or manifest_dir or kubeconfig):
         click.echo(
             "warning: no feed flags provided; agent will emit an empty report",
             err=True,
@@ -114,6 +144,8 @@ def run_cmd(
             kube_bench_feed=kube_bench_feed,
             polaris_feed=polaris_feed,
             manifest_dir=manifest_dir,
+            kubeconfig=kubeconfig,
+            cluster_namespace=cluster_namespace,
         )
     )
 
