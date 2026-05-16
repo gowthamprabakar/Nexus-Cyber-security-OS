@@ -1,0 +1,170 @@
+# A.1 v0.1.1 — Earned-autonomy pipeline (in-code promotion tracking)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Pause for review after each numbered task.
+
+**Goal.** Close the §3 gap of [`a1-safety-verification-2026-05-16.md`](../../_meta/a1-safety-verification-2026-05-16.md) by shipping **per-action-class promotion tracking** in code. The safety record names this as the load-bearing contract every future cure-quadrant agent inherits; it must land before A.1 v0.2 (more K8s action classes), A.1 v0.3 (AWS Cloud Custodian), or any further "do" agent. Per the post-A.1 readiness report's Tier-0 gate plan, the four safety gates have all closed; this plan implements the next-required slice.
+
+**Scope.** The earned-autonomy pipeline as a working, auditable, eval-gated capability:
+
+- A **per-environment promotion state** (`promotion.yaml`) recording each action class's current stage (1-4) + accumulated evidence + sign-off history.
+- A **pre-flight stage gate** in `agent.run()` that refuses operations exceeding an action class's current stage (e.g. `--mode execute` for an action class still at Stage 2).
+- **Evidence accumulation** wired into the audit chain — every Stage-N action emits a `promotion.evidence.*` audit entry that increments the corresponding counter.
+- A **`remediation promotion` CLI subcommand family** (`status` / `advance` / `reconcile`) implementing the operator-facing surface.
+- **Reconcile-from-audit-chain** — promotion.yaml is a cache; the F.6 hash-chained audit log is the source of truth. `reconcile` rebuilds promotion.yaml by replaying the chain.
+- **Safe-by-default for v0.1 customers** — absent promotion.yaml means every action class is Stage 1 (recommend-only); explicit opt-in required to advance.
+- **Eval coverage** — new cases for stage-gated refusals, stage-graduation evidence accumulation, and the reconcile path. Existing 10 cases retrofit to declare their stage assumptions.
+
+**Strategic role.** The reframe from the [safety-verification §1](../../_meta/a1-safety-verification-2026-05-16.md#1-the-reframe--tiers-are-graduation-stages-not-separate-agents) made graduation stages explicit in writing. This plan makes them explicit **in code** — without it, the human role of "tracking which action class is at which stage" lives in operator memory, which the safety record names as fragile and not a substitute for in-product tracking. After this plan: every future cure-quadrant agent (A.1 v0.2+, A.2+, etc.) inherits a working promotion contract instead of having to invent or document one from scratch.
+
+**Reads from:** the [post-A.1 readiness report](../../_meta/system-readiness-2026-05-16-post-a1.md) (Tier-0 gate ordering); the [safety-verification record](../../_meta/a1-safety-verification-2026-05-16.md) (§2 stage definitions, §3 gap specification, §4 kill switches, §6 prerequisite list); the [A.1 v0.1 plan](2026-05-16-a-1-remediation-agent.md) (audit vocabulary, authz model, eval-runner shape).
+
+**Strategic out-of-scope** (named so the next plan doesn't forget):
+
+- **The mutating-admission-webhook fixture** for `test_execute_rolled_back_against_live_cluster` (§8 follow-up in the safety record) — this is its own ~half-day spike, tracked separately.
+- **S.3 ChatOps approval surface** — Phase-1c surface track; this plan ships Stage 3 with manual-per-invocation CLI approval, S.3 layers a ChatOps approval flow on top later.
+- **Customer-onboarding playbook addendum** (items 5-9 of [safety-verification §6](../../_meta/a1-safety-verification-2026-05-16.md#customer-side-prerequisites)) — separate document, customer-facing, written after the next design-partner conversation.
+- **Promotion-tuning data from real customer clusters** — empirical. Phase-1c hardening item; cannot be done until we have customers running Stage 3.
+
+---
+
+## Resolved questions
+
+| #   | Question                                                                     | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Task    |
+| --- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Q1  | Where does promotion.yaml live?                                              | **`--promotion PATH` CLI flag**, same shape as `--auth PATH`. Defaults to `{contract.persistent_root}/promotion.yaml` so it survives workspace resets. Per cluster (not per customer) — a customer with dev / staging / prod clusters has three promotion.yaml files. Operator owns the path; A.1 reads and writes via library API.                                                                                                                                                                                                                                                                       | Task 3  |
+| Q2  | What's the relationship to auth.yaml?                                        | **Separate file with separate semantics.** `auth.yaml` is per-tenant policy (which modes the agent is authorised to use). `promotion.yaml` is per-environment evidence (which action classes have earned which stage). Both must agree for an operation to proceed: auth.yaml says "mode_execute_authorized: true"; promotion.yaml says "action class X is at Stage 3 here." Either alone is insufficient.                                                                                                                                                                                                | Task 5  |
+| Q3  | What gates stage transitions — automatic, manual, or both?                   | **Evidence accumulates automatically; transitions require human action.** The agent counts successful operations into promotion.yaml. The agent **proposes** promotions when criteria are met (e.g. "action `runAsNonRoot` has 12 Stage-3 executions; ready for sign-off to Stage 4?"). The operator **applies** the promotion via `remediation promotion advance` with a typed sign-off. This matches the safety record's "the human never fully leaves" framing.                                                                                                                                        | Task 7  |
+| Q4  | How does the pre-flight stage check refuse insufficient promotions?          | **Raises `PromotionGateError` from `agent.run()` BEFORE the Charter context** (same pattern as `AuthorizationError` for mode escalation). The CLI re-raises as `click.UsageError` with the exact remedy ("action class X is at Stage 2; run with `--mode dry_run` or promote it first"). Library callers see the typed exception.                                                                                                                                                                                                                                                                         | Task 5  |
+| Q5  | What about new customer environments / fresh installs (no file)?             | **Safe-by-default.** Missing promotion.yaml is interpreted as "every action class is at Stage 1." Operations requiring Stage 2+ refuse with a clear error pointing at `remediation promotion init` (which writes an empty Stage-1 file). No silent upgrade; no implicit promotion. The v0.1 → v0.1.1 customer migration path is: 1) upgrade, 2) run `remediation promotion init`, 3) re-promote each action class explicitly to its prior effective stage. Migration documentation in the runbook.                                                                                                        | Task 10 |
+| Q6  | Audit-chain replay performance — do we cache the derived state?              | **promotion.yaml IS the cache.** F.6 audit chain is the source of truth (per the safety-verification §3); promotion.yaml is the derived view operator+agent both read. `remediation promotion reconcile` does a full chain replay and overwrites promotion.yaml; runs in O(n) over the chain length, expected sub-second for any customer's first year of operations. Reconcile is idempotent and runs every time an operator wants to verify the cache.                                                                                                                                                  | Task 9  |
+| Q7  | How do existing A.1 v0.1 customers (without promotion.yaml) avoid breakage?  | **Backward-compatible safe-by-default.** Existing v0.1 invocations that hit `--mode recommend` work unchanged — Stage 1 is the default. Invocations that previously worked at `--mode dry_run` or `--mode execute` now refuse with `PromotionGateError` until the operator runs `remediation promotion init` and explicitly promotes the relevant action classes. **This is a breaking change for execute-mode operators** and is called out in the v0.1.1 verification record and the runbook migration section. The break is intentional: shipping execute mode without promotion tracking was the gap. | Task 10 |
+| Q8  | How does the `xfail` rolled-back-path test interact with Stage-3 graduation? | **It blocks Stage-3 customer enablement, not Stage-3 platform-capability.** Stage 3 ships in code; A.1 customers can run human-approved execute. But [safety-verification §6 item 4](../../_meta/a1-safety-verification-2026-05-16.md#platform-side-prerequisites) ("≥4 weeks of Stage-3 customer evidence") and item 3 ("rolled-back test passes") are prerequisites for any Stage-4 promotion. The promotion-tracker code refuses Stage-3 → Stage-4 promotion attempts until a sentinel sentinel-fixture acknowledgement is recorded; the runbook §12 documents the gate.                               | Task 8  |
+
+---
+
+## Architecture — the promotion contract
+
+```
+auth.yaml                      promotion.yaml                F.6 audit chain
+(per-tenant policy)            (per-environment evidence)    (source of truth)
+       │                              │                              │
+       │     ┌────────────────────────┼──────────────────────────────┘
+       ▼     ▼                        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ Remediation Agent driver (agent.run)                              │
+│                                                                  │
+│  Stage 0: PROMOTION-GATE   — for each action_class in plan:        │
+│                              max permitted mode = promotion[ac].stage_max_mode
+│                              refuse if requested mode > max permitted
+│                                                                  │
+│  Stages 1-7 (unchanged)    — ingest, authz, generate, dry-run,    │
+│                              execute, validate, rollback          │
+│                                                                  │
+│  Stage 8: EVIDENCE-EMIT    — for each successful operation:        │
+│                              promotion.evidence.stageN_completed   │
+│                              audit entry → counter increment on    │
+│                              next reconcile / inline cache write   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+The pre-flight stage gate is named "Stage 0" because it logically precedes every existing pipeline stage. Stage 8 (evidence emission) is logically per-stage — every successful dry-run, execute, validate, rollback emits its promotion-evidence entry on its way through the audit chain.
+
+### Stage → mode mapping (enforced by the pre-flight gate)
+
+| Action class stage in promotion.yaml | Modes permitted                                                   |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| **Stage 1** (default)                | `recommend` only                                                  |
+| **Stage 2**                          | `recommend`, `dry_run`                                            |
+| **Stage 3**                          | `recommend`, `dry_run`, `execute` (manual-per-invocation)         |
+| **Stage 4**                          | `recommend`, `dry_run`, `execute` (manual + unattended scheduled) |
+
+The pre-flight check fires per finding: a single run may contain findings whose action classes are at different stages. The agent splits the input — Stage-1 findings emit RECOMMENDED_ONLY artifacts regardless of `--mode`, Stage-2 findings emit DRY_RUN_ONLY artifacts if `--mode` is dry_run or execute, etc. **The mode supplied at the CLI is the maximum the operator wants for this run; promotion.yaml is the maximum the agent will honour per action class.**
+
+### Promotion event vocabulary (extends the existing 11-action audit vocabulary)
+
+| New audit action                         | Emitted when                                                          | Payload                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `promotion.evidence.stage1`              | Stage-1 artifact emitted                                              | `action_type`, `correlation_id`, `namespace`                  |
+| `promotion.evidence.stage2`              | Dry-run completed successfully                                        | `action_type`, `correlation_id`, `exit_code`                  |
+| `promotion.evidence.stage3`              | Execute completed + validated (not rolled-back)                       | `action_type`, `correlation_id`, `pre/post hashes`            |
+| `promotion.evidence.unexpected_rollback` | Stage-3+ execute rolled back without webhook attribution              | `action_type`, `correlation_id`, `matched_findings_count`     |
+| `promotion.advance.proposed`             | Reconciler determines promotion criteria are met                      | `action_type`, `from_stage`, `to_stage`, `evidence_summary`   |
+| `promotion.advance.applied`              | Operator runs `remediation promotion advance`                         | `action_type`, `from_stage`, `to_stage`, `operator`, `reason` |
+| `promotion.demote.applied`               | Operator runs `remediation promotion demote` (e.g. after an incident) | `action_type`, `from_stage`, `to_stage`, `operator`, `reason` |
+| `promotion.init.applied`                 | Operator runs `remediation promotion init` on a fresh env             | `action_classes`, `default_stage: 1`                          |
+| `promotion.reconcile.completed`          | Reconciler rebuilds promotion.yaml from chain replay                  | `chain_entries_replayed`, `state_changes`                     |
+
+Total vocabulary growth: **11 → 20 audit actions**. The new 9 are all `promotion.*` namespaced so downstream consumers (D.7 Investigation, F.6 dashboards) can subscribe by prefix.
+
+---
+
+## Execution status
+
+| Task | Status     | Commit | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ⬜ pending | —      | `promotion/` package skeleton under `packages/agents/remediation/src/remediation/`. New module structure: `__init__.py` (public API re-exports) + `schemas.py` (Pydantic models) + `tracker.py` (PromotionTracker class) + `replay.py` (audit-chain reconciler) + `events.py` (the 9 new audit-action constants). Smoke tests: package imports, public API surface, no circular deps with existing remediation modules.                                                                                                                                  |
+| 2    | ⬜ pending | —      | `schemas.py` — Pydantic v2 models. `PromotionStage` enum (1-4); `PromotionEvidence` (counters for stage2_dry_runs / stage3_executes / stage3_unexpected_rollbacks); `ActionClassPromotion` (action_type + stage + evidence + sign_off list); `PromotionSignOff` (operator + timestamp + reason + from_stage + to_stage); `PromotionFile` (the YAML root: schema_version + cluster_id + action_classes map). Plus `stage_max_mode(stage) -> RemediationMode` helper. ~25 schema tests including stage→mode mapping, evidence-aggregation invariants.      |
+| 3    | ⬜ pending | —      | `tracker.py` — `PromotionTracker` class. `from_path(path)` classmethod that returns `None` if missing (safe-by-default per Q5/Q7); `save(path)` round-trips. `stage_for(action_type) -> PromotionStage` (defaults to Stage 1 for unknown action types). `record_evidence(action_type, event)` increments the right counter in-memory; `propose_promotions()` returns a list of `(action_type, from_stage, to_stage, reason)` tuples where criteria are met. ~22 tracker tests.                                                                           |
+| 4    | ⬜ pending | —      | `events.py` — the 9 new `promotion.*` audit-action constants. Extend `audit.PipelineAuditor` with `record_promotion_evidence(action_type, stage_event, payload)` / `record_promotion_advance(...)` / `record_promotion_init(...)` / `record_promotion_reconcile(...)`. Per-action audit emission is the agent's only way to write to the chain; promotion.yaml is rewritten from chain replay or from explicit operator CLI invocation. ~15 audit-shim tests.                                                                                            |
+| 5    | ⬜ pending | —      | Pre-flight stage gate in `agent.run()`. `PromotionGateError` typed exception. The driver loads promotion.yaml at the same point it loads auth.yaml; computes the maximum-permitted mode per finding's action class; refuses (or downgrades, per the per-finding rule) before entering the Charter context. Both `agent.run` API and the CLI surface raise; the CLI converts to `click.UsageError` with the remedy in the message. ~12 driver tests covering all stage × mode combinations + the per-finding split.                                       |
+| 6    | ⬜ pending | —      | `replay.py` — chain reconciler. Reads an existing `audit.jsonl` (or a stream of `AuditEntry`s) and rebuilds the `PromotionFile` from the `promotion.*` events. Idempotent: replaying the same chain produces the same file. Handles partial chains, mid-stream sign-offs, demotions, and gaps. ~18 replay tests including round-trip parity with a tracker-generated chain.                                                                                                                                                                              |
+| 7    | ⬜ pending | —      | CLI `remediation promotion status` (prints per-action-class state + proposes promotions) + `remediation promotion advance --action <ac> --to <stage> --reason "..."` (writes sign-off + emits audit event) + `remediation promotion demote --action <ac> --to <stage> --reason "incident X"` (downgrade after a real-world issue) + `remediation promotion init` (writes an empty Stage-1 file for a fresh environment). ~16 CLI tests.                                                                                                                  |
+| 8    | ⬜ pending | —      | CLI `remediation promotion reconcile --audit AUDIT.JSONL` — reads the audit chain, rebuilds promotion.yaml in place (with `--dry-run` option that prints the diff instead). Stage-3 → Stage-4 promotion attempts refuse with a clear error citing the [safety-verification §6 items 3+4](../../_meta/a1-safety-verification-2026-05-16.md#platform-side-prerequisites) (rolled-back-test xfail + ≥4 weeks of customer Stage-3 evidence). The refusal is itself an audited event. ~10 reconcile tests.                                                    |
+| 9    | ⬜ pending | —      | Update existing 10 eval-case YAMLs to declare the promotion-state assumption per case. New schema field: `fixture.promotion: { schema_version: "0.1", cluster_id: "...", action_classes: { ... } }`. Default (when omitted) = "every action class is at the stage required by `fixture.mode`" — keeps existing cases passing. Document the schema in the eval-cases README addendum. Round-trip verification that existing 10/10 still pass.                                                                                                             |
+| 10   | ⬜ pending | —      | 5 new eval cases for the promotion surface: (a) `011_promotion_blocked_at_stage_1`: action class at Stage 1, run with `--mode dry_run`, expect `refused_promotion_gate`; (b) `012_promotion_blocked_at_stage_2`: Stage 2 + `--mode execute`, same outcome; (c) `013_promotion_mixed_per_finding`: 3 findings at Stages 1/2/3 with `--mode execute`, expect 3 outcomes (RECOMMENDED_ONLY / DRY_RUN_ONLY / EXECUTED_VALIDATED); (d) `014_promotion_advance_proposed`: chain produces a propose event; (e) `015_reconcile_round_trip`: chain replay parity. |
+| 11   | ⬜ pending | —      | New `RemediationOutcome` value: `REFUSED_PROMOTION_GATE`. Extend the summarizer's dual-pin pattern (still rollbacks first, failures second, but `refused_promotion_gate` ranks alongside `refused_unauthorized` in the most-actionable section). 8 schema + summarizer tests.                                                                                                                                                                                                                                                                            |
+| 12   | ⬜ pending | —      | Eval runner update — parse `fixture.promotion` into a `PromotionFile` instance, plumb through `agent.run(promotion=...)`, pass-through the new outcome to the actuals dict for assertions. New `expected.by_promotion_proposal: { action_type: { from_stage, to_stage } }` for case 014. **10 + 5 = 15/15 acceptance** via `eval-framework run --runner remediation`. ~6 runner tests.                                                                                                                                                                   |
+| 13   | ⬜ pending | —      | NEXUS_LIVE_K8S=1 lane update — three new tests: (a) `test_stage1_only_refuses_execute_against_live_cluster` — Stage 1 + `--mode execute` against the kind cluster must refuse without touching kubectl; (b) `test_promotion_evidence_emitted_to_audit_chain` — every successful action emits the matching `promotion.evidence.*` entry, verified by chain replay; (c) `test_reconcile_matches_tracker_state` — drive the tracker through a sequence of operations, replay the chain, assert promotion.yaml states match.                                 |
+| 14   | ⬜ pending | —      | Docs + verification record. README §"Earned-autonomy pipeline" addendum + runbook addendum (new §13 `promotion.yaml` schema + §14 day-1 migration from v0.1) + safety-verification record §3 flip from "gap" to "shipped" + new verification record [`docs/_meta/a1-v0-1-1-verification-2026-05-17.md`](../../_meta/a1-v0-1-1-verification-2026-05-17.md) (coverage delta, ADR-007 conformance, breaking-change note for execute-mode operators). Plan-status table flip + commit-hash pinning per the existing A.1 plan discipline.                     |
+
+ADR references: [ADR-007 reference template](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) · [ADR-009 memory architecture](../../_meta/decisions/ADR-009-memory-architecture.md) · [A.1 v0.1 plan](2026-05-16-a-1-remediation-agent.md) · [A.1 v0.1 implementation verification](../../_meta/a1-verification-2026-05-16.md) · [A.1 v0.1 safety verification](../../_meta/a1-safety-verification-2026-05-16.md) · [post-A.1 readiness report](../../_meta/system-readiness-2026-05-16-post-a1.md).
+
+---
+
+## Acceptance criteria
+
+This plan is **done** when all of the following are true:
+
+1. **All 14 tasks complete with pinned commit hashes** in the status table above.
+2. **15/15 eval cases pass** (the existing 10 retrofit with promotion-state declarations + 5 new promotion-specific cases) via `eval-framework run --runner remediation`.
+3. **Repo-wide gates green:** `uv run pytest -q` passes; `ruff check` + `ruff format --check` clean; `mypy --strict` clean across all source files.
+4. **NEXUS_LIVE_K8S=1 lane passes** including the 3 new promotion-flow integration tests against the kind cluster. The §8 entry in the safety-verification record gets a Stage-2 acceptance entry (kind version + commit + new tests passed).
+5. **Safety-verification §3 flips from gap to shipped.** The flip is itself a commit; the safety record is updated to read "✅ promotion tracking shipped at HEAD `<sha>`" and the [`a1-v0-1-1-verification-2026-05-17.md`](../../_meta/a1-v0-1-1-verification-2026-05-17.md) record is linked from §3.
+6. **Breaking-change discipline:** the v0.1.1 verification record contains a "Breaking changes" section that names the execute-mode operator migration explicitly (must run `remediation promotion init` + re-promote action classes). The runbook §14 migration section is the operator-facing companion.
+7. **The bright line at safety-verification §5 item 4 (promotion tracking) flips from ⚠️ to ✅.** Items 3 and 5 stay ⚠️ — they are separate work tracked elsewhere.
+
+## Sequencing within tasks
+
+Tasks 1-6 are **substrate** (schemas + tracker + replay + events + driver integration). They can ship to main as a single coherent commit even before CLI / eval cases land — backward-compatible by virtue of safe-by-default. Tasks 7-8 (CLI) + Tasks 9-12 (eval surface) + Task 13 (live-cluster) + Task 14 (docs) are layered on top.
+
+Recommended slicing into commits:
+
+- **Commit 1** (Tasks 1-2): package skeleton + schemas
+- **Commit 2** (Tasks 3-4): tracker + events
+- **Commit 3** (Task 5): driver integration + new outcome + summarizer update — backwards-compatible because new promotion.yaml absence == Stage 1
+- **Commit 4** (Task 6): replay/reconcile module
+- **Commit 5** (Tasks 7-8): CLI promotion subcommands
+- **Commit 6** (Tasks 9-12): eval surface — 15/15 acceptance
+- **Commit 7** (Task 13): live kind lane additions
+- **Commit 8** (Task 14): docs + verification record + plan hash pinning
+
+Each commit is independently testable and ruff/mypy clean. Pause for review after each.
+
+---
+
+## What this plan does NOT do
+
+- It does not change A.1's existing 9-primitive safety contract (auth.yaml, blast-radius cap, rollback timer, etc.). Those remain unchanged; promotion tracking is an additional layer above them.
+- It does not add new K8s action classes — that's A.1 v0.2.
+- It does not introduce S.3 ChatOps approval — that's a Phase-1c surface plan.
+- It does not land the mutating-admission-webhook fixture for the rolled-back-path test — that's tracked separately as the top Phase-1c follow-up.
+- It does not change the audit chain's wire format — the new 9 events are additive within the existing F.6 schema.
+- It does not modify D.6 or any other detect agent — promotion tracking is a cure-quadrant capability.
+
+## Why this plan ships before A.1 v0.2 (more action classes)
+
+The safety-verification §3 closure target reads: "Phase-1c, before any 'do' agent expansion (A.1 v0.2, A.1 v0.3, A.2, etc.). The promotion model is the load-bearing contract every future cure-quadrant agent inherits; it must be in code before more action classes ship."
+
+A.1 v0.2 will add 3 K8s action classes (`host-network-removal` / `auto-mount-sa-token` / `privileged-container-removal`). Each will need to graduate through Stages 1 → 2 → 3 → 4 per customer environment. If we ship A.1 v0.2 before the promotion contract is in code, three action classes enter the world with the contract living only in operator memory. That compounds the §3 fragility instead of closing it.
+
+Ship the contract first, then ship action classes that inherit it. The cost is one ~2-week plan inserted between A.1 v0.1 and A.1 v0.2; the alternative is recurring "where is action class X at?" ambiguity across every future "do" agent.
