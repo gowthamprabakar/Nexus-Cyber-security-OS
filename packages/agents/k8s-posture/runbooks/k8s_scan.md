@@ -62,7 +62,11 @@ The reader walks all three Polaris check levels:
 
 Only `Success: false` records become findings. Severity values: `danger` → HIGH, `warning` → MEDIUM, `ignore` → filtered.
 
-### 1c. Manifest directory
+### 1c. Workload source — pick ONE of 1c.i or 1c.ii
+
+The workload-posture analyser (the 10-rule manifest analyser) reads workloads from **one** of two sources. They are mutually exclusive (Q6 of the v0.2 plan) — supplying both flags is a CLI error.
+
+#### 1c.i. Offline manifest directory (v0.1; default)
 
 Stage a flat directory of `*.yaml` files. Helm-rendered templates work — pre-render with `helm template`:
 
@@ -83,6 +87,52 @@ The bundled 10-rule analyser supports these kinds (pod templates are walked):
 - `CronJob` — `spec.jobTemplate.spec.template.spec`
 
 Both `containers` and `initContainers` are walked. Other kinds (Service / Ingress / ConfigMap / Secret / etc.) are silently skipped — they don't carry pod posture.
+
+#### 1c.ii. Live cluster via kubeconfig (v0.2; recommended for ad-hoc scans)
+
+Point the agent at a kubeconfig file. The agent uses the kubernetes Python SDK to read live workloads — no manifest pre-staging required:
+
+```bash
+# Use the active kubeconfig:
+uv run k8s-posture run \
+    --contract /tmp/contract.yaml \
+    --kubeconfig "$KUBECONFIG" \
+    --cluster-namespace production    # optional; cluster-wide if omitted
+
+# Or point at any operator-pinned kubeconfig:
+uv run k8s-posture run \
+    --contract /tmp/contract.yaml \
+    --kubeconfig /etc/nexus/kubeconfigs/prod-readonly.yaml
+```
+
+Live mode reads the same 7 workload kinds (Pod / Deployment / StatefulSet / DaemonSet / ReplicaSet / Job / CronJob) and runs the **same** 10-rule analyser as the offline path. The findings have a sentinel `manifest_path` of the form `cluster:///<namespace>/<kind>/<name>` so operators can distinguish live-sourced from file-sourced findings in `findings.json`.
+
+**RBAC requirements for the agent's read role:**
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nexus-k8s-posture-reader
+rules:
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets, replicasets]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list]
+```
+
+A `403 Forbidden` on any of these list calls raises `ClusterReaderError` immediately — the agent refuses to produce partial coverage. Other non-2xx (e.g. `404` on an older cluster that lacks `batch/v1 CronJob`) is silently skipped per-kind so the run still completes against the kinds we can read.
+
+**v0.2 limitations** (Phase 1c+ work):
+
+- **No in-cluster fallback** (Q4) — `--kubeconfig` is required. The Pod-mounted ServiceAccount token path ships in v0.3 once we settle on the mount conventions.
+- **Workloads only.** RBAC bindings, admission webhooks, Helm releases, OPA constraints, Pod Security Standards, and NetworkPolicy graphs each get their own follow-on agents/plans.
+- **No --kubeconfig + --manifest-dir combo.** Cross-source validation (reading both and asserting parity) is deferred — operators pick one source per run.
 
 ---
 
@@ -110,6 +160,7 @@ permitted_tools:
   - read_kube_bench
   - read_polaris
   - read_manifests
+  - read_cluster_workloads # v0.2 — required when using --kubeconfig
 completion_condition: findings.json AND report.md exist
 escalation_rules: []
 workspace: /workspaces/cust_acme/k8s_posture/01J7M3X9.../
@@ -122,6 +173,8 @@ expires_at: '2026-05-13T13:00:00Z'
 
 ## 3. Run the agent
 
+**Offline mode (v0.1):**
+
 ```bash
 uv run k8s-posture run \
     --contract /tmp/contract.yaml \
@@ -130,7 +183,18 @@ uv run k8s-posture run \
     --manifest-dir /tmp/manifests/
 ```
 
-Each feed flag is optional — supply only what you have. With **no** feeds, the agent emits a clean empty report (useful for validating substrate plumbing). All three feeds run concurrently via `asyncio.TaskGroup`.
+**Live cluster mode (v0.2):**
+
+```bash
+uv run k8s-posture run \
+    --contract /tmp/contract.yaml \
+    --kube-bench-feed /tmp/kube-bench.json \
+    --polaris-feed /tmp/polaris.json \
+    --kubeconfig "$KUBECONFIG" \
+    --cluster-namespace production    # optional; cluster-wide if omitted
+```
+
+Each feed flag is optional — supply only what you have. With **no** feeds, the agent emits a clean empty report (useful for validating substrate plumbing). All three feeds run concurrently via `asyncio.TaskGroup`. `--manifest-dir` and `--kubeconfig` are mutually exclusive (Q6); `--cluster-namespace` requires `--kubeconfig`.
 
 Sample output:
 
