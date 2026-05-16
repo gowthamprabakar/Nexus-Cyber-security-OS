@@ -21,11 +21,24 @@ Public API (stubbed in Task 1; filled in across Tasks 2-8 of the
   runs once the scheduler ships).
 """
 
-from remediation.promotion.schemas import PromotionStage, stage_max_mode
+from remediation.promotion.schemas import (
+    PROMOTION_FILE_SCHEMA_VERSION,
+    ActionClassPromotion,
+    PromotionEvidence,
+    PromotionFile,
+    PromotionSignOff,
+    PromotionStage,
+    stage_max_mode,
+)
 from remediation.promotion.tracker import PromotionGateError, PromotionTracker
 
 __all__ = [
+    "PROMOTION_FILE_SCHEMA_VERSION",
+    "ActionClassPromotion",
+    "PromotionEvidence",
+    "PromotionFile",
     "PromotionGateError",
+    "PromotionSignOff",
     "PromotionStage",
     "PromotionTracker",
     "stage_max_mode",
