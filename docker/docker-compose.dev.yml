@@ -39,11 +39,34 @@ services:
       - ./.data/neo4j:/data
 
   nats:
+    # F.7 fabric runtime — substrate for ADR-004's 5 named buses (events.>,
+    # findings.>, commands.>, approvals.>, audit.>). v0.1 = bus runtime live
+    # only; no agent migrations yet (per the v0.1 plan's hard scope boundary).
+    #
+    # `--js` enables JetStream (the persistent-storage subsystem F.7 v0.1
+    # requires for `ensure_streams()`). `--store_dir /data` points JetStream's
+    # storage at the mounted volume so the 5 streams' configuration + any
+    # buffered messages survive `docker compose down/up` cycles — without
+    # the explicit store_dir + volume, streams would vanish on every restart
+    # and F.7's `ensure_streams()` would have to re-create them every boot.
+    # Single-node config; clustering is a production-deployment concern
+    # (E.x track), not a dev concern (per the F.7 v0.1 plan's Q6).
     image: nats:2.10-alpine
-    command: ['-js']
+    command: ['-js', '--store_dir', '/data']
     ports:
-      - '4222:4222'
-      - '8222:8222'
+      - '4222:4222' # client connections (nats:// protocol)
+      - '8222:8222' # HTTP monitoring (consumed by the healthcheck below)
+    volumes:
+      - ./.data/nats:/data
+    healthcheck:
+      # NATS exposes /healthz on the monitoring port when -js is enabled.
+      # BusyBox `wget` is preinstalled in the alpine image; -q suppresses
+      # progress output, --spider exits 0 on 200 OK without downloading.
+      test: ['CMD-SHELL', 'wget -q --spider http://localhost:8222/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   redis:
     image: redis:7-alpine
