@@ -432,3 +432,339 @@ async def test_run_emits_unique_incident_id(
         until=None,
     )
     assert report_a.incident_id != report_b.incident_id
+
+
+# ============================================================================
+# F.7 v0.2 Task 3 — bus_emit wiring tests
+#
+# These tests run agent.run() with publish_events_to_bus toggled on/off
+# and a mocked JetStreamClient injected at the bus_emit module level.
+# The load-bearing test is `test_run_continues_when_bus_publish_fails`
+# which proves D.7's "filesystem artifacts are the contract" guarantee
+# survives a broken bus — the user's non-negotiable requirement #3 from
+# the Task 3 brief.
+#
+# Watch-item HELD: these tests do NOT modify packages/shared/. They
+# monkeypatch shared.fabric.JetStreamClient at the consumption boundary
+# (the bus_emit module's import) — substrate code is untouched.
+# ============================================================================
+
+
+def _read_audit_actions(workspace: Path) -> list[str]:
+    """Read every action from the workspace's audit.jsonl in order."""
+    audit_path = workspace / "audit.jsonl"
+    if not audit_path.exists():
+        return []
+    return [json.loads(line)["action"] for line in audit_path.read_text().splitlines() if line]
+
+
+def _make_jetstream_client_factory(
+    *,
+    publish_side_effect: object | None = None,
+) -> type:
+    """Build a fake JetStreamClient class that the BusEmitter can construct.
+
+    The returned class has the minimal async surface BusEmitter calls:
+    `connect`, `publish`, `close`. When `publish_side_effect` is an
+    Exception (or list), publish raises it; otherwise it returns a
+    PubAck-shaped namespace.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    class _FakeJetStreamClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.connect = AsyncMock()
+            self.close = AsyncMock()
+            if publish_side_effect is not None:
+                self.publish = AsyncMock(side_effect=publish_side_effect)
+            else:
+                self.publish = AsyncMock(return_value=MagicMock(stream="events", seq=1))
+
+    return _FakeJetStreamClient
+
+
+@pytest.mark.asyncio
+async def test_run_with_flag_off_does_not_construct_bus_emitter(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Flag-off code path: no BusEmitter is constructed, no NATS calls.
+    Proves back-compat — D.7's behaviour is byte-identical to pre-v0.2.
+    """
+    import investigation.agent as agent_mod
+
+    construction_count = {"n": 0}
+
+    class _ShouldNotBeConstructed:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            construction_count["n"] += 1
+            raise AssertionError("BusEmitter should not be constructed when flag is off")
+
+    monkeypatch.setattr(agent_mod, "BusEmitter", _ShouldNotBeConstructed)
+
+    contract = _contract(tmp_path)
+    report = await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(),
+        since=None,
+        until=None,
+        publish_events_to_bus=False,
+    )
+    assert isinstance(report, IncidentReport)
+    assert construction_count["n"] == 0
+    # And no bus_publish.* audit entries.
+    actions = _read_audit_actions(Path(contract.workspace))
+    bus_actions = [a for a in actions if a.startswith("investigation.bus_publish.")]
+    assert bus_actions == []
+
+
+@pytest.mark.asyncio
+async def test_run_with_flag_on_emits_started_and_completed_to_audit_chain(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Happy path: working bus + flag on → two emits (started, completed),
+    each landing 2 audit entries (attempt + success) = 4 bus_publish.*
+    actions on the chain. The 4 filesystem artifacts are also written.
+    """
+    import investigation.bus_emit as bus_emit_mod
+
+    fake_client_cls = _make_jetstream_client_factory()
+    monkeypatch.setattr(bus_emit_mod, "JetStreamClient", fake_client_cls)
+
+    contract = _contract(tmp_path)
+    report = await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(),
+        since=None,
+        until=None,
+        publish_events_to_bus=True,
+    )
+    assert isinstance(report, IncidentReport)
+
+    # 4 filesystem artifacts written.
+    ws = Path(contract.workspace)
+    assert (ws / "incident_report.json").is_file()
+    assert (ws / "timeline.json").is_file()
+    assert (ws / "hypotheses.md").is_file()
+    assert (ws / "containment_plan.yaml").is_file()
+
+    # 4 bus_publish entries on the chain: attempt+success for started,
+    # then attempt+success for completed.
+    actions = _read_audit_actions(ws)
+    bus_actions = [a for a in actions if a.startswith("investigation.bus_publish.")]
+    assert bus_actions == [
+        "investigation.bus_publish.attempt",
+        "investigation.bus_publish.success",
+        "investigation.bus_publish.attempt",
+        "investigation.bus_publish.success",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_continues_when_bus_publish_fails(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**LOAD-BEARING NON-FATAL PROOF** (user's Task-3 requirement #3).
+
+    A broken bus (every publish raises FabricConnectionError) MUST NOT
+    break D.7. The investigation runs to completion. All 4 filesystem
+    artifacts are written. The audit chain records `bus_publish.failure`
+    entries instead of `bus_publish.success`. D.7's "filesystem artifacts
+    are the contract" guarantee is preserved.
+    """
+    import investigation.bus_emit as bus_emit_mod
+    from shared.fabric import FabricConnectionError
+
+    fake_client_cls = _make_jetstream_client_factory(
+        publish_side_effect=FabricConnectionError("broker unreachable"),
+    )
+    monkeypatch.setattr(bus_emit_mod, "JetStreamClient", fake_client_cls)
+
+    contract = _contract(tmp_path)
+    report = await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(),
+        since=None,
+        until=None,
+        publish_events_to_bus=True,
+    )
+
+    # 1. The investigation completed — a real IncidentReport returned.
+    assert isinstance(report, IncidentReport)
+
+    # 2. All 4 filesystem artifacts were still written (the contract).
+    ws = Path(contract.workspace)
+    assert (ws / "incident_report.json").is_file()
+    assert (ws / "timeline.json").is_file()
+    assert (ws / "hypotheses.md").is_file()
+    assert (ws / "containment_plan.yaml").is_file()
+
+    # 3. The audit chain records bus_publish.failure (not .success) for
+    # both the started and completed emit attempts.
+    actions = _read_audit_actions(ws)
+    bus_actions = [a for a in actions if a.startswith("investigation.bus_publish.")]
+    assert bus_actions == [
+        "investigation.bus_publish.attempt",
+        "investigation.bus_publish.failure",
+        "investigation.bus_publish.attempt",
+        "investigation.bus_publish.failure",
+    ]
+    # 4. No bus_publish.success entries — confirms the failure path was
+    # taken, not silently passed through.
+    assert "investigation.bus_publish.success" not in actions
+
+
+@pytest.mark.asyncio
+async def test_run_emits_failed_on_pipeline_exception_and_reraises(
+    tmp_path: Path,
+    semantic_store: SemanticStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When a pipeline stage raises, the agent emits `investigation.failed`
+    BEFORE the exception propagates. D.7's existing failure semantics are
+    preserved: the exception still bubbles out of `agent.run()`.
+    """
+    import investigation.agent as agent_mod
+    import investigation.bus_emit as bus_emit_mod
+
+    # Force the SPAWN stage to raise by patching `_stage_spawn` to raise
+    # a synthetic exception.
+    async def _explode(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("synthetic spawn failure for test")
+
+    monkeypatch.setattr(agent_mod, "_stage_spawn", _explode)
+
+    fake_client_cls = _make_jetstream_client_factory()
+    monkeypatch.setattr(bus_emit_mod, "JetStreamClient", fake_client_cls)
+
+    # Use a fresh audit_store rather than the fixture — the fixture's
+    # session_factory is module-scoped and we want a clean ledger.
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    fresh_audit_store = AuditStore(async_sessionmaker(engine, expire_on_commit=False))
+
+    contract = _contract(tmp_path)
+    try:
+        with pytest.raises(RuntimeError, match="synthetic spawn failure"):
+            await investigation_run(
+                contract,
+                llm_provider=None,
+                audit_store=fresh_audit_store,
+                semantic_store=semantic_store,
+                sibling_workspaces=(),
+                since=None,
+                until=None,
+                publish_events_to_bus=True,
+            )
+
+        # The audit chain captures:
+        # - started (attempt + success at Stage-1)
+        # - failed (attempt + success in the except path)
+        actions = _read_audit_actions(Path(contract.workspace))
+        bus_actions = [a for a in actions if a.startswith("investigation.bus_publish.")]
+        # 2 attempts (started + failed) each with a corresponding success
+        # entry (because the fake client's publish returns ack rather than
+        # raises in this test).
+        assert bus_actions.count("investigation.bus_publish.attempt") == 2
+        assert bus_actions.count("investigation.bus_publish.success") == 2
+        # No filesystem artifacts are written on Stage-2 failure (the
+        # pipeline doesn't reach Stage-6 _write_artifacts) — D.7's
+        # existing failure semantics are preserved.
+        ws = Path(contract.workspace)
+        assert not (ws / "incident_report.json").is_file()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_run_emit_failed_carries_stage_and_exception_class(
+    tmp_path: Path,
+    semantic_store: SemanticStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `investigation.failed` event payload carries the stage name +
+    the exception class so downstream consumers can route on failure mode."""
+    import investigation.agent as agent_mod
+    import investigation.bus_emit as bus_emit_mod
+
+    async def _explode_in_synthesize(*args: object, **kwargs: object) -> object:
+        raise ValueError("synthetic synthesize failure")
+
+    monkeypatch.setattr(agent_mod, "synthesize_hypotheses", _explode_in_synthesize)
+
+    captured_publishes: list[bytes] = []
+
+    class _CapturingClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def connect(self) -> None:
+            pass
+
+        async def close(self) -> None:
+            pass
+
+        async def publish(
+            self,
+            stream: object,
+            subject: str,
+            payload: bytes,
+            **kwargs: object,
+        ) -> object:
+            from unittest.mock import MagicMock
+
+            captured_publishes.append(payload)
+            return MagicMock(stream="events", seq=1)
+
+    monkeypatch.setattr(bus_emit_mod, "JetStreamClient", _CapturingClient)
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    fresh_audit_store = AuditStore(async_sessionmaker(engine, expire_on_commit=False))
+
+    contract = _contract(tmp_path)
+    try:
+        with pytest.raises(ValueError, match="synthetic synthesize failure"):
+            await investigation_run(
+                contract,
+                llm_provider=None,
+                audit_store=fresh_audit_store,
+                semantic_store=semantic_store,
+                sibling_workspaces=(),
+                since=None,
+                until=None,
+                publish_events_to_bus=True,
+            )
+    finally:
+        await engine.dispose()
+
+    # Two publishes: started + failed. Decode the second to confirm
+    # the stage and error_class fields are populated.
+    assert len(captured_publishes) == 2
+    failed_event = json.loads(captured_publishes[1])
+    assert failed_event["event_type"] == "failed"
+    assert failed_event["stage"] == "synthesize"
+    assert failed_event["error_class"] == "ValueError"
