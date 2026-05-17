@@ -332,6 +332,42 @@ NEXUS_LIVE_K8S=1 uv run pytest \
 # Cluster persists across runs by design (operator-owned).
 ```
 
+#### Correction note — 2026-05-17 post-merge hotfix
+
+Entry 2 above was first recorded at HEAD `1d730301a4b43879bce62c05bbd5733218315373`. **That HEAD does not actually reproduce the proof.** The original test commit (`1d73030`) shipped a broken spy that targets `kc_mod.subprocess.run` — `remediation.tools.kubectl_executor` does not import `subprocess` directly, so the test crashes with `AttributeError` on first invocation before the agent runs. The corrected spy that produced Entry 2's measurements lived in the working tree but never made it into a commit; the editor's in-flight fix was not staged before the subsequent Entry-2 and plan-pin commits.
+
+Failure modes that allowed the slip past the merge gate:
+
+1. The first local run with the broken spy failed loudly; the in-editor fix made the second run pass; subsequent commits touched only documentation, so the editor-only fix never landed on the branch.
+2. CI does not run the `NEXUS_LIVE_K8S=1` lane (this is documented behaviour — manual lanes are not enforced by CI). The CI checks on PR #8 were therefore green but did not exercise the spy.
+3. The PR review was post-merge and trusted the recorded measurements without re-running the live lane against the branch HEAD.
+
+Hotfix commit: **`dc1a1d4`** (`fix(remediation): spy targets kubectl_executor._run (post-merge hotfix for task 13)`). The fix wraps `kc_mod._run` (the executor's documented single chokepoint) and returns `(all_calls, mutating_calls)`.
+
+Re-verified live against the same persistent kind cluster:
+
+```
+DATE:                       2026-05-17 (post-hotfix)
+COMMIT:                     dc1a1d4
+KIND VERSION:               kind v0.31.0 go1.25.5 darwin/arm64
+K8S SERVER VERSION:         v1.30.0
+TESTS PASSED:               test_stage1_only_refuses_execute_against_live_cluster
+                            test_promotion_evidence_emitted_to_audit_chain_live
+                            test_reconcile_matches_tracker_state_live
+TOTAL RUN WALL-CLOCK:       4.40s
+[TASK13-STAGE1-PROOF]       outcome=refused_promotion_gate
+                            mutating_kubectl_calls=0
+                            total_kubectl_calls=0
+                            rv_before=36174 rv_after=36174
+                            workload=nexus-rem-test/bad-app-1779014307
+[TASK13-EVIDENCE-PROOF]     stage2_evidence_entries=1
+                            replay.stage2_dry_runs=1
+                            live.stage2_dry_runs=1
+[TASK13-RECONCILE-PROOF]    evidence dicts field-equal
+```
+
+The fail-closed property (Stage 1 + execute → refuse with zero kubectl mutation, `resourceVersion` unchanged) still holds against the real apiserver — the safety claim Entry 2 originally captured was real, just unreproducible from the committed branch HEAD until this hotfix. **Entry 2 is now reproducible from commit `dc1a1d4`.**
+
 ---
 
 ## Sign-off
