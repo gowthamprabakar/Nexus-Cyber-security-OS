@@ -1,4 +1,4 @@
-"""Nexus fabric primitives — subjects, OCSF envelope, correlation_id, streams.
+"""Nexus fabric primitives — subjects, OCSF envelope, correlation_id, streams, client.
 
 Phase-1a slice (per ADR-004):
 - subjects.py: pure subject builders for the five buses (events, findings,
@@ -7,15 +7,22 @@ Phase-1a slice (per ADR-004):
 - correlation.py: ULID-based correlation_id generator + asyncio-task-isolated
   contextvar.
 - streams.py: `StreamSpec` declarations for the five ADR-004 buses
-  (F.7 v0.1 Task 2). Pure declarations; consumed by `JetStreamClient.
-  ensure_streams()` (F.7 v0.1 Task 3).
+  (F.7 v0.1 Task 2).
+- client.py: async `JetStreamClient` wrapping `nats-py`'s JetStream API
+  (F.7 v0.1 Task 3). `connect()` / `ensure_streams()` / `publish()` /
+  `subscribe()` / `close()` plus typed exceptions.
 
-The NATS JetStream client lands in F.7 v0.1 Task 3 (`client.py`). This
-package codifies the schema, the IDs, and the stream declarations so
-every agent can attach correlation_id, emit OCSF-shaped findings, and
-target a known stream before / independent of the broker connection.
+F.7 v0.1 Task 4 will layer `correlation_id`-as-bus-property enforcement
+on top of `publish()` (contextvar fallback + header propagation); Task 3
+ships the explicit-kwarg baseline.
 """
 
+from shared.fabric.client import (
+    FabricConnectionError,
+    JetStreamClient,
+    MissingCorrelationIdError,
+    StreamSpecMismatchError,
+)
 from shared.fabric.correlation import (
     correlation_scope,
     current_correlation_id,
@@ -48,8 +55,12 @@ __all__ = [
     "EVENTS_STREAM",
     "FINDINGS_STREAM",
     "DiscardPolicy",
+    "FabricConnectionError",
+    "JetStreamClient",
+    "MissingCorrelationIdError",
     "NexusEnvelope",
     "StreamSpec",
+    "StreamSpecMismatchError",
     "approvals_subject",
     "audit_subject",
     "commands_subject",
