@@ -453,6 +453,8 @@ class PipelineAuditor:
         *,
         chain_entries_replayed: int,
         state_changes: dict[str, Any],
+        refused: bool = False,
+        refusal_reason: str | None = None,
     ) -> AuditEntry:
         """Emit `promotion.reconcile.completed` after the reconciler (Task 6)
         rebuilds `promotion.yaml` from the audit chain.
@@ -462,15 +464,22 @@ class PipelineAuditor:
                 reconciler consumed (sanity-check + observability).
             state_changes: dict summarising what changed during the
                 reconcile (e.g. `{"runAsNonRoot": {"stage": "2 → 3"}}`).
-                Empty when the in-place file already matched the chain.
+                Empty when the in-place file already matched the chain,
+                or when the reconcile was refused.
+            refused: True when the reconcile refused to materialize the
+                replayed state (e.g. the Task-8 Stage-4 gate). The audit
+                trail still records the attempt — forensics depend on it.
+            refusal_reason: free-text reason when `refused=True`. Omitted
+                from the payload when refused=False.
         """
-        return self._log.append(
-            ACTION_PROMOTION_RECONCILE_COMPLETED,
-            {
-                "chain_entries_replayed": chain_entries_replayed,
-                "state_changes": dict(state_changes),
-            },
-        )
+        payload: dict[str, Any] = {
+            "chain_entries_replayed": chain_entries_replayed,
+            "state_changes": dict(state_changes),
+            "refused": refused,
+        }
+        if refusal_reason is not None:
+            payload["refusal_reason"] = refusal_reason
+        return self._log.append(ACTION_PROMOTION_RECONCILE_COMPLETED, payload)
 
 
 def all_action_names() -> tuple[str, ...]:

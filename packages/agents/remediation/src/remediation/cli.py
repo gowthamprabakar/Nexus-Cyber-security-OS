@@ -11,10 +11,13 @@ Subcommand families:
   [--rollback-window-sec INT]` — run the agent against an `ExecutionContract`
   with findings produced by a detect agent (D.6 today; D.5/F.3/D.1 later).
   Writes 7 output files to the contract workspace.
-- `remediation promotion {status,init,advance,demote}` (v0.1.1) — the
-  operator-facing surface for the earned-autonomy pipeline. `status`
-  is read-only; `init`, `advance`, and `demote` mutate both
-  `promotion.yaml` and the audit chain.
+- `remediation promotion {status,init,advance,demote,reconcile}` (v0.1.1)
+  — the operator-facing surface for the earned-autonomy pipeline.
+  `status` is read-only; `init`, `advance`, `demote` mutate both
+  `promotion.yaml` and the audit chain. `reconcile` rebuilds
+  `promotion.yaml` from the audit chain (`--dry-run` for diff-only
+  preview) and refuses to materialise Stage 4 in v0.1.1 — even when
+  the chain claims Stage 4, the cache file stays at Stage 3 max.
 
 Mutual-exclusion gates and mode-escalation gates surface as `click.UsageError`
 (non-zero exit, but with a usage prompt rather than a stack trace).
@@ -586,6 +589,196 @@ def _apply_transition(
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
+
+# ---------------------- promotion reconcile (v0.1.1 Task 8) -----------
+
+
+@promotion_group.command("reconcile")
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Path to promotion.yaml. Will be created if absent; overwritten if "
+    "present (use --dry-run to preview).",
+)
+@click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+    help="Path to the audit chain (audit.jsonl). Read for replay, then "
+    "appended-to with the reconcile.completed entry.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Print the diff vs the existing promotion.yaml instead of writing. "
+    "No audit entry is emitted in dry-run mode.",
+)
+@click.option(
+    "--cluster-id",
+    default="default",
+    show_default=True,
+    help="cluster_id used when the audit chain does not contain a promotion.init.applied event.",
+)
+def promotion_reconcile_cmd(
+    promotion_path: Path,
+    audit_path: Path,
+    dry_run: bool,
+    cluster_id: str,
+) -> None:
+    """Rebuild promotion.yaml from the audit chain.
+
+    The audit chain is the F.6 source of truth (safety-verification §3);
+    promotion.yaml is the operator-readable cache. This command replays the
+    chain via `remediation.promotion.replay` and writes the canonical
+    PromotionFile back to disk.
+
+    **Stage-4 gate.** If the replayed state would materialize any action
+    class at Stage 4, this command refuses with the two Phase-1c
+    prerequisites from safety-verification §6 (rolled-back-path webhook
+    fixture + ≥4 weeks customer Stage-3 evidence). The refusal is itself
+    an audited event so forensics can find it in the chain.
+    """
+    from charter.audit import AuditEntry
+
+    from remediation.promotion import ReplayError, replay
+
+    # Read the audit chain (only promotion.* entries drive state, but the
+    # full chain is preserved in the audit log).
+    entries: list[AuditEntry] = []
+    for line in audit_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            entries.append(AuditEntry.from_json(line))
+    promotion_entries_count = sum(1 for e in entries if e.action.startswith("promotion."))
+
+    # Replay → canonical state.
+    try:
+        reconstructed = replay(entries, default_cluster_id=cluster_id)
+    except ReplayError as exc:
+        raise click.UsageError(
+            f"reconcile failed: chain is inconsistent. {exc}\n"
+            f"Investigate via `audit-agent query --path {audit_path}`."
+        ) from exc
+
+    # Stage-4 gate: refuse to materialize Stage 4 in v0.1.1.
+    stage_4_classes = sorted(
+        ac
+        for ac, entry in reconstructed.action_classes.items()
+        if entry.stage is PromotionStage.STAGE_4
+    )
+    if stage_4_classes:
+        refusal_reason = _stage4_reconcile_refusal_text(stage_4_classes)
+        click.echo(refusal_reason, err=True)
+        # The refusal is itself an audited event.
+        auditor = PipelineAuditor(audit_path, run_id=f"promotion-reconcile-refused-{_now_iso()}")
+        auditor.record_promotion_reconcile(
+            chain_entries_replayed=promotion_entries_count,
+            state_changes={},
+            refused=True,
+            refusal_reason=refusal_reason,
+        )
+        raise SystemExit(1)
+
+    # Compute the diff vs the existing promotion.yaml (if any).
+    existing_tracker = PromotionTracker.from_path(promotion_path)
+    existing_file = existing_tracker.file if existing_tracker else None
+    state_changes = _compute_reconcile_diff(existing_file, reconstructed)
+
+    if dry_run:
+        click.echo("--- reconcile dry-run ---")
+        click.echo(f"audit entries replayed: {promotion_entries_count} promotion.* events")
+        if not state_changes:
+            click.echo("no state changes — promotion.yaml already matches the chain.")
+        else:
+            click.echo(f"would update {len(state_changes)} action class(es):")
+            for ac, changes in state_changes.items():
+                click.echo(f"  {ac}:")
+                for field, change in changes.items():
+                    click.echo(f"    {field}: {change}")
+        click.echo("(dry-run — promotion.yaml NOT modified, no audit entry emitted)")
+        return
+
+    # Write the rebuilt file. PromotionTracker.save() handles the atomic
+    # tempfile-rename, parent-dir creation, and last_modified_at update.
+    PromotionTracker(reconstructed).save(promotion_path)
+
+    # Emit the reconcile.completed audit entry.
+    auditor = PipelineAuditor(audit_path, run_id=f"promotion-reconcile-{_now_iso()}")
+    auditor.record_promotion_reconcile(
+        chain_entries_replayed=promotion_entries_count,
+        state_changes=state_changes,
+    )
+
+    click.echo(f"reconcile complete; {promotion_entries_count} promotion.* entries replayed")
+    click.echo(f"promotion.yaml updated: {promotion_path}")
+    if state_changes:
+        click.echo(f"state changes: {len(state_changes)} action class(es) updated")
+        for ac, changes in state_changes.items():
+            click.echo(f"  {ac}: {changes}")
+    else:
+        click.echo("(no state changes — promotion.yaml already matched the chain)")
+
+
+def _stage4_reconcile_refusal_text(action_classes: list[str]) -> str:
+    """The Stage-4 reconcile refusal — pinned to safety-verification §6."""
+    bullet_list = "\n".join(f"  - {ac}" for ac in action_classes)
+    return (
+        f"reconcile refused: the audit chain materialises "
+        f"{len(action_classes)} action class(es) at Stage 4, but v0.1.1 holds "
+        f"Stage 4 globally closed (safety-verification §6 items 3+4):\n"
+        f"  (1) the rolled-back-path webhook fixture has not landed "
+        f"(test_execute_rolled_back_against_live_cluster currently xfails);\n"
+        f"  (2) ≥4 weeks of customer Stage-3 evidence has not accumulated.\n"
+        f"\nAffected action classes:\n"
+        f"{bullet_list}\n"
+        f"\nIf the chain contains a Stage-4 transition from a future version of A.1, "
+        f"upgrade to that version before reconciling. If the chain is corrupted or "
+        f"hand-edited, investigate via "
+        f"`audit-agent query --action promotion.advance.applied`."
+    )
+
+
+def _compute_reconcile_diff(
+    old: PromotionFile | None,
+    new: PromotionFile,
+) -> dict[str, dict[str, str]]:
+    """Compute a per-action-class diff between two PromotionFiles.
+
+    Returns a dict keyed by action_type whose values describe what changed:
+    `{"stage": "STAGE_1 → STAGE_2", "evidence": "counters updated", ...}`.
+    Action classes whose state is identical between old and new are absent
+    from the result.
+    """
+    changes: dict[str, dict[str, str]] = {}
+    old_classes = old.action_classes if old else {}
+
+    for ac, new_entry in new.action_classes.items():
+        old_entry = old_classes.get(ac)
+        if old_entry is None:
+            changes[ac] = {"appeared": f"now at {new_entry.stage.name}"}
+            continue
+        diff: dict[str, str] = {}
+        if old_entry.stage != new_entry.stage:
+            diff["stage"] = f"{old_entry.stage.name} -> {new_entry.stage.name}"
+        if old_entry.evidence.model_dump() != new_entry.evidence.model_dump():
+            diff["evidence"] = "counters/workloads updated"
+        if len(old_entry.sign_offs) != len(new_entry.sign_offs):
+            diff["sign_offs"] = f"{len(old_entry.sign_offs)} -> {len(new_entry.sign_offs)}"
+        if diff:
+            changes[ac] = diff
+
+    for ac in old_classes:
+        if ac not in new.action_classes:
+            changes[ac] = {"removed": "no longer in chain"}
+
+    return changes
+
+
+# Import deferred (module-level forward ref for the type hint).
+from remediation.promotion import PromotionFile  # noqa: E402
 
 if __name__ == "__main__":
     main()
