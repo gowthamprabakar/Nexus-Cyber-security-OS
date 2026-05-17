@@ -1,4 +1,4 @@
-"""Nexus fabric primitives — subjects, OCSF envelope, correlation_id.
+"""Nexus fabric primitives — subjects, OCSF envelope, correlation_id, streams.
 
 Phase-1a slice (per ADR-004):
 - subjects.py: pure subject builders for the five buses (events, findings,
@@ -6,10 +6,14 @@ Phase-1a slice (per ADR-004):
 - envelope.py: OCSF v1.3 base event + nexus_envelope extension wrap/unwrap.
 - correlation.py: ULID-based correlation_id generator + asyncio-task-isolated
   contextvar.
+- streams.py: `StreamSpec` declarations for the five ADR-004 buses
+  (F.7 v0.1 Task 2). Pure declarations; consumed by `JetStreamClient.
+  ensure_streams()` (F.7 v0.1 Task 3).
 
-The actual NATS JetStream client is deferred to E.2 / control-plane consumer.
-This package codifies the schema and the IDs now so every agent can attach
-correlation_id and emit OCSF-shaped findings before the broker exists.
+The NATS JetStream client lands in F.7 v0.1 Task 3 (`client.py`). This
+package codifies the schema, the IDs, and the stream declarations so
+every agent can attach correlation_id, emit OCSF-shaped findings, and
+target a known stream before / independent of the broker connection.
 """
 
 from shared.fabric.correlation import (
@@ -18,6 +22,16 @@ from shared.fabric.correlation import (
     new_correlation_id,
 )
 from shared.fabric.envelope import NexusEnvelope, unwrap_ocsf, wrap_ocsf
+from shared.fabric.streams import (
+    ALL_STREAMS,
+    APPROVALS_STREAM,
+    AUDIT_STREAM,
+    COMMANDS_STREAM,
+    EVENTS_STREAM,
+    FINDINGS_STREAM,
+    DiscardPolicy,
+    StreamSpec,
+)
 from shared.fabric.subjects import (
     approvals_subject,
     audit_subject,
@@ -27,7 +41,15 @@ from shared.fabric.subjects import (
 )
 
 __all__ = [
+    "ALL_STREAMS",
+    "APPROVALS_STREAM",
+    "AUDIT_STREAM",
+    "COMMANDS_STREAM",
+    "EVENTS_STREAM",
+    "FINDINGS_STREAM",
+    "DiscardPolicy",
     "NexusEnvelope",
+    "StreamSpec",
     "approvals_subject",
     "audit_subject",
     "commands_subject",
