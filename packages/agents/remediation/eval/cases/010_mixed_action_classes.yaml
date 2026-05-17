@@ -15,6 +15,15 @@ fixture:
       - remediation_k8s_patch_imagePullPolicy_Always
     max_actions_per_run: 5
     rollback_window_sec: 300
+  # Promotion-state assumption: recommend mode caps at Stage 1 for every
+  # action class — empty action_classes documents this without listing
+  # each of the three findings' classes.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes: {}
   findings:
     - rule_id: run-as-root
       rule_title: Container running as root

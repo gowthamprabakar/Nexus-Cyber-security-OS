@@ -13,6 +13,33 @@ fixture:
       - remediation_k8s_patch_runAsNonRoot
     max_actions_per_run: 5
     rollback_window_sec: 300
+  # Promotion-state assumption: irrelevant — AuthorizationError is
+  # raised BEFORE the promotion gate. Even if the action class were at
+  # Stage 4 here, the mode escalation gate (auth.yaml) refuses first.
+  # Declaring Stage 3 for documentation completeness — proves the
+  # promotion gate is not what's blocking this case.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes:
+      remediation_k8s_patch_runAsNonRoot:
+        action_type: remediation_k8s_patch_runAsNonRoot
+        stage: 3
+        sign_offs:
+          - event_kind: advance
+            operator: eval-fixture
+            timestamp: '2026-05-17T00:00:00Z'
+            reason: would-be Stage 2 (irrelevant; AuthZ refuses first)
+            from_stage: 1
+            to_stage: 2
+          - event_kind: advance
+            operator: eval-fixture
+            timestamp: '2026-05-17T00:00:01Z'
+            reason: would-be Stage 3 (irrelevant; AuthZ refuses first)
+            from_stage: 2
+            to_stage: 3
   findings:
     - rule_id: run-as-root
       rule_title: Container running as root

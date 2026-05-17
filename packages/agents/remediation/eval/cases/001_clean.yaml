@@ -9,6 +9,16 @@ fixture:
     authorized_actions: []
     max_actions_per_run: 5
     rollback_window_sec: 300
+  # Promotion-state assumption (v0.1.1): no findings to gate, so the
+  # promotion tracker doesn't matter. Empty action_classes = every
+  # action class implicitly at Stage 1 (recommend-only). Compatible with
+  # `mode: recommend` either way.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes: {}
   findings: []
 expected:
   finding_count: 0
