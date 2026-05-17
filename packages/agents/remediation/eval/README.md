@@ -173,7 +173,22 @@ Only the keys you specify are asserted; missing keys are not checked.
 | `009_multi_finding_batch`               | recommend | 3 same-class findings → 3 RECOMMENDED_ONLY outcomes.              |
 | `010_mixed_action_classes`              | recommend | 3 different classes → 3 distinct action_types.                    |
 
-Cases 011-015 land in Task 10 of the
-[A.1 v0.1.1 earned-autonomy-pipeline plan](../../../../docs/superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md):
-the promotion-gate surface (Stage-1 blocked, Stage-2 blocked,
-mixed-per-finding, advance-proposed, reconcile-round-trip).
+## Index of v0.1.1 cases (promotion surface — pending Task 12 runner wiring)
+
+The 5 cases below ship in
+[A.1 v0.1.1 Task 10](../../../../docs/superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md)
+as authoritative spec for the promotion surface. They are not yet executable
+by the runner — the `fixture.promotion` parser, the `REFUSED_PROMOTION_GATE`
+outcome, and the new assertion keys (`by_promotion_proposal`,
+`reconcile_matches`) all land in Task 12, at which point the eval-suite
+acceptance gate flips from 10/10 to 15/15. Until then the runner-test asserts
+the 5 YAMLs parse as valid `EvalCase` objects (catches schema drift) and
+defers execution.
+
+| Case                               | Mode      | Highlight                                                                                       |
+| ---------------------------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `011_promotion_blocked_at_stage_1` | dry_run   | Stage 1 + dry_run → REFUSED_PROMOTION_GATE (auth passes, promotion gate fires).                 |
+| `012_promotion_blocked_at_stage_2` | execute   | Stage 2 + execute → REFUSED_PROMOTION_GATE.                                                     |
+| `013_promotion_mixed_per_finding`  | execute   | Stages 1/2/3 across 3 findings → 1× RECOMMENDED_ONLY + 1× DRY_RUN_ONLY + 1× EXECUTED_VALIDATED. |
+| `014_promotion_advance_proposed`   | recommend | Stage 1 + 1 artifact crosses `_STAGE1_ARTIFACT_THRESHOLD` → propose(1→2).                       |
+| `015_reconcile_round_trip`         | recommend | 3 evidence events + 1 propose; `replay(chain)` matches the live tracker.                        |

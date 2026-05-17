@@ -1,8 +1,16 @@
-"""Tests for `RemediationEvalRunner` — fixture parsing + the 10/10 acceptance.
+"""Tests for `RemediationEvalRunner` — fixture parsing + the v0.1 acceptance gate.
 
-The cornerstone test is `test_run_suite_10_of_10` which loads
-`eval/cases/*.yaml`, runs them all through the runner, and asserts every case
-passes. That's the v0.1 acceptance gate per Task 14 of the A.1 plan.
+The cornerstone test is `test_v0_1_acceptance_suite` which loads cases 001-010
+from `eval/cases/*.yaml`, runs them through the runner, and asserts every one
+passes. That is the v0.1 acceptance gate.
+
+Cases 011-015 (the promotion-surface cases from A.1 v0.1.1 Task 10) live in
+the same directory but are not yet executable — the runner's
+`fixture.promotion` parser, the `REFUSED_PROMOTION_GATE` outcome, and the
+`by_promotion_proposal` / `reconcile_matches` assertions all land in Task 12.
+Until then `test_v0_1_1_promotion_cases_load` verifies the 5 YAMLs parse as
+valid `EvalCase` objects (catches schema drift early), and execution is
+deferred. Task 12 will fold them into the acceptance suite as 15/15.
 """
 
 from __future__ import annotations
@@ -15,6 +23,27 @@ from remediation.eval_runner import RemediationEvalRunner
 
 CASES_DIR = Path(__file__).resolve().parents[1] / "eval" / "cases"
 
+_V0_1_ACCEPTANCE_IDS: tuple[str, ...] = (
+    "001_clean",
+    "002_single_action_recommend",
+    "003_single_action_dry_run",
+    "004_single_action_execute_validated",
+    "005_single_action_execute_rolled_back",
+    "006_unauthorized_action_refused",
+    "007_unauthorized_mode_refused",
+    "008_blast_radius_cap",
+    "009_multi_finding_batch",
+    "010_mixed_action_classes",
+)
+
+_V0_1_1_PENDING_TASK_12_IDS: tuple[str, ...] = (
+    "011_promotion_blocked_at_stage_1",
+    "012_promotion_blocked_at_stage_2",
+    "013_promotion_mixed_per_finding",
+    "014_promotion_advance_proposed",
+    "015_reconcile_round_trip",
+)
+
 
 @pytest.mark.asyncio
 async def test_runner_agent_name() -> None:
@@ -23,25 +52,62 @@ async def test_runner_agent_name() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_suite_10_of_10(tmp_path: Path) -> None:
-    """Load every YAML in eval/cases/ and assert all 10 pass.
+async def test_v0_1_acceptance_suite(tmp_path: Path) -> None:
+    """The v0.1 acceptance gate — cases 001-010 must all pass.
 
-    This is the Task-14 acceptance gate. If any case fails, the runner's
-    contract is broken — either the agent driver regressed or a case's
-    fixture/expected drifted from the implementation.
+    Cases 011-015 are skipped (executable in Task 12). If any v0.1 case fails,
+    the runner's contract is broken — either the agent driver regressed or a
+    case's fixture/expected drifted from the implementation.
     """
     cases = load_cases(CASES_DIR)
-    assert len(cases) == 10, f"expected 10 representative cases in {CASES_DIR}, found {len(cases)}"
+    case_ids = {c.case_id for c in cases}
+
+    missing_v0_1 = set(_V0_1_ACCEPTANCE_IDS) - case_ids
+    assert not missing_v0_1, (
+        f"v0.1 acceptance cases missing from {CASES_DIR}: {sorted(missing_v0_1)}"
+    )
+
+    missing_v0_1_1 = set(_V0_1_1_PENDING_TASK_12_IDS) - case_ids
+    assert not missing_v0_1_1, (
+        f"v0.1.1 promotion-surface cases missing from {CASES_DIR}: {sorted(missing_v0_1_1)}"
+    )
 
     runner = RemediationEvalRunner()
     failures: list[str] = []
     for case in cases:
+        if case.case_id not in _V0_1_ACCEPTANCE_IDS:
+            continue
         case_workspace = tmp_path / case.case_id
         passed, reason, actuals, _ = await runner.run(case, workspace=case_workspace)
         if not passed:
             failures.append(f"{case.case_id}: {reason} (actuals={actuals})")
 
-    assert not failures, "eval suite failed:\n  " + "\n  ".join(failures)
+    assert not failures, "v0.1 eval suite failed:\n  " + "\n  ".join(failures)
+
+
+def test_v0_1_1_promotion_cases_load() -> None:
+    """Cases 011-015 must parse as valid `EvalCase` objects ahead of Task 12.
+
+    Catches YAML / schema drift early. Execution is deferred to Task 12,
+    which wires the `fixture.promotion` parser, the `REFUSED_PROMOTION_GATE`
+    outcome, the `by_promotion_proposal` actuals key, and the
+    `reconcile_matches` assertion through the runner. At that point this test
+    and `test_v0_1_acceptance_suite` collapse into a single 15/15 acceptance
+    gate.
+    """
+    for case_id in _V0_1_1_PENDING_TASK_12_IDS:
+        path = CASES_DIR / f"{case_id}.yaml"
+        assert path.exists(), f"{case_id}.yaml missing in {CASES_DIR}"
+        case = load_case_file(path)
+        assert case.case_id == case_id, f"case_id mismatch in {path.name}"
+        promotion = case.fixture.get("promotion")
+        assert isinstance(promotion, dict), (
+            f"{case_id}.yaml fixture.promotion missing or not a mapping"
+        )
+        assert promotion.get("schema_version") == "0.1", (
+            f"{case_id}.yaml fixture.promotion.schema_version must be '0.1'"
+        )
+        assert case.expected, f"{case_id}.yaml expected section is empty"
 
 
 # ---------------------------- per-case smoke tests ------------------------

@@ -1,0 +1,73 @@
+case_id: 015_reconcile_round_trip
+description: |
+  Chain-replay parity. After the agent runs through a multi-finding recommend
+  sequence, replaying the resulting audit chain through `promotion.replay()`
+  must yield a PromotionFile identical to the tracker's in-memory state
+  (the source-of-truth invariant from safety-verification §3 — `promotion.yaml`
+  is the cache, the F.6 audit chain is the source of truth).
+
+  Three findings on the same Stage-1 action class produce three evidence
+  events (stage1_artifacts +3) plus one propose event (the first artifact
+  already crossed the Stage-1 → 2 threshold). Replaying that chain must
+  reconstruct the same final state.
+  Executable after A.1 v0.1.1 Task 12 wires fixture.promotion + the
+  reconcile-parity assertion into the runner.
+fixture:
+  mode: recommend
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  # Promotion-state assumption: Stage 1 for runAsNonRoot, no prior evidence.
+  # The run produces 3 Stage-1 evidence events + 1 propose event; replay
+  # over the chain must reconstruct the same end-state tracker.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes:
+      remediation_k8s_patch_runAsNonRoot:
+        action_type: remediation_k8s_patch_runAsNonRoot
+        stage: 1
+        sign_offs: []
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: web
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/web
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: StatefulSet
+      workload_name: cache
+      namespace: production
+      container_name: redis
+      manifest_path: cluster:///production/StatefulSet/cache
+      detected_at: '2026-05-16T12:00:00Z'
+expected:
+  finding_count: 3
+  by_outcome:
+    recommended_only: 3
+  # Task 12 plumbs this assertion: after the run, the runner replays
+  # audit.jsonl via promotion.replay() and asserts the reconstructed
+  # PromotionFile field-equals the tracker's live state.
+  reconcile_matches: true

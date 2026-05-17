@@ -1,0 +1,100 @@
+case_id: 013_promotion_mixed_per_finding
+description: |
+  Execute mode with three findings spanning three action classes at Stages
+  1/2/3. The per-finding stage gate (not per-run) routes each independently
+  to the highest mode its action class has earned:
+    - imagePullPolicy_Always @ Stage 1 → caps at recommend → RECOMMENDED_ONLY.
+    - resource_limits @ Stage 2 → caps at dry_run → DRY_RUN_ONLY.
+    - runAsNonRoot @ Stage 3 → full execute path → EXECUTED_VALIDATED.
+  This is the load-bearing demonstration of the Task-5 per-finding-not-per-run
+  gate semantic: one operator command can produce three different outcomes
+  within a single audit chain.
+  Executable after A.1 v0.1.1 Task 12 wires fixture.promotion into the runner.
+fixture:
+  mode: execute
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: true
+    mode_execute_authorized: true
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+      - remediation_k8s_patch_resource_limits
+      - remediation_k8s_patch_imagePullPolicy_Always
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  # Promotion-state assumption:
+  #   - runAsNonRoot @ Stage 3 (two advance sign-offs).
+  #   - resource_limits @ Stage 2 (one advance sign-off).
+  #   - imagePullPolicy_Always omitted → implicit Stage 1.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes:
+      remediation_k8s_patch_runAsNonRoot:
+        action_type: remediation_k8s_patch_runAsNonRoot
+        stage: 3
+        sign_offs:
+          - event_kind: advance
+            operator: eval-fixture
+            timestamp: '2026-05-17T00:00:00Z'
+            reason: graduated runAsNonRoot to Stage 2
+            from_stage: 1
+            to_stage: 2
+          - event_kind: advance
+            operator: eval-fixture
+            timestamp: '2026-05-17T00:00:01Z'
+            reason: graduated runAsNonRoot to Stage 3
+            from_stage: 2
+            to_stage: 3
+      remediation_k8s_patch_resource_limits:
+        action_type: remediation_k8s_patch_resource_limits
+        stage: 2
+        sign_offs:
+          - event_kind: advance
+            operator: eval-fixture
+            timestamp: '2026-05-17T00:00:00Z'
+            reason: graduated resource_limits to Stage 2
+            from_stage: 1
+            to_stage: 2
+  findings:
+    - rule_id: image-pull-policy-not-always
+      rule_title: imagePullPolicy not Always
+      severity: medium
+      workload_kind: DaemonSet
+      workload_name: log-shipper
+      namespace: kube-system
+      container_name: fluent-bit
+      manifest_path: cluster:///kube-system/DaemonSet/log-shipper
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: missing-resource-limits
+      rule_title: Missing resource limits
+      severity: medium
+      workload_kind: Deployment
+      workload_name: web
+      namespace: production
+      container_name: nginx
+      manifest_path: cluster:///production/Deployment/web
+      detected_at: '2026-05-16T12:00:00Z'
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+  dry_run_result:
+    exit_code: 0
+  execute_result:
+    exit_code: 0
+  post_validate_findings: [] # clean → Stage-3 finding validates
+expected:
+  finding_count: 3
+  by_outcome:
+    recommended_only: 1
+    dry_run_only: 1
+    executed_validated: 1
+  action_types_distinct: 3
