@@ -5,6 +5,7 @@ description = "Nexus shared types and utilities"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../LICENSE-BSL" }
 dependencies = [
+    "nats-py>=2.7.0",
     "pydantic>=2.9.0",
     "python-ulid>=2.0.0",
 ]
