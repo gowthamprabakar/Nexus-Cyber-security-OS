@@ -65,10 +65,20 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from charter.audit import AuditEntry
 from charter.contract import BudgetSpec, ExecutionContract
 from remediation.agent import run as agent_run
 from remediation.authz import Authorization
-from remediation.schemas import RemediationMode, RemediationOutcome
+from remediation.promotion import (
+    ActionClassPromotion,
+    PromotionFile,
+    PromotionSignOff,
+    PromotionStage,
+    PromotionTracker,
+    replay,
+)
+from remediation.schemas import RemediationActionType, RemediationMode, RemediationOutcome
+from remediation.tools import kubectl_executor as kc_mod
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -454,3 +464,338 @@ async def test_rollback_window_matches_real_reconcile(
     assert outcome_name == RemediationOutcome.EXECUTED_VALIDATED.value, (
         f"measurement assumes happy path; outcome was {outcome_name!r}"
     )
+
+
+# ---------------------------- v0.1.1 promotion-flow live tests -----------
+#
+# Task 13 of the A.1 v0.1.1 earned-autonomy-pipeline plan. The mocked
+# `test_promotion_gate.py` proves the gate's control flow against fakes;
+# these three tests prove the same surface against a REAL kind cluster.
+# Without them, the fail-closed default (`--mode execute` against a Stage-1
+# action class refuses) is only proven against the test double of kubectl.
+# Once these pass, that property holds against a real Kubernetes apiserver.
+
+
+def _stage1_tracker() -> PromotionTracker:
+    """Empty `action_classes` → every action class implicitly at Stage 1
+    (the floor). This is the safe-by-default state when no `promotion.yaml`
+    exists in the customer environment.
+    """
+    now = datetime.now(UTC)
+    return PromotionTracker(
+        PromotionFile(
+            cluster_id="kind-live",
+            created_at=now,
+            last_modified_at=now,
+        )
+    )
+
+
+def _stage2_tracker_for_runasnonroot() -> PromotionTracker:
+    """`runAsNonRoot` graduated to Stage 2 with one advance(1→2) sign-off."""
+    now = datetime.now(UTC)
+    file = PromotionFile(cluster_id="kind-live", created_at=now, last_modified_at=now)
+    file.action_classes[RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value] = (
+        ActionClassPromotion(
+            action_type=RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT,
+            stage=PromotionStage.STAGE_2,
+            sign_offs=[
+                PromotionSignOff(
+                    event_kind="advance",
+                    operator="kind-live-fixture",
+                    timestamp=now,
+                    reason="graduated runAsNonRoot to Stage 2 for live dry_run test",
+                    from_stage=PromotionStage.STAGE_1,
+                    to_stage=PromotionStage.STAGE_2,
+                )
+            ],
+        )
+    )
+    return PromotionTracker(file)
+
+
+def _read_resource_version(kubeconfig: Path, namespace: str, workload: str) -> str:
+    """Return the cluster's view of the Deployment's `metadata.resourceVersion`.
+
+    Two reads bracketing the agent run lets the test prove the cluster never
+    saw a mutation: if `rv_before == rv_after`, no patch / apply / replace
+    / delete touched this Deployment during the window.
+    """
+    assert _KUBECTL is not None
+    out = subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kubeconfig),
+            "-n",
+            namespace,
+            "get",
+            "deployment",
+            workload,
+            "-o",
+            "jsonpath={.metadata.resourceVersion}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    )
+    return out.stdout.strip()
+
+
+_MUTATING_VERBS = frozenset(
+    {"patch", "apply", "create", "delete", "replace", "edit", "scale", "rollout"}
+)
+
+
+def _install_mutating_kubectl_spy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[list[str]]:
+    """Wrap `subprocess.run` inside `remediation.tools.kubectl_executor` with
+    a counter that records every kubectl invocation using a state-mutating
+    verb. Read verbs (`get`, `describe`, etc.) are NOT counted — the agent
+    is allowed to read the cluster before refusing.
+
+    Returns a list the test asserts is empty after the agent run. The list
+    is populated only by subprocess.run calls originating from the
+    kubectl_executor module, so reads issued by other modules (e.g., the
+    test fixture's setup, or a future D.6 detector that uses a separate
+    subprocess wrapper) don't pollute the count.
+
+    Mirrors the Task 5 control-flow proof's `_patch_driver_with_apply_spy`
+    pattern, lifted from `apply_patch`-level fake to `subprocess.run`-level
+    spy so the proof holds even when the agent reaches into a real
+    `kubectl_executor` against a real cluster.
+    """
+    mutating_calls: list[list[str]] = []
+    real_run = subprocess.run
+
+    def counting_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        cmd_arg = args[0] if args else kwargs.get("args")
+        if isinstance(cmd_arg, (list, tuple)) and cmd_arg:
+            first = cmd_arg[0]
+            if isinstance(first, str) and Path(first).name == "kubectl":
+                for arg in cmd_arg[1:]:
+                    if isinstance(arg, str) and arg in _MUTATING_VERBS:
+                        mutating_calls.append([str(c) for c in cmd_arg])
+                        break
+        # `real_run` is what the executor expects to see; preserve its return.
+        return real_run(*args, **kwargs)  # type: ignore[arg-type,return-value]
+
+    monkeypatch.setattr(kc_mod.subprocess, "run", counting_run)
+    return mutating_calls
+
+
+async def test_stage1_only_refuses_execute_against_live_cluster(
+    tmp_path: Path,
+    kind_kubeconfig: Path,
+    test_namespace: str,
+    bad_deployment: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stage 1 + `--mode execute` against the real kind cluster MUST refuse
+    every finding with `REFUSED_PROMOTION_GATE` AND emit ZERO mutating
+    kubectl invocations AND leave the workload's cluster-level
+    `resourceVersion` unchanged.
+
+    Two layers of proof:
+      1. Python-level: `_install_mutating_kubectl_spy` counts kubectl
+         invocations with mutating verbs; the list must be `[]` post-run.
+      2. Cluster-level: the Deployment's `metadata.resourceVersion` is
+         identical before and after the agent run. The Kubernetes apiserver
+         never saw a write.
+
+    The whole point of this test is that the fail-closed default holds
+    against a real Kubernetes apiserver — every unit test so far has only
+    proven it against `apply_patch`-level mocks.
+    """
+    rv_before = _read_resource_version(kind_kubeconfig, test_namespace, bad_deployment)
+    mutating_calls = _install_mutating_kubectl_spy(monkeypatch)
+
+    contract = _contract(tmp_path)
+    findings = _findings_for(bad_deployment, test_namespace, tmp_path)
+
+    report = await agent_run(
+        contract=contract,
+        findings_path=findings,
+        mode=RemediationMode.EXECUTE,
+        authorization=_auth_execute(),
+        promotion=_stage1_tracker(),
+        kubeconfig=kind_kubeconfig,
+        cluster_namespace=test_namespace,
+    )
+
+    # (1) Outcome assertion: the one finding is REFUSED_PROMOTION_GATE.
+    assert report.total == 1, f"expected 1 finding, got {report.total}"
+    outcome_name = report.findings[0]["finding_info"]["analytic"]["name"]
+    assert outcome_name == RemediationOutcome.REFUSED_PROMOTION_GATE.value, (
+        f"Stage 1 + execute must refuse with REFUSED_PROMOTION_GATE; "
+        f"got {outcome_name!r}. The gate is bypassable against a live cluster — "
+        f"investigate `agent.run()`'s pre-flight gate."
+    )
+
+    # (2) Python-level proof: zero mutating kubectl invocations.
+    assert mutating_calls == [], (
+        f"REFUSED finding triggered {len(mutating_calls)} mutating kubectl "
+        f"invocation(s) — the gate did not halt before reaching the executor. "
+        f"calls={mutating_calls}"
+    )
+
+    # (3) Cluster-level proof: resourceVersion unchanged.
+    rv_after = _read_resource_version(kind_kubeconfig, test_namespace, bad_deployment)
+    assert rv_before == rv_after, (
+        f"Deployment resourceVersion changed during the refused run "
+        f"(before={rv_before!r} after={rv_after!r}). The kubernetes apiserver "
+        f"saw a write — investigate path-of-mutation, the spy may have missed it."
+    )
+
+    # Surface measurements for safety-verification §8 (captured by `pytest -s`).
+    print(
+        f"\n[TASK13-STAGE1-PROOF] outcome={outcome_name} "
+        f"mutating_kubectl_calls={len(mutating_calls)} "
+        f"rv_before={rv_before} rv_after={rv_after} "
+        f"workload={test_namespace}/{bad_deployment}"
+    )
+
+
+async def test_promotion_evidence_emitted_to_audit_chain_live(
+    tmp_path: Path,
+    kind_kubeconfig: Path,
+    test_namespace: str,
+    bad_deployment: str,
+) -> None:
+    """Stage 2 + `--mode dry_run` against the real kind cluster MUST emit a
+    `promotion.evidence.stage2` audit entry, and `promotion.replay()` over
+    the run's audit chain MUST reconstruct an evidence counter that matches
+    the live tracker's post-run state.
+
+    The dry_run path is the smallest live-cluster flow that mutates the
+    promotion tracker: `kubectl --dry-run=server` hits the real apiserver,
+    succeeds, and the agent calls `tracker.record_evidence(stage2_dry_run)`.
+
+    Note on stage + sign-offs (the limitation case 012/013 exposed in
+    Task 12 review): `replay()` cannot reconstruct the Stage 2 designation
+    or the `advance(1→2)` sign-off from this run's chain — those events
+    come from the CLI `promotion advance` path, not the agent's run-time
+    evidence emission. The assertion below targets the evidence counter
+    only, which is the property the chain DOES carry end-to-end.
+    """
+    tracker = _stage2_tracker_for_runasnonroot()
+
+    contract = _contract(tmp_path)
+    findings = _findings_for(bad_deployment, test_namespace, tmp_path)
+
+    report = await agent_run(
+        contract=contract,
+        findings_path=findings,
+        mode=RemediationMode.DRY_RUN,
+        authorization=_auth_execute(),
+        promotion=tracker,
+        kubeconfig=kind_kubeconfig,
+        cluster_namespace=test_namespace,
+    )
+
+    # Outcome sanity: the finding made it through the gate and dry-ran.
+    assert report.total == 1
+    outcome_name = report.findings[0]["finding_info"]["analytic"]["name"]
+    assert outcome_name == RemediationOutcome.DRY_RUN_ONLY.value, (
+        f"Stage 2 + dry_run must produce DRY_RUN_ONLY; got {outcome_name!r}"
+    )
+
+    # Audit chain assertion: a stage2 evidence event exists.
+    audit_path = Path(contract.workspace) / "audit.jsonl"
+    entries = [
+        AuditEntry.from_json(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    evidence_entries = [e for e in entries if e.action == "promotion.evidence.stage2"]
+    assert len(evidence_entries) == 1, (
+        f"expected exactly one `promotion.evidence.stage2` entry; got "
+        f"{len(evidence_entries)}. action counts: "
+        f"{ {e.action: 1 for e in entries if e.action.startswith('promotion.')} }"
+    )
+    assert (
+        evidence_entries[0].payload["action_type"]
+        == RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value
+    )
+
+    # Replay assertion: the chain replays to evidence.stage2_dry_runs == 1,
+    # matching the live tracker's evidence counter.
+    replayed = replay(entries, default_cluster_id=tracker.file.cluster_id)
+    rep_evidence = replayed.action_classes[
+        RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value
+    ].evidence
+    live_evidence = tracker.file.action_classes[
+        RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value
+    ].evidence
+    assert rep_evidence.stage2_dry_runs == live_evidence.stage2_dry_runs == 1, (
+        f"replay evidence vs live tracker mismatch — "
+        f"replay.stage2_dry_runs={rep_evidence.stage2_dry_runs}, "
+        f"live.stage2_dry_runs={live_evidence.stage2_dry_runs}"
+    )
+    print(
+        f"\n[TASK13-EVIDENCE-PROOF] stage2_evidence_entries={len(evidence_entries)} "
+        f"replay.stage2_dry_runs={rep_evidence.stage2_dry_runs} "
+        f"live.stage2_dry_runs={live_evidence.stage2_dry_runs}"
+    )
+
+
+async def test_reconcile_matches_tracker_state_live(
+    tmp_path: Path,
+    kind_kubeconfig: Path,
+    test_namespace: str,
+    bad_deployment: str,
+) -> None:
+    """End-to-end reconcile-parity proof against a live cluster: drive a
+    dry_run sequence (1 finding, real apiserver dry-run), replay the run's
+    audit chain, assert the replayed evidence counters field-by-field equal
+    the live tracker's evidence counters for every action class touched.
+
+    Stage + sign-offs are excluded from the equality (see
+    `test_promotion_evidence_emitted_to_audit_chain_live` for the
+    rationale: replay cannot reconstruct transition events from the agent's
+    run-time chain). The replayed evidence is the part the chain DOES carry,
+    and that part must match exactly — otherwise the §3 'cache' /
+    'source-of-truth' contract is broken for the evidence surface.
+    """
+    tracker = _stage2_tracker_for_runasnonroot()
+
+    contract = _contract(tmp_path)
+    findings = _findings_for(bad_deployment, test_namespace, tmp_path)
+
+    await agent_run(
+        contract=contract,
+        findings_path=findings,
+        mode=RemediationMode.DRY_RUN,
+        authorization=_auth_execute(),
+        promotion=tracker,
+        kubeconfig=kind_kubeconfig,
+        cluster_namespace=test_namespace,
+    )
+
+    audit_path = Path(contract.workspace) / "audit.jsonl"
+    entries = [
+        AuditEntry.from_json(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    replayed = replay(entries, default_cluster_id=tracker.file.cluster_id)
+
+    live_classes = tracker.file.action_classes
+    rep_classes = replayed.action_classes
+    # Every action class the live tracker has evidence for must also appear
+    # in the replay output with field-equal evidence counters.
+    for key, live_entry in live_classes.items():
+        assert key in rep_classes, (
+            f"replay missing action class {key!r} that the live tracker carries"
+        )
+        live_ev = live_entry.evidence.model_dump(mode="json")
+        rep_ev = rep_classes[key].evidence.model_dump(mode="json")
+        assert live_ev == rep_ev, (
+            f"evidence-counter mismatch for {key!r}:\n  live={live_ev}\n  rep={rep_ev}"
+        )
+        print(
+            f"\n[TASK13-RECONCILE-PROOF] action_class={key} "
+            f"live_evidence={live_ev} replay_evidence={rep_ev}"
+        )
