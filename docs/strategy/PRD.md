@@ -1,4 +1,5 @@
 # PRODUCT REQUIREMENTS DOCUMENT
+
 ## [Product Name] — Autonomous Cloud Security Platform
 
 **Document Version:** 1.0
@@ -11,10 +12,10 @@
 
 ## DOCUMENT CONTROL
 
-| Version | Date | Author | Changes |
-|---|---|---|---|
-| 0.1 | [Date] | Founder | Initial outline |
-| 1.0 | [Date] | Founding team | First production draft |
+| Version | Date   | Author        | Changes                |
+| ------- | ------ | ------------- | ---------------------- |
+| 0.1     | [Date] | Founder       | Initial outline        |
+| 1.0     | [Date] | Founding team | First production draft |
 
 This document is the canonical source of truth for what the product is, who it serves, what it does, and what success looks like. All other product documents derive from this one. Changes require founder approval and version control.
 
@@ -84,6 +85,8 @@ Customers achieve four measurable outcomes within ninety days of deployment:
 ### 1.5 Business outcome
 
 The company targets $25M ARR by Month 36 with 65-75% gross margin, positioned for either continued independence at $50M+ ARR or strategic acquisition at $300M-1B+ valuation. The target market is mid-market hybrid enterprises, manufacturing OT, regulated healthcare, and defense — segments where pure-cloud SaaS security tools are architecturally inadequate and where enterprise-priced incumbents are inaccessible.
+
+**Milestone anchors.** **Phase 1 GA = Month 11–12** (the platform-capability milestone at which the 18 agents + console + edge + content + ops tracks are all minimally complete; possibly Month 10 given current calendar compression — see the [post-A.1 readiness report's §21 critical-path diagram](../_meta/system-readiness-2026-05-16-post-a1.md#21-critical-path-to-phase-1-ga--refreshed)). **Month 30** and **Month 36** are post-GA **ARR / coverage growth milestones** (~$10M and $25M ARR respectively, with 85% Wiz-equivalent weighted coverage as the capability target), **NOT GA itself**. "GA" without a qualifier means Phase 1 GA at M11–M12 in every doc in this repo.
 
 ---
 
@@ -157,13 +160,13 @@ The window exists because incumbents are committed to architectural choices that
 
 From customer discovery interviews, the pain articulated in customers' own words:
 
-*"We have Wiz. It tells us everything that's wrong. It does not help us fix anything. My team is drowning."* — VP of Security, mid-market healthcare, 2,400 employees.
+_"We have Wiz. It tells us everything that's wrong. It does not help us fix anything. My team is drowning."_ — VP of Security, mid-market healthcare, 2,400 employees.
 
-*"We can't afford Wiz. We're using a mix of native cloud tools, open-source stuff, and a managed service. None of it talks to each other. I have no idea what our actual posture is."* — CISO, regional financial services, 1,800 employees.
+_"We can't afford Wiz. We're using a mix of native cloud tools, open-source stuff, and a managed service. None of it talks to each other. I have no idea what our actual posture is."_ — CISO, regional financial services, 1,800 employees.
 
-*"Our factory floor has equipment from the 1990s. Our cloud environment is on AWS. Wiz doesn't see our factories. Our OT vendor doesn't see our cloud. The attacker doesn't care about our org chart."* — Director of IT Security, manufacturing, 5,000 employees.
+_"Our factory floor has equipment from the 1990s. Our cloud environment is on AWS. Wiz doesn't see our factories. Our OT vendor doesn't see our cloud. The attacker doesn't care about our org chart."_ — Director of IT Security, manufacturing, 5,000 employees.
 
-*"I want autonomy. I want the system to fix the basic stuff and let my analysts work on the hard stuff. Every vendor tells me 'sure but only if you approve every action.' Then it's not autonomy. It's slow approval workflow."* — VP Engineering, technology company, 1,200 employees.
+_"I want autonomy. I want the system to fix the basic stuff and let my analysts work on the hard stuff. Every vendor tells me 'sure but only if you approve every action.' Then it's not autonomy. It's slow approval workflow."_ — VP Engineering, technology company, 1,200 employees.
 
 These are not marketing-amplified pains. These are direct quotes from prospective buyers describing operational reality.
 
@@ -232,14 +235,14 @@ Foundation model capability enabling agentic security operations that were not f
 
 **Direct CNAPP competitors:**
 
-| Competitor | Strengths | Weaknesses | Strategy vs them |
-|---|---|---|---|
-| Wiz | Strongest detection, best UX, dominant brand, Google backing | Cloud-only, enterprise pricing, detection-only, no edge | Compete on edge, remediation, mid-market price |
-| CrowdStrike Falcon | Endpoint dominance, threat intel quality, brand trust | Endpoint-first, cloud as extension, monolithic | Compete on cloud-native depth and multi-agent architecture |
-| Palo Alto Prisma | Broad portfolio, network strength, agentic emerging | Complex, expensive, slow, multi-product friction | Compete on simplicity and pure-play focus |
-| Lacework | Mature CNAPP, behavioral analytics | Capital constraints, slow innovation | Compete on agentic architecture |
-| Orca | Agentless innovation, design quality | Smaller team, limited verticals | Compete on remediation and edge |
-| Sysdig | Runtime strength, container expertise | Container-focused, narrow | Compete on breadth and remediation |
+| Competitor         | Strengths                                                    | Weaknesses                                              | Strategy vs them                                           |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------- | ---------------------------------------------------------- |
+| Wiz                | Strongest detection, best UX, dominant brand, Google backing | Cloud-only, enterprise pricing, detection-only, no edge | Compete on edge, remediation, mid-market price             |
+| CrowdStrike Falcon | Endpoint dominance, threat intel quality, brand trust        | Endpoint-first, cloud as extension, monolithic          | Compete on cloud-native depth and multi-agent architecture |
+| Palo Alto Prisma   | Broad portfolio, network strength, agentic emerging          | Complex, expensive, slow, multi-product friction        | Compete on simplicity and pure-play focus                  |
+| Lacework           | Mature CNAPP, behavioral analytics                           | Capital constraints, slow innovation                    | Compete on agentic architecture                            |
+| Orca               | Agentless innovation, design quality                         | Smaller team, limited verticals                         | Compete on remediation and edge                            |
+| Sysdig             | Runtime strength, container expertise                        | Container-focused, narrow                               | Compete on breadth and remediation                         |
 
 **Adjacent competitors:**
 
@@ -282,6 +285,7 @@ We do not win in pure-cloud Fortune 500 segment where Wiz dominates. We do not t
 ### 4.1 Primary Ideal Customer Profile
 
 **Organization characteristics:**
+
 - 1,000 to 10,000 employees
 - Mid-market revenue ($100M to $2B annually)
 - Multi-cloud or hybrid infrastructure (AWS + Azure most common, often plus on-premises)
@@ -302,6 +306,8 @@ Priority 4 — Mid-market hybrid technology and SaaS. Technology companies with 
 
 Priority 5 — Defense contractors and government adjacent. Defense industrial base, government contractors. Pain: FedRAMP, CMMC, classified environment security. Decision velocity: very slow (12-24 months). Reference value: extremely high once landed.
 
+**Two orderings, both authoritative for their respective purposes.** The five priorities above are the **priority-by-revenue ordering** — verticals ranked by long-term ARR allocation and reference-value-per-customer. The **go-to-market execution order** is different: **mid-market tech-SaaS first** (shortest sales cycle of 2-4 months → fastest first-reference customer), then healthcare → financial → manufacturing-OT → defense in priority-by-revenue order. Execution order optimises for first-reference-acquisition speed; priority-by-revenue ordering optimises for long-term ARR allocation. The two are not contradictory; they answer different questions and apply at different stages of the GTM funnel.
+
 ### 4.2 Buyer personas
 
 **Primary economic buyer: VP of Security / CISO**
@@ -309,6 +315,7 @@ Priority 5 — Defense contractors and government adjacent. Defense industrial b
 Profile: Senior security leader, typically reports to CIO or CTO. 10-20 years experience. Has deployed security platforms before. Budget authority for security spending.
 
 Pains:
+
 - Cannot demonstrate measurable improvement to board
 - Team capacity exceeded by alert volume
 - Audit findings and compliance pressure
@@ -317,6 +324,7 @@ Pains:
 - Tool sprawl frustration
 
 Goals:
+
 - Reduce mean time to remediation
 - Demonstrate compliance posture continuously
 - Force-multiply security team
@@ -324,6 +332,7 @@ Goals:
 - Build defensible security program
 
 Decision criteria:
+
 - Total cost of ownership (not just license cost)
 - Speed to value
 - Compliance evidence quality
@@ -338,6 +347,7 @@ Communication style: Strategic, business-outcome focused. Wants clear ROI narrat
 Profile: Senior practitioner. Will test the product. Influences VP/CISO heavily. Often the actual person doing customer discovery calls.
 
 Pains:
+
 - Tool integration complexity
 - False positive volume
 - Inability to cover hybrid and edge environments
@@ -345,6 +355,7 @@ Pains:
 - Platform vendor inflexibility
 
 Goals:
+
 - Real detection capability, not marketing
 - Clean integration with existing tools
 - Customizability for their environment
@@ -352,6 +363,7 @@ Goals:
 - Data they can actually trust
 
 Decision criteria:
+
 - Technical depth in proof of concept
 - API quality and integration breadth
 - Detection rule transparency
@@ -365,6 +377,7 @@ Communication style: Technical depth required. Allergic to marketing speak. Will
 Profile: Day-to-day operator of the platform. Will use the product daily. Influences renewal decisions through usage patterns.
 
 Pains:
+
 - Alert fatigue
 - Dashboard switching
 - Manual investigation overhead
@@ -372,12 +385,14 @@ Pains:
 - Lack of context in alerts
 
 Goals:
+
 - Get to the root cause faster
 - Spend time on interesting work, not triage
 - Trust the platform's prioritization
 - See what's actually happening in the environment
 
 Decision criteria:
+
 - Daily UX quality
 - Integration with their actual workflow
 - Alert quality (signal vs noise)
@@ -390,18 +405,21 @@ Communication style: Direct, pragmatic, technical. Wants to see it work.
 Profile: GRC leader. Responsible for audit outcomes. Often separate budget from security.
 
 Pains:
+
 - Manual evidence collection
 - Point-in-time audits
 - Framework mapping complexity
 - Auditor demands
 
 Goals:
+
 - Continuous compliance evidence
 - Auditor-ready reports
 - Framework coverage breadth
 - Documentation quality
 
 Decision criteria:
+
 - Compliance framework breadth
 - Evidence quality
 - Audit support quality
@@ -459,6 +477,7 @@ The full Vision Document is a separate document. Summarized here for context:
 The platform includes the following capability layers, each detailed in subsequent sections:
 
 **Detection capabilities:**
+
 - Cloud Security Posture Management (CSPM) across AWS, Azure, GCP, Kubernetes
 - Cloud Workload Protection (CWPP) with runtime threat detection
 - Cloud Infrastructure Entitlement Management (CIEM) with effective permissions analysis
@@ -471,6 +490,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Identity threat detection
 
 **Prevention capabilities:**
+
 - Pre-deployment IaC scanning (CI/CD integration)
 - Runtime policy enforcement via Kubernetes admission controllers
 - Network microsegmentation recommendations
@@ -478,6 +498,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Pre-emptive threat blocking based on threat intelligence
 
 **Investigation capabilities:**
+
 - Automated incident triage
 - Timeline reconstruction
 - Root cause analysis
@@ -487,6 +508,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Forensic snapshot capture
 
 **Remediation capabilities:**
+
 - Three-tier remediation authority (autonomous, approval-gated, recommend-only)
 - Cloud Custodian policy execution
 - Terraform diff generation and execution
@@ -497,6 +519,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Multi-channel approval workflows
 
 **Compliance capabilities:**
+
 - Continuous compliance monitoring against 100+ frameworks
 - Audit-ready evidence collection and packaging
 - Control-by-control mapping for major frameworks
@@ -505,6 +528,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Vertical-specific compliance (HIPAA, PCI, FFIEC, HITRUST, NERC-CIP, FedRAMP)
 
 **Threat intelligence capabilities:**
+
 - Continuous ingestion from 15+ external sources
 - Customer-specific threat correlation
 - Active campaign tracking
@@ -512,6 +536,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Vulnerability exploitation prioritization
 
 **Operational capabilities:**
+
 - Conversational interface (chat-first UX)
 - Real-time activity transparency
 - Multi-tier deployment (cloud, hybrid, air-gapped)
@@ -520,6 +545,7 @@ The platform includes the following capability layers, each detailed in subseque
 - Self-evolution of detection and reasoning
 
 **Integration capabilities:**
+
 - 30+ pre-built integrations at launch
 - SIEM forwarding (Splunk, Sentinel, Chronicle, Datadog, Elastic)
 - Ticketing systems (Jira, ServiceNow, Linear)
@@ -565,6 +591,7 @@ First 30 days of deployment. Conservative defaults. Higher human review threshol
 Listed explicitly to prevent scope creep:
 
 **Not included in any phase:**
+
 - Full SIEM functionality (we forward to customer's SIEM, we are not their SIEM)
 - Full SOAR platform (we orchestrate within our domain, we are not a generic SOAR)
 - Endpoint Detection and Response (EDR) for general endpoints (we cover cloud workloads and runtime, we are not CrowdStrike)
@@ -599,6 +626,7 @@ This section specifies every capability in production detail. Subsequent layer-s
 Continuously detect misconfigurations across cloud infrastructure that violate security baselines, compliance frameworks, or customer-defined policies. Provide context-rich findings that include business impact, attack path implications, and remediation guidance.
 
 **Coverage:**
+
 - AWS: 1,200+ misconfiguration patterns across 100+ services
 - Azure: 1,000+ patterns across 80+ services
 - GCP: 800+ patterns across 60+ services
@@ -609,6 +637,7 @@ Continuously detect misconfigurations across cloud infrastructure that violate s
 **Specific detection categories:**
 
 Storage and data:
+
 - Public storage buckets across S3, Blob, Cloud Storage
 - Unencrypted storage at rest
 - Missing access logging
@@ -619,6 +648,7 @@ Storage and data:
 - Storage class misconfigurations
 
 Compute:
+
 - Public IPs in private subnets
 - Security groups with overly permissive ingress
 - Missing IMDSv2 enforcement
@@ -628,6 +658,7 @@ Compute:
 - Missing instance metadata protections
 
 Database:
+
 - Publicly accessible databases
 - Missing encryption at rest
 - Missing encryption in transit
@@ -638,6 +669,7 @@ Database:
 - Default credentials in use
 
 Identity and access (basic — deep analysis in CIEM):
+
 - Root account usage
 - Missing MFA on root and privileged accounts
 - Old access keys (>90 days)
@@ -646,6 +678,7 @@ Identity and access (basic — deep analysis in CIEM):
 - Federation misconfigurations
 
 Logging and monitoring:
+
 - Missing CloudTrail / Activity Log / Audit Log
 - Missing VPC flow logs
 - Missing DNS logging
@@ -654,6 +687,7 @@ Logging and monitoring:
 - Missing log encryption
 
 Networking:
+
 - Default VPC usage
 - VPC peering misconfigurations
 - NACL overly permissive
@@ -662,6 +696,7 @@ Networking:
 - TLS configuration weaknesses
 
 Container and serverless:
+
 - Public container registries
 - Lambda functions with public invocation
 - Functions with secrets in environment variables
@@ -671,18 +706,21 @@ Container and serverless:
 - Missing pod security standards
 
 Application services:
+
 - API Gateway misconfigurations
 - Load balancer misconfigurations
 - CloudFront/CDN misconfigurations
 - Message queue access control issues
 
 Encryption and key management:
+
 - Customer-managed keys without rotation
 - Key policies overly permissive
 - Default encryption keys where customer keys required
 - KMS key sharing issues
 
 **Output specification per finding:**
+
 - Unique finding identifier
 - Asset identifier and resource details
 - Misconfiguration type and severity
@@ -701,6 +739,7 @@ Encryption and key management:
 Detect runtime threats on cloud workloads including VMs, containers, serverless functions, and Kubernetes pods. Use eBPF-based monitoring for low-overhead deep visibility. Correlate runtime activity with infrastructure context for accurate threat assessment.
 
 **Coverage:**
+
 - Linux VMs (all major distributions)
 - Windows VMs
 - Containers (Docker, containerd, CRI-O)
@@ -713,6 +752,7 @@ Detect runtime threats on cloud workloads including VMs, containers, serverless 
 **Specific detection categories:**
 
 Process behavior:
+
 - Suspicious process execution patterns
 - Unusual parent-child relationships
 - Process injection
@@ -723,6 +763,7 @@ Process behavior:
 - Cryptocurrency mining activity
 
 Container threats:
+
 - Container escape attempts (host filesystem, host network, host PID)
 - Privilege escalation within containers
 - Capability abuse
@@ -732,6 +773,7 @@ Container threats:
 - Privileged container abuse
 
 Network activity (workload-level):
+
 - Reverse shell connections
 - C2 callbacks
 - Cryptocurrency mining pools
@@ -742,6 +784,7 @@ Network activity (workload-level):
 - ICMP tunneling
 
 File integrity:
+
 - Critical system file modifications
 - Unauthorized config file changes
 - Sensitive file access patterns
@@ -750,6 +793,7 @@ File integrity:
 - Ransomware behavioral patterns
 
 Kubernetes runtime:
+
 - Pod creation with privileged settings outside expected pattern
 - Service account token abuse
 - Suspicious exec into pods
@@ -757,6 +801,7 @@ Kubernetes runtime:
 - Container runtime API abuse
 
 Operating system:
+
 - Persistence mechanisms (cron, systemd, rc.d, kernel modules)
 - Privilege escalation exploitation
 - Rootkit indicators
@@ -765,12 +810,14 @@ Operating system:
 - Kernel module loading
 
 Cloud control plane (workload-triggered):
+
 - Workloads making unexpected cloud API calls
 - IMDS abuse from compromised workloads
 - Credential theft attempts
 - Token replay attempts
 
 **Detection mechanism:**
+
 - Falco eBPF sensor (primary)
 - Tracee as backup detection engine
 - Tetragon for advanced kernel telemetry
@@ -778,6 +825,7 @@ Cloud control plane (workload-triggered):
 - Wazuh for HIDS-style file integrity monitoring
 
 **Resource overhead:**
+
 - Maximum 2% sustained CPU per host (verified through benchmark suite)
 - Maximum 256 MB RAM per host
 - Network bandwidth maximum 10 KB/sec sustained per host
@@ -791,6 +839,7 @@ Each runtime finding includes process tree, network connections, file activity, 
 Analyze identity and entitlement configurations across cloud providers to detect over-privileged identities, attack paths, anomalous access patterns, and identity-based threats. Calculate effective permissions across all policy types and recommend least-privilege replacements.
 
 **Coverage:**
+
 - AWS IAM: full coverage including SCPs, permission boundaries, session policies, resource policies, identity-based policies
 - Azure RBAC: subscription, management group, resource group, resource scopes
 - Azure AD / Entra ID: roles, groups, conditional access, federation
@@ -801,6 +850,7 @@ Analyze identity and entitlement configurations across cloud providers to detect
 **Specific detection categories:**
 
 Permission analysis:
+
 - Effective permissions calculation across all policy types
 - Permissions granted but never used (90-day usage window)
 - Excessive permissions for role
@@ -810,6 +860,7 @@ Permission analysis:
 - Service-linked role abuse
 
 Authentication and access control:
+
 - Identities without MFA
 - Long-lived access keys (>90 days)
 - Weak password policies
@@ -818,12 +869,14 @@ Authentication and access control:
 - Service accounts with interactive login enabled
 
 Identity attack chains:
+
 - User → assume role → privileged role → crown jewel asset
 - Service account with excessive permissions accessible from compromised workload
 - Federation chains exposing on-premises to cloud
 - Cross-account chains across organization
 
 Privileged access:
+
 - Standing admin access where just-in-time should apply
 - Break-glass account misuse
 - Service account key sprawl
@@ -831,6 +884,7 @@ Privileged access:
 - Orphaned accounts (inactive >180 days)
 
 Anomalous behavior:
+
 - First-time permission use
 - Access from unusual geographic location
 - Access at unusual time
@@ -839,12 +893,14 @@ Anomalous behavior:
 - Token theft indicators
 
 Federation security:
+
 - SAML response manipulation indicators
 - Conditional access bypass attempts
 - OIDC misconfigurations
 - Cross-tenant synchronization abuse
 
 **Detection mechanism:**
+
 - PMapper for AWS privilege escalation analysis
 - Cloudsplaining for AWS policy danger analysis
 - AWS IAM Access Analyzer integration
@@ -862,6 +918,7 @@ Each finding includes principal ARN/ID, finding type, effective permissions summ
 Discover, classify, and protect sensitive data across cloud storage, databases, and AI workloads. Detect data exposure risks including public access, over-privileged access, residency violations, and unauthorized data flows.
 
 **Coverage:**
+
 - Cloud storage: S3, Azure Blob, GCP Cloud Storage, OCI Object Storage
 - Databases: RDS, Cosmos DB, BigQuery, Snowflake, Azure SQL, Cloud SQL
 - Data warehouses: Snowflake, Redshift, BigQuery, Databricks
@@ -872,6 +929,7 @@ Discover, classify, and protect sensitive data across cloud storage, databases, 
 **Specific detection categories:**
 
 Sensitive data discovery:
+
 - Personally Identifiable Information (PII): names, addresses, phone, email, SSN, government IDs
 - Protected Health Information (PHI): medical records, health identifiers, prescription data
 - Payment Card Industry data (PCI): card numbers, CVVs, magnetic stripe data
@@ -881,6 +939,7 @@ Sensitive data discovery:
 - Customer-defined sensitive patterns (custom classifiers)
 
 Data exposure:
+
 - Sensitive data in publicly accessible storage
 - Sensitive data in development/staging environments
 - Sensitive data accessible by over-privileged identities
@@ -890,6 +949,7 @@ Data exposure:
 - Sensitive data in CI/CD logs
 
 Data flow:
+
 - Cross-region data movement
 - Cross-cloud data transfer
 - Production-to-development data leaks
@@ -898,18 +958,21 @@ Data flow:
 - Unencrypted data in transit
 
 Data lineage:
+
 - Origin tracking for sensitive data
 - Data copy chains
 - Access history
 - System processing chains
 
 AI training data:
+
 - Sensitive data in ML training sets
 - Sensitive data exposed to LLM services
 - Custom model training data classification
 - AI service prompt logging containing sensitive data
 
 **Detection mechanism:**
+
 - Microsoft Presidio for ML-based PII classification (open source)
 - AWS Macie integration for AWS data
 - Microsoft Purview integration for Azure data
@@ -920,6 +983,7 @@ AI training data:
 
 **Privacy contract:**
 The DSPM agent operates under strict privacy contracts:
+
 - Never logs actual sensitive data values
 - Only logs classifications and locations
 - Sample-based scanning (statistical sampling, not exhaustive)
@@ -935,6 +999,7 @@ Each finding includes datastore identifier, sensitive data types detected (categ
 Detect known vulnerabilities (CVEs) across cloud workloads, container images, infrastructure-as-code, and software dependencies. Prioritize vulnerabilities based on actual exploitability for the specific customer environment, not just CVSS scores.
 
 **Coverage:**
+
 - Container images: any registry (ECR, ACR, GCR, Docker Hub, Quay, Harbor, etc.)
 - Virtual machines: Linux (RHEL, Ubuntu, Debian, Amazon Linux, SUSE, Alpine), Windows
 - Serverless: Lambda, Azure Functions, GCP Cloud Functions
@@ -945,18 +1010,21 @@ Detect known vulnerabilities (CVEs) across cloud workloads, container images, in
 **Specific detection categories:**
 
 Operating system vulnerabilities:
+
 - Kernel CVEs
 - System library CVEs (glibc, openssl, etc.)
 - Package CVEs across distributions
 - Runtime version vulnerabilities (Java, Python, Node.js, Go, Ruby)
 
 Application vulnerabilities:
+
 - Direct dependency CVEs
 - Transitive dependency CVEs
 - Vulnerable application frameworks
 - Database engine CVEs
 
 Container-specific:
+
 - Image layer vulnerabilities
 - Base image freshness
 - Multi-stage build security
@@ -964,11 +1032,13 @@ Container-specific:
 - Distroless vs full OS recommendations
 
 Serverless-specific:
+
 - Function runtime vulnerabilities
 - Function layer vulnerabilities
 - Permission misconfigurations contributing to vuln impact
 
 Supply chain:
+
 - Suspicious package patterns (typosquatting, dependency confusion)
 - Malicious package detection
 - License compliance issues
@@ -976,12 +1046,14 @@ Supply chain:
 - SBOM (Software Bill of Materials) generation and analysis
 
 IaC vulnerabilities:
+
 - Terraform misconfigurations contributing to vulns
 - Helm chart vulnerabilities
 - Kubernetes manifest issues
 - CloudFormation issues
 
 **Prioritization mechanism:**
+
 - CVSS v3 base score
 - EPSS (Exploit Prediction Scoring System) score
 - CISA KEV (Known Exploited Vulnerabilities) status
@@ -992,6 +1064,7 @@ IaC vulnerabilities:
 - Whether vulnerable component is actually executed (runtime correlation)
 
 **Detection mechanism:**
+
 - Trivy as primary scanner (containers, VMs, IaC, secrets)
 - Grype as backup container scanner
 - Syft for SBOM generation
@@ -1008,6 +1081,7 @@ Each vulnerability finding includes CVE ID, affected assets, CVSS v3, EPSS score
 Detect exposed credentials, keys, and secrets across source code, configuration files, container layers, infrastructure-as-code, and runtime environment variables. Validate detected secrets against their issuing systems where possible to confirm active exposure.
 
 **Coverage:**
+
 - Source code repositories (GitHub, GitLab, Bitbucket, Azure DevOps)
 - Container image layers
 - Infrastructure-as-Code files
@@ -1019,18 +1093,21 @@ Detect exposed credentials, keys, and secrets across source code, configuration 
 **Specific detection categories:**
 
 Cloud credentials:
+
 - AWS access keys and secret keys
 - Azure service principals and SAS tokens
 - GCP service account keys
 - Cloud provider session tokens
 
 API keys and tokens:
+
 - Stripe, Twilio, SendGrid, and 800+ other service API keys
 - OAuth access and refresh tokens
 - JWT tokens with sensitive claims
 - Webhook secrets
 
 Authentication credentials:
+
 - Database connection strings with embedded credentials
 - LDAP/AD credentials
 - SSH keys (RSA, ED25519, DSA)
@@ -1038,29 +1115,34 @@ Authentication credentials:
 - API keys from internal services
 
 Cryptographic material:
+
 - Private keys (PEM, PKCS#8, PKCS#12)
 - HMAC keys
 - Encryption keys
 - Signing keys
 
 Generic patterns:
+
 - High-entropy strings in code
 - Suspicious base64-encoded values
 - Patterns matching credential formats
 
 **Validation mechanism:**
 For detected secrets, the agent attempts validation:
+
 - AWS keys: STS GetCallerIdentity (read-only)
 - Azure tokens: limited scope validation
 - API keys: provider-specific validation endpoints
 - Database connections: connection test (read-only)
 
 Validation produces three states:
+
 - Valid: secret is currently active and grants access
 - Invalid: secret was rotated or revoked
 - Unvalidated: validation infrastructure unavailable; treat as if valid
 
 **Detection mechanism:**
+
 - Trufflehog (primary) with 800+ secret detectors
 - Gitleaks as backup
 - detect-secrets for pre-commit hooks
@@ -1075,6 +1157,7 @@ Each secret finding includes secret type, location (file path, line, container l
 Detect security misconfigurations in infrastructure-as-code before deployment. Integrate into developer workflows (CI/CD, pull requests, pre-commit) to prevent misconfigurations from reaching production.
 
 **Coverage:**
+
 - Terraform (HCL): all major providers
 - CloudFormation (YAML/JSON)
 - Kubernetes manifests (YAML)
@@ -1088,6 +1171,7 @@ Detect security misconfigurations in infrastructure-as-code before deployment. I
 **Detection categories:**
 
 Same as CSPM categories applied to IaC:
+
 - Storage misconfigurations declared in IaC
 - Network misconfigurations
 - IAM misconfigurations
@@ -1096,6 +1180,7 @@ Same as CSPM categories applied to IaC:
 - Compliance violations
 
 Plus IaC-specific:
+
 - Hardcoded secrets in IaC
 - Hardcoded credentials in module variables
 - Insecure module sources
@@ -1104,12 +1189,14 @@ Plus IaC-specific:
 - License compliance in modules
 
 **Integration points:**
+
 - Pre-commit hooks (developer machine)
 - Pull request scanning (GitHub, GitLab, Bitbucket)
 - CI/CD pipeline integration (Jenkins, GitHub Actions, GitLab CI, CircleCI, etc.)
 - Pre-deployment scanning (in deployment pipelines)
 
 **Detection mechanism:**
+
 - Checkov (primary) — same engine as Palo Alto Prisma Cloud
 - KICS as backup
 - tfsec for Terraform-specific
@@ -1124,6 +1211,7 @@ Each IaC finding includes file path, line number, misconfiguration type, severit
 Detect network-layer threats including reconnaissance, lateral movement, command-and-control, and data exfiltration through network IDS, DNS analysis, and traffic flow analysis.
 
 **Coverage:**
+
 - VPC traffic (AWS), VNet traffic (Azure), VPC traffic (GCP)
 - East-west traffic within cloud environments
 - North-south traffic at cloud boundaries
@@ -1134,6 +1222,7 @@ Detect network-layer threats including reconnaissance, lateral movement, command
 **Specific detection categories:**
 
 Reconnaissance:
+
 - Port scans (TCP/UDP/SYN/FIN/XMAS/NULL)
 - Port sweeps across hosts
 - Service enumeration
@@ -1141,6 +1230,7 @@ Reconnaissance:
 - DNS enumeration
 
 Lateral movement:
+
 - Unexpected service-to-service communication
 - East-west traffic violating microsegmentation
 - Privilege escalation network indicators
@@ -1149,6 +1239,7 @@ Lateral movement:
 - SSH-based lateral movement
 
 Command and control:
+
 - Beaconing patterns
 - DGA (Domain Generation Algorithm) DNS queries
 - DNS tunneling
@@ -1157,6 +1248,7 @@ Command and control:
 - Unusual user-agents
 
 Data exfiltration:
+
 - Large outbound transfers to unexpected destinations
 - Data uploaded to file-sharing services
 - DNS-based exfiltration
@@ -1164,12 +1256,14 @@ Data exfiltration:
 - Unusual protocol usage
 
 Denial of service:
+
 - Volumetric attacks
 - Protocol attacks (SYN flood, UDP amplification)
 - Application-layer attacks
 - Slow-rate attacks
 
 Cloud-specific:
+
 - Suspicious VPC peering activity
 - Unusual cross-region traffic
 - Direct Connect anomalies
@@ -1177,6 +1271,7 @@ Cloud-specific:
 - VPN abuse
 
 **Detection mechanism:**
+
 - Suricata (rule-based IDS) with Emerging Threats Open ruleset
 - Zeek (network analysis framework) for behavioral analysis
 - Custom DGA detection model
@@ -1194,6 +1289,7 @@ Each network finding includes finding type, source, destination, evidence (packe
 Detect security risks in AI/ML infrastructure including unmanaged AI services, AI training data exposure, malicious models, and AI-specific attack techniques.
 
 **Coverage:**
+
 - AWS Bedrock, SageMaker
 - Azure AI Services, Azure Machine Learning
 - Google Vertex AI
@@ -1206,6 +1302,7 @@ Detect security risks in AI/ML infrastructure including unmanaged AI services, A
 **Specific detection categories:**
 
 AI infrastructure:
+
 - Unmanaged or shadow AI services
 - AI services with public inference endpoints
 - AI services without authentication
@@ -1213,29 +1310,34 @@ AI infrastructure:
 - Misconfigured AI access controls
 
 Training data:
+
 - Sensitive data in ML training sets (coordinates with DSPM)
 - Sensitive data exposed to LLM services
 - Training data residency violations
 - Training data freshness gaps
 
 Models:
+
 - Malicious AI models (pickle deserialization vulnerabilities)
 - Model files with embedded code
 - Models from untrusted sources
 - Model signing verification gaps
 
 AI runtime:
+
 - Anomalous AI service usage patterns
 - Cost anomalies suggesting abuse
 - Prompt injection attempts (from logs where available)
 - Model output exfiltration patterns
 
 Application AI security:
+
 - Unauthorized AI API key usage
 - API keys for AI services in source code (coordinates with secrets detection)
 - Sensitive data flowing to external AI services without controls
 
 **Detection mechanism:**
+
 - Garak (NVIDIA) for LLM vulnerability scanning
 - ModelScan (ProtectAI) for malicious model detection
 - PyRIT (Microsoft) for AI red-teaming
@@ -1265,6 +1367,7 @@ Detect active identity-based threats including credential theft, session hijacki
 Enforce security policies at runtime through Kubernetes admission controllers, network policies, and configuration drift prevention. Block unsafe configurations from reaching production.
 
 **Mechanisms:**
+
 - Kyverno admission controller for Kubernetes
 - OPA Gatekeeper as alternative
 - Custom admission webhooks
@@ -1277,6 +1380,7 @@ Enforce security policies at runtime through Kubernetes admission controllers, n
 Analyze network traffic patterns and recommend microsegmentation policies that minimize attack surface while preserving operational requirements.
 
 **Mechanisms:**
+
 - Traffic flow analysis through Network Threat Agent
 - Communication graph generation
 - Policy recommendation engine
@@ -1289,6 +1393,7 @@ Analyze network traffic patterns and recommend microsegmentation policies that m
 Detect changes to identity configurations that violate baseline policies and prevent or reverse unauthorized changes.
 
 **Mechanisms:**
+
 - Continuous monitoring of identity changes
 - Baseline-vs-current comparison
 - Just-in-time access recommendations
@@ -1301,6 +1406,7 @@ Detect changes to identity configurations that violate baseline policies and pre
 Block known-bad indicators (IPs, domains, hashes, URLs) before they can be exploited, based on threat intelligence and customer-specific threat exposure.
 
 **Mechanisms:**
+
 - IP blocking at WAF/firewall
 - DNS-based blocking
 - Container image policy enforcement
@@ -1314,6 +1420,7 @@ Block known-bad indicators (IPs, domains, hashes, URLs) before they can be explo
 When critical findings or alerts occur, automatically triage to determine severity, scope, and required investigation depth.
 
 **Process:**
+
 - Initial event reception
 - Severity classification
 - Scope assessment (single asset vs multi-asset)
@@ -1327,6 +1434,7 @@ When critical findings or alerts occur, automatically triage to determine severi
 Reconstruct the sequence of events leading to and following a security event using cross-source telemetry.
 
 **Sources:**
+
 - Cloud control plane logs (CloudTrail, Activity Log, Audit Log)
 - Runtime telemetry (Falco, eBPF events)
 - Network telemetry (VPC flow logs, DNS logs, Suricata alerts)
@@ -1343,6 +1451,7 @@ Chronological timeline with timestamped events, source attribution, technique ma
 Determine the root cause of security incidents, distinguishing between contributing factors and the actual root cause that, if addressed, would have prevented the incident.
 
 **Mechanism:**
+
 - Five Whys methodology applied to evidence
 - Counterfactual analysis (would addressing X have prevented this?)
 - Failure mode classification
@@ -1355,6 +1464,7 @@ Determine the root cause of security incidents, distinguishing between contribut
 Extract indicators of compromise from incidents and pivot to find related compromised assets.
 
 **Process:**
+
 - IOC extraction (IPs, domains, hashes, file paths, registry keys, etc.)
 - IOC enrichment (threat intelligence, reputation, attribution)
 - Pivot search across customer environment
@@ -1367,6 +1477,7 @@ Extract indicators of compromise from incidents and pivot to find related compro
 Map observed attacker behavior to MITRE ATT&CK techniques to support analyst understanding and defensive planning.
 
 **Coverage:**
+
 - MITRE ATT&CK Enterprise Matrix
 - MITRE ATT&CK Cloud Matrix
 - MITRE ATLAS (AI-specific)
@@ -1379,6 +1490,7 @@ Map observed attacker behavior to MITRE ATT&CK techniques to support analyst und
 Correlate events across cloud, identity, runtime, network, and data domains to identify attacks that span multiple domains.
 
 **Capability examples:**
+
 - Cloud control plane abuse + workload execution
 - Identity compromise + lateral movement
 - Network reconnaissance + workload exploitation
@@ -1390,6 +1502,7 @@ Correlate events across cloud, identity, runtime, network, and data domains to i
 Capture forensic-quality snapshots of compromised workloads for offline analysis without disrupting production.
 
 **Mechanisms:**
+
 - EBS/Disk snapshots for AWS/Azure/GCP
 - Memory dumps where supported
 - Network packet captures
@@ -1406,6 +1519,7 @@ Capture forensic-quality snapshots of compromised workloads for offline analysis
 Customer pre-authorizes specific action classes. Platform executes without human intervention within authorized scope. Auto-rollback timer per action. Customer kill switch for instant revocation.
 
 Initial action classes available for Tier 1 authorization:
+
 - Rotate confirmed-leaked AWS access keys
 - Disable public S3/Blob/Cloud Storage ACLs on data flagged sensitive
 - Quarantine confirmed-malicious workloads
@@ -1416,6 +1530,7 @@ Initial action classes available for Tier 1 authorization:
 - Remove stale unused IAM users
 
 Each action class:
+
 - Customer opt-in only (default off)
 - Defined blast radius limit
 - Mandatory automatic rollback timer
@@ -1428,6 +1543,7 @@ Each action class:
 Default for most remediations. Platform drafts complete remediation script. Sends to customer-configured approval channel. Customer approves with one click; platform executes. Customer rejects; platform records reasoning.
 
 Approval channels:
+
 - Slack message with approve/reject buttons
 - Microsoft Teams adaptive card
 - Email with signed approval link
@@ -1439,6 +1555,7 @@ Approval channels:
 For high-risk actions or where customer has not authorized higher tiers. Platform generates detailed recommendation. Human executes manually using their tools.
 
 Always Tier 3 by default:
+
 - IAM policy modifications affecting >10 users
 - Production database modifications
 - Network configuration changes affecting >25% of traffic
@@ -1450,6 +1567,7 @@ Always Tier 3 by default:
 Generate and execute Cloud Custodian policies for cloud configuration remediation. Cloud Custodian provides multi-cloud policy-as-code with built-in safety mechanisms.
 
 **Coverage:**
+
 - 1,000+ pre-built remediation policies
 - Custom policy generation per finding
 - Dry-run before execution
@@ -1462,6 +1580,7 @@ Generate and execute Cloud Custodian policies for cloud configuration remediatio
 For customers using Terraform for infrastructure management, generate Terraform diffs that fix detected misconfigurations. Optionally create pull requests in customer's source control.
 
 **Mechanism:**
+
 - Map production resources to Terraform state
 - Generate minimal diff to address finding
 - Validate diff syntactically
@@ -1474,6 +1593,7 @@ For customers using Terraform for infrastructure management, generate Terraform 
 For Kubernetes-related findings, generate manifest patches that fix issues.
 
 **Mechanism:**
+
 - Generate kubectl patch or kustomize overlay
 - Validate against admission policies
 - Apply via kubectl or push to GitOps repo
@@ -1485,6 +1605,7 @@ For Kubernetes-related findings, generate manifest patches that fix issues.
 For over-privileged identities, draft replacement policies that grant only the permissions actually used over a 90-day window.
 
 **Process:**
+
 - Analyze actual permission usage from CloudTrail
 - Generate minimal policy
 - Compare to current policy (show what's removed)
@@ -1498,6 +1619,7 @@ For over-privileged identities, draft replacement policies that grant only the p
 Every Tier 1 autonomous action has an automatic rollback timer. If conditions are not validated within the rollback window, the action is automatically reversed.
 
 **Mechanism:**
+
 - Per-action rollback timer (default 1 hour, configurable per action class)
 - Pre-action state capture
 - Rollback procedure pre-computed
@@ -1511,6 +1633,7 @@ Every Tier 1 autonomous action has an automatic rollback timer. If conditions ar
 Tier 2 remediations route through customer-configured approval workflows.
 
 **Supported channels:**
+
 - Slack (primary)
 - Microsoft Teams
 - Email
@@ -1520,6 +1643,7 @@ Tier 2 remediations route through customer-configured approval workflows.
 - Console-based review
 
 **Workflow features:**
+
 - Configurable approver groups per action type
 - Escalation if approval not received in time window
 - Multi-approver for high-risk actions
@@ -1534,6 +1658,7 @@ Tier 2 remediations route through customer-configured approval workflows.
 Continuously assess customer environment against compliance frameworks. Detect drift from baseline. Surface emerging gaps before audits.
 
 **Coverage:**
+
 - 100+ compliance frameworks at launch
 - Daily monitoring frequency
 - Real-time monitoring for critical controls
@@ -1546,6 +1671,7 @@ Continuously assess customer environment against compliance frameworks. Detect d
 Collect, organize, and package evidence for compliance audits.
 
 **Process:**
+
 - Evidence requirement determination per control
 - Automated evidence collection from platform telemetry
 - Evidence packaging in auditor-preferred formats
@@ -1560,6 +1686,7 @@ Map every detection rule, every finding, every remediation to applicable complia
 **Frameworks supported at launch:**
 
 General security:
+
 - CIS Benchmarks (AWS, Azure, GCP, Kubernetes, Linux)
 - NIST 800-53 Rev 5
 - NIST Cybersecurity Framework 2.0
@@ -1568,23 +1695,27 @@ General security:
 - COBIT 2019
 
 Privacy:
+
 - GDPR (EU)
 - CCPA/CPRA (California)
 - PIPEDA (Canada)
 - LGPD (Brazil)
 
 Financial:
+
 - PCI-DSS 4.0
 - FFIEC Cybersecurity Assessment Tool
 - NYDFS Part 500
 - SWIFT CSP
 
 Healthcare:
+
 - HIPAA Security Rule
 - HITRUST CSF
 - HITECH
 
 Government:
+
 - FedRAMP Moderate
 - FedRAMP High
 - StateRAMP
@@ -1592,18 +1723,21 @@ Government:
 - IL2, IL4, IL5
 
 Cloud-specific:
+
 - AWS Well-Architected Framework
 - Azure Cloud Adoption Framework
 - Google Cloud Architecture Framework
 - AWS Foundational Technical Review (FTR)
 
 Industry:
+
 - NERC-CIP (electric utility)
 - HIPAA + 42 CFR Part 2 (substance abuse)
 - TSA Pipeline Security Directives
 - IEC 62443 (industrial control systems)
 
 International:
+
 - BSI C5 (Germany)
 - IRAP (Australia)
 - TISAX (German automotive)
@@ -1611,6 +1745,7 @@ International:
 - ENS (Spain)
 
 Custom:
+
 - Customer-defined frameworks
 - Internal policy frameworks
 
@@ -1620,6 +1755,7 @@ Custom:
 Detect when compliance posture degrades over time and alert before it becomes audit-blocking.
 
 **Mechanism:**
+
 - Daily compliance score per framework
 - Trend analysis
 - Threshold-based alerting
@@ -1632,6 +1768,7 @@ Detect when compliance posture degrades over time and alert before it becomes au
 Generate audit-ready reports and provide auditor-direct access to evidence.
 
 **Report types:**
+
 - Executive summary (board-level, 5-10 pages)
 - Auditor evidence package (control-by-control with evidence)
 - Internal compliance status (operational, monthly)
@@ -1639,6 +1776,7 @@ Generate audit-ready reports and provide auditor-direct access to evidence.
 - Custom reports per customer requirement
 
 **Auditor access:**
+
 - Time-limited auditor access account
 - Read-only evidence access
 - Audit log of auditor activity
@@ -1654,35 +1792,41 @@ Continuously ingest threat intelligence from multiple external sources, normaliz
 **Sources at launch:**
 
 Standards bodies:
+
 - MITRE ATT&CK (Cloud, Enterprise, ICS)
 - MITRE ATLAS (AI/ML)
 - MITRE D3FEND
 - CSA Cloud Controls Matrix
 
 Government:
+
 - CISA Known Exploited Vulnerabilities (KEV)
 - CISA Alerts
 - NIST National Vulnerability Database (NVD)
 
 Cloud-specific:
+
 - Wiz Cloud Threat Landscape (public RSS + STIX)
 - AWS Security Bulletins
 - Azure Security Bulletins
 - GCP Security Bulletins
 
 Industry:
+
 - Unit 42 (Palo Alto) GitHub IOCs and reports
 - CrowdStrike Global Threat Report
 - Mandiant public reports
 - Microsoft Threat Intelligence Center publications
 
 Community:
+
 - AlienVault OTX
 - abuse.ch (URLhaus, ThreatFox, MalwareBazaar)
 - VirusTotal Intelligence
 - GreyNoise
 
 Vertical:
+
 - FS-ISAC (financial)
 - H-ISAC (healthcare)
 - E-ISAC (electricity)
@@ -1690,6 +1834,7 @@ Vertical:
 - Aviation-ISAC
 
 OSS vulnerability:
+
 - OSV (Open Source Vulnerabilities)
 - GitHub Advisory Database
 - npm Advisory Database
@@ -1701,6 +1846,7 @@ OSS vulnerability:
 Correlate observed activity in customer environments to known threat actor behavior and active campaigns.
 
 **Mechanisms:**
+
 - Industry vertical → threat actor mapping
 - Tech stack → relevant threat technique mapping
 - Observed indicators → campaign attribution
@@ -1713,6 +1859,7 @@ Correlate observed activity in customer environments to known threat actor behav
 Track active threat campaigns relevant to customer environment. Notify customer when their environment exposure changes.
 
 **Capability:**
+
 - Real-time campaign feed
 - Customer-specific relevance filtering
 - Notification when campaign techniques observed in customer env
@@ -1725,6 +1872,7 @@ Track active threat campaigns relevant to customer environment. Notify customer 
 Generate periodic threat briefings tailored to customer's industry vertical, geographic region, and tech stack.
 
 **Briefing schedule:**
+
 - Daily: critical alerts only (automated)
 - Weekly: industry threat summary (semi-automated)
 - Monthly: comprehensive briefing (with human curation)
@@ -1736,6 +1884,7 @@ Generate periodic threat briefings tailored to customer's industry vertical, geo
 For every vulnerability in customer environment, provide exploitation context: who's exploiting it, when, against whom, with what consequences.
 
 **Data integration:**
+
 - CISA KEV catalog
 - Exploit code databases (Exploit-DB, Metasploit)
 - Active exploitation reports
@@ -1750,6 +1899,7 @@ For every vulnerability in customer environment, provide exploitation context: w
 Customer interaction primarily through natural language conversation with the platform's agent system. Traditional dashboards available as secondary surface.
 
 **Capabilities:**
+
 - Natural language queries about findings, remediation, posture
 - Multi-turn conversations with context retention
 - Specialist agent routing (transparent to customer)
@@ -1764,6 +1914,7 @@ Customer interaction primarily through natural language conversation with the pl
 Customers can see what the platform is doing in real time — what agents are observing, reasoning, deciding, executing. This is genuinely differentiating; competitors hide this.
 
 **Surfaces:**
+
 - Live activity feed in console
 - Per-agent activity views
 - Decision history with reasoning
@@ -1781,6 +1932,7 @@ Customers can see what the platform is doing in real time — what agents are ob
 Strict per-customer data boundaries. No cross-tenant data access ever. Validated through SOC 2 audits and continuous internal verification.
 
 **Mechanisms:**
+
 - Tenant ID enforced at every database query
 - Network segmentation between tenants
 - Per-tenant encryption keys
@@ -1793,6 +1945,7 @@ Strict per-customer data boundaries. No cross-tenant data access ever. Validated
 Every action by every agent, every API call, every state change recorded in immutable audit log with hash chain integrity.
 
 **Coverage:**
+
 - All agent invocations
 - All tool calls
 - All state changes
@@ -1810,6 +1963,7 @@ Every action by every agent, every API call, every state change recorded in immu
 The platform continuously improves itself through Meta-Harness Agent reading raw execution traces and proposing optimizations. Optimizations are eval-gated, signed, and deployed via canary rollout.
 
 **Operational details:**
+
 - Customer-specific tuning is automatic
 - Cross-customer pattern distillation is vendor-curated
 - All optimization is auditable
@@ -1886,7 +2040,7 @@ The platform continuously improves itself through Meta-Harness Agent reading raw
 
 (Each functional requirement specified with ID, description, priority, acceptance criteria. This section is approximately 80 pages in production. Excerpt below for illustration.)
 
-### 9.1 Detection requirements (FR-DET-*)
+### 9.1 Detection requirements (FR-DET-\*)
 
 **FR-DET-001: AWS CSPM Coverage**
 The system shall detect 1,200+ misconfiguration patterns across AWS services including but not limited to S3, EC2, IAM, RDS, KMS, Lambda, ECS, EKS, VPC, CloudTrail, Config.
@@ -1908,27 +2062,27 @@ Acceptance criteria: 95th percentile latency under 30 seconds measured across MI
 
 (Continues for all detection capabilities.)
 
-### 9.2 Prevention requirements (FR-PREV-*)
+### 9.2 Prevention requirements (FR-PREV-\*)
 
 (Detailed for each prevention capability.)
 
-### 9.3 Investigation requirements (FR-INV-*)
+### 9.3 Investigation requirements (FR-INV-\*)
 
 (Detailed for each investigation capability.)
 
-### 9.4 Remediation requirements (FR-REM-*)
+### 9.4 Remediation requirements (FR-REM-\*)
 
 (Detailed for each remediation capability.)
 
-### 9.5 Compliance requirements (FR-COMP-*)
+### 9.5 Compliance requirements (FR-COMP-\*)
 
 (Detailed for each compliance framework and capability.)
 
-### 9.6 Operational requirements (FR-OP-*)
+### 9.6 Operational requirements (FR-OP-\*)
 
 (Detailed for operational capabilities.)
 
-### 9.7 Integration requirements (FR-INT-*)
+### 9.7 Integration requirements (FR-INT-\*)
 
 (Detailed for each supported integration.)
 
@@ -1965,6 +2119,7 @@ Acceptance criteria: 95th percentile latency under 30 seconds measured across MI
 ### 10.4 Security
 
 (Detailed in Security Architecture Document. Summary requirements:)
+
 - All data encrypted at rest and in transit
 - Strict tenant isolation
 - SOC 2 Type II certification
@@ -2002,21 +2157,25 @@ Acceptance criteria: 95th percentile latency under 30 seconds measured across MI
 ### 12.1 Platform compliance certifications
 
 Required at launch:
+
 - SOC 2 Type I (in progress, complete by Month 12)
 - HIPAA Business Associate Agreement capability
 - GDPR DPA capability
 
 Required Phase 2:
+
 - SOC 2 Type II
 - ISO 27001
 - PCI-DSS Level 2
 
 Required Phase 3-4:
+
 - FedRAMP Moderate
 - HITRUST CSF
 - StateRAMP
 
 Required Phase 5:
+
 - FedRAMP High
 - IL5 (DoD)
 - C5 (Germany)
@@ -2048,6 +2207,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 ### 14.1 Product success metrics
 
 **Engagement metrics:**
+
 - Daily active users per customer
 - Findings reviewed per week
 - Remediations approved per week
@@ -2056,6 +2216,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 - Custom rules created per customer
 
 **Quality metrics:**
+
 - False positive rate (target: <10%)
 - True positive rate (target: >85% for critical)
 - Mean time to detection (target: <60 seconds for critical)
@@ -2063,6 +2224,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 - Customer-reported issues per month (target: declining trend)
 
 **Outcome metrics:**
+
 - Customer security incidents (target: declining vs baseline)
 - Audit pass rate (target: 100%)
 - Compliance posture improvement
@@ -2071,6 +2233,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 ### 14.2 Business success metrics
 
 **Revenue:**
+
 - ARR by quarter (target: per phase plan)
 - Net revenue retention (target: >120%)
 - Gross revenue retention (target: >95%)
@@ -2079,12 +2242,14 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 - Sales cycle length
 
 **Efficiency:**
+
 - Customer acquisition cost
 - LTV:CAC ratio (target: >3:1)
 - Gross margin (target: 65-75%)
 - Sales efficiency (Magic Number, target: >1.0)
 
 **Growth:**
+
 - New logos per quarter
 - Expansion revenue per quarter
 - Pipeline coverage (target: 3-4x quota)
@@ -2096,6 +2261,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 ### 15.1 Pricing tiers
 
 **Edge Pro — Mid-Market:**
+
 - $30,000 base annual
 - $5,000 per cloud account
 - $10 per workload per month
@@ -2104,6 +2270,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 - Typical ACV: $50K-$120K
 
 **Edge Enterprise — Hybrid Enterprise:**
+
 - Custom pricing starting $150,000
 - Per-account and per-workload structures
 - Includes: full detection stack, Tier 1 + Tier 2 + Tier 3 remediation, all integrations, 24/7 support, custom rule pack authoring, dedicated CSM, air-gap deployment, vertical specialization
@@ -2111,6 +2278,7 @@ The platform supports customer compliance with frameworks listed in section 7.5.
 - Typical ACV: $200K-$500K
 
 **Edge Open — Lead Generation:**
+
 - Free tier
 - Limited to: 1 cloud account, 50 workloads, generic rule packs only, no remediation, community support
 - Conversion path to paid via product limits
@@ -2166,24 +2334,24 @@ Edge Open creates funnel without cannibalizing paid tiers.
 
 ### 17.1 Product risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Detection rule false positive rate too high | Medium | High | Conservative defaults, tuning service for new customers, FP monitoring |
-| Tier 1 autonomous action causes outage | Low | Critical | Strict scoping, rollback timers, blast radius limits, insurance partnership |
-| Edge deployment complexity exceeds customer capability | Medium | Medium | Standard packaging, automated installers, deployment partner program |
-| Self-evolution drift in unintended directions | Low | High | Eval gating, signed deployments, monitoring, customer opt-out |
-| LLM cost exceeds margin expectations | Low | High | Charter budget enforcement, model tier optimization, caching |
-| Compliance certification delays | Medium | Medium | Compliance-first design, early auditor engagement |
-| Multi-cloud coverage gaps embarrass at customer | Medium | Medium | Honest scoping, transparent roadmap, fast iteration |
+| Risk                                                   | Likelihood | Impact   | Mitigation                                                                  |
+| ------------------------------------------------------ | ---------- | -------- | --------------------------------------------------------------------------- |
+| Detection rule false positive rate too high            | Medium     | High     | Conservative defaults, tuning service for new customers, FP monitoring      |
+| Tier 1 autonomous action causes outage                 | Low        | Critical | Strict scoping, rollback timers, blast radius limits, insurance partnership |
+| Edge deployment complexity exceeds customer capability | Medium     | Medium   | Standard packaging, automated installers, deployment partner program        |
+| Self-evolution drift in unintended directions          | Low        | High     | Eval gating, signed deployments, monitoring, customer opt-out               |
+| LLM cost exceeds margin expectations                   | Low        | High     | Charter budget enforcement, model tier optimization, caching                |
+| Compliance certification delays                        | Medium     | Medium   | Compliance-first design, early auditor engagement                           |
+| Multi-cloud coverage gaps embarrass at customer        | Medium     | Medium   | Honest scoping, transparent roadmap, fast iteration                         |
 
 ### 17.2 Market risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Wiz adds edge deployment | Medium | High | Vertical specialization, integrated remediation, mid-market lock-in |
-| Major LLM provider outage | Low | High | Multi-provider fallback architecture |
-| Mid-market security spending contracts | Low | High | Diversification across verticals |
-| Regulatory restrictions on agentic AI | Medium | Medium | Conservative autonomy, full auditability, compliance-first |
+| Risk                                   | Likelihood | Impact | Mitigation                                                          |
+| -------------------------------------- | ---------- | ------ | ------------------------------------------------------------------- |
+| Wiz adds edge deployment               | Medium     | High   | Vertical specialization, integrated remediation, mid-market lock-in |
+| Major LLM provider outage              | Low        | High   | Multi-provider fallback architecture                                |
+| Mid-market security spending contracts | Low        | High   | Diversification across verticals                                    |
+| Regulatory restrictions on agentic AI  | Medium     | Medium | Conservative autonomy, full auditability, compliance-first          |
 
 ### 17.3 Open questions
 
@@ -2230,6 +2398,7 @@ Edge Open creates funnel without cannibalizing paid tiers.
 This PRD is the canonical source of truth for what we're building. All other product documents derive from this. Changes require founder approval and version control.
 
 **Next documents:**
+
 1. Vision Document (next, completes Batch 1)
 2. Detailed Agent Specification (Batch 2)
 3. Platform Architecture (Batch 2)
