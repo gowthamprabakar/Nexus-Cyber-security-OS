@@ -130,6 +130,13 @@ def test_refused_unauthorized_is_medium_severity() -> None:
     assert outcome_severity(RemediationOutcome.REFUSED_UNAUTHORIZED) == Severity.MEDIUM
 
 
+def test_refused_promotion_gate_is_medium_severity() -> None:
+    """v0.1.1 earned-autonomy pre-flight refusal — same actionability tier
+    as REFUSED_UNAUTHORIZED. Operator fixes by graduating the action class
+    via `remediation promotion advance`, or by lowering the run mode."""
+    assert outcome_severity(RemediationOutcome.REFUSED_PROMOTION_GATE) == Severity.MEDIUM
+
+
 def test_dry_run_failed_is_high_severity() -> None:
     """A dry-run failure means our apply path is broken — HIGH."""
     assert outcome_severity(RemediationOutcome.DRY_RUN_FAILED) == Severity.HIGH
