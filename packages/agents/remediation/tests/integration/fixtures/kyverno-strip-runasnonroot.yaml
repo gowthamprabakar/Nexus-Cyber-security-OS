@@ -1,0 +1,75 @@
+# Kyverno ClusterPolicy used by `test_execute_rolled_back_against_live_cluster`.
+#
+# The webhook fires on Deployment UPDATE inside the `nexus-rem-test` namespace
+# and rewrites `spec.template.spec.containers[*].securityContext.runAsNonRoot`
+# to `false` regardless of what the patcher set. This simulates the real-world
+# "patch applied at the API layer but doesn't stick at runtime" failure mode
+# the A.1 rollback path is designed to catch — A.1's `kubectl patch` adds
+# `runAsNonRoot: true`, the webhook flips it back to false, D.6's post-validation
+# re-detect still sees the run-as-root rule firing, A.1 applies the inverse
+# patch automatically → `executed_rolled_back`.
+#
+# Why a webhook (and not a controller / reconcile-race fixture): the safety-
+# verification record's §6 prerequisite item 3 names this as a
+# **mutating-admission-webhook** fixture specifically, because that is the
+# real customer failure mode (OPA Gatekeeper, Linkerd / Istio sidecar
+# injection, Kyverno itself if mis-configured). Other simulation paths
+# don't exercise the apiserver's MutatingAdmissionWebhook plumbing.
+#
+# Why Kyverno: it brings its own webhook server + TLS + JSON-patch generation,
+# so the fixture is one YAML file instead of a Pod/Service/MutatingWebhook-
+# Configuration triad with self-signed certificates and a custom webhook
+# image. The trade-off is the heaviness of the Kyverno install (~4 deployments,
+# one-time on the persistent kind cluster).
+#
+# Scope: the policy is restricted to namespace `nexus-rem-test` so the fixture
+# does not interfere with other workloads on the persistent cluster. Tests
+# that don't want the mutation skip this namespace by creating Deployments
+# elsewhere.
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: a1-rolled-back-fixture-strip-runasnonroot
+  annotations:
+    policies.kyverno.io/title: 'A.1 rolled-back-path fixture: strip runAsNonRoot'
+    policies.kyverno.io/category: 'A.1 test fixture'
+    policies.kyverno.io/description: |
+      Test fixture only. Mutates Deployment containers in the nexus-rem-test
+      namespace to force `runAsNonRoot: false`, regardless of what the patcher
+      set. Used by test_execute_rolled_back_against_live_cluster to prove
+      A.1's rollback path against a real mutating-admission-webhook.
+spec:
+  background: false
+  mutateExistingOnPolicyUpdate: false
+  rules:
+    - name: strip-runasnonroot-on-update
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              namespaces:
+                - nexus-rem-test
+              operations:
+                - CREATE
+                - UPDATE
+      mutate:
+        patchStrategicMerge:
+          spec:
+            template:
+              spec:
+                containers:
+                  - (name): '?*'
+                    securityContext:
+                      # Revert BOTH fields that A.1's runAsNonRoot patch sets.
+                      # A.1's patch_body sets `runAsNonRoot: true` AND
+                      # `runAsUser: 65532` (the conventional non-root UID);
+                      # D.6's run-as-root detector keys on `runAsUser == 0`,
+                      # so leaving the new runAsUser=65532 in place would
+                      # silently produce `executed_validated` even when the
+                      # webhook stripped runAsNonRoot. Forcing runAsUser back
+                      # to 0 ensures the rule re-fires and the rollback path
+                      # is exercised end-to-end.
+                      runAsNonRoot: false
+                      runAsUser: 0

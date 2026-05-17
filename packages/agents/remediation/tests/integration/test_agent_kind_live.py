@@ -61,6 +61,7 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -85,6 +86,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 _CLUSTER_NAME = os.environ.get("NEXUS_KIND_CLUSTER", "nexus-remediation-test")
 _NAMESPACE = os.environ.get("NEXUS_KIND_NAMESPACE", "nexus-rem-test")
+_KYVERNO_INSTALL_URL = "https://github.com/kyverno/kyverno/releases/download/v1.13.4/install.yaml"
+_FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 def _live_enabled() -> bool:
@@ -351,7 +354,17 @@ async def test_execute_validated_against_live_cluster(
     tmp_path: Path, kind_kubeconfig: Path, test_namespace: str, bad_deployment: str
 ) -> None:
     """Apply a run-as-root finding's remediation against a live kind cluster;
-    expect `executed_validated` after the rollback window."""
+    expect `executed_validated` after the rollback window.
+
+    Explicit isolation precondition: the `strip_runasnonroot_policy`
+    ClusterPolicy from `test_execute_rolled_back_against_live_cluster`
+    must NOT be present on the cluster. If it leaked, the validated
+    outcome would silently become `executed_rolled_back` and this test
+    would fail at the outcome assertion several stages later. Failing
+    fast here turns "the teardown failed and tainted us" into a clear,
+    localised error.
+    """
+    _assert_no_strip_policy(kind_kubeconfig)
     contract = _contract(tmp_path)
     findings = _findings_for(bad_deployment, test_namespace, tmp_path)
 
@@ -399,18 +412,311 @@ async def test_execute_validated_against_live_cluster(
     )
 
 
+@pytest.fixture(scope="module")
+def kyverno_installed(kind_kubeconfig: Path) -> str:
+    """Install Kyverno on the kind cluster (idempotent; module-scoped).
+
+    Kyverno provides the MutatingAdmissionWebhook server + TLS + JSON-patch
+    machinery the rolled-back-path proof needs. Installing it explicitly
+    (rather than expecting it pre-installed) makes the fixture cold-followable
+    by anyone reading this test file.
+
+    Uses `kubectl apply --server-side --force-conflicts` because the Kyverno
+    CRDs' annotations exceed the client-side 256 KiB limit and re-applying
+    already-managed CRDs trips field-ownership warnings as fatal errors.
+    Then waits up to 3 minutes for all four Kyverno deployments to report
+    `available`. Re-runs against an already-installed cluster are fast.
+
+    Returns the Kyverno namespace name.
+    """
+    assert _KUBECTL is not None
+    subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "-f",
+            _KYVERNO_INSTALL_URL,
+        ],
+        check=True,
+        capture_output=True,
+        timeout=120,
+    )
+    subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "-n",
+            "kyverno",
+            "wait",
+            "--for=condition=available",
+            "deployment",
+            "--all",
+            "--timeout=180s",
+        ],
+        check=True,
+        capture_output=True,
+        timeout=200,
+    )
+    return "kyverno"
+
+
+@pytest.fixture
+def strip_runasnonroot_policy(
+    kind_kubeconfig: Path,
+    kyverno_installed: str,
+) -> Iterator[str]:
+    """Apply the `a1-rolled-back-fixture-strip-runasnonroot` Kyverno
+    ClusterPolicy for the duration of one test, then remove it on teardown.
+
+    Function-scoped so other tests in this module (which create Deployments
+    in the same `nexus-rem-test` namespace) are not affected by the
+    mutation. The policy YAML lives in
+    [`fixtures/kyverno-strip-runasnonroot.yaml`](fixtures/kyverno-strip-runasnonroot.yaml)
+    and matches Deployment CREATE/UPDATE in `nexus-rem-test` only.
+
+    Yields the policy name. The teardown removes the policy so a re-run
+    of the suite against the persistent cluster starts from a clean state.
+    """
+    del kyverno_installed
+    assert _KUBECTL is not None
+    policy_file = _FIXTURES_DIR / "kyverno-strip-runasnonroot.yaml"
+    policy_name = "a1-rolled-back-fixture-strip-runasnonroot"
+    subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [_KUBECTL, "--kubeconfig", str(kind_kubeconfig), "apply", "-f", str(policy_file)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    # Wait for the policy's Ready condition — Kyverno registers the webhook
+    # config asynchronously. Without this wait, the test may UPDATE the
+    # Deployment before the webhook is actually live.
+    subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "wait",
+            "--for=condition=Ready",
+            f"clusterpolicy/{policy_name}",
+            "--timeout=60s",
+        ],
+        check=True,
+        capture_output=True,
+        timeout=70,
+    )
+    try:
+        yield policy_name
+    finally:
+        # Delete the policy, then BLOCK until the apiserver reports it gone.
+        # A silent teardown failure (e.g. apiserver lagging on delete-propagation)
+        # would leak the webhook into the next test and produce a misleading
+        # "validated" outcome when the rolled-back path was supposed to be
+        # the only place this policy is live. Raising loudly here surfaces
+        # the leak immediately rather than letting the next test fail at a
+        # downstream assertion.
+        subprocess.run(  # noqa: S603 — fixed args, absolute path
+            [
+                _KUBECTL,
+                "--kubeconfig",
+                str(kind_kubeconfig),
+                "delete",
+                "clusterpolicy",
+                policy_name,
+                "--ignore-not-found",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        # `kubectl wait --for=delete` blocks until the object is gone; safer
+        # than polling because it doesn't race with API-server eventual
+        # consistency. If the resource was already deleted by the time wait
+        # starts, kubectl returns immediately with exit 0.
+        wait_result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+            [
+                _KUBECTL,
+                "--kubeconfig",
+                str(kind_kubeconfig),
+                "wait",
+                "--for=delete",
+                f"clusterpolicy/{policy_name}",
+                "--timeout=30s",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=40,
+        )
+        # Final post-delete proof: `kubectl get` returns NotFound. If this
+        # assertion fails, the next test would have run against a polluted
+        # cluster and produced misleading results.
+        get_result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+            [
+                _KUBECTL,
+                "--kubeconfig",
+                str(kind_kubeconfig),
+                "get",
+                "clusterpolicy",
+                policy_name,
+                "-o",
+                "name",
+                "--ignore-not-found",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert get_result.stdout.strip() == "", (
+            f"strip_runasnonroot_policy teardown leaked: ClusterPolicy "
+            f"{policy_name!r} still present after delete + wait. "
+            f"wait stdout={wait_result.stdout!r} wait stderr={wait_result.stderr!r} "
+            f"get stdout={get_result.stdout!r}. Subsequent tests against this "
+            f"namespace would silently see the webhook fire — fail fast here."
+        )
+
+
+def _assert_no_strip_policy(kind_kubeconfig: Path) -> None:
+    """Pre-test assertion: the `strip_runasnonroot_policy` `ClusterPolicy`
+    must NOT be installed on the cluster when this is called.
+
+    Used by `test_execute_validated_against_live_cluster` and
+    `test_rollback_window_matches_real_reconcile` — both depend on the
+    operator's patch sticking against an unmodified apiserver. If the
+    Kyverno webhook policy from `test_execute_rolled_back_against_live_cluster`
+    leaked (function-scoped teardown failed silently or got skipped),
+    these tests would produce `executed_rolled_back` instead of
+    `executed_validated` and surface as a confusing assertion failure
+    several stages downstream. Failing fast here turns "the teardown
+    failed and tainted the next test" into a clear, localised error.
+
+    This complements the strict teardown assertion in
+    `strip_runasnonroot_policy` — defence in depth, not redundancy: a
+    teardown can fail because of process termination, OOM, or any other
+    failure mode that bypasses Python's `finally` semantics. The pre-test
+    assertion catches those.
+    """
+    assert _KUBECTL is not None
+    result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "get",
+            "clusterpolicy",
+            "a1-rolled-back-fixture-strip-runasnonroot",
+            "-o",
+            "name",
+            "--ignore-not-found",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.stdout.strip() == "", (
+        f"isolation precondition failed: ClusterPolicy "
+        f"'a1-rolled-back-fixture-strip-runasnonroot' is present on the "
+        f"cluster, which would silently mutate Deployment specs in "
+        f"`nexus-rem-test`. The rolled-back test's teardown failed to "
+        f"remove it. Run `kubectl delete clusterpolicy "
+        f"a1-rolled-back-fixture-strip-runasnonroot` to clean up, then "
+        f"re-run. (get stdout={result.stdout!r})"
+    )
+
+
 async def test_execute_rolled_back_against_live_cluster(
-    tmp_path: Path, kind_kubeconfig: Path, test_namespace: str
+    tmp_path: Path,
+    kind_kubeconfig: Path,
+    test_namespace: str,
+    strip_runasnonroot_policy: str,
+    bad_deployment: str,
 ) -> None:
-    """Reserved for a follow-up CL once a mutating admission webhook fixture
-    is wired (current `kind` clusters have no webhook installed by default).
-    The webhook would strip `runAsNonRoot` on apply, simulating a real
-    "patch applied at API layer but doesn't stick at runtime" failure.
-    For now this test xfails so the lane runs green at the contract level
-    until the webhook fixture lands."""
-    pytest.xfail(
-        "Rolled-back path requires a mutating-admission-webhook fixture; "
-        "tracked as follow-up (see module docstring)."
+    """Live-cluster proof of A.1's rollback path against a real
+    MutatingAdmissionWebhook.
+
+    The Kyverno ClusterPolicy installed by `strip_runasnonroot_policy`
+    mutates every Deployment UPDATE in `nexus-rem-test` to set
+    `runAsNonRoot: false` on its containers, regardless of what the
+    patcher sent. The webhook simulates the real customer failure mode
+    A.1's rollback path is designed to catch (OPA Gatekeeper / Linkerd /
+    Istio sidecar-injection rewriting workload specs).
+
+    Flow:
+      1. `bad_deployment` creates a Deployment in `nexus-rem-test` with
+         `runAsUser: 0` (no `runAsNonRoot`).
+      2. A.1 runs with `--mode execute`, patches the Deployment to add
+         `runAsNonRoot: true`.
+      3. The Kyverno webhook fires on UPDATE and rewrites
+         `runAsNonRoot` back to `false`.
+      4. After the rollback window, A.1's validator re-runs D.6 against
+         the live cluster. D.6 sees `runAsUser: 0` + `runAsNonRoot: false`
+         and reports the `run-as-root` rule still firing.
+      5. A.1 applies the inverse patch automatically.
+      6. Outcome: `executed_rolled_back`.
+
+    Closes safety-verification §6 prerequisite item 3 — the rolled-back
+    path is no longer asserted only by mocked tests.
+    """
+    del strip_runasnonroot_policy
+    contract = _contract(tmp_path)
+    findings = _findings_for(bad_deployment, test_namespace, tmp_path)
+
+    start = time.monotonic()
+    report = await agent_run(
+        contract=contract,
+        findings_path=findings,
+        mode=RemediationMode.EXECUTE,
+        authorization=_auth_execute(),
+        kubeconfig=kind_kubeconfig,
+        cluster_namespace=test_namespace,
+    )
+    elapsed = time.monotonic() - start
+
+    assert report.total == 1, f"expected 1 finding, got {report.total}"
+    outcome_name = report.findings[0]["finding_info"]["analytic"]["name"]
+    assert outcome_name == RemediationOutcome.EXECUTED_ROLLED_BACK.value, (
+        f"expected executed_rolled_back, got {outcome_name!r}. "
+        f"investigate execution_results.json + rollback_decisions.json under "
+        f"{contract.workspace}. If the Kyverno policy didn't fire, check "
+        f"`kubectl get deployment {bad_deployment} -n {test_namespace} -o yaml` "
+        f"for spec.template.spec.containers[].securityContext.runAsNonRoot."
+    )
+
+    # Cluster-level confirmation: after the rolled-back path, the Deployment
+    # is not at runAsNonRoot=true. (The webhook may have set it to false;
+    # what matters is that the validator's decision was honoured and the
+    # inverse patch was applied.)
+    assert _KUBECTL is not None
+    out = subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "-n",
+            test_namespace,
+            "get",
+            "deployment",
+            bad_deployment,
+            "-o",
+            "jsonpath={.spec.template.spec.containers[0].securityContext.runAsNonRoot}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    )
+    assert out.stdout.strip() in ("", "false"), (
+        f"post-rollback cluster state should not show runAsNonRoot=true; got {out.stdout!r}"
+    )
+
+    print(
+        f"\n[WEBHOOK-ROLLBACK-PROOF] outcome={outcome_name} "
+        f"wall_clock={elapsed:.2f}s "
+        f"workload={test_namespace}/{bad_deployment} "
+        f"post_patch_runAsNonRoot={out.stdout.strip() or '<unset>'}"
     )
 
 
@@ -419,7 +725,13 @@ async def test_rollback_window_matches_real_reconcile(
 ) -> None:
     """Measure the wall-clock time from `kubectl patch` to the new Pod
     being Ready. Assert the default `rollback_window_sec=300` provides ≥30s
-    of cushion over the measured reconcile latency."""
+    of cushion over the measured reconcile latency.
+
+    Like `test_execute_validated_against_live_cluster`, this measurement
+    only makes sense against a cluster where the operator's patch sticks
+    — same isolation precondition (no leaked Kyverno strip policy).
+    """
+    _assert_no_strip_policy(kind_kubeconfig)
     contract = _contract(tmp_path)
     findings = _findings_for(bad_deployment, test_namespace, tmp_path)
 
