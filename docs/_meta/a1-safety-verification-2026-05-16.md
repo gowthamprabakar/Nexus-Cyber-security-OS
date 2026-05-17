@@ -94,21 +94,35 @@ The human never fully leaves. The shift between Stage 3 and Stage 4 is the human
 
 ## §3. Promotion-tracking: where the per-action-class graduation state lives
 
-A.1 v0.1 does not yet have a per-action-class promotion state file. **This is a gap.** The v0.1 model is binary at the `auth.yaml` level: an action class is either in `authorized_actions` or not, with no record of what stage it's at or what evidence justified the listing.
+**Status (updated 2026-05-17):** **Shipped in code as of A.1 v0.1.1.** The original v0.1 gap — "no per-action-class promotion state file; the v0.1 model is binary at the `auth.yaml` level with no record of what stage an action class is at" — was closed by the A.1 v0.1.1 earned-autonomy-pipeline plan ([`docs/superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md`](../superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md)). The verification record for v0.1.1 is at [`a1-v0-1-1-verification-2026-05-17.md`](a1-v0-1-1-verification-2026-05-17.md).
 
-For the earned-autonomy pipeline to be auditable, A.1 v0.2 (or earlier) needs:
+### What shipped (concrete artifacts)
 
-1. **A `promotion.yaml` per customer environment** that records, per action class:
-   - Current stage (1-4).
-   - Promotion-evidence count (e.g. `stage2_dry_runs: 7`, `stage3_executes: 14`, `stage3_unexpected_rollbacks: 0`).
-   - Promotion-sign-off (who, when) for the most recent stage transition.
-   - Excluded namespaces / workload kinds / labels.
-2. **Per-action audit log emission** on every Stage-N event — incrementing the corresponding counter in `promotion.yaml`. Reuses A.1's F.6 audit hash chain; the promotion state is derivable from the chain replay.
-3. **A `remediation promotion` CLI subcommand** that prints the per-action-class state and proposes promotions to the operator (e.g. "action `runAsNonRoot` has accumulated 12 successful Stage-3 executions in `production`; ready for sign-off to Stage 4?").
+1. **`promotion.yaml` per customer environment** — the operator-readable cache that records, per action class: current stage (1-4); evidence counters (`stage1_artifacts`, `stage2_dry_runs`, `stage3_executes`, `stage3_consecutive_executes`, `stage3_unexpected_rollbacks`, `stage3_distinct_workloads`); and the chronological sign-off chain (who advanced or demoted, when, and why) for every stage transition. Pydantic-validated; atomically written; safe-by-default (absent file ⇒ every action class is implicitly Stage 1). Ships in [`packages/agents/remediation/src/remediation/promotion/`](../../packages/agents/remediation/src/remediation/promotion/).
 
-**Until promotion.yaml ships**, the human role for every Stage 3 and Stage 4 action is owned by manual operator discipline — the operator-of-record reviews the audit log + `findings.json` weekly and makes promotion decisions out-of-band. This is documented in the runbook ([§4 of `remediation_workflow.md`](../../packages/agents/remediation/runbooks/remediation_workflow.md)) but it is fragile. **Manual discipline is not a substitute for in-product tracking.**
+2. **The four-stage earned-autonomy pipeline in code.** [§2 above](#§2-the-four-stage-earned-autonomy-pipeline) describes each stage; the in-code enforcement is `agent.run()`'s pre-flight gate, which computes each artifact's effective mode from `tracker.stage_for(action_type)` and refuses with `REFUSED_PROMOTION_GATE` when the operator's requested mode exceeds an action class's stage cap. Per-finding routing (Stage 1 → recommend / Stage 2 → dry_run / Stage 3+ → execute) is the load-bearing demonstration documented at [eval case 013](../../packages/agents/remediation/eval/cases/013_promotion_mixed_per_finding.yaml). The gate is proven against mocks (Task 5's zero-kubectl control-flow tests) and against a real `kind` cluster ([Entry 2 below](#entry-2--kind-v0310--k8s-v1300--2026-05-17), reproducible from commit `dc1a1d4` per the Correction note).
 
-**Gap closure target:** Phase-1c, before any "do" agent expansion (A.1 v0.2, A.1 v0.3, A.2, etc.). The promotion model is the load-bearing contract every future cure-quadrant agent inherits; it must be in code before more action classes ship.
+3. **F.6 audit chain as the source of truth.** 9 `promotion.*` event types (`promotion.evidence.{stage1,stage2,stage3,unexpected_rollback}` + `promotion.advance.{proposed,applied}` + `promotion.demote.applied` + `promotion.init.applied` + `promotion.reconcile.completed`) — `promotion.yaml` is the derived cache; the chain is authoritative. `remediation.promotion.replay()` rebuilds the file by walking the chain.
+
+4. **`remediation promotion` CLI subcommand group** — `status` (print state + propose advances), `init` (fresh promotion.yaml + audit entry; refuses overwrite), `advance` (apply a one-stage transition with operator sign-off; refuses skip / no-op / Stage 4), `demote` (symmetric for downgrades; any decrease allowed), `reconcile` (replay the chain to disk with optional `--dry-run` diff). Stage-4 closure (item below) is enforced independently by both `advance` and `reconcile`.
+
+5. **Eval coverage: 15/15 with the `fixture.promotion` parser active.** The 10 v0.1 cases retrofit to declare their promotion state (Task 9); 5 new v0.1.1 cases (`011_promotion_blocked_at_stage_1` / `012_…stage_2` / `013_promotion_mixed_per_finding` / `014_promotion_advance_proposed` / `015_reconcile_round_trip`) author the promotion-gate surface as authoritative spec (Task 10); the eval runner parses `fixture.promotion` into a `PromotionTracker` and plumbs through `agent.run(promotion=...)` (Task 12). A paired-negative test (`test_case_003_promotion_gate_is_load_bearing`) proves the Stage-2 grant in case 003 is what makes it pass, not coincidence.
+
+6. **Live-kind proof of the fail-closed default.** Three new tests in the `NEXUS_LIVE_K8S=1` lane ([Task 13](../superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md)): `test_stage1_only_refuses_execute_against_live_cluster` (Stage 1 + execute against the real apiserver → zero mutating kubectl calls, zero total kubectl calls, `resourceVersion` unchanged); `test_promotion_evidence_emitted_to_audit_chain_live` (stage2 evidence emission + replay parity); `test_reconcile_matches_tracker_state_live` (field-equality on evidence counters). Recorded in §8 Entry 2 (and its Correction note, after the post-merge hotfix PR #9 — the proof is now reproducible from commit `dc1a1d4`).
+
+### What this does NOT change (the bright line, preserved)
+
+The earned-autonomy pipeline shipping in code does **not** unlock Stage 3 or Stage 4 for customers. The per-customer customer-side prerequisites of [§6](#6-what-must-be-true-before---mode-execute-runs-unattended-in-a-customers-production-environment) still apply for Stage 3, and Stage 4 remains globally closed in code:
+
+- **Stage 1 (recommend) and Stage 2 (dry_run): ship to customers** as of v0.1.1. Promotion floor + dry-run validation. Stage 2 customer enablement requires the customer-side prerequisites items 5-9 of §6.
+- **Stage 3 (human-approved execute): customer-conditional.** All customer-side prerequisites of §6 must close per-customer before enablement. The shipping of the gate + tracker is necessary but not sufficient.
+- **Stage 4 (unattended execute): globally closed in code.** Both `remediation promotion advance --to stage_4` and `remediation promotion reconcile` refuse with the same prerequisite message naming **two** prerequisites: (a) the rolled-back-path mutating-admission-webhook fixture lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`, AND (b) at least 4 weeks of customer Stage-3 evidence accumulates against a real production cluster. No flag, no operator, and no policy override opens Stage 4 until both prerequisites close. This is the immediate next-plan gate after v0.1.1.
+
+The `promotion.yaml` cache + the §3 cache/source-of-truth contract carry **one documented limitation**: `replay()` over a chain emitted by `agent.run()` alone cannot reconstruct stage + sign_offs above Stage 1, because the transition events (`promotion.advance.applied`, `promotion.demote.applied`, `promotion.init.applied`) originate from the CLI's `init`/`advance`/`demote` paths, not from agent runs. Evidence counters reconstruct field-by-field; stage + sign_offs require the CLI history to also be in the chain. Documented permanently in [`a1-v0-1-1-verification-2026-05-17.md`](a1-v0-1-1-verification-2026-05-17.md#permanent-documented-limitation--reconcile_matches-evidence-only-parity) and in the runbook's [§13](../../packages/agents/remediation/runbooks/remediation_workflow.md#13-promotionyaml-schema-reference-v011) limitation note.
+
+### What's still pending v0.1.2 (named so the next plan inherits it)
+
+- **CLI-gate wiring for `remediation run`.** The pre-flight gate fires from the `agent.run()` Python API today; the CLI's `run` subcommand does not yet wire `--promotion <path>`. Customers using `remediation run --mode execute` in v0.1.1 still see the v0.1 surface — `auth.yaml` + `--i-understand-this-applies-patches-to-the-cluster` remain the operator-facing kill switches. v0.1.2 wires the CLI gate, gated on the rolled-back-path webhook fixture landing first.
 
 ---
 
@@ -162,7 +176,7 @@ The complete list (every item must close; this is not "pick three"):
 ### Platform-side prerequisites
 
 1. **Gate G3 closure** — the `NEXUS_LIVE_K8S=1` lane passes `test_execute_validated_against_live_cluster` and `test_rollback_window_matches_real_reconcile` against a `kind` cluster of the customer's K8s minor version. Recorded by appending a note to this file: date, kind version, measured reconcile latency, commit hash.
-2. **Promotion tracking in code (§3 gap)** — `promotion.yaml` ships; per-action audit emission lands; `remediation promotion` CLI exists. Phase-1c task; no Stage 4 customer enablement until done.
+2. **Promotion tracking in code (§3 gap).** ✅ **Closed in A.1 v0.1.1.** `promotion.yaml` ships, per-action audit emission lands, the `remediation promotion` CLI subcommand group exists, and the pre-flight gate is live (proven against a real `kind` cluster — see [§8 Entry 2](#entry-2--kind-v0310--k8s-v1300--2026-05-17)). Stage-4 customer enablement still requires the rolled-back-path webhook fixture + ≥4 weeks customer Stage-3 evidence per item 4 above + the bright line in §3.
 3. **The mutating-admission-webhook fixture** lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`. This proves the rolled-back path works end-to-end, not just the validated path. Phase-1c follow-up after initial G3 closure.
 4. **At least one design-partner customer has run Stage 3 in their environment for ≥4 weeks without an unexpected rollback.** This is the empirical floor; no synthetic test substitutes for a real customer cluster's webhook landscape.
 
@@ -380,7 +394,7 @@ The fail-closed property (Stage 1 + execute → refuse with zero kubectl mutatio
 
 - ✅ G1: Math correction recorded — [`wiz-coverage-math-correction-2026-05-16.md`](wiz-coverage-math-correction-2026-05-16.md)
 - ✅ G2: `--mode execute` locked OFF by default
-- ⚠️ G3: `NEXUS_LIVE_K8S=1` lane scaffolded; actual run pending operator
+- ✅ G3: `NEXUS_LIVE_K8S=1` lane closed — Entry 1 (2026-05-16, execute path) + Entry 2 (2026-05-17, v0.1.1 fail-closed default; corrected from broken-spy merge via hotfix `dc1a1d4`)
 - ✅ G4: This record exists
 
 — recorded 2026-05-16 (post-A.1, safety-verification record)

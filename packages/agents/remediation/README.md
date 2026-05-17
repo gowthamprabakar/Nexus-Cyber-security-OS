@@ -133,6 +133,21 @@ Each action class is a `(build, inverse)` pair. The inverse patch is what makes 
 | `rollback_decisions.json`  | JSON list                             | Per-action validate-pass/fail + rollback flag + matched-findings count. Execute mode only.                                            |
 | `audit.jsonl`              | `charter.audit.AuditEntry` JSON-lines | This run's own F.6 hash-chained audit log. **11-action `remediation.*` vocabulary.** Tamper-evident pre/post-patch SHA-256 chain.     |
 
+## Earned-autonomy pipeline (v0.1.1+)
+
+Each action class lives in one of four graduation stages **per customer environment**. The pre-flight stage gate in `agent.run()` reads the action class's stage from `promotion.yaml` (the operator-readable cache; the F.6 audit chain is the source of truth) and refuses any operator-requested mode that exceeds the stage cap:
+
+| Stage | What runs                                   | Required sign-off chain                                                                                                          |
+| ----- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `recommend` (artifact emission, no kubectl) | None (the floor; absent action classes are implicitly Stage 1)                                                                   |
+| 2     | `dry_run` (kubectl --dry-run=server)        | `advance(1→2)`                                                                                                                   |
+| 3     | `execute` (human-approved per-action)       | `advance(1→2)` then `advance(2→3)` (chronological)                                                                               |
+| 4     | `execute` (unattended)                      | **Globally closed in code** pending the rolled-back-path mutating-admission-webhook fixture + ≥4 weeks customer Stage-3 evidence |
+
+Per-finding routing: when one run carries findings spanning multiple stages, each artifact gets its own effective mode (Stage-1 finding → `RECOMMENDED_ONLY`, Stage-2 finding → `DRY_RUN_ONLY`, Stage-3 finding → `EXECUTED_VALIDATED`) in a single audit chain. When **all** authorised artifacts would be downgraded and the operator's requested mode is non-recommend, the gate emits `REFUSED_PROMOTION_GATE` per finding with zero kubectl contact (proven against mocks in [`test_promotion_gate.py`](tests/test_promotion_gate.py) and against a real `kind` cluster in [`test_agent_kind_live.py`](tests/integration/test_agent_kind_live.py) — see safety-verification [§8 Entry 2](../../../docs/_meta/a1-safety-verification-2026-05-16.md#entry-2--kind-v0310--k8s-v1300--2026-05-17)).
+
+Operator surface: the `remediation promotion` CLI subcommand group (`status` / `init` / `advance` / `demote` / `reconcile`). v0.1.1 ships the package + the CLI; the `remediation run` subcommand does not yet wire `--promotion <path>` (v0.1.2 task). Full migration guide for v0.1 operators in [the runbook §14](runbooks/remediation_workflow.md#14-v01--v011-migration); schema reference in [§13](runbooks/remediation_workflow.md#13-promotionyaml-schema-reference-v011). The v0.1.1 verification record (gates, coverage delta, ADR-007 conformance, four-boundary process notes, the permanent `reconcile_matches` limitation) is at [`a1-v0-1-1-verification-2026-05-17.md`](../../../docs/_meta/a1-v0-1-1-verification-2026-05-17.md).
+
 ## Nine safety primitives
 
 A.1's "production action" claim rests on nine layered gates:
@@ -153,16 +168,16 @@ A.1's "production action" claim rests on nine layered gates:
 uv run pytest packages/agents/remediation -q
 ```
 
-275 tests; mypy strict clean. **10/10 eval acceptance gate** via the eval-framework entry-point:
+~445 tests (v0.1.1, +174 from v0.1); mypy strict clean. **15/15 eval acceptance gate** via the eval-framework entry-point:
 
 ```bash
 uv run eval-framework run --runner remediation \
     --cases packages/agents/remediation/eval/cases \
     --output /tmp/a1-eval-out.json
-# → 10/10 passed (100.0%)
+# → 15/15 passed (100.0%)
 ```
 
-The 10 eval cases cover: clean (empty), recommend / dry-run / execute-validated / execute-rolled-back single-action paths, unauthorized-action refusal, unauthorized-mode refusal (raises `AuthorizationError`), blast-radius cap, multi-finding batch (3 same-class), and mixed-action-classes (3 different classes, all authorized).
+The 15 eval cases cover the v0.1 surface (10 cases — clean, recommend / dry-run / execute-validated / execute-rolled-back single-action paths, unauthorized-action refusal, unauthorized-mode refusal, blast-radius cap, multi-finding batch, mixed-action-classes) plus the v0.1.1 earned-autonomy surface (5 cases — Stage-1-blocked dry_run, Stage-2-blocked execute, mixed-per-finding Stage 1/2/3 routing, advance-proposed evidence threshold, reconcile-round-trip chain replay). The runner parses `fixture.promotion` and plumbs into `agent.run(promotion=...)` so the pre-flight gate is ACTIVE on every case — no skip-lists, no filters.
 
 ## License
 
