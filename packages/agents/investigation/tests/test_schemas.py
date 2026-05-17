@@ -36,6 +36,7 @@ Cross-agent OCSF inventory after D.7:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -48,6 +49,7 @@ from investigation.schemas import (
     OCSF_VERSION,
     Hypothesis,
     IncidentReport,
+    InvestigationLifecycleEvent,
     IocItem,
     IocType,
     MitreTechnique,
@@ -333,8 +335,304 @@ def test_module_all_exports_models_plus_constants() -> None:
         "Timeline",
         "TimelineEvent",
         "IncidentReport",
+        "InvestigationLifecycleEvent",
+        "LifecycleEventType",
         "OCSF_CLASS_UID",
         "OCSF_CLASS_NAME",
         "OCSF_VERSION",
     }
     assert expected <= set(schemas.__all__)
+
+
+# ---------------------------- InvestigationLifecycleEvent (F.7 v0.2 Task 1) ----------------------------
+
+# Two canonical 26-char ULID-shaped values; the schema validates length but
+# does NOT crockford-decode, so any 26-char string works for shape tests.
+_INV_ID = "01JV0000000000000000INVID0"
+_TENANT_ID = "01JV0000000000000000TENANT"
+_CID = "01JV0000000000000000CID000"
+
+
+def _fixed_emitted_at() -> datetime:
+    """Stable datetime so deterministic-bytes tests can compare across runs."""
+    return datetime(2026, 5, 17, 12, 34, 56, tzinfo=UTC)
+
+
+def test_lifecycle_event_started_constructs_with_no_failure_fields() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    assert e.event_type == "started"
+    assert e.stage is None
+    assert e.error_class is None
+
+
+def test_lifecycle_event_completed_constructs_with_no_failure_fields() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="completed",
+        emitted_at=_fixed_emitted_at(),
+    )
+    assert e.event_type == "completed"
+    assert e.stage is None
+    assert e.error_class is None
+
+
+def test_lifecycle_event_failed_requires_stage_and_error_class() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="failed",
+        stage="synthesize",
+        error_class="charter.budget.BudgetExhausted",
+        emitted_at=_fixed_emitted_at(),
+    )
+    assert e.event_type == "failed"
+    assert e.stage == "synthesize"
+    assert e.error_class == "charter.budget.BudgetExhausted"
+
+
+@pytest.mark.parametrize(
+    "missing_field,kwargs",
+    [
+        ("stage", {"error_class": "X"}),
+        ("error_class", {"stage": "scope"}),
+        ("both", {}),
+    ],
+    ids=["missing-stage", "missing-error_class", "missing-both"],
+)
+def test_lifecycle_event_failed_rejects_missing_stage_or_error_class(
+    missing_field: str, kwargs: dict
+) -> None:
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type="failed",
+            emitted_at=_fixed_emitted_at(),
+            **kwargs,
+        )
+
+
+def test_lifecycle_event_failed_rejects_empty_stage() -> None:
+    """Empty string is not a valid stage for a failed event — the
+    schema treats empty as missing per Q1's intent."""
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type="failed",
+            stage="",
+            error_class="X",
+            emitted_at=_fixed_emitted_at(),
+        )
+
+
+def test_lifecycle_event_failed_rejects_empty_error_class() -> None:
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type="failed",
+            stage="scope",
+            error_class="",
+            emitted_at=_fixed_emitted_at(),
+        )
+
+
+@pytest.mark.parametrize("event_type", ["started", "completed"])
+def test_lifecycle_event_success_paths_reject_stage_field(event_type: str) -> None:
+    """Failure-only fields must not leak onto success paths."""
+    with pytest.raises(ValidationError, match="must NOT set stage"):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type=event_type,
+            stage="scope",
+            emitted_at=_fixed_emitted_at(),
+        )
+
+
+@pytest.mark.parametrize("event_type", ["started", "completed"])
+def test_lifecycle_event_success_paths_reject_error_class_field(event_type: str) -> None:
+    with pytest.raises(ValidationError, match="must NOT set error_class"):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type=event_type,
+            error_class="X",
+            emitted_at=_fixed_emitted_at(),
+        )
+
+
+def test_lifecycle_event_rejects_unknown_event_type() -> None:
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type="cancelled",  # type: ignore[arg-type]
+            emitted_at=_fixed_emitted_at(),
+        )
+
+
+@pytest.mark.parametrize(
+    "field,bad_value",
+    [
+        ("investigation_id", "too-short"),
+        ("tenant_id", "too-short"),
+        ("correlation_id", ""),
+        ("correlation_id", "x" * 33),
+    ],
+    ids=["inv-short", "tenant-short", "cid-empty", "cid-too-long"],
+)
+def test_lifecycle_event_field_length_constraints(field: str, bad_value: str) -> None:
+    kwargs = {
+        "investigation_id": _INV_ID,
+        "tenant_id": _TENANT_ID,
+        "correlation_id": _CID,
+        "event_type": "started",
+        "emitted_at": _fixed_emitted_at(),
+    }
+    kwargs[field] = bad_value
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(**kwargs)
+
+
+def test_lifecycle_event_is_frozen() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    with pytest.raises(ValidationError):
+        e.event_type = "completed"  # type: ignore[misc]
+
+
+def test_lifecycle_event_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        InvestigationLifecycleEvent(
+            investigation_id=_INV_ID,
+            tenant_id=_TENANT_ID,
+            correlation_id=_CID,
+            event_type="started",
+            emitted_at=_fixed_emitted_at(),
+            unknown_field="x",  # type: ignore[call-arg]
+        )
+
+
+def test_lifecycle_event_to_payload_bytes_is_deterministic() -> None:
+    """Two events with identical fields produce byte-identical payloads.
+
+    Load-bearing for any future replay/dedup discipline. Matches F.7 v0.1's
+    publish_finding() encoding contract (sort_keys=True + compact separators).
+    """
+    a = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    b = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    assert a.to_payload_bytes() == b.to_payload_bytes()
+
+
+def test_lifecycle_event_to_payload_bytes_uses_sorted_keys() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    raw = e.to_payload_bytes().decode("utf-8")
+    # Sort-keys guarantees alphabetical top-level key ordering; consumers
+    # downstream rely on this for stable replay-and-dedup discipline.
+    assert raw.index('"correlation_id"') < raw.index('"emitted_at"')
+    assert raw.index('"emitted_at"') < raw.index('"event_type"')
+    assert raw.index('"event_type"') < raw.index('"investigation_id"')
+    assert raw.index('"investigation_id"') < raw.index('"tenant_id"')
+
+
+def test_lifecycle_event_to_payload_bytes_omits_none_fields_on_success_path() -> None:
+    """Success-path events (started / completed) MUST NOT carry empty
+    stage / error_class keys in the wire payload. exclude_none=True in
+    the serializer guarantees this."""
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="completed",
+        emitted_at=_fixed_emitted_at(),
+    )
+    decoded = json.loads(e.to_payload_bytes())
+    assert "stage" not in decoded
+    assert "error_class" not in decoded
+
+
+def test_lifecycle_event_to_payload_bytes_includes_failure_fields_on_failed() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="failed",
+        stage="synthesize",
+        error_class="charter.budget.BudgetExhausted",
+        emitted_at=_fixed_emitted_at(),
+    )
+    decoded = json.loads(e.to_payload_bytes())
+    assert decoded["stage"] == "synthesize"
+    assert decoded["error_class"] == "charter.budget.BudgetExhausted"
+
+
+def test_lifecycle_event_to_payload_bytes_encodes_datetime_as_iso_8601() -> None:
+    e = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="started",
+        emitted_at=_fixed_emitted_at(),
+    )
+    decoded = json.loads(e.to_payload_bytes())
+    # 2026-05-17T12:34:56Z (or +00:00); pydantic emits the +00:00 form.
+    assert decoded["emitted_at"].startswith("2026-05-17T12:34:56")
+
+
+def test_lifecycle_event_round_trips_through_model_validate_json() -> None:
+    """A payload encoded by to_payload_bytes() must parse cleanly via
+    pydantic's model_validate_json — proves the schema can act as both
+    producer and consumer in the future v0.x consumer-side migration.
+    """
+    original = InvestigationLifecycleEvent(
+        investigation_id=_INV_ID,
+        tenant_id=_TENANT_ID,
+        correlation_id=_CID,
+        event_type="failed",
+        stage="validate",
+        error_class="RuntimeError",
+        emitted_at=_fixed_emitted_at(),
+    )
+    payload = original.to_payload_bytes()
+    restored = InvestigationLifecycleEvent.model_validate_json(payload)
+    assert restored == original

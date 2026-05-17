@@ -35,10 +35,11 @@ Six pydantic models — all `frozen=True`, `extra="forbid"`, JSON-round-tripping
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -240,6 +241,76 @@ class IncidentReport(BaseModel):
         }
 
 
+LifecycleEventType = Literal["started", "completed", "failed"]
+"""Closed set of D.7 lifecycle events that may publish to events.> per F.7 v0.2 Q1.
+
+Bounded volume by design — three event types per investigation:
+- `"started"`: emitted at Stage-1 SCOPE entry.
+- `"completed"`: emitted at Stage-6 HANDOFF success.
+- `"failed"`: emitted at any stage failure that aborts the pipeline.
+Other stage transitions stay internal (stdout/logs only).
+"""
+
+
+class InvestigationLifecycleEvent(BaseModel):
+    """One D.7 lifecycle event published to `events.>` (F.7 v0.2 Task 1).
+
+    Schema-only. No I/O. The wire-format helpers (`bus_emit.py`) land in
+    Task 3 and consume this shape via `to_payload_bytes()`.
+
+    Field invariants (enforced via `model_validator(mode="after")`):
+    - `event_type == "failed"` => `stage` and `error_class` are required
+      (both non-None, non-empty).
+    - `event_type in {"started", "completed"}` => `stage` and
+      `error_class` MUST be `None` (no leakage of failure-only fields
+      onto success paths).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    investigation_id: str = Field(min_length=_ULID_LEN, max_length=_ULID_LEN)
+    tenant_id: str = Field(min_length=_ULID_LEN, max_length=_ULID_LEN)
+    correlation_id: str = Field(min_length=1, max_length=32)
+    event_type: LifecycleEventType
+    stage: str | None = Field(default=None, max_length=64)
+    error_class: str | None = Field(default=None, max_length=128)
+    emitted_at: datetime
+
+    @model_validator(mode="after")
+    def _check_event_type_invariants(self) -> InvestigationLifecycleEvent:
+        if self.event_type == "failed":
+            if not self.stage:
+                raise ValueError("event_type='failed' requires a non-empty stage")
+            if not self.error_class:
+                raise ValueError("event_type='failed' requires a non-empty error_class")
+        else:
+            if self.stage is not None:
+                raise ValueError(
+                    f"event_type={self.event_type!r} must NOT set stage; "
+                    "stage is reserved for event_type='failed'"
+                )
+            if self.error_class is not None:
+                raise ValueError(
+                    f"event_type={self.event_type!r} must NOT set error_class; "
+                    "error_class is reserved for event_type='failed'"
+                )
+        return self
+
+    def to_payload_bytes(self) -> bytes:
+        """Encode as deterministic JSON bytes for `events.>` publish.
+
+        Matches F.7 v0.1's `publish_finding()` encoding contract:
+        `sort_keys=True` + `separators=(",", ":")` so two equivalent
+        events produce byte-identical payloads (load-bearing for
+        replay-and-dedup discipline once that lands in v0.x).
+        Datetime fields serialize to ISO 8601 strings via pydantic's
+        `mode="json"`; `None` fields are omitted via `exclude_none=True`
+        so success-path payloads don't carry empty stage/error_class keys.
+        """
+        rendered = self.model_dump(mode="json", exclude_none=True)
+        return json.dumps(rendered, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
 __all__ = [
     "OCSF_ACTIVITY_INCIDENT_CREATE",
     "OCSF_CATEGORY_NAME",
@@ -249,8 +320,10 @@ __all__ = [
     "OCSF_VERSION",
     "Hypothesis",
     "IncidentReport",
+    "InvestigationLifecycleEvent",
     "IocItem",
     "IocType",
+    "LifecycleEventType",
     "MitreTechnique",
     "Timeline",
     "TimelineEvent",
