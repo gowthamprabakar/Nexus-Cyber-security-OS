@@ -151,3 +151,309 @@ def test_triage_emits_concise_summary(tmp_path: Path) -> None:
     # Triage prints a one-screen summary — confidence + hypothesis count.
     assert "Triage summary" in result.output
     assert "confidence" in result.output.lower()
+
+
+# ---------------------------- --publish-events-to-bus flag (F.7 v0.2 Task 2) ----------------------------
+
+# v0.2 Task 2 wires `--publish-events-to-bus` and `NEXUS_FABRIC_PUBLISH=1`
+# from the CLI through to agent.run()'s `publish_events_to_bus` kwarg.
+# No publish behaviour is added in v0.2 Task 2 — Task 3 lands the bus_emit
+# module + the agent-driver branching. These tests prove the wire-through
+# is correct + the off-by-default + env-fallback + CLI-wins-over-env
+# precedence per the plan's Q3.
+
+
+def test_resolve_publish_flag_default_off_when_neither_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from investigation.cli import _resolve_publish_flag
+
+    monkeypatch.delenv("NEXUS_FABRIC_PUBLISH", raising=False)
+    assert _resolve_publish_flag(None) is False
+
+
+@pytest.mark.parametrize("truthy", ["1", "true", "TRUE", "True", "yes", "YES", "Yes"])
+def test_resolve_publish_flag_env_truthy_values_yield_true(
+    monkeypatch: pytest.MonkeyPatch, truthy: str
+) -> None:
+    from investigation.cli import _resolve_publish_flag
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", truthy)
+    assert _resolve_publish_flag(None) is True
+
+
+@pytest.mark.parametrize("falsy", ["0", "false", "FALSE", "no", "NO", "", "anything-else"])
+def test_resolve_publish_flag_env_falsy_values_yield_false(
+    monkeypatch: pytest.MonkeyPatch, falsy: str
+) -> None:
+    from investigation.cli import _resolve_publish_flag
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", falsy)
+    assert _resolve_publish_flag(None) is False
+
+
+def test_resolve_publish_flag_cli_true_overrides_env_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI explicit True wins even when env says false."""
+    from investigation.cli import _resolve_publish_flag
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", "0")
+    assert _resolve_publish_flag(True) is True
+
+
+def test_resolve_publish_flag_cli_false_overrides_env_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI explicit False (--no-publish-events-to-bus) wins even when env says true.
+
+    Load-bearing for the rollback path: an operator who sets the env var
+    globally can still disable the flag for a specific invocation by
+    passing --no-publish-events-to-bus.
+    """
+    from investigation.cli import _resolve_publish_flag
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", "1")
+    assert _resolve_publish_flag(False) is False
+
+
+def test_run_flag_off_by_default_when_no_cli_flag_and_no_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Default behaviour is preserved: no CLI flag + no env → False reaches agent.run()."""
+    import investigation.cli as cli_mod
+
+    monkeypatch.delenv("NEXUS_FABRIC_PUBLISH", raising=False)
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        # Return a minimal IncidentReport so the print stage doesn't crash.
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(main, ["run", "--contract", str(_contract_yaml(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is False
+
+
+def test_run_flag_on_via_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import investigation.cli as cli_mod
+
+    monkeypatch.delenv("NEXUS_FABRIC_PUBLISH", raising=False)
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(_contract_yaml(tmp_path)), "--publish-events-to-bus"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is True
+
+
+def test_run_flag_on_via_env_var(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Env var alone (no CLI flag) flips the flag on."""
+    import investigation.cli as cli_mod
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", "1")
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(main, ["run", "--contract", str(_contract_yaml(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is True
+
+
+def test_run_cli_no_flag_overrides_env_true(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """CLI --no-publish-events-to-bus disables the bus publish even when env says enable.
+
+    End-to-end version of test_resolve_publish_flag_cli_false_overrides_env_true.
+    """
+    import investigation.cli as cli_mod
+
+    monkeypatch.setenv("NEXUS_FABRIC_PUBLISH", "1")
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(_contract_yaml(tmp_path)), "--no-publish-events-to-bus"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is False
+
+
+def test_triage_flag_off_by_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import investigation.cli as cli_mod
+
+    monkeypatch.delenv("NEXUS_FABRIC_PUBLISH", raising=False)
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(main, ["triage", "--contract", str(_contract_yaml(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is False
+
+
+def test_triage_flag_on_via_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import investigation.cli as cli_mod
+
+    monkeypatch.delenv("NEXUS_FABRIC_PUBLISH", raising=False)
+    captured: dict[str, object] = {}
+
+    async def fake_agent_run(*args: object, **kwargs: object) -> object:
+        captured["publish_events_to_bus"] = kwargs.get("publish_events_to_bus")
+        from datetime import UTC, datetime
+
+        from investigation.schemas import IncidentReport, Timeline
+
+        return IncidentReport(
+            incident_id="01J7M3X9Z1K8RPVQNH2T8DBHF0",
+            tenant_id=_TENANT_A,
+            correlation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+            timeline=Timeline(events=()),
+            hypotheses=(),
+            iocs=(),
+            mitre_techniques=(),
+            containment_summary="",
+            confidence=0.0,
+            emitted_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(cli_mod, "agent_run", fake_agent_run)
+
+    result = CliRunner().invoke(
+        main,
+        ["triage", "--contract", str(_contract_yaml(tmp_path)), "--publish-events-to-bus"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["publish_events_to_bus"] is True
+
+
+def test_run_help_describes_publish_events_flag() -> None:
+    result = CliRunner().invoke(main, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--publish-events-to-bus" in result.output
+    assert "--no-publish-events-to-bus" in result.output
+    assert "NEXUS_FABRIC_PUBLISH" in result.output
+
+
+def test_triage_help_describes_publish_events_flag() -> None:
+    result = CliRunner().invoke(main, ["triage", "--help"])
+    assert result.exit_code == 0
+    assert "--publish-events-to-bus" in result.output
+    assert "--no-publish-events-to-bus" in result.output
+
+
+def test_agent_run_accepts_publish_events_to_bus_kwarg() -> None:
+    """The kwarg flows all the way to agent.run() and is accepted without
+    error. v0.2 Task 2 does NOT yet branch on the kwarg — Task 3 does.
+    This test pins the signature so a future refactor cannot remove the
+    parameter without breaking Task 3's contract."""
+    import inspect
+
+    from investigation.agent import run as agent_run_fn
+
+    sig = inspect.signature(agent_run_fn)
+    assert "publish_events_to_bus" in sig.parameters
+    assert sig.parameters["publish_events_to_bus"].default is False

@@ -114,12 +114,24 @@ async def run(
     sibling_workspaces: Sequence[Path] = (),
     since: datetime | None = None,
     until: datetime | None = None,
+    publish_events_to_bus: bool = False,
 ) -> IncidentReport:
     """Run the 6-stage Orchestrator-Workers pipeline end-to-end.
 
     Returns an `IncidentReport` and writes the 4 artifacts to the
     charter workspace.
+
+    `publish_events_to_bus` (F.7 v0.2 Task 2 wiring): kwarg accepted
+    for forward-compatibility; the agent driver does NOT yet branch on
+    it. Task 3 lands the `bus_emit` module and invokes it at Stage-1
+    entry + Stage-6 exit when this flag is True. v0.2 Task 2 only
+    wires the flag from CLI → `_drive()` → here so the wire-through
+    can be tested end-to-end before any side-effect is introduced.
     """
+    # Explicit no-op consumption to satisfy linters that flag unused
+    # kwargs. Task 3 removes this line and replaces it with the actual
+    # bus_emit invocations conditional on this flag.
+    _ = publish_events_to_bus
     registry = build_registry()
 
     with Charter(contract, tools=registry) as ctx:
