@@ -1,0 +1,204 @@
+# F.7 v0.1 — Fabric runtime (NATS JetStream live)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Pause for review after each numbered task.
+
+**Goal.** Land the bus runtime that [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) has specified since 2026-05-09 but that ten subsequent agents have routed around via filesystem reads / in-process function calls. F.7 v0.1 turns ADR-004 from a sketch into a substrate: NATS JetStream live, the 5 ADR-004 streams declared with the right retention/ordering, an async client in `packages/shared/src/shared/fabric/client.py`, `correlation_id` enforced as a bus property at publish time, and a `NEXUS_LIVE_NATS=1` integration lane gated like the kind / localstack lanes already established.
+
+**Hard scope boundary** (stated up-front because the original A.1 three-tiers-into-one collapse is the cautionary tale this plan is written against):
+
+**F.7 v0.1 = bus runtime live. NO retroactive migration of existing agents' filesystem handoffs.** D.7 migration onto `events.>` is **v0.2, a separate plan**. The Cloud-Posture / D.5 / D.6 finding handoffs migrating onto `findings.>` is **v0.3+, separate plans**. Edge plane leaf-node ↔ control-plane connection is **E.1 + E.2 scope, separate plans**.
+
+Collapsing "land the substrate" and "migrate ten agents onto it" into one plan would repeat the exact failure mode safety-verification §1 names as the reason the A.1 cure quadrant got reframed. Don't. v0.1 lands the substrate; v0.2+ migrates one consumer at a time, each with its own plan and its own ADR-010 eligibility test (since each migration is a within-agent version extension of the agent being migrated).
+
+## Strategic context
+
+After A.1 v0.1.2 closed (PR #13), the next-plan decision was platform-line: not "more remediation surface" but "the next piece that the most other pieces can stand on." [The directional re-read](../../_meta/a1-v0-1-1-verification-2026-05-17.md#whats-still-pending-v012-named-so-the-next-plan-inherits-it) named F.7 as the only candidate that is infrastructure rather than a domain extension. F.7 v0.1's success criterion is **not** "moves Wiz coverage by X percentage points" — it doesn't move Wiz coverage at all. It is "after this lands, the supervisor primitive can be built soundly; A.4 Meta-Harness can subscribe to `audit.>`; D.7 v0.2 graph queries can subscribe to `findings.>`; S.1 Console can subscribe to `events.>` for real-time activity; E.1 edge plane has a central-side endpoint to leaf-node into." Each of those plans gets shorter and stronger because F.7 v0.1 is underneath.
+
+The platform-line decision is recorded in the directional re-read; this plan executes against that decision.
+
+## ADR-010 eligibility test — executed result (adapted for initial version)
+
+[ADR-010](../../_meta/decisions/ADR-010-version-extension-template.md)'s six-condition eligibility test is defined for **within-agent version extensions**. F.7 v0.1 is an **initial version of a new substrate component**, not a vN→vN+1 extension. Running the test honestly:
+
+| #   | Condition                                         | Result                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Same package directory as the prior version       | **N/A.** No prior F.7 version exists. F.7 v0.1 introduces `packages/shared/src/shared/fabric/client.py` as the first NATS-touching code; the surrounding fabric directory (`correlation.py`, `envelope.py`, `subjects.py`) is pre-existing substrate that was never wired to a broker. |
+| 2   | Additive surface — no rename / remove / repurpose | **Trivially satisfied.** No prior public API on F.7 to rename / remove. The existing `shared.fabric.subjects.build_*_subject()` helpers and `shared.fabric.envelope.NexusEnvelope` are unchanged — F.7 v0.1 consumes them, does not modify them.                                       |
+| 3   | OCSF `class_uid` unchanged                        | **N/A.** F.7 is the transport layer; it doesn't produce findings. The OCSF v1.3 envelope helpers in `shared.fabric.envelope` are unchanged.                                                                                                                                            |
+| 4   | F.6 audit-chain action vocabulary additive only   | **N/A in v0.1.** F.7 v0.1 carries the `audit.>` stream as one of the 5 buses but does not migrate any agent's audit-chain emission onto it yet — that migration is v0.2+. No `audit.*` action vocabulary changes.                                                                      |
+| 5   | CLI subcommand surface unchanged                  | **N/A.** F.7 is library code in `packages/shared/`. No agent CLI is touched.                                                                                                                                                                                                           |
+| 6   | Python public API params unchanged                | **N/A.** No prior public API. F.7 v0.1 defines a new one (the async `JetStreamClient` in `client.py`); subsequent F.7 versions WILL be eligible under ADR-010 with this v0.1 as the baseline.                                                                                          |
+
+**Result: ADR-010's eligibility test does not meaningfully apply to F.7 v0.1.** This is the eligibility-test outcome ADR-010 anticipated (its §"When this template stops applying" item 1 names "initial version of a new component" implicitly via the "no prior version's contracts" precondition).
+
+**What shape F.7 v0.1 follows instead.** [ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md) is the design contract — F.7 v0.1 implements its 5-bus decision verbatim. The substrate-implementation pattern that F.1 (charter), F.5 (memory engines), F.6 (audit log) shipped under is the operational template: a Python module in `packages/shared/` or `packages/charter/`, integration-tested against a real backing service via a `NEXUS_LIVE_*=1` env-gated lane, documented in a runbook addendum, callable from agent code without surface conventions beyond the existing ADR-007 reference NLAH.
+
+**F.7 v0.2 and later WILL use the ADR-010 template.** v0.2 (D.7 migration) is a within-D.7 version extension that happens to consume F.7; v0.3+ similarly. v0.1 → v0.2 of F.7 itself (e.g., adding KMS-signed `audit.>` messages or tenant ACL enforcement) would also be an ADR-010-eligible extension. v0.1 alone is the initial-version carve-out the eligibility test correctly flags as N/A.
+
+## Scope
+
+**In v0.1 (load-bearing):**
+
+1. NATS JetStream as a development dependency. Added to `docker/docker-compose.dev.yml` as a single service with a persistent volume, health-checked. Single-node — clustering is a production-deployment concern (E.x track), not a v0.1 dev concern.
+2. `packages/shared/src/shared/fabric/streams.py` — declarative `StreamSpec` dataclass per ADR-004's retention + ordering policy. 5 `StreamSpec` instances for `events.>` / `findings.>` / `commands.>` / `approvals.>` / `audit.>`.
+3. `packages/shared/src/shared/fabric/client.py` — async `JetStreamClient` class wrapping `nats-py`'s JetStream API. Methods: `connect()`, `ensure_streams()` (idempotent — checks if streams exist, creates them with the configured spec if not), `publish(stream, subject, message_bytes, *, correlation_id)`, `subscribe(stream, subject_filter, callback)` (returns a subscription handle).
+4. **`correlation_id` as a bus property.** `publish()` requires `correlation_id` (positional or kwarg); raises `ValueError` if absent. The client also reads the contextvar from `shared.fabric.correlation.current_correlation_id()` and uses it as the default when a `correlation_id` isn't passed explicitly — but only if the contextvar is set; otherwise refuses to publish. The contract is "every message on the bus carries a correlation_id," and the bus boundary enforces it.
+5. Unit tests for the client using `nats-py`'s test doubles / a mocking layer.
+6. Integration test against a live local NATS, gated by `NEXUS_LIVE_NATS=1` env var (mirrors the `NEXUS_LIVE_K8S=1` / `NEXUS_LIVE_LOCALSTACK=1` / `NEXUS_LIVE_POSTGRES=1` patterns already established). Round-trip test: connect → ensure_streams → publish → subscribe → receive → assert.
+7. Runbook addendum at `docs/runbooks/fabric.md` (new) covering: how to start NATS locally; how the client is used from agent code (synthetic example only — no agent uses it in v0.1); what's deferred to v0.2+.
+8. Companion verification record `docs/_meta/f-7-v0-1-verification-YYYY-MM-DD.md` following the F.1 / F.5 / F.6 substrate-record shape (gates + per-task surface + ADR-004 conformance + integration-lane proof).
+
+**Deferred to F.7 v0.2 (separate plan):**
+
+- **D.7 Investigation Agent migration onto `events.>`** — the first agent to subscribe to the bus end-to-end. v0.2's scope is the migration of D.7's currently-in-process event routing onto JetStream + per-stream subscription, treated as a within-D.7 version extension under ADR-010.
+
+**Deferred to F.7 v0.3+ (separate plans):**
+
+- Cloud-Posture / D.5 / D.6 finding handoffs onto `findings.>` — each agent's migration is its own within-agent version extension.
+- A.1 audit-chain emission onto `audit.>` — within-A.1 version extension; produces signed `audit.>` messages instead of (or in addition to) per-run `audit.jsonl`.
+- A.1 ChatOps approval flow on `approvals.>` — would land alongside S.3 ChatOps.
+
+**Deferred to F.7 v0.x (further out, not next-up):**
+
+- KMS-signed `audit.>` messages (the signing scheme is named in ADR-004 but not implemented in v0.1).
+- Tenant ACL enforcement via NATS auth tokens (subject-scoping at the builder level is already done in `subjects.py`; ACL enforcement at the broker level is hardening).
+- Protobuf schemas for `events.>` / `commands.>` / `approvals.>` (the OCSF envelope for `findings.>` is the only fully-specified wire format today; the other 4 streams' schemas land when their first consumer's plan defines what messages it sends).
+- Replay / dedup / backpressure tuning beyond NATS JetStream defaults.
+
+**Deferred to E.1 + E.2 (separate plans, edge plane track):**
+
+- Leaf-node outbound mTLS connection edge ↔ control.
+- Air-gap leaf-disconnected operation + signed-bundle export.
+
+## Strategic role
+
+F.7 v0.1 is the substrate that ten agents have routed around. After it lands:
+
+- **Supervisor / delegation primitive** (currently deferred Phase-1c-late because the runtime substrate didn't exist) can be built. Fan-out from one supervisor to N sub-agents routes through `events.>` rather than in-process function calls.
+- **A.4 Meta-Harness** (self-evolving agent quality via trace aggregation) can subscribe to `audit.>` and `events.>`. Today A.4 would have to read filesystem snapshots from each agent's workspace; F.7 v0.1 lays the aggregation pipe.
+- **D.7 v0.2 cross-incident graph queries** ("toxic combinations" — flagged in the [post-A.1 readiness §9](../../_meta/system-readiness-2026-05-16-post-a1.md#9-what-wiz-does-that-we-dont--refreshed-last-mile-gap-list)) can correlate findings across agents because findings flow through one bus.
+- **S.1 Console real-time activity feed** can subscribe to `events.>` instead of polling per-agent filesystem state.
+- **E.1 edge plane** has a central-side endpoint to leaf-node into. Edge plane built without F.7 means inventing a second transport layer.
+- **F.6 audit-chain end-to-end correlation by `correlation_id`** is bus-enforced (the publish boundary refuses messages without one) rather than per-agent disciplined.
+
+None of those happen in v0.1. They each get their own plan. v0.1's role is to make those plans short and sound by putting the transport substrate underneath them.
+
+## Resolved questions
+
+| #   | Question                                                                                                        | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                            | Task   |
+| --- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Q1  | Which NATS client library — `nats-py` or `nats.aio`?                                                            | `nats-py` (the official Python client; pulls in `nats.aio` for async). One async client; matches the `asyncio` discipline F.1 / F.5 / F.6 already use. ADR-005 names async as the convention; no carve-out needed.                                                                                                                                                                                                                    | Task 3 |
+| Q2  | Stream creation — operator-managed (out-of-band) or agent-managed (idempotent on connect)?                      | **Agent-managed, idempotent on connect** via `ensure_streams()`. The client checks each declared stream against NATS's `stream_info()` API; missing streams are created with the configured spec. Existing streams whose retention / ordering / subject pattern doesn't match the declared spec produce a `StreamSpecMismatchError` (surfaced loudly; operators must reconcile manually rather than the client silently overwriting). | Task 3 |
+| Q3  | `correlation_id` enforcement — at the publish boundary, or as a wire-format requirement enforced by a consumer? | **At the publish boundary.** `JetStreamClient.publish()` raises `ValueError` if `correlation_id` is None AND `shared.fabric.correlation.current_correlation_id()` returns None. This makes "every message on the bus has a correlation_id" a property the bus enforces, not a discipline each producer must observe. Aligns with ADR-004's "Mandatory cross-cutting" framing.                                                         | Task 4 |
+| Q4  | Integration test gate — `NEXUS_LIVE_NATS=1` or `NEXUS_LIVE_FABRIC=1`?                                           | `NEXUS_LIVE_NATS=1` for v0.1. The env var names the underlying technology (NATS JetStream) rather than the abstraction (fabric), mirroring `NEXUS_LIVE_K8S=1` (kind), `NEXUS_LIVE_LOCALSTACK=1` (AWS LocalStack), `NEXUS_LIVE_POSTGRES=1` (postgres). When F.7 v0.2 migrates D.7, that migration's tests use the same env var; the abstraction layer is `shared.fabric`, the live dependency is NATS.                                 | Task 6 |
+| Q5  | Should v0.1 enforce wire-format schemas on any of the 5 streams?                                                | **OCSF v1.3 envelope on `findings.>` only.** The envelope helpers in `shared.fabric.envelope` already exist; v0.1 documents that `findings.>` publishes go through `NexusEnvelope.wrap(ocsf_event)` and exposes a typed `publish_finding()` helper that the future migration plans will consume. The other 4 streams accept arbitrary `bytes`; their first consumer's plan defines the schema.                                        | Task 3 |
+| Q6  | NATS deployment for development — single-node Docker container, or full cluster?                                | **Single-node Docker container** in `docker-compose.dev.yml`. JetStream is enabled (the default in NATS 2.10+); persistent volume; health-checked. Clustering is a production-deployment concern (E.x track), not a v0.1 substrate concern. Operators running v0.1 against a clustered NATS will work as long as the client points at any cluster member; v0.1 doesn't add cluster-aware logic.                                       | Task 1 |
+| Q7  | What happens when no NATS is reachable (no Docker running, wrong port)?                                         | `JetStreamClient.connect()` raises a typed `FabricConnectionError` after a 5-second connect timeout. Caller decides retry / fallback / fail. The client does not silently fall back to in-process delivery or filesystem routing — the connect failure is the operator's signal that the bus isn't reachable, not a behaviour the client compensates for.                                                                             | Task 3 |
+
+## Architecture
+
+**Delta vs the pre-F.7 platform:**
+
+```
+PRE-F.7 (today's main):
+─────────────────────────
+Agent A  ──filesystem──> Agent B
+Agent C  ──in-process──> Agent D
+Agent E  ──workspace───> Agent F's input
+        (no bus; no correlation_id at the transport layer; per-agent state)
+
+POST-F.7-v0.1:
+──────────────
+Agent A ──filesystem──> Agent B    (unchanged; no migrations in v0.1)
+Agent C ──in-process──> Agent D    (unchanged)
+
+NEW SUBSTRATE (live but unused by agents in v0.1):
+┌────────────────────────────────────────────────────────────┐
+│  NATS JetStream (single-node, dev; cluster in production)  │
+│                                                              │
+│  events.>     findings.>     commands.>     approvals.>    │
+│  (7d retn)    (90d hot)      (30d retn)     (365d retn)    │
+│                                                              │
+│  audit.>                                                     │
+│  (7y retn, mirrored upstream, KMS-sign in v0.x)            │
+└────────────────────────────────────────────────────────────┘
+              ▲
+              │ async
+              │
+   ┌──────────┴──────────┐
+   │  JetStreamClient    │  ← packages/shared/src/shared/fabric/client.py
+   │  - connect()         │
+   │  - ensure_streams()  │
+   │  - publish(...,      │
+   │      correlation_id) │
+   │  - subscribe(...)    │
+   └──────────────────────┘
+              │
+   ┌──────────┴──────────────────────────────────────┐
+   │  Used by: NO agent in v0.1                       │
+   │  Smoke / integration tests against live NATS    │
+   │  Future v0.2 D.7; v0.3+ migrations              │
+   └─────────────────────────────────────────────────┘
+```
+
+**Shared substrate cross-references (unchanged from pre-F.7):**
+
+- `packages/shared/src/shared/fabric/correlation.py` — ULID-based contextvar.
+- `packages/shared/src/shared/fabric/envelope.py` — OCSF v1.3 wrapper.
+- `packages/shared/src/shared/fabric/subjects.py` — per-tenant subject builders for the 5 streams.
+
+**New code in v0.1:**
+
+- `packages/shared/src/shared/fabric/streams.py` — `StreamSpec` dataclass + 5 instances (Task 2).
+- `packages/shared/src/shared/fabric/client.py` — `JetStreamClient` async class (Tasks 3 + 4).
+- `packages/shared/tests/test_fabric_client.py` — unit tests with mocked nats-py (Task 5).
+- `packages/shared/tests/integration/test_fabric_client_live.py` — `NEXUS_LIVE_NATS=1`-gated round-trip test (Task 6).
+- `docs/runbooks/fabric.md` — operator-readable runbook (Task 7).
+
+## Execution status
+
+| #   | Status     | Commit | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | ⬜ pending | —      | Add NATS JetStream service to `docker/docker-compose.dev.yml` per Q6 (single-node, JetStream enabled by default in NATS 2.10+, persistent volume, healthcheck via `nats account info` or equivalent). Document the `docker compose -f docker/docker-compose.dev.yml up -d nats` invocation in the runbook addendum's "starting NATS locally" section (Task 7). Single-task scope; no other files modified. **Hash-pin this row after the task lands.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2   | ⬜ pending | —      | `packages/shared/src/shared/fabric/streams.py` — `StreamSpec` frozen dataclass with fields `name`, `subjects` (subject pattern with wildcards), `retention_seconds`, `max_msgs_per_subject`, `discard_policy`. 5 instances corresponding to ADR-004's table verbatim (`events.>` / `findings.>` / `commands.>` / `approvals.>` / `audit.>`). Unit tests asserting each spec's retention/ordering matches ADR-004. **No client code in this task** — pure declarations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 3   | ⬜ pending | —      | `packages/shared/src/shared/fabric/client.py` — `JetStreamClient` class. `__init__(servers: list[str], creds: str \| None = None)`. `async connect() -> None` (Q7: 5-second timeout, raises `FabricConnectionError` on failure). `async ensure_streams() -> None` (Q2: idempotent; raises `StreamSpecMismatchError` if existing stream's config drifts from the declared spec). `async publish(stream: StreamSpec, subject: str, message: bytes, *, correlation_id: str \| None = None) -> nats.js.api.PubAck` (Q3: enforces correlation_id; Q5: arbitrary bytes for non-findings streams; helper `publish_finding(...)` accepts OCSF event dicts and wraps via `NexusEnvelope`). `async subscribe(stream: StreamSpec, subject_filter: str, callback: Callable[[Message], Awaitable[None]]) -> Subscription` (durable push consumer). `async close() -> None`. Typed exceptions (`FabricConnectionError`, `StreamSpecMismatchError`, `MissingCorrelationIdError`). |
+| 4   | ⬜ pending | —      | `correlation_id`-as-bus-property enforcement (Q3). `publish()` precondition: if `correlation_id` is None AND `current_correlation_id()` returns None, raise `MissingCorrelationIdError` BEFORE the network call. When `correlation_id` is None AND the contextvar is set, use the contextvar's value (the agent-side convention; opt-in). Header propagation: the resolved correlation_id is set as a NATS message header `Nexus-Correlation-Id` for consumers to read without unwrapping the OCSF envelope. **Tests assert** (a) explicit kwarg path; (b) contextvar fallback path; (c) refusal when both absent; (d) header round-trip.                                                                                                                                                                                                                                                                                                                          |
+| 5   | ⬜ pending | —      | Unit tests for the client using mocked `nats.aio.client.Client` + `nats.aio.client.JetStream`. ~15–20 tests covering connect happy/timeout/refused paths, ensure_streams happy/already-exists/mismatch paths, publish happy/missing-correlation-id/typed-finding paths, subscribe happy/callback-exception paths. Tests live in `packages/shared/tests/test_fabric_client.py` and run in the default mocked lane.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 6   | ⬜ pending | —      | Integration test `packages/shared/tests/integration/test_fabric_client_live.py` gated by `NEXUS_LIVE_NATS=1` (Q4). Round-trip: `connect()` against `nats://localhost:4222` → `ensure_streams()` → `publish(events_stream, "events.tenant.test.foo", b"hello", correlation_id=<ULID>)` → `subscribe(events_stream, "events.tenant.test.>", callback)` → callback received → assert message body + correlation_id header. Mirrors the `test_agent_kind_live.py` pattern's skip-reason discipline so CI shows the test as SKIPPED with a clear remediation message when the env var isn't set.                                                                                                                                                                                                                                                                                                                                                                        |
+| 7   | ⬜ pending | —      | `docs/runbooks/fabric.md` (new) — operator-readable runbook. Sections: (1) what F.7 v0.1 ships (the bus is live; no agent migrated yet); (2) starting NATS locally (`docker compose up -d nats` + health check); (3) using `JetStreamClient` from agent code (synthetic minimal example); (4) the 5 streams + retention table copied from ADR-004; (5) `correlation_id` as a bus property + how to set the contextvar from agent code; (6) what's deferred to v0.2 (D.7 migration) and v0.3+ (other agent migrations). README banner added to `packages/shared/README.md` (if extant) cross-referencing the runbook.                                                                                                                                                                                                                                                                                                                                               |
+| 8   | ⬜ pending | —      | Companion verification record `docs/_meta/f-7-v0-1-verification-<DATE>.md`. Sections (per the F.1/F.5/F.6 substrate-record shape, **not** ADR-010's within-agent-extension shape — F.7 v0.1 is an initial version): gate-results table; per-task surface citing this plan's execution-status table; ADR-004 conformance check (every clause of ADR-004 either implemented or explicitly deferred to a named v0.x); coverage delta (test count delta + LOC delta); breaking-change note (none expected — F.7 v0.1 has no prior consumers to break); sign-off. Cross-references this plan + ADR-004 + ADR-011 (when accepted).                                                                                                                                                                                                                                                                                                                                       |
+
+## Compatibility contract
+
+F.7 v0.1 has **no prior consumers**. The ADR-010-style "what doesn't change" table doesn't apply (no prior surface to preserve). The forward-looking contract:
+
+- **Existing agents continue to work unchanged.** Filesystem-mediated handoffs (D.6 findings.json → A.1 ingest, etc.) are untouched. v0.1 doesn't read or write the bus from any agent.
+- **The substrate that F.7 v0.1 lands on is stable.** `shared.fabric.correlation`, `shared.fabric.envelope`, `shared.fabric.subjects` are unchanged in v0.1; v0.1 adds `streams.py` and `client.py` alongside them.
+- **`packages/shared/` test count grows by Task 5's unit-test count + Task 6's gated integration test.** Repo-wide pytest behavior is unchanged when `NEXUS_LIVE_NATS=1` is unset (Task 6's test SKIPs with a clear reason); when set, the integration test passes against a live Docker NATS.
+
+This contract becomes the v0.2 starting point. F.7 v0.2 (D.7 migration) WILL run ADR-010's eligibility test — at that point F.7 has a prior version with a public API surface (the `JetStreamClient`), and the eligibility test applies meaningfully.
+
+## Defers
+
+Eight items deferred and named explicitly so future plans inherit them:
+
+| Deferred to                  | Item                                                           | Reason                                                                                                 |
+| ---------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| F.7 v0.2                     | D.7 Investigation migration onto `events.>`                    | First consumer migration. D.7 v0.2 (within-D.7 extension under ADR-010) consumes F.7 v0.1's substrate. |
+| F.7 v0.3+                    | Cloud-Posture / D.5 / D.6 finding handoffs onto `findings.>`   | Each detect agent's migration is its own within-agent version extension.                               |
+| F.7 v0.x                     | KMS-signed `audit.>` messages                                  | Hardening; ADR-004 names it; not load-bearing for v0.1.                                                |
+| F.7 v0.x                     | Tenant ACL enforcement via NATS auth tokens                    | Subject-scoping at builder level already done; broker-level ACL is hardening.                          |
+| F.7 v0.x                     | Protobuf schemas for `events.>` / `commands.>` / `approvals.>` | Wire-format discipline lands when each stream's first consumer defines what messages it sends.         |
+| F.7 v0.x                     | Replay / dedup / backpressure beyond NATS defaults             | Production-tuning; defaults are adequate for v0.1 substrate validation.                                |
+| E.1 + E.2 (edge plane track) | Leaf-node outbound mTLS edge ↔ control                         | Edge track owns this; F.7 v0.1 is single-plane substrate.                                              |
+| E.1 + E.2 (edge plane track) | Air-gap leaf-disconnected operation                            | Same.                                                                                                  |
+
+## Reference template
+
+F.7 v0.1 is an **initial version of a new substrate component**, not a vN→vN+1 extension of an existing agent. It does NOT follow [ADR-010](../../_meta/decisions/ADR-010-version-extension-template.md) (that ADR's eligibility test was executed above and recorded as N/A or trivially satisfied across all six conditions). It follows:
+
+- **[ADR-004](../../_meta/decisions/ADR-004-fabric-layer.md)** — the design contract being implemented. The 5-bus decision, retention policy, ordering, OCSF wire format, and `correlation_id` mandate are verbatim from ADR-004.
+- **The F.1 / F.5 / F.6 substrate-implementation pattern** — Python module in `packages/shared/` or `packages/charter/`, integration-tested against a real backing service via `NEXUS_LIVE_*=1`-gated lane, documented in a runbook, callable from agent code without surface conventions beyond the existing ADR-007 reference NLAH.
+- **[ADR-011](../../_meta/decisions/ADR-011-pr-flow-and-branch-protection-discipline.md)** (proposed alongside this plan) — process discipline for the F.7 PR series. Each task lands as its own PR; SAFETY-CRITICAL tasks (Tasks 3, 4, 6 in particular) carry the verified-against-HEAD sentence; report → review → merge cadence.
+
+F.7 v0.2 onward WILL use ADR-010 — at v0.2 F.7 has a prior version with a public API surface, and the eligibility test applies meaningfully.
