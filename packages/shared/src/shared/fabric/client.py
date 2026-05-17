@@ -13,13 +13,15 @@ Q2 (resolved): `ensure_streams()` is idempotent on connect — checks each
 existing streams whose config drifts from the spec produce a
 `StreamSpecMismatchError` (the client never silently overwrites).
 
-Q3 (Task 3 baseline only): `publish()` requires an explicit
-`correlation_id` kwarg; raises `MissingCorrelationIdError` if `None`.
-F.7 v0.1 Task 4 will relax this to consult
-`shared.fabric.correlation.current_correlation_id()` before raising
-(contextvar fallback) and propagate the resolved correlation_id as a
-NATS message header `Nexus-Correlation-Id`. Task 3 ships the shape;
-Task 4 ships the bus-property contract.
+Q3 (resolved in Task 4): `publish()` resolves the `correlation_id` in
+this order: (1) explicit `correlation_id` kwarg if non-None;
+(2) `shared.fabric.correlation.current_correlation_id()` if the caller
+is inside a `correlation_scope`; (3) raise `MissingCorrelationIdError`
+when both are absent. The resolved value is set on the outbound NATS
+message as a `Nexus-Correlation-Id` header so consumers can read it
+without unwrapping the OCSF envelope. This makes "every message on the
+bus has a correlation_id" a property the bus enforces, not a discipline
+each producer must observe.
 
 Q5 (resolved): The OCSF v1.3 envelope is enforced on `findings.>` only,
 via the typed `publish_finding()` helper. The other four streams accept
@@ -63,11 +65,20 @@ from nats.js.api import (
 )
 from nats.js.errors import NotFoundError as NATSNotFoundError
 
+from shared.fabric.correlation import current_correlation_id
 from shared.fabric.envelope import NexusEnvelope, wrap_ocsf
 from shared.fabric.streams import ALL_STREAMS, FINDINGS_STREAM, StreamSpec
 
 _DEFAULT_CONNECT_TIMEOUT_SECONDS = 5
 """Q7: connect timeout (seconds). nats-py expects an int."""
+
+CORRELATION_ID_HEADER = "Nexus-Correlation-Id"
+"""NATS message header name carrying the resolved correlation_id (per F.7 v0.1 Q3).
+
+Exported so consumers can read it without importing `client.py` private
+state. The header is set on every successful `publish()` call by
+`JetStreamClient`.
+"""
 
 _DISCARD_POLICY_MAP: dict[str, NATSDiscardPolicy] = {
     "old": NATSDiscardPolicy.OLD,
@@ -97,15 +108,18 @@ class StreamSpecMismatchError(RuntimeError):
 
 
 class MissingCorrelationIdError(ValueError):
-    """`publish()` was called without a `correlation_id` kwarg.
+    """`publish()` was called without a resolvable `correlation_id`.
 
-    Task 3 baseline: this fires whenever the explicit kwarg is `None`.
+    F.7 v0.1 Q3 resolution: `publish()` resolves the correlation_id in
+    this order:
+    1. Explicit `correlation_id=` kwarg if non-None.
+    2. `shared.fabric.correlation.current_correlation_id()` if the
+       caller is inside a `correlation_scope`.
+    3. Raises this exception when both are absent.
 
-    Task 4 will relax the precondition to consult
-    `shared.fabric.correlation.current_correlation_id()` before raising,
-    so callers running inside a `correlation_scope` can omit the kwarg.
-    The exception class is shared between both versions; only the
-    precondition logic changes.
+    Recovery: either pass an explicit kwarg, or wrap the publish call
+    in `with correlation_scope(<id>):`. Both satisfy the bus-property
+    contract.
     """
 
 
@@ -239,11 +253,19 @@ class JetStreamClient:
     ) -> PubAck:
         """Publish a raw bytes message to a stream.
 
-        Q3 (Task 3 baseline): `correlation_id` must be supplied as an
-        explicit kwarg; raises `MissingCorrelationIdError` if `None`.
-        Task 4 will relax this to consult the contextvar before raising
-        AND set the resolved id as a `Nexus-Correlation-Id` header on
-        the outbound message.
+        Q3 resolution (correlation_id as bus property):
+        1. If `correlation_id` kwarg is non-None, use it.
+        2. Otherwise consult `current_correlation_id()` (the contextvar
+           set by `shared.fabric.correlation.correlation_scope()`).
+        3. If both are None, raise `MissingCorrelationIdError` BEFORE
+           the network call — every message on the bus is required to
+           carry a correlation_id.
+
+        The resolved correlation_id is set on the outbound NATS message
+        as a `Nexus-Correlation-Id` header so consumers can read it
+        without unwrapping the OCSF envelope or any per-stream payload
+        format. Explicit kwarg takes precedence over the contextvar so
+        callers can override the ambient value when needed.
 
         Q5: `message` is arbitrary bytes for the four non-findings
         streams (`events.>` / `commands.>` / `approvals.>` / `audit.>`).
@@ -255,11 +277,12 @@ class JetStreamClient:
         stream). Cross-stream subject reuse is rejected at the publish
         boundary so a typo can't silently route to the wrong stream.
         """
-        if correlation_id is None:
+        resolved = correlation_id if correlation_id is not None else current_correlation_id()
+        if resolved is None:
             raise MissingCorrelationIdError(
-                "publish() requires an explicit correlation_id kwarg "
-                "(Task 3 baseline; Task 4 will fall back to "
-                "shared.fabric.correlation.current_correlation_id())"
+                "publish() requires either an explicit correlation_id kwarg or an active "
+                "shared.fabric.correlation.correlation_scope(); both were absent. "
+                "Set one before publishing — the bus refuses messages without a correlation_id."
             )
         expected_prefix = stream.name + "."
         if not subject.startswith(expected_prefix):
@@ -268,7 +291,12 @@ class JetStreamClient:
                 f"expected prefix {expected_prefix!r}"
             )
         js = self._require_js()
-        return await js.publish(subject, message, stream=stream.name)
+        return await js.publish(
+            subject,
+            message,
+            stream=stream.name,
+            headers={CORRELATION_ID_HEADER: resolved},
+        )
 
     async def publish_finding(
         self,

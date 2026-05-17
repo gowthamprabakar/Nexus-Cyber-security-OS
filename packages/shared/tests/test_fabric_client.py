@@ -34,11 +34,13 @@ from nats.js.api import StreamConfig
 from nats.js.errors import NotFoundError as NATSNotFoundError
 from pytest_mock import MockerFixture
 from shared.fabric.client import (
+    CORRELATION_ID_HEADER,
     FabricConnectionError,
     JetStreamClient,
     MissingCorrelationIdError,
     StreamSpecMismatchError,
 )
+from shared.fabric.correlation import correlation_scope
 from shared.fabric.envelope import NexusEnvelope
 from shared.fabric.streams import (
     ALL_STREAMS,
@@ -301,24 +303,29 @@ async def test_publish_happy_path(mocker: MockerFixture) -> None:
         "events.tenant.t1.scan_completed",
         b"payload",
         stream="events",
+        headers={CORRELATION_ID_HEADER: "cid-1"},
     )
 
 
 @pytest.mark.asyncio
-async def test_publish_raises_missing_correlation_id_on_none_kwarg(
+async def test_publish_raises_missing_correlation_id_when_both_absent(
     mocker: MockerFixture,
 ) -> None:
-    nc, _ = _make_nats_mock()
+    """Q3 refusal path: kwarg None + no active correlation_scope → raise."""
+    nc, js = _make_nats_mock()
     _patch_nats_connect(mocker, nc_mock=nc)
     client = JetStreamClient(servers=["nats://localhost:4222"])
     await client.connect()
-    with pytest.raises(MissingCorrelationIdError, match="explicit correlation_id"):
+    with pytest.raises(MissingCorrelationIdError, match="bus refuses messages"):
         await client.publish(
             EVENTS_STREAM,
             "events.tenant.t1.foo",
             b"payload",
             correlation_id=None,
         )
+    # The refusal happens BEFORE the network call — the mocked publish was
+    # never awaited.
+    js.publish.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -347,6 +354,141 @@ async def test_publish_before_connect_raises_connection_error() -> None:
             "audit.tenant.t1",
             b"x",
             correlation_id="cid",
+        )
+
+
+# ─── Q3 correlation_id-as-bus-property (Task 4 surface) ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_publish_uses_explicit_kwarg_in_header(mocker: MockerFixture) -> None:
+    """Path (a): explicit kwarg → header carries that exact value."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.publish(
+        AUDIT_STREAM,
+        "audit.tenant.t1",
+        b"x",
+        correlation_id="explicit-cid",
+    )
+    headers = js.publish.await_args.kwargs["headers"]
+    assert headers == {CORRELATION_ID_HEADER: "explicit-cid"}
+
+
+@pytest.mark.asyncio
+async def test_publish_falls_back_to_contextvar_when_kwarg_absent(
+    mocker: MockerFixture,
+) -> None:
+    """Path (b): kwarg None + active correlation_scope → contextvar value used."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    with correlation_scope("ctxvar-cid"):
+        await client.publish(EVENTS_STREAM, "events.tenant.t1.foo", b"x")
+    headers = js.publish.await_args.kwargs["headers"]
+    assert headers == {CORRELATION_ID_HEADER: "ctxvar-cid"}
+
+
+@pytest.mark.asyncio
+async def test_publish_kwarg_takes_precedence_over_contextvar(
+    mocker: MockerFixture,
+) -> None:
+    """Explicit kwarg overrides the ambient contextvar.
+
+    Important for callers that want to publish a message under a
+    different correlation_id than the surrounding scope (e.g.,
+    audit-chain anchor messages that mint their own root).
+    """
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    with correlation_scope("ambient-cid"):
+        await client.publish(
+            EVENTS_STREAM,
+            "events.tenant.t1.foo",
+            b"x",
+            correlation_id="explicit-cid",
+        )
+    headers = js.publish.await_args.kwargs["headers"]
+    assert headers == {CORRELATION_ID_HEADER: "explicit-cid"}
+
+
+@pytest.mark.asyncio
+async def test_publish_header_round_trip_via_mocked_js_publish(
+    mocker: MockerFixture,
+) -> None:
+    """Path (d): the header reaches the wire-level publish call.
+
+    Mocked round-trip — Task 6 (NEXUS_LIVE_NATS=1 against a live
+    broker) is the load-bearing live round-trip. This unit-level
+    assertion proves the header is set on the outbound call; the live
+    test will prove the broker preserves it end-to-end to subscribers.
+    """
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.publish(
+        EVENTS_STREAM,
+        "events.tenant.t1.foo",
+        b"payload",
+        correlation_id="round-trip-cid",
+    )
+    js.publish.assert_awaited_once_with(
+        "events.tenant.t1.foo",
+        b"payload",
+        stream="events",
+        headers={CORRELATION_ID_HEADER: "round-trip-cid"},
+    )
+    # Header constant is exactly the wire-format name ADR-004's
+    # correlation_id contract requires — guard against accidental rename.
+    assert CORRELATION_ID_HEADER == "Nexus-Correlation-Id"
+
+
+@pytest.mark.asyncio
+async def test_publish_finding_propagates_envelope_correlation_id_to_header(
+    mocker: MockerFixture,
+) -> None:
+    """publish_finding() routes the envelope's correlation_id through to
+    the header. A caller who provides only an envelope (no separate
+    kwarg) still ends up with the header set on the outbound message.
+    """
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    envelope = _make_envelope(correlation_id="env-cid-xyz")
+    await client.publish_finding(
+        "findings.tenant.tnt-abc.asset.abc",
+        {"class_uid": 2007},
+        envelope,
+    )
+    headers = js.publish.await_args.kwargs["headers"]
+    assert headers == {CORRELATION_ID_HEADER: "env-cid-xyz"}
+
+
+@pytest.mark.asyncio
+async def test_publish_refusal_happens_before_subject_validation(
+    mocker: MockerFixture,
+) -> None:
+    """The Q3 refusal precondition runs BEFORE subject validation —
+    a caller missing both correlation sources gets the MissingCorrelationIdError,
+    not a misleading subject ValueError, even if the subject is also wrong.
+    """
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    with pytest.raises(MissingCorrelationIdError):
+        await client.publish(
+            EVENTS_STREAM,
+            "wrong.subject.root.foo",  # would also fail subject validation
+            b"x",
+            correlation_id=None,
         )
 
 
