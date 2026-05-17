@@ -39,6 +39,8 @@
 
 **Verdict.** Today shipped **D.6 v0.3 + A.1 v0.1** plus the **four-gate safety review** that the implementation-completeness record sidestepped. The headline is A.1's **platform-capability**: the agent collapses what was originally three sequential plans (A.1 recommend-only → A.2 approve-and-execute → A.3 autonomous, projected ~14 weeks across Tier-3 → Tier-2 → Tier-1) into a **single agent shipping all three operational tiers** as `--mode` flags gated by safety primitives, and the execute path is now proven against a live kind cluster (G3 green at HEAD `96bd75c`). **The platform-capability gap vs Wiz is closed; customer-facing "execute" enablement is conditional on the per-customer prerequisites in [`a1-safety-verification §6`](a1-safety-verification-2026-05-16.md).** Stage 1 (`recommend`) and Stage 2 (`dry_run`) are safe to ship to customers today; Stage 3 (human-approved `execute`) and Stage 4 (unattended `execute`) require the customer-side gates to close before enablement.
 
+**Milestone anchors used throughout this report.** **Phase 1 GA = Month 11–12** (the platform-capability milestone at which the 18 agents + console + edge + content + ops tracks are all minimally complete; M11 = 2026-07, M12 = 2026-08; possibly M10 given current calendar compression — see [§21 critical-path diagram](#21-critical-path-to-phase-1-ga--refreshed)). **Month 30 and Month 36 are post-GA ARR / coverage growth milestones** (~$10M and $25M ARR respectively, with 85% Wiz-equivalent weighted coverage as the capability target), **NOT GA itself**. "GA" without a qualifier means Phase 1 GA at M11–M12 in every snapshot in this series. Cross-referenced from [PRD §1.5](../strategy/PRD.md#15-business-outcome).
+
 ---
 
 ## §2. Architectural pillars — at a glance

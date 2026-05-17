@@ -38,6 +38,21 @@ The label is **stated in the PR title** (e.g., `feat(remediation): v0.1.2 — wi
 
 When in doubt, **default to SAFETY-CRITICAL**. The discipline tax of treating LOW-RISK as SAFETY-CRITICAL is small (a reviewer's extra read); the safety tax of treating SAFETY-CRITICAL as LOW-RISK is the Task-13 failure mode.
 
+#### Label override — reviewer authority
+
+The agent self-labels at PR-open. The reviewer is the **structural defense against a wrong or dishonest label** — without an explicit override path, the labelling discipline reduces to self-attestation, which is exactly the property a SAFETY-CRITICAL ADR cannot rest on.
+
+| Direction                                                                            | Authority                                | Procedure                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UPGRADE** (any class → SAFETY-CRITICAL, or LOW-RISK → methodological / docs-only)  | Reviewer **or** agent                    | Reviewer states the upgrade in a PR comment OR the agent edits the PR title + body to re-label, citing the surfacing concern. Review continues under the upgraded discipline (verified-against-HEAD sentence required if newly SAFETY-CRITICAL; the agent adds it if missing). No additional gate; upgrades are always permitted because they only add discipline.                                            |
+| **DOWNGRADE** (SAFETY-CRITICAL → LOW-RISK, or methodological / docs-only → LOW-RISK) | **Reviewer only** — NOT agent-unilateral | Reviewer states the downgrade rationale in a PR comment AND explicitly satisfies themselves that the downgrade does not strip required disciplines that the original classification implied. The agent edits the PR title + body to reflect the new label only AFTER the reviewer's comment. If the agent believes the label is wrong, it asks the reviewer in a comment rather than re-labelling on its own. |
+
+**The agent does not self-downgrade its own SAFETY-CRITICAL label**, ever. This rule is the labelling-side analogue of Discipline 4's "agent does not self-merge": the structural defense against the failure mode where an agent applies the label honestly at PR-open, then talks itself out of it on second look, and merges under a lighter discipline than the change warranted. Upgrades are agent-permitted; downgrades require reviewer authority.
+
+**Why this asymmetry.** Upgrade-only-agent and downgrade-only-reviewer reflects who carries the risk. An upgrade adds discipline (more eyes, more gates); the worst case is wasted reviewer time. A downgrade removes discipline (fewer eyes, fewer gates); the worst case is the Task-13 failure mode landing under a lighter standard than it deserved. The asymmetry encodes that the discipline tax of an unjustified upgrade is bounded and small, while the safety tax of an unjustified downgrade is unbounded and large.
+
+**Documentation.** The label-override decision is part of the PR's review record. Reviewer's comment naming the downgrade rationale is sufficient; no separate ADR amendment is needed for individual PR re-labels. If a downgrade pattern recurs systematically (e.g., the same kind of change keeps getting downgraded after PR-open), that is a signal to amend the label criteria in this ADR — but the per-PR override is normal practice, not an exception that needs ADR amendment each time.
+
 ### Discipline 2 — Branch protection on `main`, structurally enforced
 
 The GitHub Rulesets-based branch protection on `main` requires all 5 status checks (`python-tests`, `python` lint, `typescript-tests`, `typescript` lint, `go` lint) to pass before merge. `bypass_actors: []` (no admin bypass). The ruleset definition is checked in at [`.github/branch-protection.json`](../../.github/branch-protection.json); the runbook for applying / re-applying it is at [`.github/BRANCH_PROTECTION.md`](../../.github/BRANCH_PROTECTION.md). Both shipped in PR #6.
@@ -100,7 +115,7 @@ Every PR follows this cadence:
 ### Neutral / unknown
 
 - **Multi-agent PRs.** When a single PR spans multiple agents' surfaces (rare under ADR-010's "cross-agent fan-out" exclusion), the labelling defaults to the most-critical surface's class. Acceptable: this is the same default-to-strictest pattern the rest of the disciplines use.
-- **PR comments that surface post-open issues.** A LOW-RISK PR that surfaces a SAFETY-CRITICAL concern in review should be re-labelled; the ADR doesn't (yet) specify the re-labelling mechanic. Probably "edit the title + body; reviewer acknowledges the re-label in a comment." Defer to first occurrence; amend the ADR if the pattern recurs.
+- **Re-labelling mechanic** — specified in [Discipline 1's "Label override — reviewer authority" sub-section](#label-override--reviewer-authority). Upgrades are agent-or-reviewer; downgrades are reviewer-only. The agent never self-downgrades.
 
 ## Alternatives considered
 
@@ -126,7 +141,8 @@ Every PR follows this cadence:
 2. **Branch protection's `main`-ruleset is the only path to `main`.** The `bypass_actors: []` setting is enforced; amendments go through PR-flow on `.github/branch-protection.json`.
 3. **SAFETY-CRITICAL PR bodies carry the verified-against-merged-branch-HEAD sentence** in the shape specified in Discipline 3. Reviewers refuse merge without it.
 4. **Agents create + report; humans review + merge.** No self-merge by the agent under any class of PR. Sandbox capabilities that would otherwise grant merge authority are not exercised.
-5. **This ADR amends rather than is superseded** for routine tweaks (Discipline 1's label list, Discipline 3's sentence form, etc.), same as ADR-007's v1.1/v1.2/v1.3 amendment cadence.
+5. **Labels are agent-upgradeable, reviewer-downgradeable only.** The agent never self-downgrades its own SAFETY-CRITICAL label. The reviewer is the structural defense against a wrong or dishonest label; the override path is in [Discipline 1's "Label override — reviewer authority" sub-section](#label-override--reviewer-authority), not assumed.
+6. **This ADR amends rather than is superseded** for routine tweaks (Discipline 1's label list, Discipline 3's sentence form, etc.), same as ADR-007's v1.1/v1.2/v1.3 amendment cadence.
 
 ## References
 
