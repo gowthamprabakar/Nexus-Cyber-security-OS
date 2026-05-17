@@ -488,3 +488,205 @@ def test_run_missing_findings_exits_nonzero(tmp_path: Path) -> None:
         ["run", "--contract", str(contract), "--findings", str(tmp_path / "no.json")],
     )
     assert result.exit_code != 0
+
+
+# ---------------------------- run: --promotion (v0.1.2) -----------------
+
+
+def _run_as_root_findings_json(tmp_path: Path) -> Path:
+    """Write a D.6-shaped `findings.json` with one `run-as-root` finding that
+    maps to the `remediation_k8s_patch_runAsNonRoot` action class."""
+    path = tmp_path / "findings.json"
+    now = datetime.now(UTC).isoformat()
+    payload = {
+        "agent": "k8s_posture",
+        "agent_version": "0.3.0",
+        "customer_id": "cust_test",
+        "run_id": "test-run",
+        "scan_started_at": now,
+        "scan_completed_at": now,
+        "findings": [
+            {
+                "category_uid": 3,
+                "category_name": "Identity & Access Management",
+                "class_uid": 2003,
+                "class_name": "Compliance Finding",
+                "activity_id": 1,
+                "activity_name": "Create",
+                "type_uid": 200301,
+                "type_name": "Compliance Finding: Create",
+                "severity_id": 4,
+                "severity": "High",
+                "time": 1700000000000,
+                "time_dt": now,
+                "status_id": 1,
+                "status": "New",
+                "metadata": {
+                    "version": "1.3.0",
+                    "product": {"name": "Nexus K8s Posture", "vendor_name": "Nexus"},
+                },
+                "finding_info": {
+                    "uid": "CSPM-KUBERNETES-MANIFEST-001-api",
+                    "title": "Container running as root",
+                    "desc": "runAsUser=0",
+                    "first_seen_time": 1700000000000,
+                    "last_seen_time": 1700000000000,
+                    "types": ["cspm_k8s_manifest"],
+                    "analytic": {"name": "run-as-root"},
+                },
+                "resources": [
+                    {
+                        "cloud": "kubernetes",
+                        "account_id": "production",
+                        "region": "cluster",
+                        "type": "Deployment",
+                        "uid": "production/api",
+                        "name": "api",
+                    }
+                ],
+                "evidences": [
+                    {
+                        "kind": "manifest",
+                        "rule_id": "run-as-root",
+                        "rule_title": "Container running as root",
+                        "workload_kind": "Deployment",
+                        "workload_name": "api",
+                        "namespace": "production",
+                        "container_name": "app",
+                        "manifest_path": "cluster:///production/Deployment/api",
+                    }
+                ],
+            }
+        ],
+    }
+    path.write_text(json.dumps(payload))
+    return path
+
+
+def _stage1_promotion_yaml(tmp_path: Path) -> Path:
+    """Write a `promotion.yaml` with empty `action_classes` (every action is
+    implicitly at Stage 1 — the safe-by-default floor)."""
+    path = tmp_path / "promotion.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "0.1",
+                "cluster_id": "cli-promotion-test",
+                "created_at": "2026-05-17T00:00:00Z",
+                "last_modified_at": "2026-05-17T00:00:00Z",
+                "action_classes": {},
+            }
+        )
+    )
+    return path
+
+
+def test_run_promotion_flag_loads_tracker_and_fires_gate(tmp_path: Path) -> None:
+    """v0.1.2: `--promotion <path>` plumbs a `PromotionTracker` through to
+    `agent.run`, which fires the pre-flight stage gate. Stage 1 (empty
+    `action_classes`) + `--mode execute` against an action class the gate
+    would refuse must produce `refused_promotion_gate` outcome.
+
+    Uses an empty file as `--kubeconfig` only to satisfy the CLI's
+    cluster-access precheck; the agent halts at the pre-flight gate
+    before reaching the executor, so the kubeconfig is never actually
+    used. This isolation is the same property the live-cluster proof in
+    `test_stage1_only_refuses_execute_against_live_cluster` recorded —
+    here we exercise it through the CLI surface instead.
+    """
+    contract = _contract_yaml(tmp_path)
+    findings = _run_as_root_findings_json(tmp_path)
+    auth = _auth_yaml(
+        tmp_path,
+        mode_recommend_authorized=True,
+        mode_dry_run_authorized=True,
+        mode_execute_authorized=True,
+        authorized_actions=["remediation_k8s_patch_runAsNonRoot"],
+        max_actions_per_run=5,
+        rollback_window_sec=300,
+    )
+    promotion = _stage1_promotion_yaml(tmp_path)
+    fake_kubeconfig = tmp_path / "kubeconfig"
+    fake_kubeconfig.write_text("")  # exists; never actually read
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "run",
+            "--contract",
+            str(contract),
+            "--findings",
+            str(findings),
+            "--auth",
+            str(auth),
+            "--mode",
+            "execute",
+            "--kubeconfig",
+            str(fake_kubeconfig),
+            "--i-understand-this-applies-patches-to-the-cluster",
+            "--promotion",
+            str(promotion),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "refused_promotion_gate: 1" in result.output, (
+        f"expected refused_promotion_gate in CLI output; got:\n{result.output}"
+    )
+
+
+def test_run_promotion_flag_absent_preserves_v0_1_behaviour(tmp_path: Path) -> None:
+    """v0.1.2 compatibility-contract assertion: omitting `--promotion` MUST
+    preserve v0.1.1's behaviour exactly — the gate is skipped (legacy
+    safe default), and recommend-mode runs against an empty findings file
+    still succeed without any promotion-related output.
+
+    The other direction of this contract (the prior version's full test
+    surface staying green) is asserted by `uv run pytest -q` returning
+    the same passed count modulo the new tests added in this file. This
+    test specifically pins the "absent flag, default behaviour" property
+    as a regression marker.
+    """
+    contract = _contract_yaml(tmp_path)
+    findings = _empty_findings_json(tmp_path)
+
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--findings", str(findings)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "mode: recommend" in result.output
+    assert "refused_promotion_gate" not in result.output, (
+        f"absent --promotion must NOT produce promotion-gate output; got:\n{result.output}"
+    )
+
+
+def test_run_promotion_flag_invalid_path_errors_via_click(tmp_path: Path) -> None:
+    """v0.1.2: a non-existent `--promotion` path must be rejected by
+    Click's `exists=True` type check before the agent runs — no
+    half-started run, no partial output, just a usage error.
+
+    This mirrors the existing `--auth`, `--contract`, and `--findings`
+    file-check semantics; consistency with the prior version's CLI
+    surface is one of ADR-010's six eligibility conditions.
+    """
+    contract = _contract_yaml(tmp_path)
+    findings = _empty_findings_json(tmp_path)
+    nonexistent_promotion = tmp_path / "no-such-promotion.yaml"
+    assert not nonexistent_promotion.exists()
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "run",
+            "--contract",
+            str(contract),
+            "--findings",
+            str(findings),
+            "--promotion",
+            str(nonexistent_promotion),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower() or "no such" in result.output.lower(), (
+        f"expected file-not-found-style usage error; got:\n{result.output}"
+    )

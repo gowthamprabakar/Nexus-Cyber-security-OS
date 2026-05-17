@@ -166,6 +166,22 @@ def eval_cmd(cases_dir: Path) -> None:
     "plan), this flag should remain unset in any environment that holds real "
     "workloads. See: docs/_meta/a1-safety-verification-2026-05-16.md.",
 )
+@click.option(
+    "--promotion",
+    "promotion_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional path to a `promotion.yaml` (v0.1.1+ earned-autonomy "
+    "cache). When supplied, the agent's pre-flight stage gate fires against "
+    "the loaded tracker: each finding's effective mode is downgraded to the "
+    "action class's stage cap, and runs where every authorised artifact "
+    "would be downgraded emit per-finding REFUSED_PROMOTION_GATE outcomes "
+    "instead of touching the cluster. When omitted, the gate is skipped "
+    "(legacy v0.1 behaviour preserved). The auth.yaml + "
+    "`--i-understand-this-applies-patches-to-the-cluster` operational "
+    "gates remain the operator-facing kill switches in either case. See: "
+    "packages/agents/remediation/runbooks/remediation_workflow.md §14.",
+)
 def run_cmd(
     contract_path: Path,
     findings_path: Path,
@@ -176,6 +192,7 @@ def run_cmd(
     cluster_namespace: str | None,
     rollback_window_sec: int | None,
     enable_execute: bool,
+    promotion_path: Path | None,
 ) -> None:
     """Run the Remediation Agent end-to-end."""
     mode = RemediationMode(mode_str.lower())
@@ -204,6 +221,15 @@ def run_cmd(
     if rollback_window_sec is not None:
         auth = auth.model_copy(update={"rollback_window_sec": rollback_window_sec})
 
+    # v0.1.2: load the promotion tracker if --promotion was supplied. When
+    # omitted, tracker stays None and `agent.run` skips the pre-flight stage
+    # gate (legacy v0.1 behaviour). The Click `exists=True` type check has
+    # already rejected paths that don't resolve; `PromotionTracker.from_path`
+    # surfaces a Pydantic ValidationError if the YAML is malformed, which
+    # propagates as a UsageError-equivalent stack trace — desired, since a
+    # malformed promotion.yaml is operator-actionable.
+    tracker = PromotionTracker.from_path(promotion_path) if promotion_path else None
+
     contract = load_contract(contract_path)
 
     try:
@@ -213,6 +239,7 @@ def run_cmd(
                 findings_path=findings_path,
                 mode=mode,
                 authorization=auth,
+                promotion=tracker,
                 kubeconfig=kubeconfig,
                 in_cluster=in_cluster,
                 cluster_namespace=cluster_namespace,
