@@ -18,6 +18,7 @@ Three subcommands:
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,32 @@ from investigation import __version__
 from investigation.agent import run as agent_run
 from investigation.eval_runner import InvestigationEvalRunner
 from investigation.schemas import IncidentReport
+
+PUBLISH_FLAG_ENV_VAR = "NEXUS_FABRIC_PUBLISH"
+"""Env var that flips F.7 fabric publishing on per F.7 v0.2 plan Q3.
+
+Truthy values (case-insensitive): "1", "true", "yes". Anything else (or
+unset) is False. The CLI flag `--publish-events-to-bus` /
+`--no-publish-events-to-bus` overrides this env var when explicitly
+passed.
+"""
+
+_PUBLISH_FLAG_TRUTHY = frozenset({"1", "true", "yes"})
+
+
+def _resolve_publish_flag(cli_value: bool | None) -> bool:
+    """Resolve the publish-events-to-bus flag with the F.7 v0.2 Q3 precedence.
+
+    1. Explicit CLI flag wins when the user passed either form
+       (`--publish-events-to-bus` or `--no-publish-events-to-bus`).
+    2. Otherwise consult `NEXUS_FABRIC_PUBLISH` env var (truthy values:
+       1 / true / yes, case-insensitive).
+    3. Otherwise default to False (the v0.2-safe-default).
+    """
+    if cli_value is not None:
+        return cli_value
+    raw = os.environ.get(PUBLISH_FLAG_ENV_VAR, "").strip().lower()
+    return raw in _PUBLISH_FLAG_TRUTHY
 
 
 @click.group()
@@ -100,11 +127,24 @@ def eval_cmd(cases_dir: Path) -> None:
     default=None,
     help="ISO-8601 upper bound on the investigation window.",
 )
+@click.option(
+    "--publish-events-to-bus/--no-publish-events-to-bus",
+    "publish_events_to_bus",
+    default=None,
+    help=(
+        "Publish D.7 lifecycle events (started / completed / failed) to the "
+        "F.7 fabric bus (events.>). Default: off. Env var "
+        f"{PUBLISH_FLAG_ENV_VAR}=1 is the secondary control; the explicit "
+        "CLI flag wins when both are set. v0.2 wires the flag only; the "
+        "agent driver does not yet branch on it (Task 3 lands that)."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     sibling_workspaces: tuple[Path, ...],
     since: str | None,
     until: str | None,
+    publish_events_to_bus: bool | None,
 ) -> None:
     """Run the D.7 6-stage pipeline against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
@@ -114,6 +154,7 @@ def run_cmd(
             sibling_workspaces=sibling_workspaces,
             since=_parse_iso(since),
             until=_parse_iso(until),
+            publish_events_to_bus=_resolve_publish_flag(publish_events_to_bus),
         )
     )
     _print_full_digest(report)
@@ -137,9 +178,21 @@ def run_cmd(
     multiple=True,
     help="Sibling-agent workspace containing findings.json. Repeat for multiple.",
 )
+@click.option(
+    "--publish-events-to-bus/--no-publish-events-to-bus",
+    "publish_events_to_bus",
+    default=None,
+    help=(
+        "Publish D.7 lifecycle events (started / completed / failed) to the "
+        "F.7 fabric bus (events.>). Default: off. Env var "
+        f"{PUBLISH_FLAG_ENV_VAR}=1 is the secondary control; the explicit "
+        "CLI flag wins when both are set."
+    ),
+)
 def triage_cmd(
     contract_path: Path,
     sibling_workspaces: tuple[Path, ...],
+    publish_events_to_bus: bool | None,
 ) -> None:
     """Mode-A fast-path triage — concise summary for on-call paging."""
     contract = load_contract(contract_path)
@@ -149,6 +202,7 @@ def triage_cmd(
             sibling_workspaces=sibling_workspaces,
             since=None,
             until=None,
+            publish_events_to_bus=_resolve_publish_flag(publish_events_to_bus),
         )
     )
     _print_triage_summary(report)
@@ -163,6 +217,7 @@ async def _drive(
     sibling_workspaces: tuple[Path, ...],
     since: datetime | None,
     until: datetime | None,
+    publish_events_to_bus: bool = False,
 ) -> IncidentReport:
     """Bring up an in-memory aiosqlite substrate + run the agent."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -182,6 +237,7 @@ async def _drive(
             sibling_workspaces=sibling_workspaces,
             since=since,
             until=until,
+            publish_events_to_bus=publish_events_to_bus,
         )
     finally:
         await engine.dispose()
