@@ -12,6 +12,13 @@ After the two pinned sections, a per-outcome breakdown and a per-action-class
 breakdown give the operator the full picture. Audit chain head/tail hashes
 are pinned at the bottom so operators can verify the chain end-to-end.
 
+**v0.1.1 — earned-autonomy:** `REFUSED_PROMOTION_GATE` (the per-finding
+pre-flight stage refusal from `agent.run()`) ranks alongside
+`REFUSED_UNAUTHORIZED` in the per-outcome breakdown and the All-actions
+section. The dual-pin pattern itself is unchanged: pre-flight refusals
+don't call kubectl, so they neither roll back nor trigger the failures
+pin — they surface in the actionable tier of the breakdown instead.
+
 The renderer is **pure** (no I/O) — takes a `RemediationReport` and returns
 markdown text. The driver writes the result to `report.md` in the workspace.
 """
@@ -27,11 +34,21 @@ from remediation.schemas import (
 )
 
 # Outcome ordering for the per-outcome table — most-actionable first.
+#
+# v0.1.1: `REFUSED_PROMOTION_GATE` is slotted **immediately after**
+# `REFUSED_UNAUTHORIZED`. Both are policy-level refusals an operator can
+# directly fix: REFUSED_UNAUTHORIZED → grant the action class / mode;
+# REFUSED_PROMOTION_GATE → graduate the action class via
+# `remediation promotion advance`, or lower the run mode. They belong in
+# the same "most-actionable" tier of the breakdown, and they come BEFORE
+# `REFUSED_BLAST_RADIUS` (which usually means "trim the input set," not
+# "change policy") and BEFORE the success outcomes.
 _OUTCOME_ORDER: tuple[RemediationOutcome, ...] = (
     RemediationOutcome.EXECUTED_ROLLED_BACK,
     RemediationOutcome.EXECUTE_FAILED,
     RemediationOutcome.DRY_RUN_FAILED,
     RemediationOutcome.REFUSED_UNAUTHORIZED,
+    RemediationOutcome.REFUSED_PROMOTION_GATE,
     RemediationOutcome.REFUSED_BLAST_RADIUS,
     RemediationOutcome.EXECUTED_VALIDATED,
     RemediationOutcome.DRY_RUN_ONLY,

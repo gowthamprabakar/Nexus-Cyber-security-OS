@@ -434,5 +434,161 @@ def test_output_is_string_with_single_trailing_newline() -> None:
     assert not out.endswith("\n\n")
 
 
+# ---------------------------- v0.1.1: refused_promotion_gate -------------
+
+
+def test_refused_promotion_gate_appears_in_per_outcome_breakdown() -> None:
+    """A pre-flight refusal surfaces in the per-outcome breakdown alongside
+    the other refusal types — operators read the actionable tier first."""
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg"),
+                "REM-K8S-001-pg",
+            )
+        ]
+    )
+    out = render_summary(report)
+    assert "**refused_promotion_gate**: 1" in out
+
+
+def test_refused_promotion_gate_appears_in_all_actions_section() -> None:
+    """All-actions groups by outcome — REFUSED_PROMOTION_GATE gets its own
+    subsection so operators can scan exactly which findings the gate blocked."""
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg"),
+                "REM-K8S-001-pg",
+            )
+        ]
+    )
+    out = render_summary(report)
+    assert "### refused_promotion_gate (1)" in out
+    assert "`pg`" in out
+
+
+def test_refused_promotion_gate_renders_action_type_and_location() -> None:
+    """Each refused-promotion-gate bullet must carry action_type + location —
+    that's what tells the operator which action class to graduate (or which
+    workload to skip)."""
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(
+                    correlation_id="pg-legacy",
+                    name="legacy",
+                    namespace="payments",
+                ),
+                "REM-K8S-001-pg-legacy",
+            )
+        ]
+    )
+    out = render_summary(report)
+    assert "`pg-legacy`" in out
+    assert "`payments/Deployment/legacy`" in out
+    assert "`remediation_k8s_patch_runAsNonRoot`" in out
+
+
+def test_refused_promotion_gate_ranks_alongside_refused_unauthorized() -> None:
+    """The v0.1.1 'alongside refused_unauthorized' commitment, end-to-end:
+
+    Ordering in the per-outcome breakdown must be
+      refused_unauthorized → refused_promotion_gate → refused_blast_radius
+      → executed_validated.
+
+    Both REFUSED_UNAUTHORIZED and REFUSED_PROMOTION_GATE are policy-level
+    refusals the operator can directly fix; they belong in the same
+    actionable tier and come before REFUSED_BLAST_RADIUS (which usually
+    means 'trim the input' rather than 'change policy') and before the
+    success outcomes.
+    """
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_UNAUTHORIZED,
+                _artifact(correlation_id="ru"),
+                "REM-K8S-001-ru",
+            ),
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg"),
+                "REM-K8S-002-pg",
+            ),
+            (
+                RemediationOutcome.REFUSED_BLAST_RADIUS,
+                _artifact(correlation_id="br"),
+                "REM-K8S-003-br",
+            ),
+            (
+                RemediationOutcome.EXECUTED_VALIDATED,
+                _artifact(correlation_id="ok"),
+                "REM-K8S-004-ok",
+            ),
+        ]
+    )
+    out = render_summary(report)
+    ru_idx = out.index("**refused_unauthorized**: 1")
+    pg_idx = out.index("**refused_promotion_gate**: 1")
+    br_idx = out.index("**refused_blast_radius**: 1")
+    validated_idx = out.index("**executed_validated**: 1")
+    assert ru_idx < pg_idx < br_idx < validated_idx
+
+
+def test_refused_promotion_gate_does_not_trigger_rollback_pin() -> None:
+    """The pre-flight gate refuses BEFORE kubectl runs — there is no patch to
+    roll back, so the rollback pin (which surfaces `executed_rolled_back`)
+    stays silent even when every finding is REFUSED_PROMOTION_GATE."""
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg-1"),
+                "REM-K8S-001-pg",
+            ),
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg-2"),
+                "REM-K8S-002-pg",
+            ),
+        ]
+    )
+    out = render_summary(report)
+    assert "Pinned: rollbacks" not in out
+
+
+def test_refused_promotion_gate_does_not_trigger_failures_pin() -> None:
+    """The pre-flight gate refuses BEFORE kubectl runs — there is no failed
+    kubectl call, so the failures pin (which surfaces `dry_run_failed` +
+    `execute_failed`) stays silent. Important: pre-flight refusals must not
+    be conflated with apply-path failures in the operator's mental model."""
+    report = _build_report(
+        entries=[
+            (
+                RemediationOutcome.REFUSED_PROMOTION_GATE,
+                _artifact(correlation_id="pg"),
+                "REM-K8S-001-pg",
+            )
+        ]
+    )
+    out = render_summary(report)
+    assert "Pinned: failures" not in out
+
+
+def test_outcome_order_slots_promotion_gate_immediately_after_unauthorized() -> None:
+    """White-box pin on the v0.1.1 commitment: future reordering of the
+    summarizer's outcome tuple must explicitly choose to break this contract,
+    not break it silently. REFUSED_PROMOTION_GATE sits exactly one position
+    after REFUSED_UNAUTHORIZED in `_OUTCOME_ORDER`."""
+    from remediation.summarizer import _OUTCOME_ORDER
+
+    ru_idx = _OUTCOME_ORDER.index(RemediationOutcome.REFUSED_UNAUTHORIZED)
+    pg_idx = _OUTCOME_ORDER.index(RemediationOutcome.REFUSED_PROMOTION_GATE)
+    assert pg_idx == ru_idx + 1
+
+
 # Silence the pytest unused-import warning when no fixtures are used.
 _ = pytest
