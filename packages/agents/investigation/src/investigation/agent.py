@@ -29,8 +29,10 @@ ADR-007 conformance:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -46,6 +48,7 @@ from charter.llm import LLMProvider
 from charter.memory import SemanticStore
 from ulid import ULID
 
+from investigation.bus_emit import BusEmitter, mint_investigation_id
 from investigation.orchestrator import SubAgentOrchestrator, SubResult
 from investigation.schemas import (
     Hypothesis,
@@ -62,6 +65,9 @@ from investigation.tools.ioc_extractor import extract_iocs
 from investigation.tools.memory_walk import memory_neighbors_walk
 from investigation.tools.mitre_mapper import map_to_mitre
 from investigation.tools.related_findings import RelatedFinding, find_related_findings
+
+_NATS_URL_ENV_VAR = "NEXUS_NATS_URL"
+_DEFAULT_NATS_URL = "nats://localhost:4222"
 
 _LOG = logging.getLogger(__name__)
 
@@ -121,18 +127,27 @@ async def run(
     Returns an `IncidentReport` and writes the 4 artifacts to the
     charter workspace.
 
-    `publish_events_to_bus` (F.7 v0.2 Task 2 wiring): kwarg accepted
-    for forward-compatibility; the agent driver does NOT yet branch on
-    it. Task 3 lands the `bus_emit` module and invokes it at Stage-1
-    entry + Stage-6 exit when this flag is True. v0.2 Task 2 only
-    wires the flag from CLI → `_drive()` → here so the wire-through
-    can be tested end-to-end before any side-effect is introduced.
+    `publish_events_to_bus` (F.7 v0.2 Task 3): when True, the agent
+    driver emits 3 lifecycle events to the F.7 fabric bus's `events.>`
+    stream — one `investigation.started` at Stage-1 entry, one
+    `investigation.completed` at Stage-6 success, or one
+    `investigation.failed` at any stage exception. Bus failures are
+    non-fatal per F.7 v0.2 plan Q4: a publish failure is logged +
+    recorded to the F.6 audit chain as `investigation.bus_publish.
+    failure`, but the investigation continues and still writes the 4
+    filesystem artifacts. D.7's "filesystem artifacts are the
+    contract" guarantee is preserved.
+
+    When False (default), no bus client is constructed and no NATS
+    network calls are made — D.7's behaviour is byte-identical to
+    pre-v0.2.
     """
-    # Explicit no-op consumption to satisfy linters that flag unused
-    # kwargs. Task 3 removes this line and replaces it with the actual
-    # bus_emit invocations conditional on this flag.
-    _ = publish_events_to_bus
     registry = build_registry()
+    bus: BusEmitter | None = None
+    if publish_events_to_bus:
+        servers = [os.environ.get(_NATS_URL_ENV_VAR, _DEFAULT_NATS_URL)]
+        bus = BusEmitter(servers=servers)
+        await bus.connect()
 
     with Charter(contract, tools=registry) as ctx:
         # Stage 1 — SCOPE
@@ -142,56 +157,105 @@ async def run(
             since=since,
             until=until,
         )
+        investigation_id = mint_investigation_id()
+        current_stage = "scope"
 
-        # Stage 2 — SPAWN (4 parallel sub-investigations)
-        sub_outputs = await _stage_spawn(
-            scope=scope,
-            audit_store=audit_store,
-            semantic_store=semantic_store,
-        )
+        # F.7 v0.2: emit `investigation.started` at Stage-1 entry.
+        if bus is not None and ctx.audit is not None:
+            with contextlib.suppress(Exception):
+                await bus.emit_started(
+                    audit_log=ctx.audit,
+                    tenant_id=scope.tenant_id,
+                    correlation_id=scope.correlation_id,
+                    investigation_id=investigation_id,
+                )
 
-        # Stage 3 — SYNTHESIZE (timeline + hypotheses)
-        timeline = reconstruct_timeline(
-            audit_events=sub_outputs.audit_events,
-            related_findings=sub_outputs.related_findings,
-            extra_events=sub_outputs.extra_timeline_events,
-        )
-        hypotheses = await synthesize_hypotheses(
-            llm_provider=llm_provider,
-            audit_events=sub_outputs.audit_events,
-            related_findings=sub_outputs.related_findings,
-            timeline=timeline,
-        )
+        try:
+            # Stage 2 — SPAWN (4 parallel sub-investigations)
+            current_stage = "spawn"
+            sub_outputs = await _stage_spawn(
+                scope=scope,
+                audit_store=audit_store,
+                semantic_store=semantic_store,
+            )
 
-        # Stage 4 — VALIDATE (drop unresolved-evidence hypotheses)
-        validated = _stage_validate(
-            hypotheses=hypotheses,
-            audit_events=sub_outputs.audit_events,
-            related_findings=sub_outputs.related_findings,
-        )
+            # Stage 3 — SYNTHESIZE (timeline + hypotheses)
+            current_stage = "synthesize"
+            timeline = reconstruct_timeline(
+                audit_events=sub_outputs.audit_events,
+                related_findings=sub_outputs.related_findings,
+                extra_events=sub_outputs.extra_timeline_events,
+            )
+            hypotheses = await synthesize_hypotheses(
+                llm_provider=llm_provider,
+                audit_events=sub_outputs.audit_events,
+                related_findings=sub_outputs.related_findings,
+                timeline=timeline,
+            )
 
-        # Stage 5 — PLAN (containment templates per finding class_uid)
-        containment_plan = _stage_plan(
-            related_findings=sub_outputs.related_findings,
-        )
+            # Stage 4 — VALIDATE (drop unresolved-evidence hypotheses)
+            current_stage = "validate"
+            validated = _stage_validate(
+                hypotheses=hypotheses,
+                audit_events=sub_outputs.audit_events,
+                related_findings=sub_outputs.related_findings,
+            )
 
-        # Stage 6 — HANDOFF
-        report = _build_incident_report(
-            scope=scope,
-            timeline=timeline,
-            hypotheses=validated,
-            iocs=sub_outputs.iocs,
-            mitre_techniques=sub_outputs.mitre_techniques,
-            containment_plan=containment_plan,
-        )
-        _write_artifacts(
-            ctx=ctx,
-            report=report,
-            timeline=timeline,
-            hypotheses=validated,
-            containment_plan=containment_plan,
-            llm_used=llm_provider is not None,
-        )
+            # Stage 5 — PLAN (containment templates per finding class_uid)
+            current_stage = "plan"
+            containment_plan = _stage_plan(
+                related_findings=sub_outputs.related_findings,
+            )
+
+            # Stage 6 — HANDOFF
+            current_stage = "handoff"
+            report = _build_incident_report(
+                scope=scope,
+                timeline=timeline,
+                hypotheses=validated,
+                iocs=sub_outputs.iocs,
+                mitre_techniques=sub_outputs.mitre_techniques,
+                containment_plan=containment_plan,
+            )
+            _write_artifacts(
+                ctx=ctx,
+                report=report,
+                timeline=timeline,
+                hypotheses=validated,
+                containment_plan=containment_plan,
+                llm_used=llm_provider is not None,
+            )
+
+            # F.7 v0.2: emit `investigation.completed` at Stage-6 success.
+            if bus is not None and ctx.audit is not None:
+                with contextlib.suppress(Exception):
+                    await bus.emit_completed(
+                        audit_log=ctx.audit,
+                        tenant_id=scope.tenant_id,
+                        correlation_id=scope.correlation_id,
+                        investigation_id=investigation_id,
+                    )
+        except Exception as exc:
+            # F.7 v0.2: emit `investigation.failed` on any pipeline
+            # exception. Best-effort; never masks the underlying D.7
+            # failure. The Charter context manager's __exit__ still
+            # records `invocation_failed` to the F.6 chain via its
+            # own protocol.
+            if bus is not None and ctx.audit is not None:
+                with contextlib.suppress(Exception):
+                    await bus.emit_failed(
+                        audit_log=ctx.audit,
+                        tenant_id=scope.tenant_id,
+                        correlation_id=scope.correlation_id,
+                        investigation_id=investigation_id,
+                        stage=current_stage,
+                        error_class=exc.__class__.__name__,
+                    )
+            raise
+        finally:
+            if bus is not None:
+                with contextlib.suppress(Exception):
+                    await bus.close()
 
     return report
 
