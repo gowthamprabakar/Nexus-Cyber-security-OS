@@ -354,7 +354,17 @@ async def test_execute_validated_against_live_cluster(
     tmp_path: Path, kind_kubeconfig: Path, test_namespace: str, bad_deployment: str
 ) -> None:
     """Apply a run-as-root finding's remediation against a live kind cluster;
-    expect `executed_validated` after the rollback window."""
+    expect `executed_validated` after the rollback window.
+
+    Explicit isolation precondition: the `strip_runasnonroot_policy`
+    ClusterPolicy from `test_execute_rolled_back_against_live_cluster`
+    must NOT be present on the cluster. If it leaked, the validated
+    outcome would silently become `executed_rolled_back` and this test
+    would fail at the outcome assertion several stages later. Failing
+    fast here turns "the teardown failed and tainted us" into a clear,
+    localised error.
+    """
+    _assert_no_strip_policy(kind_kubeconfig)
     contract = _contract(tmp_path)
     findings = _findings_for(bad_deployment, test_namespace, tmp_path)
 
@@ -502,8 +512,13 @@ def strip_runasnonroot_policy(
     try:
         yield policy_name
     finally:
-        # Never raise out of teardown; a leaked policy here is recoverable
-        # manually via `kubectl delete clusterpolicy …`.
+        # Delete the policy, then BLOCK until the apiserver reports it gone.
+        # A silent teardown failure (e.g. apiserver lagging on delete-propagation)
+        # would leak the webhook into the next test and produce a misleading
+        # "validated" outcome when the rolled-back path was supposed to be
+        # the only place this policy is live. Raising loudly here surfaces
+        # the leak immediately rather than letting the next test fail at a
+        # downstream assertion.
         subprocess.run(  # noqa: S603 — fixed args, absolute path
             [
                 _KUBECTL,
@@ -514,9 +529,102 @@ def strip_runasnonroot_policy(
                 policy_name,
                 "--ignore-not-found",
             ],
+            check=True,
             capture_output=True,
             timeout=30,
         )
+        # `kubectl wait --for=delete` blocks until the object is gone; safer
+        # than polling because it doesn't race with API-server eventual
+        # consistency. If the resource was already deleted by the time wait
+        # starts, kubectl returns immediately with exit 0.
+        wait_result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+            [
+                _KUBECTL,
+                "--kubeconfig",
+                str(kind_kubeconfig),
+                "wait",
+                "--for=delete",
+                f"clusterpolicy/{policy_name}",
+                "--timeout=30s",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=40,
+        )
+        # Final post-delete proof: `kubectl get` returns NotFound. If this
+        # assertion fails, the next test would have run against a polluted
+        # cluster and produced misleading results.
+        get_result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+            [
+                _KUBECTL,
+                "--kubeconfig",
+                str(kind_kubeconfig),
+                "get",
+                "clusterpolicy",
+                policy_name,
+                "-o",
+                "name",
+                "--ignore-not-found",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert get_result.stdout.strip() == "", (
+            f"strip_runasnonroot_policy teardown leaked: ClusterPolicy "
+            f"{policy_name!r} still present after delete + wait. "
+            f"wait stdout={wait_result.stdout!r} wait stderr={wait_result.stderr!r} "
+            f"get stdout={get_result.stdout!r}. Subsequent tests against this "
+            f"namespace would silently see the webhook fire — fail fast here."
+        )
+
+
+def _assert_no_strip_policy(kind_kubeconfig: Path) -> None:
+    """Pre-test assertion: the `strip_runasnonroot_policy` `ClusterPolicy`
+    must NOT be installed on the cluster when this is called.
+
+    Used by `test_execute_validated_against_live_cluster` and
+    `test_rollback_window_matches_real_reconcile` — both depend on the
+    operator's patch sticking against an unmodified apiserver. If the
+    Kyverno webhook policy from `test_execute_rolled_back_against_live_cluster`
+    leaked (function-scoped teardown failed silently or got skipped),
+    these tests would produce `executed_rolled_back` instead of
+    `executed_validated` and surface as a confusing assertion failure
+    several stages downstream. Failing fast here turns "the teardown
+    failed and tainted the next test" into a clear, localised error.
+
+    This complements the strict teardown assertion in
+    `strip_runasnonroot_policy` — defence in depth, not redundancy: a
+    teardown can fail because of process termination, OOM, or any other
+    failure mode that bypasses Python's `finally` semantics. The pre-test
+    assertion catches those.
+    """
+    assert _KUBECTL is not None
+    result = subprocess.run(  # noqa: S603 — fixed args, absolute path
+        [
+            _KUBECTL,
+            "--kubeconfig",
+            str(kind_kubeconfig),
+            "get",
+            "clusterpolicy",
+            "a1-rolled-back-fixture-strip-runasnonroot",
+            "-o",
+            "name",
+            "--ignore-not-found",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.stdout.strip() == "", (
+        f"isolation precondition failed: ClusterPolicy "
+        f"'a1-rolled-back-fixture-strip-runasnonroot' is present on the "
+        f"cluster, which would silently mutate Deployment specs in "
+        f"`nexus-rem-test`. The rolled-back test's teardown failed to "
+        f"remove it. Run `kubectl delete clusterpolicy "
+        f"a1-rolled-back-fixture-strip-runasnonroot` to clean up, then "
+        f"re-run. (get stdout={result.stdout!r})"
+    )
 
 
 async def test_execute_rolled_back_against_live_cluster(
@@ -617,7 +725,13 @@ async def test_rollback_window_matches_real_reconcile(
 ) -> None:
     """Measure the wall-clock time from `kubectl patch` to the new Pod
     being Ready. Assert the default `rollback_window_sec=300` provides ≥30s
-    of cushion over the measured reconcile latency."""
+    of cushion over the measured reconcile latency.
+
+    Like `test_execute_validated_against_live_cluster`, this measurement
+    only makes sense against a cluster where the operator's patch sticks
+    — same isolation precondition (no leaked Kyverno strip policy).
+    """
+    _assert_no_strip_policy(kind_kubeconfig)
     contract = _contract(tmp_path)
     findings = _findings_for(bad_deployment, test_namespace, tmp_path)
 
