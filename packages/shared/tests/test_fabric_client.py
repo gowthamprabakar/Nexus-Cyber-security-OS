@@ -1,24 +1,31 @@
-"""Tests for `shared.fabric.client.JetStreamClient` (F.7 v0.1 Task 3 surface).
+"""Tests for `shared.fabric.client.JetStreamClient` (F.7 v0.1 client surface).
 
 All tests in this module run in the default mocked lane — nats-py is
 mocked at the import boundary of `shared.fabric.client`. The live lane
 (`NEXUS_LIVE_NATS=1` against a real broker) is owned by F.7 v0.1 Task 6
-(`tests/integration/test_fabric_client_live.py`, separate PR).
+(`tests/integration/test_fabric_client_live.py`, separate PR). The
+mocked round-trip in this module is necessary but not sufficient;
+Task 6 is the load-bearing live proof of the substrate.
 
-Scope per F.7 v0.1 plan Task 3 — this file covers:
+Coverage:
 - Construction validation.
-- `connect()` happy / timeout / no-server / OSError paths + idempotency.
+- `connect()` happy / timeout / no-server / OSError / asyncio-timeout
+  paths + idempotency + connect-timeout passthrough.
 - `ensure_streams()` create-when-missing / no-op-when-matching /
-  raise-on-drift (subjects / max_age / discard).
-- `publish()` happy / missing-correlation-id / cross-stream-subject.
-- `publish_finding()` envelope-wrap / non-findings-subject rejection.
-- `subscribe()` happy / cross-stream-subject / empty-durable rejection.
-- `close()` idempotency.
-- "not connected" guards on publish / subscribe / ensure_streams.
-
-F.7 v0.1 Task 5 will expand to ~15-20 additional cases (subscribe
-callback-exception paths, parameterized error matrices, etc.). Task 4
-adds the correlation_id contextvar-fallback + header-propagation tests.
+  raise-on-drift (subjects / max_age / discard) / empty-specs no-op /
+  partial-specs / after-close raises / not-connected raises.
+- `publish()` happy + per-stream parameterized / Q3 4-prong path
+  matrix (explicit kwarg / contextvar fallback / both absent / header
+  round-trip / kwarg-over-contextvar precedence / refusal before subject
+  validation) / cross-stream-subject / subject-prefix-must-end-with-dot
+  / return-value-passthrough / payload-not-mutated.
+- `publish_finding()` envelope-wrap / non-findings rejection /
+  envelope-correlation-id-to-header / JSON-encoding-deterministic /
+  6-field envelope serialized in payload / after-close raises.
+- `subscribe()` happy / wildcard subject_filter / callback-by-reference /
+  cross-stream rejection / empty-durable rejection / multiple-calls
+  independent / after-close raises.
+- `close()` idempotency / lifecycle re-init (close→connect→use).
 """
 
 from __future__ import annotations
@@ -44,7 +51,9 @@ from shared.fabric.correlation import correlation_scope
 from shared.fabric.envelope import NexusEnvelope
 from shared.fabric.streams import (
     ALL_STREAMS,
+    APPROVALS_STREAM,
     AUDIT_STREAM,
+    COMMANDS_STREAM,
     EVENTS_STREAM,
     FINDINGS_STREAM,
     StreamSpec,
@@ -673,3 +682,352 @@ async def test_findings_stream_constant_matches_publish_finding_path(
         _make_envelope(),
     )
     assert js.publish.await_args.kwargs["stream"] == "findings"
+
+
+# ─── Task 5 expansion: ensure_streams() edge cases ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ensure_streams_with_empty_specs_is_no_op(mocker: MockerFixture) -> None:
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.ensure_streams(specs=())
+    js.stream_info.assert_not_awaited()
+    js.add_stream.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ensure_streams_with_partial_specs_only_acts_on_those(
+    mocker: MockerFixture,
+) -> None:
+    nc, js = _make_nats_mock(stream_info_side_effect=NATSNotFoundError())
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.ensure_streams(specs=(EVENTS_STREAM, AUDIT_STREAM))
+    assert js.stream_info.await_count == 2
+    assert js.add_stream.await_count == 2
+    created_names = {call.args[0].name for call in js.add_stream.await_args_list}
+    assert created_names == {"events", "audit"}
+
+
+# ─── Task 5 expansion: publish() edge cases ────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_publish_subject_prefix_must_be_followed_by_dot(
+    mocker: MockerFixture,
+) -> None:
+    """`events_typo` is NOT a valid events subject; the prefix check
+    requires the stream root followed by a literal dot."""
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    with pytest.raises(ValueError, match="does not match stream"):
+        await client.publish(
+            EVENTS_STREAM,
+            "events_typo.foo",
+            b"x",
+            correlation_id="cid",
+        )
+
+
+@pytest.mark.asyncio
+async def test_publish_subject_equal_to_stream_root_alone_rejected(
+    mocker: MockerFixture,
+) -> None:
+    """`events` alone (no `.` suffix) is rejected — the prefix is
+    `events.` not `events`."""
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    with pytest.raises(ValueError, match="does not match stream"):
+        await client.publish(
+            EVENTS_STREAM,
+            "events",
+            b"x",
+            correlation_id="cid",
+        )
+
+
+@pytest.mark.asyncio
+async def test_publish_returns_puback_from_underlying_js(mocker: MockerFixture) -> None:
+    """publish() returns nats-py's PubAck unchanged (no wrapping)."""
+    nc, js = _make_nats_mock()
+    ack_sentinel = MagicMock(stream="events", seq=42)
+    js.publish = AsyncMock(return_value=ack_sentinel)
+    nc.jetstream = MagicMock(return_value=js)
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    result = await client.publish(
+        EVENTS_STREAM,
+        "events.tenant.t1.foo",
+        b"x",
+        correlation_id="cid",
+    )
+    assert result is ack_sentinel
+
+
+@pytest.mark.asyncio
+async def test_publish_does_not_mutate_or_reencode_payload(
+    mocker: MockerFixture,
+) -> None:
+    """The bytes object the caller hands in reaches `js.publish` by
+    reference. Guards against a future change that might decode/
+    re-encode the payload and silently change its bytes.
+    """
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    payload = b"specific-bytes-\x00\x01\x02-payload"
+    await client.publish(
+        EVENTS_STREAM,
+        "events.tenant.t1.foo",
+        payload,
+        correlation_id="cid",
+    )
+    assert js.publish.await_args.args[1] is payload
+
+
+@pytest.mark.parametrize(
+    "stream,subject",
+    [
+        (EVENTS_STREAM, "events.tenant.t1.scan_started"),
+        (COMMANDS_STREAM, "commands.edge.e1.rule_pack_update"),
+        (APPROVALS_STREAM, "approvals.tenant.t1.finding.f1"),
+        (AUDIT_STREAM, "audit.tenant.t1"),
+    ],
+    ids=["events", "commands", "approvals", "audit"],
+)
+@pytest.mark.asyncio
+async def test_publish_per_non_findings_stream(
+    mocker: MockerFixture,
+    stream: StreamSpec,
+    subject: str,
+) -> None:
+    """publish() round-trips bytes through to js.publish for each of
+    the four non-findings streams. Q5: arbitrary bytes accepted; only
+    findings.> enforces the OCSF envelope (via publish_finding())."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.publish(stream, subject, b"payload", correlation_id="cid")
+    js.publish.assert_awaited_once_with(
+        subject,
+        b"payload",
+        stream=stream.name,
+        headers={CORRELATION_ID_HEADER: "cid"},
+    )
+
+
+# ─── Task 5 expansion: publish_finding() determinism + envelope coverage ──
+
+
+@pytest.mark.asyncio
+async def test_publish_finding_json_encoding_is_deterministic(
+    mocker: MockerFixture,
+) -> None:
+    """Two publish_finding() calls with the same dict produce the same
+    bytes. sort_keys=True + separators=(',', ':') is the contract; any
+    future change here is a wire-format change that breaks consumers."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    ocsf_event = {"b_key": 2, "a_key": 1, "c_key": 3}
+    envelope = _make_envelope()
+    await client.publish_finding("findings.tenant.t1.asset.abc", ocsf_event, envelope)
+    await client.publish_finding("findings.tenant.t1.asset.abc", ocsf_event, envelope)
+    first = js.publish.await_args_list[0].args[1]
+    second = js.publish.await_args_list[1].args[1]
+    assert first == second
+    # Sort-keys guarantees alphabetical ordering of top-level keys.
+    decoded = first.decode("utf-8")
+    assert decoded.index('"a_key"') < decoded.index('"b_key"') < decoded.index('"c_key"')
+
+
+@pytest.mark.asyncio
+async def test_publish_finding_all_six_envelope_fields_in_payload(
+    mocker: MockerFixture,
+) -> None:
+    """The full 6-field NexusEnvelope contract serializes into the
+    payload's nexus_envelope sub-dict — none lost in transit."""
+    import json as _json
+
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    envelope = NexusEnvelope(
+        correlation_id="cid-1",
+        tenant_id="tnt-1",
+        agent_id="agent-1",
+        nlah_version="1.2",
+        model_pin="claude-opus-4-7",
+        charter_invocation_id="charter-1",
+    )
+    await client.publish_finding(
+        "findings.tenant.tnt-1.asset.abc",
+        {"class_uid": 2007},
+        envelope,
+    )
+    payload_bytes: bytes = js.publish.await_args.args[1]
+    decoded = _json.loads(payload_bytes.decode("utf-8"))
+    env_serialized = decoded["nexus_envelope"]
+    assert env_serialized == {
+        "correlation_id": "cid-1",
+        "tenant_id": "tnt-1",
+        "agent_id": "agent-1",
+        "nlah_version": "1.2",
+        "model_pin": "claude-opus-4-7",
+        "charter_invocation_id": "charter-1",
+    }
+
+
+# ─── Task 5 expansion: subscribe() behaviour + variations ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_subscribe_with_wildcard_subject_filter(mocker: MockerFixture) -> None:
+    """JetStream wildcard subjects (e.g., `events.tenant.t1.>`) are
+    passed through unchanged."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+
+    async def cb(msg: Any) -> None:
+        pass
+
+    await client.subscribe(
+        EVENTS_STREAM,
+        "events.tenant.t1.>",
+        cb,
+        durable_name="wildcard-consumer",
+    )
+    assert js.subscribe.await_args.args[0] == "events.tenant.t1.>"
+    assert js.subscribe.await_args.kwargs["durable"] == "wildcard-consumer"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_passes_callback_by_reference(mocker: MockerFixture) -> None:
+    """The wrapper does NOT decorate / wrap / curry the user's callback.
+    Exception handling, ack/nak, redelivery all stay nats-py's domain.
+    """
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+
+    async def my_cb(msg: Any) -> None:
+        pass
+
+    await client.subscribe(EVENTS_STREAM, "events.tenant.t1.>", my_cb, durable_name="d-1")
+    assert js.subscribe.await_args.kwargs["cb"] is my_cb
+
+
+@pytest.mark.asyncio
+async def test_subscribe_multiple_calls_produce_independent_subscriptions(
+    mocker: MockerFixture,
+) -> None:
+    nc, js = _make_nats_mock()
+    sub_a = MagicMock(name="SubA")
+    sub_b = MagicMock(name="SubB")
+    js.subscribe = AsyncMock(side_effect=[sub_a, sub_b])
+    nc.jetstream = MagicMock(return_value=js)
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+
+    async def cb(msg: Any) -> None:
+        pass
+
+    result_a = await client.subscribe(EVENTS_STREAM, "events.tenant.t1.>", cb, durable_name="d-a")
+    result_b = await client.subscribe(EVENTS_STREAM, "events.tenant.t1.>", cb, durable_name="d-b")
+    assert result_a is sub_a
+    assert result_b is sub_b
+    assert result_a is not result_b
+    assert js.subscribe.await_count == 2
+
+
+# ─── Task 5 expansion: post-close lifecycle guards ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_subscribe_after_close_raises_connection_error(
+    mocker: MockerFixture,
+) -> None:
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.close()
+
+    async def cb(msg: Any) -> None:
+        pass
+
+    with pytest.raises(FabricConnectionError, match="not connected"):
+        await client.subscribe(EVENTS_STREAM, "events.tenant.t1.>", cb, durable_name="d-1")
+
+
+@pytest.mark.asyncio
+async def test_ensure_streams_after_close_raises_connection_error(
+    mocker: MockerFixture,
+) -> None:
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.close()
+    with pytest.raises(FabricConnectionError, match="not connected"):
+        await client.ensure_streams()
+
+
+@pytest.mark.asyncio
+async def test_publish_finding_after_close_raises_connection_error(
+    mocker: MockerFixture,
+) -> None:
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.close()
+    with pytest.raises(FabricConnectionError, match="not connected"):
+        await client.publish_finding(
+            "findings.tenant.t1.asset.abc",
+            {"class_uid": 2007},
+            _make_envelope(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_reconnect_after_close_works(mocker: MockerFixture) -> None:
+    """close() then connect() restores a usable client. Mirrors the
+    cold-start lifecycle a long-lived process might do for failover."""
+    nc, js = _make_nats_mock()
+    # nats.connect needs to return a fresh nc on the second call;
+    # AsyncMock with return_value returns the same object both times,
+    # which is fine for the mocked lane since we just need is_connected
+    # to flip back to True.
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    await client.connect()
+    await client.close()
+    assert client.is_connected is False
+    await client.connect()
+    assert client.is_connected is True
+    # And the new lifecycle accepts a publish call.
+    await client.publish(
+        EVENTS_STREAM,
+        "events.tenant.t1.foo",
+        b"x",
+        correlation_id="cid",
+    )
+    js.publish.assert_awaited()
