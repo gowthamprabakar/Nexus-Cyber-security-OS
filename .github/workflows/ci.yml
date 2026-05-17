@@ -14,7 +14,12 @@ jobs:
         with:
           version: '0.4.27'
       - run: uv python install 3.12
-      - run: uv sync --all-extras
+      # --all-packages installs every workspace member as editable (without
+      # it, `uv run pytest` can't find the workspace-member console scripts
+      # or the local-import paths the test suite relies on). --all-extras
+      # picks up every member's [project.optional-dependencies] (pytest +
+      # plugins live there per-package).
+      - run: uv sync --all-extras --all-packages
       - run: uv run pytest -v --cov --cov-report=xml
       - uses: codecov/codecov-action@v4
         with:

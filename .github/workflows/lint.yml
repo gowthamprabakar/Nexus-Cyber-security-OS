@@ -16,13 +16,21 @@ jobs:
       - name: Install python
         run: uv python install 3.12
       - name: Sync workspace
-        run: uv sync --all-extras
+        # --all-packages installs every workspace member as editable (without
+        # it, ruff/mypy can resolve modules but pytest in `ci.yml` can't find
+        # workspace console scripts). Keeping the two workflows in sync.
+        run: uv sync --all-extras --all-packages
       - name: Ruff check
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
       - name: Mypy
-        run: uv run mypy packages
+        # No path argument: use the `files = [...]` list in pyproject.toml,
+        # which targets every package's src/ directory and excludes alembic
+        # env.py files (both `packages/charter/alembic/env.py` and
+        # `packages/control-plane/alembic/env.py` are module-named `env`, so
+        # `uv run mypy packages` errors with "Duplicate module named 'env'").
+        run: uv run mypy
 
   typescript:
     runs-on: ubuntu-latest
