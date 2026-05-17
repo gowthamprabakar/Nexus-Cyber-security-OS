@@ -23,6 +23,46 @@ def shipped_cases_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "eval" / "cases"
 
 
+_V0_1_ACCEPTANCE_IDS: tuple[str, ...] = (
+    "001_clean",
+    "002_single_action_recommend",
+    "003_single_action_dry_run",
+    "004_single_action_execute_validated",
+    "005_single_action_execute_rolled_back",
+    "006_unauthorized_action_refused",
+    "007_unauthorized_mode_refused",
+    "008_blast_radius_cap",
+    "009_multi_finding_batch",
+    "010_mixed_action_classes",
+)
+"""IDs of the v0.1 acceptance cases.
+
+Cases 011-015 (the promotion-surface cases from A.1 v0.1.1 Task 10) live in
+the same `eval/cases/` directory but are not yet executable by the runner —
+Task 12 wires `fixture.promotion` parsing, the `REFUSED_PROMOTION_GATE`
+outcome, and the new assertion keys. Until then the CLI eval gate runs the
+v0.1 subset from a tmp copy, and the runner-test load-test
+(`test_v0_1_1_promotion_cases_load`) covers the v0.1.1 YAMLs for schema
+drift. Task 12 collapses both surfaces into a single 15/15 acceptance.
+"""
+
+
+@pytest.fixture
+def v0_1_acceptance_cases_dir(tmp_path: Path, shipped_cases_dir: Path) -> Path:
+    """Copy the v0.1 acceptance cases (001-010) into a tmp dir.
+
+    Used by the CLI eval gate so the `remediation eval` command runs against
+    the curated v0.1 subset rather than the full directory (which also
+    contains the v0.1.1 cases pending Task 12).
+    """
+    cases_dir = tmp_path / "v0_1_cases"
+    cases_dir.mkdir()
+    for case_id in _V0_1_ACCEPTANCE_IDS:
+        src = shipped_cases_dir / f"{case_id}.yaml"
+        (cases_dir / f"{case_id}.yaml").write_text(src.read_text(encoding="utf-8"))
+    return cases_dir
+
+
 def _contract_yaml(tmp_path: Path) -> Path:
     contract = ExecutionContract(
         schema_version="0.1",
@@ -100,9 +140,15 @@ def test_cli_version_flag() -> None:
 # ---------------------------- eval ---------------------------------------
 
 
-def test_eval_with_shipped_cases_passes_10_of_10(shipped_cases_dir: Path) -> None:
-    """Same gate as the test_eval_runner.py 10/10 acceptance test, via CLI."""
-    result = CliRunner().invoke(main, ["eval", str(shipped_cases_dir)])
+def test_eval_with_v0_1_acceptance_cases_passes(v0_1_acceptance_cases_dir: Path) -> None:
+    """The v0.1 acceptance gate via the CLI: cases 001-010 must all pass.
+
+    Mirrors `test_v0_1_acceptance_suite` in test_eval_runner.py. Cases 011-015
+    (promotion-surface, pending Task 12) are excluded from this CLI gate; the
+    runner-test's load check covers them for schema drift until Task 12 makes
+    them executable.
+    """
+    result = CliRunner().invoke(main, ["eval", str(v0_1_acceptance_cases_dir)])
     assert result.exit_code == 0, result.output
     assert "10/10 passed" in result.output
 

@@ -1,0 +1,56 @@
+case_id: 014_promotion_advance_proposed
+description: |
+  Stage-1 action class accumulates enough evidence to cross the Stage 1 → 2
+  graduation threshold during this run. The tracker's `propose_promotions()`
+  yields an advance proposal; Task 12 plumbs it into the runner's actuals as
+  `by_promotion_proposal[action_type] = {from_stage, to_stage}`.
+
+  Threshold note (tracker.py): `_STAGE1_ARTIFACT_THRESHOLD = 1` — emitting a
+  single artifact at Stage 1 is sufficient. Recommend mode emits exactly one
+  artifact per finding, so this fixture (one finding, fresh action class)
+  produces stage1_artifacts=1 → propose(1→2) fires.
+  Executable after A.1 v0.1.1 Task 12 wires fixture.promotion + propose
+  surfacing into the runner.
+fixture:
+  mode: recommend
+  authorization:
+    mode_recommend_authorized: true
+    mode_dry_run_authorized: false
+    mode_execute_authorized: false
+    authorized_actions:
+      - remediation_k8s_patch_runAsNonRoot
+    max_actions_per_run: 5
+    rollback_window_sec: 300
+  # Promotion-state assumption: Stage 1 for runAsNonRoot, no prior evidence.
+  # The recommend-mode run emits one artifact → evidence.stage1_artifacts
+  # increments to 1 → threshold met → propose(1→2) fires at end-of-run.
+  promotion:
+    schema_version: '0.1'
+    cluster_id: eval-fixture
+    created_at: '2026-05-17T00:00:00Z'
+    last_modified_at: '2026-05-17T00:00:00Z'
+    action_classes:
+      remediation_k8s_patch_runAsNonRoot:
+        action_type: remediation_k8s_patch_runAsNonRoot
+        stage: 1
+        sign_offs: []
+  findings:
+    - rule_id: run-as-root
+      rule_title: Container running as root
+      severity: high
+      workload_kind: Deployment
+      workload_name: api
+      namespace: production
+      container_name: api
+      manifest_path: cluster:///production/Deployment/api
+      detected_at: '2026-05-16T12:00:00Z'
+expected:
+  finding_count: 1
+  by_outcome:
+    recommended_only: 1
+  # Task 12 surfaces tracker.propose_promotions() results in the runner
+  # actuals under this key; the eval-framework asserts the proposal exists.
+  by_promotion_proposal:
+    remediation_k8s_patch_runAsNonRoot:
+      from_stage: 1
+      to_stage: 2
