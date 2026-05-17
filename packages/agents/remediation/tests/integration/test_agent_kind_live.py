@@ -550,40 +550,47 @@ _MUTATING_VERBS = frozenset(
 
 def _install_mutating_kubectl_spy(
     monkeypatch: pytest.MonkeyPatch,
-) -> list[list[str]]:
-    """Wrap `subprocess.run` inside `remediation.tools.kubectl_executor` with
-    a counter that records every kubectl invocation using a state-mutating
-    verb. Read verbs (`get`, `describe`, etc.) are NOT counted — the agent
-    is allowed to read the cluster before refusing.
+) -> tuple[list[list[str]], list[list[str]]]:
+    """Wrap the kubectl_executor's `_run` chokepoint with a counter.
 
-    Returns a list the test asserts is empty after the agent run. The list
-    is populated only by subprocess.run calls originating from the
-    kubectl_executor module, so reads issued by other modules (e.g., the
-    test fixture's setup, or a future D.6 detector that uses a separate
-    subprocess wrapper) don't pollute the count.
+    All cluster-touching paths in A.1 flow through
+    [`kubectl_executor._run`](packages/agents/remediation/src/remediation/tools/kubectl_executor.py#L88)
+    — the module's docstring explicitly names this as the single subprocess
+    point ("All cluster-touching paths in A.1 flow through this — tests
+    monkeypatch it to inject deterministic results"). Spying here gives a
+    complete record of kubectl invocations the agent issued, ignoring any
+    kubectl invocations made elsewhere (e.g., by the test fixture setup or
+    the operator's terminal).
 
-    Mirrors the Task 5 control-flow proof's `_patch_driver_with_apply_spy`
-    pattern, lifted from `apply_patch`-level fake to `subprocess.run`-level
-    spy so the proof holds even when the agent reaches into a real
-    `kubectl_executor` against a real cluster.
+    Returns `(all_calls, mutating_calls)`. `all_calls` records every
+    invocation; `mutating_calls` is the subset using a state-mutating verb
+    (patch / apply / create / delete / replace / edit / scale / rollout).
+    Read verbs (get / describe / version / etc.) appear only in `all_calls`
+    — the agent is allowed to read the cluster before refusing.
+
+    Mirrors Task 5's `_patch_driver_with_apply_spy` pattern, lifted from
+    `apply_patch`-level fake to subprocess-level spy so the proof holds even
+    when the agent reaches into a real `kubectl_executor` against a real
+    cluster.
     """
+    all_calls: list[list[str]] = []
     mutating_calls: list[list[str]] = []
-    real_run = subprocess.run
+    real_run = kc_mod._run
 
-    def counting_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        cmd_arg = args[0] if args else kwargs.get("args")
-        if isinstance(cmd_arg, (list, tuple)) and cmd_arg:
-            first = cmd_arg[0]
-            if isinstance(first, str) and Path(first).name == "kubectl":
-                for arg in cmd_arg[1:]:
-                    if isinstance(arg, str) and arg in _MUTATING_VERBS:
-                        mutating_calls.append([str(c) for c in cmd_arg])
+    async def counting_run(cmd: object) -> tuple[int, str, str]:
+        if isinstance(cmd, (list, tuple)) and cmd:
+            cmd_str = [str(c) for c in cmd]
+            all_calls.append(cmd_str)
+            first = cmd_str[0]
+            if Path(first).name == "kubectl":
+                for arg in cmd_str[1:]:
+                    if arg in _MUTATING_VERBS:
+                        mutating_calls.append(cmd_str)
                         break
-        # `real_run` is what the executor expects to see; preserve its return.
-        return real_run(*args, **kwargs)  # type: ignore[arg-type,return-value]
+        return await real_run(cmd)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(kc_mod.subprocess, "run", counting_run)
-    return mutating_calls
+    monkeypatch.setattr(kc_mod, "_run", counting_run)
+    return all_calls, mutating_calls
 
 
 async def test_stage1_only_refuses_execute_against_live_cluster(
@@ -610,7 +617,7 @@ async def test_stage1_only_refuses_execute_against_live_cluster(
     proven it against `apply_patch`-level mocks.
     """
     rv_before = _read_resource_version(kind_kubeconfig, test_namespace, bad_deployment)
-    mutating_calls = _install_mutating_kubectl_spy(monkeypatch)
+    all_kubectl_calls, mutating_calls = _install_mutating_kubectl_spy(monkeypatch)
 
     contract = _contract(tmp_path)
     findings = _findings_for(bad_deployment, test_namespace, tmp_path)
@@ -653,6 +660,7 @@ async def test_stage1_only_refuses_execute_against_live_cluster(
     print(
         f"\n[TASK13-STAGE1-PROOF] outcome={outcome_name} "
         f"mutating_kubectl_calls={len(mutating_calls)} "
+        f"total_kubectl_calls={len(all_kubectl_calls)} "
         f"rv_before={rv_before} rv_after={rv_after} "
         f"workload={test_namespace}/{bad_deployment}"
     )
