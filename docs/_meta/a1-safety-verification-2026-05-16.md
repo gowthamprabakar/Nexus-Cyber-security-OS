@@ -116,7 +116,7 @@ The earned-autonomy pipeline shipping in code does **not** unlock Stage 3 or Sta
 
 - **Stage 1 (recommend) and Stage 2 (dry_run): ship to customers** as of v0.1.1. Promotion floor + dry-run validation. Stage 2 customer enablement requires the customer-side prerequisites items 5-9 of §6.
 - **Stage 3 (human-approved execute): customer-conditional.** All customer-side prerequisites of §6 must close per-customer before enablement. The shipping of the gate + tracker is necessary but not sufficient.
-- **Stage 4 (unattended execute): globally closed in code.** Both `remediation promotion advance --to stage_4` and `remediation promotion reconcile` refuse with the same prerequisite message naming **two** prerequisites: (a) the rolled-back-path mutating-admission-webhook fixture lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`, AND (b) at least 4 weeks of customer Stage-3 evidence accumulates against a real production cluster. No flag, no operator, and no policy override opens Stage 4 until both prerequisites close. This is the immediate next-plan gate after v0.1.1.
+- **Stage 4 (unattended execute): globally closed in code.** Both `remediation promotion advance --to stage_4` and `remediation promotion reconcile` refuse with the same prerequisite message naming **two** prerequisites: (a) the rolled-back-path mutating-admission-webhook fixture lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass` — ✅ closed 2026-05-17 ([Entry 3](#entry-3--kind-v0310--k8s-v1300--2026-05-17--rolled-back-path-live-proven)); AND (b) at least 4 weeks of customer Stage-3 evidence accumulates against a real production cluster — ⚠️ empirical and cannot close until customers run Stage 3 in production. Stage 4 remains globally closed pending (b). The CLI refusal messages still name both prerequisites; updating them to reflect just (b) is a follow-up code change.
 
 The `promotion.yaml` cache + the §3 cache/source-of-truth contract carry **one documented limitation**: `replay()` over a chain emitted by `agent.run()` alone cannot reconstruct stage + sign_offs above Stage 1, because the transition events (`promotion.advance.applied`, `promotion.demote.applied`, `promotion.init.applied`) originate from the CLI's `init`/`advance`/`demote` paths, not from agent runs. Evidence counters reconstruct field-by-field; stage + sign_offs require the CLI history to also be in the chain. Documented permanently in [`a1-v0-1-1-verification-2026-05-17.md`](a1-v0-1-1-verification-2026-05-17.md#permanent-documented-limitation--reconcile_matches-evidence-only-parity) and in the runbook's [§13](../../packages/agents/remediation/runbooks/remediation_workflow.md#13-promotionyaml-schema-reference-v011) limitation note.
 
@@ -177,7 +177,7 @@ The complete list (every item must close; this is not "pick three"):
 
 1. **Gate G3 closure** — the `NEXUS_LIVE_K8S=1` lane passes `test_execute_validated_against_live_cluster` and `test_rollback_window_matches_real_reconcile` against a `kind` cluster of the customer's K8s minor version. Recorded by appending a note to this file: date, kind version, measured reconcile latency, commit hash.
 2. **Promotion tracking in code (§3 gap).** ✅ **Closed in A.1 v0.1.1.** `promotion.yaml` ships, per-action audit emission lands, the `remediation promotion` CLI subcommand group exists, and the pre-flight gate is live (proven against a real `kind` cluster — see [§8 Entry 2](#entry-2--kind-v0310--k8s-v1300--2026-05-17)). Stage-4 customer enablement still requires the rolled-back-path webhook fixture + ≥4 weeks customer Stage-3 evidence per item 4 above + the bright line in §3.
-3. **The mutating-admission-webhook fixture** lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`. This proves the rolled-back path works end-to-end, not just the validated path. Phase-1c follow-up after initial G3 closure.
+3. **The mutating-admission-webhook fixture** lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`. ✅ **Closed 2026-05-17 — see [Entry 3 below](#entry-3--kind-v0310--k8s-v1300--2026-05-17--rolled-back-path-live-proven).** The rolled-back path is now live-proven against a Kyverno-based mutating admission webhook that rewrites Deployment containers' `securityContext.runAsNonRoot` + `runAsUser` on UPDATE; the validator's D.6 re-detect re-fires `run-as-root`, the inverse patch lands automatically, outcome `executed_rolled_back`.
 4. **At least one design-partner customer has run Stage 3 in their environment for ≥4 weeks without an unexpected rollback.** This is the empirical floor; no synthetic test substitutes for a real customer cluster's webhook landscape.
 
 ### Customer-side prerequisites
@@ -381,6 +381,77 @@ TOTAL RUN WALL-CLOCK:       4.40s
 ```
 
 The fail-closed property (Stage 1 + execute → refuse with zero kubectl mutation, `resourceVersion` unchanged) still holds against the real apiserver — the safety claim Entry 2 originally captured was real, just unreproducible from the committed branch HEAD until this hotfix. **Entry 2 is now reproducible from commit `dc1a1d4`.**
+
+---
+
+### Entry 3 — kind v0.31.0 / K8s v1.30.0 / 2026-05-17 — rolled-back path live-proven
+
+Closes safety-verification **§6 prerequisite item 3** — the rolled-back-path mutating-admission-webhook fixture lands and `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass`. This was the immediate next-plan gate named at the close of the A.1 v0.1.1 earned-autonomy-pipeline plan ([`docs/_meta/a1-v0-1-1-verification-2026-05-17.md`](a1-v0-1-1-verification-2026-05-17.md#immediate-next-plan-gate-non-negotiable)) and is now satisfied.
+
+```
+DATE:                       2026-05-17 (post-A.1-v0.1.1)
+COMMIT:                     (this PR's HEAD; pinned in PR body + entry sign-off below)
+KIND VERSION:               kind v0.31.0 go1.25.5 darwin/arm64
+KIND NODE IMAGE:            kindest/node:v1.30.0
+K8S SERVER VERSION:         v1.30.0
+KUBECTL CLIENT VERSION:     v1.36.1
+HOST:                       Darwin 25.4.0 arm64 (10 CPU, 7.6 GiB RAM)
+DOCKER:                     29.1.3 (Docker Desktop)
+WEBHOOK:                    Kyverno v1.13.4 (admission controller + ClusterPolicy
+                              `a1-rolled-back-fixture-strip-runasnonroot`)
+TEST:                       test_execute_rolled_back_against_live_cluster
+                              (no longer xfail; flipped to a real assertion)
+OUTCOME:                    executed_rolled_back
+WALL-CLOCK:                 60.56s (≈ rollback_window_sec=60 + ~0.5s agent overhead)
+[WEBHOOK-ROLLBACK-PROOF]    outcome=executed_rolled_back
+                            wall_clock=60.56s
+                            workload=nexus-rem-test/bad-app-<timestamp>
+                            post_patch_runAsNonRoot=false
+```
+
+#### What this entry proves
+
+1. **The rolled-back path applies the inverse patch automatically against a real cluster when a mutating webhook reverts the operator's intended state.** The Kyverno ClusterPolicy [`a1-rolled-back-fixture-strip-runasnonroot`](../../packages/agents/remediation/tests/integration/fixtures/kyverno-strip-runasnonroot.yaml) fires on Deployment UPDATE in `nexus-rem-test` and rewrites the container's `securityContext.runAsNonRoot` back to `false` AND `runAsUser` back to `0`, regardless of what `kubectl patch` set. The agent's `kubectl patch` applies (setting `runAsNonRoot: true` + `runAsUser: 65532`); Kyverno's webhook strips both back; the rollback-window-bounded post-validate D.6 re-detect finds the `run-as-root` rule still firing; A.1 applies the inverse patch automatically. Outcome `executed_rolled_back`. This is the failure mode A.1's rollback path is designed to catch (OPA Gatekeeper / Linkerd / Istio sidecar-injection / Kyverno itself rewriting workload specs), and it now holds against a real Kubernetes apiserver — not just mocked tests.
+
+2. **The 60-second rollback window is sufficient for a kind-shaped cluster.** Total wall-clock was 60.56s; subtracting the 60s rollback window leaves ~0.56s of agent overhead (apply + re-detect + inverse-patch). The default 300s window has 5x headroom over the rolled-back-path agent overhead on kind. Real-customer clusters with heavier webhook chains will have higher reconcile latency; the runbook's "measure your cluster's actual reconcile latency before promoting to Stage 4" guidance remains the right framing.
+
+3. **D.6's cluster-side detector correctly re-fires the rule after the webhook reverts the spec.** Pre-patch state: `runAsUser=0`, no `runAsNonRoot`. A.1's patch transitions to `runAsUser=65532` + `runAsNonRoot=true`. Kyverno's UPDATE webhook fires and rewrites to `runAsUser=0` + `runAsNonRoot=false`. D.6's run-as-root rule re-fires (keys on `runAsUser==0`) and the validator returns `requires_rollback=True`. The first attempt at this fixture stripped only `runAsNonRoot`, leaving `runAsUser=65532` in place, which surfaced silently as `executed_validated` — fixed in the same commit by extending the webhook policy to also revert `runAsUser`. The cluster-side detector behaves correctly; the lesson is "exercise the webhook against the rule's actual key fields, not just the field the patch added."
+
+#### What this entry does NOT prove
+
+1. **Real-customer webhook chains.** The Kyverno-based fixture exercises one webhook (Kyverno's admission controller) with one mutation rule. Real customer environments may chain multiple webhooks (Linkerd injects sidecars, OPA Gatekeeper validates, custom controllers re-mutate) with different latencies. The 60.56s wall-clock here is the kind baseline; per-customer measurement still required per §6 item 8.
+
+2. **The customer-Stage-3-evidence prerequisite.** Stage 4 remains globally closed in code because **§6 prerequisite item 4** — ≥4 weeks of customer Stage-3 evidence without unexpected rollbacks — is still empirical and cannot close until customers run Stage 3 in production. Entry 3 satisfies the platform-side prerequisite (item 3), not the customer-side (item 4).
+
+3. **Stage-3 enablement for any customer.** Items 5–9 of §6 (signed runbook, separation of duties, kill-switch drill cadence, rollback-window-tuning process, incident-response playbook) are per-customer and still required for Stage-3 enablement per customer.
+
+#### Operator follow-ups generated by this run
+
+- **The v0.1.2 CLI-gate wiring is unblocked.** [`a1-v0-1-1-verification-2026-05-17.md`](a1-v0-1-1-verification-2026-05-17.md#whats-still-pending-v012-named-so-the-next-plan-inherits-it) named that the `remediation run` CLI does not yet wire `--promotion <path>` and that the wiring was "gated on the rolled-back-path webhook fixture landing first." That gate now lifts. Sequence the v0.1.2 plan accordingly.
+- **The CLI's Stage-4 refusal messages** in `remediation promotion advance` and `remediation promotion reconcile` currently name both prerequisites (the webhook fixture AND ≥4 weeks customer Stage-3 evidence) as outstanding. After this lands, only item (b) is outstanding — the message text is still accurate insofar as Stage 4 is still globally closed, but the specific reason narrowed. Consider whether to update the message text in a follow-up to reflect just item (b); not blocking.
+
+#### Reproduction
+
+```bash
+export PATH="/opt/homebrew/bin:/Applications/Docker.app/Contents/Resources/bin:$PATH"
+open -a Docker && until docker info >/dev/null 2>&1; do sleep 3; done
+# Reuse the persistent cluster; create only if absent.
+kind get clusters | grep -q nexus-remediation-test || \
+    kind create cluster --name nexus-remediation-test --image kindest/node:v1.30.0
+# Install Kyverno (idempotent — `kubectl apply --server-side --force-conflicts`).
+# The test fixture does this automatically; the explicit invocation here is
+# documented for transparency.
+kubectl --context kind-nexus-remediation-test apply --server-side --force-conflicts \
+    -f https://github.com/kyverno/kyverno/releases/download/v1.13.4/install.yaml
+kubectl --context kind-nexus-remediation-test -n kyverno wait \
+    --for=condition=available deployment --all --timeout=180s
+# Run the rolled-back path.
+NEXUS_LIVE_K8S=1 uv run pytest \
+    packages/agents/remediation/tests/integration/test_agent_kind_live.py::test_execute_rolled_back_against_live_cluster \
+    -v -s
+# The test installs + cleans up the ClusterPolicy automatically per invocation.
+# Cluster + Kyverno persist; the policy is removed on test teardown.
+```
 
 ---
 
