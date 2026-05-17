@@ -404,7 +404,7 @@ Practical implication: to reconstruct `promotion.yaml` end-to-end from the chain
 
 ### File location convention
 
-By convention `promotion.yaml` lives at `<persistent_root>/promotion.yaml`, where `persistent_root` is the ExecutionContract field operators already supply for cross-run state. Operators are free to put it anywhere — every `remediation promotion` subcommand takes an explicit `--promotion <path>`. The agent's run-time `agent.run(promotion=...)` API takes a `PromotionTracker` instance directly; the CLI's `remediation run` subcommand does **not** yet wire a `--promotion` flag (v0.1.2 task — see [§14](#14-v01--v011-migration) below).
+By convention `promotion.yaml` lives at `<persistent_root>/promotion.yaml`, where `persistent_root` is the ExecutionContract field operators already supply for cross-run state. Operators are free to put it anywhere — every `remediation promotion` subcommand takes an explicit `--promotion <path>`, and as of **v0.1.2** the `remediation run` subcommand also accepts `--promotion <path>` to route the loaded `PromotionTracker` through the pre-flight stage gate. The agent's run-time `agent.run(promotion=...)` API takes a `PromotionTracker` instance directly (the CLI's `--promotion` is a thin wrapper around `PromotionTracker.from_path()` plus that API param).
 
 ---
 
@@ -418,10 +418,10 @@ By convention `promotion.yaml` lives at `<persistent_root>/promotion.yaml`, wher
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Your existing `remediation run --contract X --findings Y --auth Z --mode execute --kubeconfig … --i-understand-this-applies-patches-to-the-cluster` command line | **None.** v0.1.1 ships the promotion package additively. Your existing v0.1 CLI invocation works unchanged; `auth.yaml` + `--i-understand-…` remain your two operator-facing kill switches.                                                                                                    |
 | Eval gate (if you run `remediation eval`)                                                                                                                        | "10/10 passed" → "15/15 passed". The five new cases (011–015) exercise the promotion-gate surface against the v0.1.1 parser.                                                                                                                                                                   |
-| Outcome vocabulary in `report.md` / `findings.json`                                                                                                              | New value: `refused_promotion_gate`. Only appears if a `PromotionTracker` is passed to `agent.run(promotion=...)`. **The `remediation run` CLI does not pass one** today (v0.1.2 will), so v0.1.1 users running the CLI never see this outcome.                                                |
+| Outcome vocabulary in `report.md` / `findings.json`                                                                                                              | New value: `refused_promotion_gate`. Appears in CLI output when `--promotion <path>` is supplied (v0.1.2+) AND a finding's action class hasn't earned the requested mode.                                                                                                                      |
 | Stage 4 (`unattended execute`)                                                                                                                                   | **Globally closed in code.** Both `remediation promotion advance --to stage_4` and `remediation promotion reconcile` refuse with the same prerequisite message naming the rolled-back-path webhook fixture + ≥4 weeks customer Stage-3 evidence. There is no flag or operator that opens this. |
 
-**The migration below is opt-in.** You can keep running v0.1.1 exactly the way you ran v0.1 and lose nothing. Following the steps below buys you (a) operator-readable graduation tracking, (b) the `remediation promotion status` print, and (c) the foundation for the v0.1.2 CLI-gate wiring.
+**The migration below is opt-in.** You can keep running v0.1.x exactly the way you ran v0.1 and lose nothing — omitting `--promotion <path>` on `remediation run` reverts to the v0.1 behaviour exactly. Following the steps below buys you (a) operator-readable graduation tracking, (b) the `remediation promotion status` print, and (c) end-to-end gate enforcement at the CLI surface via the v0.1.2 `--promotion <path>` flag.
 
 ### Step-by-step setup
 
@@ -552,11 +552,24 @@ uv run remediation promotion status --promotion "$PROMOTION_FILE"
 
 The print shows every action class you've graduated, its current stage, the sign-off chain (operator + reason for each transition), and any proposals from `tracker.propose_promotions()`.
 
-#### Step 8 — Continue running `remediation run` exactly as before
+#### Step 8 — Wire `promotion.yaml` into `remediation run`
 
-There is no `--promotion` flag on `remediation run` in v0.1.1 — the `agent.run()` Python API enforces the pre-flight gate, but the CLI does not yet wire `promotion.yaml` into the run. That wiring is **v0.1.2**, gated on the rolled-back-path webhook fixture landing first.
+As of **v0.1.2**, `remediation run` accepts an optional `--promotion <path>` flag that loads the `promotion.yaml` you set up in Steps 1–7 and routes it into the pre-flight stage gate. When supplied, the gate fires for any finding whose action class hasn't earned the requested mode: Stage 1 + `--mode execute` against a finding emits `refused_promotion_gate` for that finding; mixed-stage runs route each finding to its earned mode (Stage 1 → recommend, Stage 2 → dry_run, Stage 3+ → execute) in a single audit chain.
 
-In the meantime: your `remediation run --mode execute` command line is unchanged from v0.1; the existing `auth.yaml` + `--i-understand-…` operational flag are the operator-facing kill switches; **`promotion.yaml` records intent for the v0.1.2 wiring, not enforcement today.**
+```bash
+uv run remediation run \
+    --contract path/to/contract.yaml \
+    --findings path/to/d6-findings.json \
+    --auth path/to/auth.yaml \
+    --mode execute \
+    --kubeconfig ~/.kube/config \
+    --i-understand-this-applies-patches-to-the-cluster \
+    --promotion "$PROMOTION_FILE"
+```
+
+When `--promotion` is **omitted**, the run behaves exactly as in v0.1 — the gate is skipped, and the existing `auth.yaml` + `--i-understand-…` operational flag are the only operator-facing kill switches. This preserves the safe default for invocations that haven't yet adopted the earned-autonomy surface.
+
+Compatibility: every v0.1 CLI invocation still works unmodified. v0.1.2 is purely additive on the CLI surface — same `auth.yaml` opt-in, same `--mode` choices, same cluster-access semantics, plus the optional new flag.
 
 #### Step 9 — Use `propose` + `reconcile` as needed
 
@@ -580,28 +593,26 @@ Practical implication: if you bootstrap the audit chain from agent runs only (wi
 
 To make `reconcile` losslessly restore your `promotion.yaml`: **always issue `init` once when you start tracking a cluster, and always issue `advance` / `demote` via the CLI (never by hand-editing `promotion.yaml`).** That way every event lands in the chain and the chain replays cleanly.
 
-#### Step 10 — Plan for the rolled-back-path fixture landing
+#### Step 10 — Stage-4 closure status
 
-After this fixture lands (the immediate next-plan gate after v0.1.1):
+The rolled-back-path mutating-admission-webhook fixture (PR #11) has landed; `test_execute_rolled_back_against_live_cluster` is now live-proven against a Kyverno webhook (kind v0.31.0 / K8s v1.30.0; recorded in [safety-verification §8 Entry 3](../../../../docs/_meta/a1-safety-verification-2026-05-16.md#entry-3--kind-v0310--k8s-v1300--2026-05-17--rolled-back-path-live-proven)). That closes **prerequisite (a)** of the Stage-4 global closure named in [safety-verification §3](../../../../docs/_meta/a1-safety-verification-2026-05-16.md#3-promotion-tracking-where-the-per-action-class-graduation-state-lives).
 
-1. `test_execute_rolled_back_against_live_cluster` flips from `xfail` to `pass` in the `NEXUS_LIVE_K8S=1` lane.
-2. The Stage-4 prerequisite list updates in the safety-verification record.
-3. v0.1.2 wires `--promotion <path>` into `remediation run` so the CLI itself enforces the gate.
+**Prerequisite (b)** — ≥4 weeks of customer Stage-3 evidence without unexpected rollbacks — remains empirical and cannot close until customers run Stage 3 in production. Stage 4 stays globally closed in code pending (b). The CLI's `advance --to stage_4` and `reconcile` refusal messages still name both prerequisites; that text is accurate insofar as Stage 4 is still globally closed, but the specific outstanding reason narrowed to just (b) when Entry 3 closed. Updating the message text is a small follow-up code change, not blocking.
 
-The `promotion.yaml` you set up in steps 1–7 above is exactly what v0.1.2 will read.
+The `promotion.yaml` you set up in Steps 1–7 is now exercised end-to-end via `--promotion` (Step 8 above).
 
 ### What if I get stuck
 
-| Symptom                                                                                 | Fix                                                                                                       |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `init` says "file already exists"                                                       | Move the existing file aside (`mv promotion.yaml promotion.yaml.bak`); re-run `init`.                     |
-| `advance --to stage_4` exits non-zero                                                   | Working as intended. Stage 4 is globally closed. Read the printed message for the two prerequisites.      |
-| `advance` says "no-op transition"                                                       | The action class is already at the target stage. Run `status` to confirm; nothing to do.                  |
-| `advance --to stage_3` says "skip transition"                                           | The action class is at Stage 1. You must `advance --to stage_2` first, then `advance --to stage_3`.       |
-| `status` shows different `evidence` counters than what your audit chain has             | Run `reconcile --dry-run` to see the diff. Re-issue any missing `advance` events (see Step 9 limitation). |
-| `status` shows `proposed_promotions` for an action class you don't want to graduate yet | Ignore. Proposals never auto-advance.                                                                     |
-| `remediation run --mode execute` succeeds even though I have Stage 1 in promotion.yaml  | Working as intended for v0.1.1 — the CLI `run` does not yet wire `promotion.yaml`. Wait for v0.1.2.       |
+| Symptom                                                                                 | Fix                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init` says "file already exists"                                                       | Move the existing file aside (`mv promotion.yaml promotion.yaml.bak`); re-run `init`.                                                                                                                                  |
+| `advance --to stage_4` exits non-zero                                                   | Working as intended. Stage 4 is globally closed. Read the printed message for the two prerequisites.                                                                                                                   |
+| `advance` says "no-op transition"                                                       | The action class is already at the target stage. Run `status` to confirm; nothing to do.                                                                                                                               |
+| `advance --to stage_3` says "skip transition"                                           | The action class is at Stage 1. You must `advance --to stage_2` first, then `advance --to stage_3`.                                                                                                                    |
+| `status` shows different `evidence` counters than what your audit chain has             | Run `reconcile --dry-run` to see the diff. Re-issue any missing `advance` events (see Step 9 limitation).                                                                                                              |
+| `status` shows `proposed_promotions` for an action class you don't want to graduate yet | Ignore. Proposals never auto-advance.                                                                                                                                                                                  |
+| `remediation run --mode execute` succeeds even though I have Stage 1 in promotion.yaml  | You forgot `--promotion <path>` on the `run` invocation. As of v0.1.2 the gate fires only when the path is supplied; omitting it preserves v0.1 behaviour (gate skipped). Re-run with `--promotion "$PROMOTION_FILE"`. |
 
 ### Why this migration is opt-in and not flag-day
 
-A flag-day migration would require every v0.1 customer to issue `init` + N×`advance` before their next `remediation run --mode execute` would work. v0.1.1 instead lets customers keep running v0.1's CLI surface unchanged, opt into promotion tracking when they're ready, and absorb v0.1.2's CLI-gate wiring when the rolled-back-path fixture lands. The earned-autonomy contract still applies — Stage 4 is globally closed in code, customer-side prerequisites of [safety-verification §6](../../../../docs/_meta/a1-safety-verification-2026-05-16.md#customer-side-prerequisites) still apply for Stage 3 enablement — but the migration cost is paid when the customer chooses to pay it, not on the v0.1.1 upgrade.
+A flag-day migration would require every v0.1 customer to issue `init` + N×`advance` before their next `remediation run --mode execute` would work. v0.1.x instead keeps the CLI surface backwards-compatible: omit `--promotion` on `run` and the gate is skipped (v0.1 behaviour preserved exactly); supply `--promotion <path>` and the gate enforces. The earned-autonomy contract still applies — Stage 4 is globally closed in code, customer-side prerequisites of [safety-verification §6](../../../../docs/_meta/a1-safety-verification-2026-05-16.md#customer-side-prerequisites) still apply for Stage 3 enablement — but the migration cost is paid when the customer chooses to pay it, not on the v0.1.x upgrade.
