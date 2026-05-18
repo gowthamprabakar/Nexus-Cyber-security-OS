@@ -233,3 +233,152 @@ NEXUS_LIVE_NATS=1 uv run pytest \
 Expected: 4 passed (connect+ensure_streams; publish→subscribe round-trip with header; contextvar fallback on the wire; publish_finding round-trip).
 
 Without `NEXUS_LIVE_NATS=1`, the lane SKIPs with a reason naming the env var + the compose command. The mocked lane in `test_fabric_client.py` (53 tests) runs unconditionally — the live lane is for empirical proof against a real broker; the mocked lane is the CI gate.
+
+---
+
+## 8. D.7 lifecycle events on the wire (F.7 v0.2)
+
+After F.7 v0.2 closes (the [D.7 lifecycle-events plan](../superpowers/plans/2026-05-17-f-7-v0-2-d-7-events-migration.md)), the **D.7 Investigation Agent** can publish 3 lifecycle events per run to `events.>`. **This is opt-in and reversible.** D.7's filesystem path (the 4 charter-workspace artifacts — `incident_report.json` / `timeline.json` / `hypotheses.md` / `containment_plan.yaml`) is unchanged. The bus path is additive.
+
+D.7 is the first real agent to use the F.7 v0.1 substrate. Subsequent agent migrations (Cloud-Posture / D.5 / D.6 onto `findings.>`) are **F.7 v0.3+, each their own plan, not started**.
+
+### 8a. How to enable
+
+Two equivalent ways. CLI flag wins when both are set (per [F.7 v0.2 plan Q3](../superpowers/plans/2026-05-17-f-7-v0-2-d-7-events-migration.md#resolved-questions)):
+
+```bash
+# Option 1 — CLI flag (per-invocation):
+investigation-agent run --contract path.yaml --publish-events-to-bus
+
+# Option 2 — env var (process-wide default):
+NEXUS_FABRIC_PUBLISH=1 investigation-agent run --contract path.yaml
+
+# Operator turns it off explicitly even when env says enable
+# (the rollback path; per F.7 v0.2 plan Q3):
+NEXUS_FABRIC_PUBLISH=1 investigation-agent run \
+    --contract path.yaml --no-publish-events-to-bus
+```
+
+**Default is OFF.** An operator not opting in sees byte-identical pre-v0.2 D.7 behaviour. The F.7 v0.2 plan's [eval-suite both-modes gate](../superpowers/plans/2026-05-17-f-7-v0-2-d-7-events-migration.md#execution-status) proves this empirically: all 10 D.7 eval cases pass with the flag OFF AND ON, with per-case investigation outcomes byte-identical between the two modes.
+
+### 8b. The 3 lifecycle event types
+
+Subject pattern per F.7 v0.2 Q2:
+
+    events.tenant.<tenant_id>.investigation.<event_type>
+
+`<event_type>` is one of three closed-set values:
+
+| `event_type` | When it fires                                                   | Payload fields                                                                                          |
+| ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `started`    | Stage-1 SCOPE entry, before the parallel sub-investigations     | `investigation_id`, `tenant_id`, `correlation_id`, `event_type`, `emitted_at`                           |
+| `completed`  | Stage-6 HANDOFF success, after the 4 artifacts are written      | Same shape as `started`                                                                                 |
+| `failed`     | Any stage exception (Stage-2 spawn / Stage-3 synthesize / etc.) | Same shape as `started`, **plus** `stage` (which stage raised) and `error_class` (exception class name) |
+
+The payload is JSON-encoded with deterministic key ordering (`sort_keys=True` + compact separators), matching F.7 v0.1's `publish_finding()` encoding contract. Two equivalent lifecycle events produce byte-identical wire payloads — load-bearing for any future replay / dedup discipline.
+
+Every lifecycle event carries the `Nexus-Correlation-Id` header on the wire (the F.7 v0.1 bus-property contract). Consumers read the header directly without unwrapping the JSON.
+
+Per-investigation grouping: every event from a single D.7 run carries the same `investigation_id` (a 26-char ULID minted at Stage-1 entry, distinct from the `incident_id` minted at Stage-6 for the incident-report artefact). Consumers correlate the started → completed (or started → failed) pair on the bus via this id.
+
+### 8c. What if the bus is unreachable
+
+**Publish failures are non-fatal** (F.7 v0.2 plan Q4 + the load-bearing `test_run_continues_when_bus_publish_fails` proof).
+
+- A `FabricConnectionError` (broker unreachable), `MissingCorrelationIdError`, or network `OSError` during a lifecycle publish is **caught**, logged at WARNING, and recorded to the F.6 audit chain as `investigation.bus_publish.failure` (with the exception class + message in the payload).
+- The investigation **continues**. The 4 filesystem artifacts are **still written**. D.7's "filesystem artifacts are the contract" guarantee is preserved.
+- An operator inspecting `audit.jsonl` after a bus-broken run will see `investigation.bus_publish.attempt` → `investigation.bus_publish.failure` for each missed publish, alongside the usual `invocation_started` / `tool_call` / `output_written` / `invocation_completed` chain entries.
+
+Three new audit-action types extend D.7's chain vocabulary under F.7 v0.2 (additive only per ADR-010 condition 4):
+
+| Action                              | Payload                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `investigation.bus_publish.attempt` | `event_type`, `subject`, `investigation_id`                                                                      |
+| `investigation.bus_publish.success` | `event_type`, `subject`, `investigation_id`, `ack_stream`, `ack_seq` (PubAck fields for forensic reconstruction) |
+| `investigation.bus_publish.failure` | `event_type`, `subject`, `investigation_id`, `exception_class`, `message`                                        |
+
+### 8d. Sample subscriber — monitor real-time D.7 activity
+
+A minimal consumer that watches D.7 lifecycle events for a specific tenant:
+
+```python
+import asyncio
+from shared.fabric import (
+    CORRELATION_ID_HEADER,
+    EVENTS_STREAM,
+    JetStreamClient,
+)
+
+
+async def monitor_d7(tenant_id: str) -> None:
+    client = JetStreamClient(servers=["nats://localhost:4222"])
+    try:
+        await client.connect()
+        await client.ensure_streams()
+
+        async def on_event(msg) -> None:
+            import json
+
+            cid = msg.headers.get(CORRELATION_ID_HEADER) if msg.headers else None
+            payload = json.loads(msg.data)
+            event_type = payload["event_type"]
+            inv_id = payload["investigation_id"]
+            if event_type == "failed":
+                print(
+                    f"[{event_type}] inv={inv_id} cid={cid} "
+                    f"stage={payload['stage']} err={payload['error_class']}"
+                )
+            else:
+                print(f"[{event_type}] inv={inv_id} cid={cid}")
+            await msg.ack()
+
+        await client.subscribe(
+            EVENTS_STREAM,
+            f"events.tenant.{tenant_id}.investigation.>",
+            on_event,
+            durable_name=f"d7-monitor-{tenant_id}",
+        )
+
+        await asyncio.sleep(3600)  # run for an hour
+    finally:
+        await client.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(monitor_d7("01HV0T0000000000000000TENA"))
+```
+
+Run a D.7 investigation in another terminal with `--publish-events-to-bus`; the monitor receives `started` and `completed` (success) or `started` and `failed` (exception path) within seconds.
+
+### 8e. Live-lane reproduce-the-D.7-proof
+
+To reproduce the F.7 v0.2 live-broker proof against a fresh environment:
+
+```bash
+# 1. Bring NATS up.
+docker compose -f docker/docker-compose.dev.yml up -d nats
+
+# 2. Run the D.7 live lane.
+NEXUS_LIVE_NATS=1 uv run pytest \
+    packages/agents/investigation/tests/integration/test_bus_emit_live.py -v
+```
+
+Expected: 2 passed (real D.7 investigation publishes `started` + `completed` to real broker, header verified, 4 filesystem artifacts also written; real D.7 with forced Stage-2 failure publishes `started` + `failed`, original `RuntimeError` propagates).
+
+Without `NEXUS_LIVE_NATS=1`, the lane SKIPs with a reason naming the env var + the compose command. The mocked-lane D.7 tests (`test_bus_emit.py` + the F.7 v0.2 wiring tests in `test_agent.py`) run unconditionally — the live lane is for empirical proof against a real broker; the mocked lane is the CI gate.
+
+### 8f. Version-deviation carryover (from §2b + F.7 v0.1 §6)
+
+The local-development broker (`nats-server` via brew, currently `v2.14.0`) may be ahead of the `nats:2.10-alpine` image pinned in the compose file. The JetStream protocol surface D.7 exercises (publish with headers; per-tenant subject; correlation_id header round-trip) is stable across NATS 2.10 / 2.11 / 2.14. **F.7 v0.2 introduced NO new NATS-version dependency** — the `nats:2.10-alpine` baseline remains the correct production target. The F.7 v0.2 verification record names this carryover explicitly.
+
+### 8g. What's deferred (D.7-related)
+
+D.7's bus-side migration is **only the publish side of lifecycle events** in v0.2. Three D.7-related items remain deferred:
+
+| Deferred to    | Item                                                                                  | Reason                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Later F.7 v0.x | D.7's `find_related_findings` sibling-reads onto `findings.>` (instead of filesystem) | Depends on Cloud-Posture / D.5 / D.6 publishing findings to `findings.>` first (their v0.3+ scope).                   |
+| Later F.7 v0.x | D.7's `incident_report.json` (OCSF `class_uid` 2005) publishing to `findings.>`       | D.7 produces an incident-finding; once the substrate carries findings reliably, D.7's emission can move onto the bus. |
+| F.7 v0.x       | D.7 subscribing to `events.>` (e.g., a Supervisor-orchestrated investigation trigger) | No real subscriber-side use case today; D.7 today is operator-triggered via `investigation-agent run`.                |
+
+The F.7 v0.2 hard scope boundary names each explicitly — Cloud-Posture / D.5 / D.6 finding-publish migrations are **F.7 v0.3+, separate plans, not started**.
