@@ -4,7 +4,7 @@ Cloud Posture Agent — agent **#1 of 18** for Nexus Cyber OS, and the **referen
 
 ## What it does
 
-Scans AWS accounts for cloud-configuration issues that increase risk, using **Prowler 5.x** for breadth + **boto3-driven IAM enrichment** for primary-source evidence. Emits OCSF v1.3 Compliance Findings (`class_uid 2003`) wrapped with a `NexusEnvelope` (correlation_id, tenant_id, agent_id, model_pin, charter_invocation_id), a markdown summary, and an append-only hash-chained audit log. Optionally upserts assets + findings into the customer's Neo4j knowledge graph.
+Scans AWS accounts for cloud-configuration issues that increase risk, using **Prowler 5.x** for breadth + **boto3-driven IAM enrichment** for primary-source evidence. Emits OCSF v1.3 Compliance Findings (`class_uid 2003`) wrapped with a `NexusEnvelope` (correlation_id, tenant_id, agent_id, model_pin, charter_invocation_id), a markdown summary, and an append-only hash-chained audit log. Optionally upserts assets + findings into the platform's Postgres `SemanticStore` knowledge graph.
 
 Every action runs through the [runtime charter](../../charter/) — execution contract, per-dimension budget envelope, tool whitelist, audit chain — so the agent cannot exceed its sanctioned scope.
 
