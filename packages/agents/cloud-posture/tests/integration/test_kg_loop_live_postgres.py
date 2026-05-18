@@ -63,20 +63,18 @@ import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import pytest_asyncio
-from alembic import command
-from alembic.config import Config
 from charter.contract import BudgetSpec, ExecutionContract
 from charter.memory import SemanticStore
-from charter.memory.models import EntityModel, RelationshipModel
+from charter.memory.models import Base, EntityModel, RelationshipModel
 from cloud_posture import agent as agent_mod
 from cloud_posture.tools import aws_iam, aws_s3, prowler
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 from investigation.tools.memory_walk import memory_neighbors_walk
-from sqlalchemy import select, text
+from sqlalchemy import Table, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -94,11 +92,6 @@ _DEFAULT_TARGET_URL = "postgresql+asyncpg://nexus:nexus_dev@localhost:5432/nexus
 
 _TARGET_URL = os.environ.get("NEXUS_LIVE_POSTGRES_URL", _DEFAULT_TARGET_URL)
 _ADMIN_URL = os.environ.get("NEXUS_LIVE_POSTGRES_ADMIN_URL", _DEFAULT_ADMIN_URL)
-
-
-def _alembic_url_from(async_url: str) -> str:
-    """Alembic ships a sync env; swap asyncpg → psycopg2 in the DSN."""
-    return async_url.replace("+asyncpg", "+psycopg2")
 
 
 def _skip_reason() -> str:
@@ -132,29 +125,53 @@ async def fresh_database() -> AsyncIterator[str]:
     yield _TARGET_URL
 
 
-def _run_migrations(async_url: str) -> None:
-    """Drive alembic `upgrade head` against the given DB.
+async def _install_entities_and_relationships_schema(engine: AsyncEngine) -> None:
+    """Materialize the production `entities` + `relationships` tables on the live DB.
 
-    Reuses `packages/charter/alembic` — the same migration set the
-    F.5 lane uses, so the `entities` + `relationships` schema we end
-    up with is bit-for-bit identical to production's.
+    Plan row 6's letter says "alembic-managed entities/relationships
+    tables via the same fixtures the F.5 live lane uses." This function
+    deviates from the letter for a *charter-substrate-side* reason that
+    is honestly disclosed (see also the Task 8 verification record):
 
-    Path resolution: this file lives at
-    `packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py`
-    (5 directories under the repo root). `parents[4]` is `packages/`,
-    so `parents[4] / "charter"` is the charter package root.
+    `packages/charter/src/charter/memory/models.py` defines
+    `_PortableLtree.load_dialect_impl`, which on the Postgres dialect
+    calls `postgresql.LTREE()`. As of SQLAlchemy 2.0.49 (this
+    workspace's pin) there is no `LTREE` attribute on
+    `sqlalchemy.dialects.postgresql`. The `playbooks` table uses this
+    column type; the full F.5 alembic baseline therefore cannot
+    materialize against real Postgres without a fix that lives in
+    `packages/charter/`. The KG-loop-closure plan's watch-item 1
+    forbids any charter change, so the fix belongs to a later plan
+    that explicitly owns substrate work.
+
+    The KG-loop write path only touches `entities` and `relationships`.
+    Those two tables do NOT use `_PortableLtree`. So we materialize
+    JUST those two via `Base.metadata.create_all(tables=...)` — same
+    ORM source of truth charter's `tests/test_semantic_store.py` uses
+    against aiosqlite — and skip the broken-against-Postgres tables
+    we don't need. The schema we end up with for `entities` and
+    `relationships` is bit-for-bit identical to production's because
+    both production-alembic and `create_all` emit DDL from the same
+    `EntityModel.__table__` / `RelationshipModel.__table__` definitions.
+
+    Honest scope of what this proves vs. plan-row-6 letter:
+    - Proved: real Postgres + production `entities`/`relationships`
+      schema + live `SemanticStore` against them. The KG-loop closes
+      via execution.
+    - NOT proved (because the playbooks-table substrate bug blocks it):
+      the F.5 baseline-alembic-upgrade-head against Postgres. This is
+      F.5's own live lane's job to prove, in a plan that owns the
+      substrate fix.
     """
-    charter_root = Path(__file__).resolve().parents[4] / "charter"
-    cfg = Config(str(charter_root / "alembic.ini"))
-    cfg.set_main_option("script_location", str(charter_root / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", _alembic_url_from(async_url))
-    command.upgrade(cfg, "head")
+    tables = [cast(Table, EntityModel.__table__), cast(Table, RelationshipModel.__table__)]
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
 
 
 @pytest_asyncio.fixture
 async def engine(fresh_database: str) -> AsyncIterator[AsyncEngine]:
-    _run_migrations(fresh_database)
     eng = create_async_engine(fresh_database)
+    await _install_entities_and_relationships_schema(eng)
     yield eng
     await eng.dispose()
 
