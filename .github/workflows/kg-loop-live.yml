@@ -89,6 +89,16 @@ jobs:
 
       - run: uv sync --all-extras --all-packages
 
+      # Alembic's sync env (used by `_run_migrations` in the live test
+      # via the +asyncpg -> +psycopg2 swap) needs psycopg2 to drive
+      # CREATE EXTENSION + the DDL. psycopg2 is not a declared workspace
+      # dependency — F.5's local live lane relied on the operator
+      # installing it ad-hoc. Install it here as a CI-only need so the
+      # cloud-posture package's runtime surface stays clean. (Matches
+      # the same need any reader of charter/runbooks/memory_bootstrap.md
+      # would hit running NEXUS_DATABASE_URL=postgresql+psycopg2://...)
+      - run: uv pip install psycopg2-binary
+
       # The live proof file gates on NEXUS_LIVE_POSTGRES=1. The default
       # admin URL the test uses (postgresql+asyncpg://nexus:nexus_dev@
       # localhost:5432/postgres) is reachable because POSTGRES_USER=nexus
