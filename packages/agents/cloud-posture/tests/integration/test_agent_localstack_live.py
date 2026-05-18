@@ -105,7 +105,7 @@ async def test_iam_no_mfa_detected_against_localstack(
     _stub_prowler(monkeypatch)
 
     contract = _contract(tmp_path)
-    report = await run(contract=contract, neo4j_driver=None)
+    report = await run(contract=contract, semantic_store=None)
 
     findings_doc = json.loads((Path(contract.workspace) / "findings.json").read_text())
     no_mfa_uids = {
@@ -131,7 +131,7 @@ async def test_admin_policy_detected_against_localstack(
     _stub_prowler(monkeypatch)
 
     contract = _contract(tmp_path)
-    await run(contract=contract, neo4j_driver=None)
+    await run(contract=contract, semantic_store=None)
 
     findings_doc = json.loads((Path(contract.workspace) / "findings.json").read_text())
     admin = next(
@@ -157,7 +157,7 @@ async def test_clean_account_emits_no_findings(
     _stub_prowler(monkeypatch)
 
     contract = _contract(tmp_path)
-    report = await run(contract=contract, neo4j_driver=None)
+    report = await run(contract=contract, semantic_store=None)
 
     assert report.total == 0
     summary = (Path(contract.workspace) / "summary.md").read_text()

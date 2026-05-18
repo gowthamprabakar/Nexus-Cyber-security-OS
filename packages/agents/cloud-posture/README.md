@@ -56,7 +56,7 @@ ExecutionContract (YAML)
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ async run(contract, *, llm_provider=None, neo4j_driver=None) │
+│ async run(contract, *, llm_provider=None, semantic_store=None) │
 │                                                              │
 │  1.  await ctx.call_tool("prowler_scan", ...)                │
 │  2.  asyncio.TaskGroup:                                      │
@@ -73,13 +73,13 @@ ExecutionContract (YAML)
 
 ### Tools
 
-| Tool                                      | Source                                                                                                         | Cost (cloud-API calls) |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `prowler_scan`                            | [`tools/prowler.py`](src/cloud_posture/tools/prowler.py) — async subprocess wrapper around the Prowler 5.x CLI | 200                    |
-| `aws_s3_list_buckets` / `aws_s3_describe` | [`tools/aws_s3.py`](src/cloud_posture/tools/aws_s3.py) — async via `asyncio.to_thread(boto3.client(...))`      | 1 / 6                  |
-| `aws_iam_list_users_without_mfa`          | [`tools/aws_iam.py`](src/cloud_posture/tools/aws_iam.py)                                                       | 10                     |
-| `aws_iam_list_admin_policies`             | detects `Action="*"` `Resource="*"` on customer-managed policies                                               | 10                     |
-| `kg_upsert_asset` / `kg_upsert_finding`   | [`tools/neo4j_kg.py`](src/cloud_posture/tools/neo4j_kg.py) — customer-scoped, UNWIND-batched                   | 0                      |
+| Tool                                      | Source                                                                                                                                                                                                                                                        | Cost (cloud-API calls) |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `prowler_scan`                            | [`tools/prowler.py`](src/cloud_posture/tools/prowler.py) — async subprocess wrapper around the Prowler 5.x CLI                                                                                                                                                | 200                    |
+| `aws_s3_list_buckets` / `aws_s3_describe` | [`tools/aws_s3.py`](src/cloud_posture/tools/aws_s3.py) — async via `asyncio.to_thread(boto3.client(...))`                                                                                                                                                     | 1 / 6                  |
+| `aws_iam_list_users_without_mfa`          | [`tools/aws_iam.py`](src/cloud_posture/tools/aws_iam.py)                                                                                                                                                                                                      | 10                     |
+| `aws_iam_list_admin_policies`             | detects `Action="*"` `Resource="*"` on customer-managed policies                                                                                                                                                                                              | 10                     |
+| `kg_upsert_asset` / `kg_upsert_finding`   | [`tools/kg_writer.py`](src/cloud_posture/tools/kg_writer.py) — Postgres `SemanticStore`-backed, customer-scoped, per-finding AFFECTS dedup (dormant Neo4j writer at [`tools/neo4j_kg.py`](src/cloud_posture/tools/neo4j_kg.py) retained for the Phase-2 swap) | 0                      |
 
 All tools are async by default per [ADR-005](../../../docs/_meta/decisions/ADR-005-async-tool-wrapper-convention.md).
 
