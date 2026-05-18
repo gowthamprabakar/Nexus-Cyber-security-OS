@@ -1,7 +1,7 @@
 """Cloud Posture Agent driver — the template for Nexus production agents.
 
 Wires the runtime charter, the four async tool wrappers, the OCSF schema
-layer, the markdown summarizer, and the optional Neo4j knowledge-graph
+layer, the markdown summarizer, and the optional Postgres knowledge-graph
 writer into a single `async def run(contract, ...)` entry point.
 
 Flow:
@@ -14,7 +14,7 @@ Flow:
    each wrapped with a `NexusEnvelope` carrying correlation_id, tenant_id,
    agent_id, nlah_version, model_pin, charter_invocation_id.
 5. Write `findings.json` (FindingsReport) and `summary.md` (rendered).
-6. (Optional) Upsert assets + findings into the customer's Neo4j KG.
+6. (Optional) Upsert assets + findings into the Postgres `SemanticStore`.
 7. Charter exits — emits `invocation_completed`, clears contextvar, runs
    completion-condition assertion.
 
@@ -22,6 +22,11 @@ Flow:
 v0.1 Cloud Posture flow is deterministic — the LLM is not called. Per the
 NLAH `Out-of-scope` section, customer-facing narration belongs to the
 Synthesis Agent.
+
+KG persistence rewired 2026-05-18 (KG-loop-closure plan) from a direct
+Neo4j async driver to the platform's Postgres `SemanticStore`. The legacy
+Neo4j writer at `cloud_posture/tools/neo4j_kg.py` is preserved DORMANT
+against the future Phase-2 swap per ADR-009's escape hatch.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ from typing import Any
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -48,7 +54,7 @@ from cloud_posture.schemas import (
 )
 from cloud_posture.summarizer import render_summary
 from cloud_posture.tools import aws_iam, aws_s3, prowler
-from cloud_posture.tools.neo4j_kg import KnowledgeGraphWriter
+from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 
 NLAH_VERSION = "0.1.0"
 DEFAULT_AWS_ACCOUNT_ID = "111122223333"
@@ -84,11 +90,11 @@ _CONTEXT_RE = re.compile(r"[^a-z0-9_-]")
 # ----------------------------- registry --------------------------------------
 
 
-def build_registry(neo4j_driver: Any | None, customer_id: str) -> ToolRegistry:
+def build_registry(semantic_store: SemanticStore | None, customer_id: str) -> ToolRegistry:
     """Compose the tool universe available to this agent.
 
     KG tools (`kg_upsert_asset`, `kg_upsert_finding`) are registered only
-    when `neo4j_driver` is provided. Without it the agent still produces
+    when `semantic_store` is provided. Without it the agent still produces
     `findings.json` + `summary.md` and skips graph persistence.
     """
     reg = ToolRegistry()
@@ -113,8 +119,8 @@ def build_registry(neo4j_driver: Any | None, customer_id: str) -> ToolRegistry:
         cloud_calls=10,
     )
 
-    if neo4j_driver is not None:
-        kg = KnowledgeGraphWriter(driver=neo4j_driver, customer_id=customer_id)
+    if semantic_store is not None:
+        kg = KnowledgeGraphWriter(semantic_store=semantic_store, customer_id=customer_id)
         reg.register("kg_upsert_asset", kg.upsert_asset, version="0.1.0", cloud_calls=0)
         reg.register("kg_upsert_finding", kg.upsert_finding, version="0.1.0", cloud_calls=0)
     return reg
@@ -271,7 +277,7 @@ async def run(
     contract: ExecutionContract,
     *,
     llm_provider: LLMProvider | None = None,  # plumbed; not called in v0.1
-    neo4j_driver: Any | None = None,
+    semantic_store: SemanticStore | None = None,
     aws_account_id: str = DEFAULT_AWS_ACCOUNT_ID,
     aws_region: str = DEFAULT_AWS_REGION,
 ) -> FindingsReport:
@@ -279,8 +285,8 @@ async def run(
 
     Returns the `FindingsReport`. Side effects: writes `findings.json` and
     `summary.md` to the charter workspace; emits a hash-chained audit log
-    at `audit.jsonl`; optionally upserts assets + findings to Neo4j when
-    `neo4j_driver` is provided.
+    at `audit.jsonl`; optionally upserts assets + findings to the Postgres
+    `SemanticStore` when `semantic_store` is provided.
 
     `llm_provider` is accepted to keep the call signature stable across
     later agents that DO drive their loops via LLM. Cloud Posture v0.1
@@ -288,7 +294,7 @@ async def run(
     """
     del llm_provider  # reserved for future iterations
 
-    registry = build_registry(neo4j_driver, contract.customer_id)
+    registry = build_registry(semantic_store, contract.customer_id)
     model_pin = "deterministic"  # no LLM calls in this flow
     correlation_id = new_correlation_id()
 
@@ -352,8 +358,8 @@ async def run(
         for f in findings:
             report.add_finding(f)
 
-        # 5. Knowledge-graph persistence (best-effort; only if driver provided)
-        if neo4j_driver is not None:
+        # 5. Knowledge-graph persistence (best-effort; only if SemanticStore provided)
+        if semantic_store is not None:
             await _upsert_findings_to_kg(ctx, findings)
 
         # 6. Write outputs
@@ -371,7 +377,7 @@ async def run(
 
 
 async def _upsert_findings_to_kg(ctx: Charter, findings: list[CloudPostureFinding]) -> None:
-    """Upsert each finding's resources + the finding itself into Neo4j."""
+    """Upsert each finding's resources + the finding itself into SemanticStore."""
     for finding in findings:
         for ocsf_resource in finding.resources:
             await ctx.call_tool(

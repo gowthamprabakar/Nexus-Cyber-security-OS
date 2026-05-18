@@ -187,7 +187,7 @@ rm -rf /tmp/nexus-smoke /tmp/prowler-smoke /tmp/smoke-contract.yaml
 ## What this runbook does NOT cover
 
 - LLM-driven enrichment or narration (deferred to the Synthesis Agent in [Track D](../../../../docs/superpowers/plans/2026-05-08-build-roadmap.md)).
-- Neo4j knowledge-graph persistence (requires `neo4j_driver` argument to `cloud_posture.agent.run`; see the library API).
+- Postgres `SemanticStore` knowledge-graph persistence (requires `semantic_store` argument to `cloud_posture.agent.run`; see the library API). The legacy Neo4j writer at `cloud_posture/tools/neo4j_kg.py` is preserved DORMANT against the Phase-2 swap per the KG-loop-closure plan + ADR-009 amendment (2026-05-18).
 - Multi-region / multi-account scans (Phase 1b).
 - Tier-2 / Tier-1 remediation (Track A).
 - Production-grade rate-limit / blast-radius checks (the smoke is single-shot; production deployments add Cloud Custodian gating).

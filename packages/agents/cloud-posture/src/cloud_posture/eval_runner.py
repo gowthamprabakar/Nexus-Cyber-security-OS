@@ -97,7 +97,7 @@ async def _run_case_async(
         return await agent_mod.run(
             contract=contract,
             llm_provider=llm_provider,
-            neo4j_driver=None,
+            semantic_store=None,
         )
 
 

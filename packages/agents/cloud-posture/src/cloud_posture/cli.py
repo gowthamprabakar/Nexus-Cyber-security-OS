@@ -86,15 +86,15 @@ def eval_cmd(cases_dir: Path) -> None:
 def run_cmd(contract_path: Path, aws_account_id: str, aws_region: str) -> None:
     """Run the Cloud Posture Agent against an ExecutionContract YAML.
 
-    LLM and Neo4j are not wired through here; the v0.1 deterministic flow
-    does not call the LLM, and KG persistence is skipped (use the agent
-    library API directly for KG-enabled runs).
+    LLM and the Postgres `SemanticStore` are not wired through here; the
+    v0.1 deterministic flow does not call the LLM, and KG persistence is
+    skipped (use the agent library API directly for KG-enabled runs).
     """
     contract = load_contract(contract_path)
     report = asyncio.run(
         agent_run(
             contract=contract,
-            neo4j_driver=None,
+            semantic_store=None,
             aws_account_id=aws_account_id,
             aws_region=aws_region,
         )
