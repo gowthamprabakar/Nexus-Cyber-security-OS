@@ -1,0 +1,283 @@
+# KG loop closure — Cloud Posture's Neo4j writer → SemanticStore
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Pause for review after each numbered task.
+
+**Goal.** Close the knowledge-graph read/write loop that has been **severed across two stores** since the F.5 pivot. Cloud Posture writes assets + findings + `AFFECTS` edges to an unused Neo4j writer; Investigation's `memory_neighbors_walk` reads the Postgres `SemanticStore`. Nothing connects the two. This plan **retires `cloud_posture/tools/neo4j_kg.py` and reroutes Cloud Posture's KG write path to the Postgres `SemanticStore`** so that what Cloud Posture writes, Investigation can actually read.
+
+## Settled context (fixed input — do not re-litigate)
+
+These facts are **inputs** to this plan, recorded so future readers don't replay the deliberation:
+
+- **The Postgres SemanticStore (`charter.memory.semantic.SemanticStore`) is the platform knowledge graph.** Per [ADR-009](../../_meta/decisions/ADR-009-memory-architecture.md): Phase 1a collapses TimescaleDB + Postgres + Neo4j into a single Postgres 16 + pgvector + LTREE instance. The `entities` + `relationships` tables ARE the graph for Phase 1a. Recursive-CTE traversal capped at `MAX_TRAVERSAL_DEPTH = 3`. The architecture is intentionally graph-portable: stores take an `async_sessionmaker[AsyncSession]` so a future Phase-2 Neo4j swap is a backend change, not a rewrite.
+
+- **Cloud Posture's `tools/neo4j_kg.py` (F.3 Task 6, committed 2026-05-08 at `bee67ad`) is an orphaned survivor of the pre-ADR-009 three-engine architecture.** It writes Neo4j via `neo4j.AsyncDriver`. Nothing reads it. The opt-in registration in `cloud_posture/agent.py` (lines 116-119) gates the two `kg_upsert_*` tools on `neo4j_driver is not None` — meaning in practice, Cloud Posture invocations either skip KG persistence entirely (driver=None) or write to a Neo4j that no platform consumer queries.
+
+- **Investigation's `memory_neighbors_walk` (D.7 Task 4) reads `SemanticStore.neighbors(...)`.** It expects entities populated by some producer; today no agent populates it. D.7's eval-suite cases supply fixture `SemanticStore` rows in-memory; in production, the producer side is empty.
+
+- **The loop was severed by a documentation gap, not by deliberate design.** Timeline that orphaned `neo4j_kg.py`:
+
+  | Date       | Event                                                                                                                                                                                | What it should have done                                                                                                                |
+  | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+  | 2026-05-08 | F.3 Task 6 ships `cloud_posture/tools/neo4j_kg.py` against the original 3-engine architecture (Neo4j Aura for semantic).                                                             | Worked as designed at the time — Neo4j was the planned semantic store.                                                                  |
+  | 2026-05-11 | F.4 + F.5 pivot pulls control-plane onto Postgres. Three-engine plan abandoned in favour of a single Postgres + pgvector + LTREE instance.                                           | Should have flagged Cloud Posture's Neo4j writer as orphaned and rerouted it.                                                           |
+  | 2026-05-12 | [ADR-009](../../_meta/decisions/ADR-009-memory-architecture.md) records the Postgres-collapse decision. Names "the Phase-1b path to TimescaleDB / Neo4j is a per-store engine swap." | Should have included a "retire-and-reroute" sweep of any pre-ADR-009 writers. The sweep did not happen for Cloud Posture.               |
+  | 2026-05-18 | This plan.                                                                                                                                                                           | Close the gap. Write the ADR amendment recording the decision so the next such drift gets caught at amendment-time, not migration-time. |
+
+  **The absence of an ADR-009 amendment for Cloud Posture is what allowed the drift.** Writing the amendment (Task 1 of this plan) closes that gap structurally.
+
+- **Verified: no other agent has a Neo4j writer.** A repo-wide grep for `from neo4j` / `Neo4j` / `KnowledgeGraphWriter` outside `packages/agents/cloud-posture/` returns zero matches. This plan touches Cloud Posture ONLY. The single-agent assertion is empirical, not assumed.
+
+## Hard scope boundary (stated up-front)
+
+**This plan reroutes Cloud Posture's KG write path ONLY and retires `neo4j_kg.py`.**
+
+Specifically out of scope, each named so it doesn't drift in mid-execution:
+
+- **NOT** any change to D.5 / D.6 / D.7 / any other agent. The single-agent-touch assertion above is the structural invariant of this plan; any cross-agent diff at any task is a scope violation and gets rejected.
+- **NOT** any new KG content beyond what Cloud Posture already writes today. The schema is: `Asset` nodes (kind + external_id + region + account_uid properties), `Finding` nodes (rule_id + severity), `AFFECTS` edges. **Identical input → identical graph shape, different backend.** No new entity types, no new relationship types, no expanded property surface.
+- **NOT** any KG consumer build. The graph is now populated by Cloud Posture and read by D.7's existing `memory_neighbors_walk`; that read-write loop is what closes here. **No new consumer agent**, no probability layer, no attack-path enumerator, no cure-recommendation engine.
+- **NOT** any other agent wired into the graph as a writer. D.5 / D.6 do not start writing entities/relationships in this plan. Their migration onto the graph is later — different plans, not started.
+- **NOT** the Phase-2 Neo4j swap. ADR-009's escape hatch (depth ≥ 4 + > 1M edges/tenant) is reaffirmed as the trigger condition for the swap, not executed by this plan.
+
+Collapsing "reroute Cloud Posture" + "wire D.5/D.6 in too" + "add probability layer" + "execute the Neo4j swap" into one plan would repeat the A.1 three-tiers-into-one failure mode. **One agent, one direction (write-side), one schema (preserve the existing assets+findings+AFFECTS shape verbatim).** Three knobs locked.
+
+## Strategic context
+
+The F.7 v0.2 close just demonstrated that one real agent can use the F.7 substrate end-to-end (`d225c52`, 2026-05-18). The substrate is empirically functional. But the **semantic-memory substrate** — `SemanticStore` — has a different problem: it is empirically _unused_. D.7 reads from it; nothing writes to it (the only writer that exists today writes to a different database). The keystone of ADR-009's collapse is **load-bearing but unloaded**.
+
+This plan loads it for the first time. **It does not add new functionality**; it connects two existing pieces that were drawn together at design time and silently disconnected at implementation time. The smallest possible change that closes the read/write loop, by exactly the producer/consumer pair the design intended (Cloud Posture's findings ↔ D.7's investigation traversal).
+
+Why Cloud Posture first (and not D.5 / D.6 wiring at the same time):
+
+1. **Cloud Posture already has KG-writer code** (`tools/neo4j_kg.py`). The plan deletes one orphan and adds one replacement; it doesn't add a brand-new writer to an agent that never had one.
+2. **D.5 / D.6 have NO KG-writer code today.** Wiring them onto the graph is an additive code path of substantial complexity (per-agent schema decisions, entity-type taxonomy resolution across detect agents). That belongs in a separate plan AFTER Cloud Posture's loop closure validates the pattern.
+3. **Cloud Posture is the [ADR-007 reference agent](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md).** Its surface is the closest-to-canonical of any detect agent; the reroute pattern this plan establishes is the template every later detect-agent migration follows.
+4. **D.7's existing `memory_neighbors_walk` is the natural read counterpart.** No new consumer needs to be built — D.7 already does graph traversal; this plan just makes that traversal finally have something to traverse.
+
+## ADR-010 eligibility test — executed result
+
+This plan is a **within-component version extension** of Cloud Posture v0.x and a **substrate-consumer extension** of charter.memory v0.x. The six [ADR-010](../../_meta/decisions/ADR-010-version-extension-template.md) conditions apply:
+
+| #   | Condition                                         | Result                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Same package directory as the prior version       | **PASS.** All changes confined to `packages/agents/cloud-posture/` (the agent under reroute) plus a new ADR. No `packages/charter/` source modification — `SemanticStore`'s API is consumed exactly as it ships today; the substrate is sealed (same watch-item-1 discipline as F.7 v0.2).                                                                                                                                               |
+| 2   | Additive surface — no rename / remove / repurpose | **CONDITIONAL PASS — explicit retirement.** This plan **deletes** `cloud_posture/tools/neo4j_kg.py` and **removes** the two `kg_upsert_asset` / `kg_upsert_finding` tool registrations. ADR-010 condition 2 is normally violated by removal; here the removal is **deliberate retirement of an orphaned module** documented in the new ADR. No agent / no test / no operator workflow depends on the deleted surface (verified by grep). |
+| 3   | OCSF `class_uid` unchanged                        | **PASS.** Cloud Posture's `class_uid 2003 Compliance Finding` envelope is unchanged. The KG-persistence path is post-OCSF-envelope; the wire format is untouched.                                                                                                                                                                                                                                                                        |
+| 4   | F.6 audit-chain action vocabulary additive only   | **PASS.** Cloud Posture's chain already records `kg_upsert_asset` and `kg_upsert_finding` actions (via the existing `ctx.call_tool` indirection). The new SemanticStore path also goes through `ctx.call_tool` and re-uses the same action names (`kg_upsert_asset` / `kg_upsert_finding`) — same chain vocabulary, different backend. **The audit chain is the contract; the backend is the implementation detail.**                    |
+| 5   | CLI subcommand surface unchanged                  | **PASS.** No CLI flags added or changed. The `neo4j_driver` constructor parameter on `agent.run` is renamed to `semantic_store` (the new substrate-consumer DI seam) — this IS a parameter rename. Documented under "deviation acknowledged" in §6.                                                                                                                                                                                      |
+| 6   | Python public API params unchanged                | **CONDITIONAL PASS — disclosed rename.** `cloud_posture.agent.run(..., neo4j_driver: Any \| None = None)` → `cloud_posture.agent.run(..., semantic_store: SemanticStore \| None = None)`. This is a renamed parameter. Per ADR-010 this is normally a violation; here it's the cleanest way to honor condition 1 (same backend semantics, different store). The new param keeps the same shape (optional `None` default → KG-skip path). |
+
+**Result: 4 PASS, 2 CONDITIONAL PASS with disclosed retirements/renames.** The plan documents both explicitly (the new ADR + the §6 deviation note) rather than silently force-fitting condition 2 and condition 6 to "PASS." Honest classification per the F.7 v0.1 / v0.2 verification-record discipline: when a clean PASS isn't available, name the deviation, record the reason, and proceed with eyes open — don't pretend.
+
+## Scope
+
+**In v0.1 (load-bearing):**
+
+1. **A new ADR amendment.** `docs/_meta/decisions/ADR-009-memory-architecture.md` gains an "Amendment 2026-05-18 — Cloud Posture KG writer rerouted" section. The amendment records the timeline gap (2026-05-08 F.3 → 2026-05-11 pivot → 2026-05-12 ADR-009 → 2026-05-18 reroute) so future readers see the drift recorded.
+2. **A new `kg_writer.py`** in `cloud_posture/tools/` (replacing `neo4j_kg.py`). Same `KnowledgeGraphWriter` class name, same method signatures (`upsert_asset` / `upsert_finding`), same per-tenant-scoping contract. Internally it calls `SemanticStore.upsert_entity` (with `entity_type="asset"` or `"finding"`) and `SemanticStore.add_relationship` (with `relationship_type="AFFECTS"`).
+3. **`cloud_posture/agent.py` rewires the registry.** `neo4j_driver: Any | None` parameter → `semantic_store: SemanticStore | None`. `build_registry(neo4j_driver, ...)` → `build_registry(semantic_store, ...)`. The two `kg_upsert_*` tool registrations preserve their action names (audit-chain compatibility per ADR-010 condition 4) and now point at the new `KnowledgeGraphWriter` instance bound to a `SemanticStore`.
+4. **The neo4j dependency is dropped** from `packages/agents/cloud-posture/pyproject.toml`. `tools/neo4j_kg.py` is deleted.
+5. **An eval-gate exercise** demonstrating Cloud Posture's existing eval cases pass byte-identically with the reroute applied (the additive-only proof: rerouting the KG backend changes Cloud Posture's `findings.json` / `summary.md` outputs by exactly zero).
+6. **The load-bearing live proof**: `NEXUS_LIVE_POSTGRES=1` integration test running a real Cloud Posture scan against in-memory test fixtures, persisting assets/findings/edges to a real Postgres `SemanticStore`, and then having D.7's `memory_neighbors_walk` actually traverse those persisted entities. **Proves the read/write loop is closed by execution.**
+
+**Explicitly out of v0.1 (each pinned in the hard scope boundary):**
+
+- D.5 / D.6 KG writers — not started, not planned in this PR.
+- Any new probability / attack-path / cure layer — not in this PR.
+- Migration of D.7's `find_related_findings` filesystem-reads — not in this PR (separate later plan; depends on `findings.>` bus migration which is F.7 v0.3+, also not started).
+- Phase-2 Neo4j swap — not executed; the escape-hatch trigger condition is reaffirmed in the new ADR amendment but not approached.
+- Any net-new KG content beyond what Cloud Posture writes today — the schema (asset/finding/AFFECTS) is preserved verbatim.
+
+## Reversibility and rollback
+
+The reroute is **additive and reversible** by design:
+
+- **Cloud Posture's primary output is unchanged.** `findings.json` and `summary.md` are byte-identical before and after the reroute. The KG-persistence path was already opt-in (gated on the constructor parameter); the parameter rename keeps the opt-in shape (`semantic_store=None` skips KG persistence exactly the way `neo4j_driver=None` does today).
+- **Eval-suite gate.** Cloud Posture's existing eval cases must pass with byte-identical `actuals` (same fields D.7's eval suite asserts) before AND after the reroute. Any divergence rejects the migration.
+- **Audit-chain action vocabulary unchanged.** The chain still records `kg_upsert_asset` and `kg_upsert_finding`; the implementation behind those names changed, but the names and ordering and payload-shape did not. F.6 audit-chain consumers (replay, verifier) are unaffected.
+
+**Rollback path** (if the reroute introduces a defect found post-deploy):
+
+1. Revert the implementing PRs in reverse order: Task 5 (file deletion + dep drop) → Task 4 (`kg_writer.py` swap) → Task 3 (agent.py rewire). After Task 3's revert, Cloud Posture is back on the pre-reroute Neo4j writer; the broken `SemanticStore` path is gone.
+2. If only the SemanticStore path is broken but the structure (`kg_writer.py` + agent rewire) is sound, the rollback is one parameter: callers pass `semantic_store=None` → KG persistence skips entirely; Cloud Posture's `findings.json` / `summary.md` output is preserved.
+3. The amendment ADR (Task 1) stays in place even on rollback — its purpose is to record that the reroute decision was made, regardless of whether the current execution succeeded. If a rollback happens, a follow-up amendment records why.
+
+Same principle as F.7 v0.2's additive-reversible design: the existing path (Cloud Posture's filesystem outputs) is preserved through every code path; the new path (KG persistence) is the additive layer that can be disabled at the DI seam.
+
+## Data-model mapping (Neo4j Cypher → SemanticStore)
+
+The cleanest way to make this explicit: side-by-side the existing Cypher and the new SemanticStore call. Anything that doesn't translate cleanly is flagged here, not silently dropped at execution time.
+
+| Cypher (pre-reroute, `tools/neo4j_kg.py`)                                                                                                   | SemanticStore (post-reroute)                                                                                                                                                                                                                                                                | Translation notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MERGE (a:Asset {customer_id: $customer_id, kind: $kind, external_id: $external_id}) SET a += $properties`                                  | `await semantic_store.upsert_entity(tenant_id=customer_id, entity_type="asset", external_id=external_id, properties={"kind": kind, **properties})`                                                                                                                                          | **Clean translation.** Cypher's `(customer_id, kind, external_id)` composite key collapses to SemanticStore's `(tenant_id, entity_type, external_id)` — `kind` moves from the key into the properties dict. The store's idempotent upsert (existing → merged properties; new → fresh ULID) matches Cypher's MERGE semantics.                                                                                                                                                                                                                                               |
+| `MERGE (f:Finding {customer_id: $customer_id, finding_id: $finding_id}) SET f.rule_id = $rule_id, f.severity = $severity`                   | `await semantic_store.upsert_entity(tenant_id=customer_id, entity_type="finding", external_id=finding_id, properties={"rule_id": rule_id, "severity": severity})`                                                                                                                           | **Clean translation.** Same shape as asset. The Cypher property-set after MERGE maps to the upsert's `properties` dict.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `MATCH (f:Finding {customer_id, finding_id}) UNWIND $arns AS arn MERGE (a:Asset {customer_id, external_id: arn}) MERGE (f)-[:AFFECTS]->(a)` | For each arn: `dst = await semantic_store.upsert_entity(tenant_id=customer_id, entity_type="asset", external_id=arn, properties={})` ; then `await semantic_store.add_relationship(tenant_id=customer_id, src_entity_id=finding_entity_id, dst_entity_id=dst, relationship_type="AFFECTS")` | **Requires the upsert-then-relate pattern explicit.** Cypher's `MERGE (a:Asset) MERGE (f)-[:AFFECTS]->(a)` is one round-trip; SemanticStore's API is two calls (upsert each endpoint, then add edge between their `entity_id`s). Two sub-notes: (a) the asset MERGE-by-external_id without `kind` in Cypher leaves the `kind` property unset if the asset wasn't pre-created — SemanticStore's upsert-with-empty-properties matches this behaviour; (b) `add_relationship` always inserts (it does NOT MERGE), so repeated calls produce duplicate edges — see flag below. |
+
+**One flagged-not-translated item — the `add_relationship` duplicate-edge concern:**
+
+`SemanticStore.add_relationship` is INSERT-only (no upsert-by-`(src, dst, type)`). Cypher's `MERGE (f)-[:AFFECTS]->(a)` is upsert-by-relation; calling it twice yields one edge, not two. Calling `add_relationship` twice on the same `(src, dst, "AFFECTS")` yields two relationship rows.
+
+**Resolution path A (preferred — task work):** the new `KnowledgeGraphWriter.upsert_finding` accumulates the `affected_arns` list per-finding and only emits `add_relationship` calls for arns it hasn't already related to this finding within the current scan run. In-process dedup at the writer; no SemanticStore behaviour change. Documented in `kg_writer.py`'s docstring + a unit test.
+
+**Resolution path B (rejected — substrate change):** modify `SemanticStore.add_relationship` to upsert-by-`(tenant_id, src_entity_id, dst_entity_id, relationship_type)`. This would touch `packages/charter/` → violates watch-item 1 (substrate sealed). REJECTED.
+
+**This is the only data-model translation issue.** The plan records it here so future readers see why the writer has an in-process dedup table.
+
+## Resolved questions
+
+| #   | Question                                                                       | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Task           |
+| --- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Q1  | New ADR or amend ADR-009?                                                      | **Amend ADR-009.** ADR-009 already names "the Phase-1b path to TimescaleDB / Neo4j is a per-store engine swap" and the depth-3 escape-hatch trigger; the orphaned Cloud Posture writer is a Phase-1a sweep that ADR-009 missed. An amendment records the gap and the reroute decision in the same document; a new ADR would split the semantic-store history across two files unnecessarily.                                                                                                                                       | T1             |
+| Q2  | Where does the new `KnowledgeGraphWriter` live?                                | `packages/agents/cloud-posture/src/cloud_posture/tools/kg_writer.py` (NEW). Same module location pattern as the existing `neo4j_kg.py` — operators currently reading the path know where the KG writer lives. The Cypher-vs-SQLAlchemy backend difference is a docstring note, not a path move.                                                                                                                                                                                                                                    | T3             |
+| Q3  | Same class name + method signatures, or rename?                                | **Same name + signatures.** `KnowledgeGraphWriter` with `upsert_asset(kind, external_id, properties)` and `upsert_finding(finding_id, rule_id, severity, affected_arns)`. Internal implementation swaps Neo4j Cypher → SemanticStore calls. This is the minimum-change reroute: caller code (`agent.py`'s `_upsert_findings_to_kg`) is identical at the call sites; only the constructor injection changes.                                                                                                                        | T3             |
+| Q4  | How is duplicate-AFFECTS-edge handled (the only data-model translation issue)? | **In-process dedup table in `KnowledgeGraphWriter`** (resolution path A above). Per-finding `set[str]` of arns already related. No SemanticStore change — watch-item 1 preserved.                                                                                                                                                                                                                                                                                                                                                  | T3             |
+| Q5  | How is the agent.py constructor parameter changed?                             | `neo4j_driver: Any \| None = None` renamed to `semantic_store: SemanticStore \| None = None`. Both are optional with `None` default → KG persistence skipped path identical. ADR-010 condition 6 records this as a disclosed rename.                                                                                                                                                                                                                                                                                               | T3             |
+| Q6  | What is the load-bearing live proof?                                           | A `NEXUS_LIVE_POSTGRES=1`-gated test under `packages/agents/cloud-posture/tests/integration/` that: (a) brings up a real Postgres + the alembic-managed `entities`/`relationships` tables; (b) runs a real Cloud Posture scan against fixture findings (no live AWS) with `semantic_store=` wired; (c) verifies via D.7's `memory_neighbors_walk` that the asset entities and AFFECTS edges Cloud Posture just wrote are reachable from each finding's `entity_id`. **The first time the read/write loop is closed by execution.** | T6             |
+| Q7  | What stays in the eval-gate as the "additive-only" proof?                      | Cloud Posture's existing eval cases run before AND after the reroute with `semantic_store=` injected. Their `findings.json` / `summary.md` outputs must be byte-identical. Same shape as F.7 v0.2 Task 6's flag-OFF/ON gate. If any eval-case output diverges, the migration is not additive and the plan rejects.                                                                                                                                                                                                                 | T5             |
+| Q8  | When does the Neo4j escape hatch fire?                                         | **Unchanged from ADR-009.** Depth ≥ 4 traversal against a graph with > 1M edges per tenant. The amendment reaffirms this; it does NOT trigger it. The amendment also adds the related signal — if a future cure-quadrant agent needs probability-weighted multi-hop paths that recursive-CTE can't express, that's a different trigger condition.                                                                                                                                                                                  | T1             |
+| Q9  | Are any other agents touched?                                                  | **No.** Verified by grep: `from neo4j` / `Neo4j` / `KnowledgeGraphWriter` appears ONLY in `packages/agents/cloud-posture/`. This plan touches Cloud Posture and the new ADR amendment; nothing else.                                                                                                                                                                                                                                                                                                                               | (verification) |
+| Q10 | What does the verification record look like (Task 8)?                          | ADR-010 within-agent-extension shape: gate results / live-loop proof (the Task 6 NEXUS_LIVE_POSTGRES=1 evidence A.1-§8 style) / ADR-010 conformance re-run including the two CONDITIONAL PASS disclosures / watch-item-1 audit / coverage delta / back-compat eval-gate evidence / breaking-change note / process notes / hard-scope-boundary preserved / forward references / next-plan gate (D.5/D.6 KG writers).                                                                                                                | T8             |
+
+## Architecture (delta)
+
+```
+PRE-REROUTE (today's main):
+─────────────────────────────
+Cloud Posture scan
+  ├─ writes findings.json  ───┐
+  ├─ writes summary.md     ───┤
+  └─ if neo4j_driver:           │       ┌──────────────────┐
+       kg.upsert_asset    ────┐ │  ┌──▶ │   Neo4j Aura     │   (orphan;
+       kg.upsert_finding  ────┤─┴──┘    │   (no readers)   │    nothing
+       kg.AFFECTS edges   ────┘         └──────────────────┘    queries)
+
+D.7 Investigation
+  └─ memory_neighbors_walk ───────────▶ ┌──────────────────┐
+                                        │ Postgres         │   (empty
+                                        │ SemanticStore    │    in
+                                        │ (entities,       │    prod)
+                                        │  relationships)  │
+                                        └──────────────────┘
+
+POST-REROUTE (after this plan):
+───────────────────────────────
+Cloud Posture scan
+  ├─ writes findings.json  ─── (unchanged)
+  ├─ writes summary.md     ─── (unchanged)
+  └─ if semantic_store:
+       kg.upsert_asset    ─────────────┐
+       kg.upsert_finding  ─────────────┤    ┌──────────────────┐
+       kg.AFFECTS edges   ─────────────┴───▶│ Postgres         │
+                                            │ SemanticStore    │◀── memory_neighbors_walk
+                                            │ (entities +      │       (D.7)
+                                            │  relationships)  │
+                                            └──────────────────┘
+                                                ▲
+                                                │
+                                  [The loop is closed.]
+
+(neo4j_kg.py, neo4j dep, Neo4j Aura all retired from cloud-posture.)
+```
+
+**Shared substrate cross-references (unchanged):**
+
+- `packages/charter/src/charter/memory/semantic.py` — `SemanticStore` public API. Untouched by this plan (watch-item 1).
+- `packages/charter/src/charter/memory/service.py` — `MemoryService` facade. Untouched.
+- `packages/charter/src/charter/memory/models.py` — `EntityModel` / `RelationshipModel`. Untouched.
+- `packages/agents/investigation/src/investigation/tools/memory_walk.py` — the consumer. Untouched (already reads SemanticStore exactly as v0.1 ships).
+
+**New code in this plan:**
+
+- `packages/agents/cloud-posture/src/cloud_posture/tools/kg_writer.py` (NEW; replaces `neo4j_kg.py`).
+- `packages/agents/cloud-posture/tests/test_kg_writer.py` (NEW; mocked SemanticStore unit tests).
+- `packages/agents/cloud-posture/tests/integration/__init__.py` (NEW, empty).
+- `packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py` (NEW; `NEXUS_LIVE_POSTGRES=1`-gated load-bearing read/write-loop proof).
+
+**Modified code:**
+
+- `packages/agents/cloud-posture/src/cloud_posture/agent.py` — constructor parameter rename + `build_registry` rewire + `_upsert_findings_to_kg` call sites unchanged (signature preserved). Tests updated.
+- `packages/agents/cloud-posture/pyproject.toml` — drop `neo4j>=5.24.0` dependency.
+- `docs/_meta/decisions/ADR-009-memory-architecture.md` — amend with the 2026-05-18 reroute note.
+
+**Deleted code:**
+
+- `packages/agents/cloud-posture/src/cloud_posture/tools/neo4j_kg.py` (the orphan).
+- `packages/agents/cloud-posture/tests/test_tools_neo4j_kg.py` (if extant — the mocked Neo4j tests).
+
+## Execution status
+
+| #   | Status     | Commit | Risk label          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --- | ---------- | ------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ⬜ pending | —      | LOW-RISK            | Amend `docs/_meta/decisions/ADR-009-memory-architecture.md` with a new "Amendment 2026-05-18 — Cloud Posture KG writer rerouted" section. Records: (a) the four-event timeline (F.3 2026-05-08 → pivot 2026-05-11 → ADR-009 2026-05-12 → reroute 2026-05-18); (b) the absence-of-sweep observation as the structural gap that allowed the drift; (c) the reroute decision + the data-model mapping summary; (d) reaffirmation of the Neo4j escape-hatch trigger (depth ≥ 4 + > 1M edges/tenant) as the unchanged Phase-2 trigger condition. Doc-only. **Hash-pin this row.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2   | ⬜ pending | —      | LOW-RISK            | Audit-of-record: empirical grep audit to confirm no agent other than Cloud Posture has a Neo4j writer. Records the grep invocation + output in the verification record (Task 8). No code change. The plan asserts this in §"Settled context"; Task 2 makes the assertion empirical at execution time so a future drift is caught.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 3   | ⬜ pending | —      | **SAFETY-CRITICAL** | `packages/agents/cloud-posture/src/cloud_posture/tools/kg_writer.py` (NEW). New `KnowledgeGraphWriter` class — same name, same method signatures as the retiring class. Constructor takes `semantic_store: SemanticStore` + `customer_id: str`. `upsert_asset` calls `SemanticStore.upsert_entity(entity_type="asset", ...)`. `upsert_finding` calls `upsert_entity(entity_type="finding", ...)` + dedup-aware `add_relationship(relationship_type="AFFECTS", ...)` for each affected arn (resolution path A — in-process per-finding `set[str]` of arns already related). `agent.py` rewired: `build_registry(semantic_store, customer_id)` instead of `neo4j_driver`; the two `kg_upsert_*` tool registrations preserve action names (audit-chain unchanged). Constructor signature: `cloud_posture.agent.run(..., semantic_store: SemanticStore \| None = None)` — disclosed rename per ADR-010 condition 6. **This task touches Cloud Posture's actual KG-persistence behaviour. Verified-against-HEAD sentence required** in the PR body per ADR-011 Discipline 3.                                                                                                                                                                                             |
+| 4   | ⬜ pending | —      | LOW-RISK            | Mocked unit tests for the new `KnowledgeGraphWriter` in `tests/test_kg_writer.py` (NEW). Mocked `SemanticStore` injected via constructor. Covers: per-method upsert payload shape (`entity_type`, `tenant_id`, `external_id`, `properties` correctly assembled); AFFECTS-edge dedup per-finding (calling `upsert_finding` twice with the same arn produces ONE `add_relationship` call, not two); empty-affected-arns is a no-op; relationship_id round-trip from `add_relationship`. ~10-12 tests. No live Postgres needed; pure mocked. Watch-item 1 verification: no `packages/charter/` change in the diff.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 5   | ⬜ pending | —      | LOW-RISK            | **Eval-suite back-compat + additive-only gate.** Cloud Posture's existing eval cases must pass with byte-identical `actuals` before AND after the reroute. Implementation: test (in `tests/test_eval_runner.py` or equivalent) that runs the full Cloud Posture eval suite TWICE — once with `semantic_store=None` (skip-KG path; equivalent to pre-reroute neo4j_driver=None behaviour); once with `semantic_store=<in-memory aiosqlite-backed SemanticStore>`. Captures per-case `actuals` from both runs. Asserts dict-equality for all 6 fields × N cases. If any diverges, the reroute is not additive and the plan rejects. Same shape as F.7 v0.2 Task 6's flag-OFF/ON gate (the load-bearing additive-only test). No live Postgres in this task — that's Task 6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 6   | ⬜ pending | —      | **SAFETY-CRITICAL** | **THE LOAD-BEARING LIVE PROOF.** `packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py` (NEW), gated by `NEXUS_LIVE_POSTGRES=1` (mirroring `packages/charter/tests/integration/test_memory_live_postgres.py`'s skip-discipline). The test: (a) brings up a real Postgres + alembic-managed entities/relationships tables via the same fixtures the F.5 live lane uses; (b) constructs a real `SemanticStore` against that Postgres; (c) runs a real Cloud Posture scan with fixture findings (no live AWS) wired to the live `SemanticStore`; (d) verifies via D.7's `memory_neighbors_walk` (importing the real `investigation.tools.memory_walk.memory_neighbors_walk`) that the asset entities Cloud Posture just wrote are returned as neighbors of the finding entity Cloud Posture also just wrote, with AFFECTS edges traversed correctly. **This is the first time the read/write loop is closed by execution.** Skip-reason discipline: `NEXUS_LIVE_POSTGRES=1` unset → SKIP with actionable reason (postgres compose command); env var set but Postgres unreachable → SKIP with reason. **Verified-against-HEAD sentence required** in the PR body. Same A.1-live-cluster-grade discipline as F.7 v0.1 Task 6 + F.7 v0.2 Task 5. |
+| 7   | ⬜ pending | —      | LOW-RISK            | Retirement: delete `packages/agents/cloud-posture/src/cloud_posture/tools/neo4j_kg.py`; delete `packages/agents/cloud-posture/tests/test_tools_neo4j_kg.py` if extant; remove `neo4j>=5.24.0` from `packages/agents/cloud-posture/pyproject.toml`; `uv sync --all-extras --all-packages` to regenerate the lockfile. The KG-tools registrations in `agent.py` already point at the new `kg_writer.py` (Task 3), so this task removes only the orphan + the dep. Watch-item 1 verification: no `packages/charter/` change. Watch-item 2 verification: no agent other than `cloud-posture` modified.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 8   | ⬜ pending | —      | LOW-RISK            | Companion verification record at `docs/_meta/kg-loop-closure-verification-<DATE>.md`. **Plan-closer — gets full A.1 v0.1.1-grade review per the established discipline; agent does NOT quick-merge this PR.** Sections (per ADR-010's within-agent-extension shape): gate-results table; live-broker-style live-loop evidence A.1-§8 (Postgres version, alembic migration result, HEAD, invocation, result); ADR-010 conformance re-run including the two CONDITIONAL PASS retirement/rename disclosures; watch-item-1 + watch-item-2 audit; per-task surface table (8 hash-pins); coverage delta; back-compat preservation evidence (eval-gate from Task 5); breaking-change note (none — `semantic_store=None` preserves pre-reroute observable behaviour); permanent-limitation carryover; hard-scope-boundary preserved (zero other-agent KG writers, zero net-new entity/relationship types, zero new consumer); forward references; next-plan gate (D.5/D.6 KG writers, separate plans, not started).                                                                                                                                                                                                                                                         |
+
+## Compatibility contract
+
+The reroute preserves:
+
+- **Cloud Posture's `class_uid 2003` OCSF envelope** — unchanged.
+- **The two audit-chain action names** (`kg_upsert_asset`, `kg_upsert_finding`) — unchanged (F.6 chain consumers are unaffected).
+- **The KG-persistence opt-in shape** — pre: `neo4j_driver=None` skips; post: `semantic_store=None` skips. Both default to None; CLI / operator-invocation defaults preserve "no KG persistence by default" exactly as today.
+- **The asset/finding/AFFECTS data-model shape** — verbatim. No new entity types, no new relationship types, no expanded property surface.
+- **D.7's `memory_neighbors_walk` API** — unchanged (it already consumes SemanticStore in the form this plan starts writing).
+- **`SemanticStore`'s entire public API** — sealed via watch-item 1 (substrate untouched). The plan adds consumers, not surface.
+
+The reroute changes:
+
+- **`cloud_posture.agent.run` parameter:** `neo4j_driver` → `semantic_store` (disclosed rename per ADR-010 condition 6).
+- **The backend** behind the two `kg_upsert_*` tools (Neo4j → Postgres SemanticStore).
+- **The dependency surface:** `neo4j>=5.24.0` removed from `packages/agents/cloud-posture/pyproject.toml`.
+
+## Defers
+
+Five items deferred and named explicitly so future plans inherit them:
+
+| Deferred to             | Item                                                                                   | Reason                                                                                                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Later plans (per-agent) | D.5 (Network Threat) KG writer                                                         | Different agent. Needs its own per-agent entity-type taxonomy + finding-shape mapping. Separate plan, **not started**.                                                   |
+| Later plans (per-agent) | D.6 (Runtime Threat) KG writer                                                         | Same reason. Separate plan, **not started**.                                                                                                                             |
+| Later plan              | D.7's `find_related_findings` filesystem-reads → SemanticStore `findings` entity reads | Depends on F.7 v0.3+ (sibling-agent finding-publish onto `findings.>`). The bus migration is the prerequisite; the consumer swap is downstream of that. **Not started.** |
+| Later plan              | Probability-weighted multi-hop traversal / attack-path enumeration                     | Higher-level graph consumer. May trigger Phase-2 Neo4j swap per ADR-009's escape hatch. **Not started.**                                                                 |
+| Phase 2                 | Neo4j swap (full SemanticStore backend replacement)                                    | Per ADR-009 + amended in Task 1: triggered by depth ≥ 4 traversal with > 1M edges/tenant. **Not triggered by this plan.**                                                |
+
+## Watch-items (carried into execution)
+
+**Watch-item 1: `packages/charter/` UNTOUCHED.**
+
+Every implementing task's diff must show `git diff --stat <commit>^..<commit> packages/charter/` returning empty. This plan exists because SemanticStore was already the platform graph; consuming it does not require modifying it. If any task's diff touches `packages/charter/` — including `semantic.py`, `models.py`, `service.py`, the alembic migrations, anything — that is **substrate scope creep** and the task is rejected.
+
+The single edge case the plan explicitly addresses (duplicate AFFECTS edges from repeated `upsert_finding` calls within one scan) is resolved with an in-process dedup table inside the new `KnowledgeGraphWriter` — entirely on the agent side, no substrate change. See "Data-model mapping" §"One flagged-not-translated item."
+
+**Watch-item 2: NO OTHER AGENT MODIFIED.**
+
+The plan asserts (settled context item) that only Cloud Posture has a Neo4j writer. Task 2 makes that assertion empirical at execution time. Every implementing task's diff must be confined to `packages/agents/cloud-posture/` + the ADR amendment + plan-status row pins. If any task's diff touches `packages/agents/{investigation,network-threat,runtime-threat,...}` — that is **cross-agent scope creep** and the task is rejected.
+
+The single dependency Cloud Posture acquires on D.7 is the load-bearing live proof (Task 6) imports `investigation.tools.memory_walk.memory_neighbors_walk` to verify the read side of the loop. That is a **test-side import**, not a production-code change to either agent.
+
+**Watch-item 3 (carried into the future): ADR-009 escape-hatch trigger.**
+
+The amended ADR-009 (Task 1) reaffirms: depth ≥ 4 traversal against > 1M edges/tenant triggers the Phase-2 Neo4j swap. SemanticStore's entity/relationship model is kept graph-portable precisely so that swap stays a backend change, not a rebuild. The verification record (Task 8) records this watch-item explicitly so a future plan that hits the trigger condition has a clear marker for which decision to revisit.
+
+**This is the "deferred-Neo4j door clearly marked"** the user named. The amendment doesn't close it; it labels it for the conditions that would open it.
+
+## Reference template
+
+This plan is a **within-agent extension** of Cloud Posture (per [ADR-010](../../_meta/decisions/ADR-010-version-extension-template.md)) plus a **substrate-consumer extension** (consuming `charter.memory.SemanticStore`). It follows the ADR-010 framework directly — the six-condition eligibility test was executed above (4 PASS, 2 CONDITIONAL PASS with disclosed retirement/rename); the verification record (Task 8) will re-run the test against the actually-shipped surface.
+
+Pattern references for execution:
+
+- [ADR-009](../../_meta/decisions/ADR-009-memory-architecture.md) — the design decision being honored (Postgres-collapse), now amended by Task 1.
+- [ADR-007](../../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) — Cloud Posture as reference agent (the retiring writer was F.3 Task 6 — original reference-agent surface).
+- [ADR-010](../../_meta/decisions/ADR-010-version-extension-template.md) — the within-agent-extension template.
+- [ADR-011](../../_meta/decisions/ADR-011-pr-flow-and-branch-protection-discipline.md) — operating discipline; 8 task PRs under labelling + branch-protection + verified-against-HEAD-for-SAFETY-CRITICAL + report→review→merge cadence.
+- [F.7 v0.2 plan](2026-05-17-f-7-v0-2-d-7-events-migration.md) — the most recent within-agent-extension worked example; the additive-reversible + eval-gate + live-proof shape this plan mirrors.
+- [F.7 v0.2 verification record](../../_meta/f-7-v0-2-verification-2026-05-18.md) — the closing artifact this plan's Task 8 will mirror in shape.
+
+After all 8 tasks land, this plan closes; the next-plan candidate is **D.5 (Network Threat) KG writer + SemanticStore reroute** (Cloud Posture's pattern templated; separate plan, **not started**) or alternatively **D.7's `find_related_findings` filesystem-read → SemanticStore consumer migration** (depends on F.7 v0.3+'s sibling-agent finding-publish bus migration; also **not started**).
