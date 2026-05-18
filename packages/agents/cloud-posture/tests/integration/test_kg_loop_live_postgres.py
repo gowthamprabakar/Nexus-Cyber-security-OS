@@ -138,8 +138,13 @@ def _run_migrations(async_url: str) -> None:
     Reuses `packages/charter/alembic` — the same migration set the
     F.5 lane uses, so the `entities` + `relationships` schema we end
     up with is bit-for-bit identical to production's.
+
+    Path resolution: this file lives at
+    `packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py`
+    (5 directories under the repo root). `parents[4]` is `packages/`,
+    so `parents[4] / "charter"` is the charter package root.
     """
-    charter_root = Path(__file__).resolve().parents[5] / "charter"
+    charter_root = Path(__file__).resolve().parents[4] / "charter"
     cfg = Config(str(charter_root / "alembic.ini"))
     cfg.set_main_option("script_location", str(charter_root / "alembic"))
     cfg.set_main_option("sqlalchemy.url", _alembic_url_from(async_url))
