@@ -55,7 +55,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON, TypeDecorator
+from sqlalchemy.types import JSON, TypeDecorator, UserDefinedType
 
 # Embedding vector dimensionality. Matches OpenAI's text-embedding-3-small and
 # the FakeEmbeddingProvider (F.5 Task 4). Production deployments can override
@@ -89,6 +89,29 @@ class _PortableVector(TypeDecorator[list[float]]):
         return dialect.type_descriptor(JSON())
 
 
+class _LtreeColumn(UserDefinedType[str]):
+    """Minimal `ltree` column emitter for the Postgres branch of `_PortableLtree`.
+
+    SQLAlchemy 2.0.49 does not ship `postgresql.LTREE`. This emitter keeps
+    the substrate's behaviour identical to what `postgresql.LTREE` would
+    have done if it existed: emits `LTREE` as the column DDL, round-trips
+    values as strings (Python `str` <-> SQL `ltree`). No additional bind
+    / result processing — `path` values are dot-separated strings on both
+    sides of the protocol, so the default `str` round-trip is correct.
+
+    Private to this module; consumed only by `_PortableLtree.load_dialect_impl`
+    on the Postgres dialect path. See `docs/superpowers/plans/
+    2026-05-19-f5-ltree-substrate-fix.md` and
+    `docs/_meta/kg-loop-closure-verification-2026-05-18.md` §13.2 for the
+    decision record.
+    """
+
+    cache_ok = True
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return "LTREE"
+
+
 class _PortableLtree(TypeDecorator[str]):
     """Dialect-portable LTREE — Postgres-native LTREE, String fallback elsewhere.
 
@@ -103,7 +126,7 @@ class _PortableLtree(TypeDecorator[str]):
 
     def load_dialect_impl(self, dialect: Any) -> Any:
         if dialect.name == "postgresql":
-            return dialect.type_descriptor(postgresql.LTREE())  # type: ignore[attr-defined]
+            return dialect.type_descriptor(_LtreeColumn())
         return dialect.type_descriptor(String(512))
 
 
