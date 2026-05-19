@@ -1,0 +1,121 @@
+name: charter-f5-live
+
+# PERMANENT CI workflow. Runs charter's F.5 memory-engine live-Postgres
+# lane (packages/charter/tests/integration/test_memory_live_postgres.py)
+# against a CI-provisioned Postgres service container, with
+# NEXUS_LIVE_POSTGRES=1 set. The GREEN run of this workflow on every
+# relevant PR is the standing guarantee that charter's Postgres-dialect
+# code paths actually work against a real Postgres — closing the root
+# cause of the LTREE substrate bug that lived latent across F.5 v0.1
+# and was only surfaced by the KG-loop-closure plan's CI lane on
+# 2026-05-18.
+#
+# Why this workflow is PERMANENT (not a throwaway diagnostic):
+# - The LTREE substrate bug at charter/memory/models.py:106 lived for
+#   ~11 days from F.5 v0.1 ship (2026-05-12) to its CI surfacing
+#   (2026-05-18). The reason: nothing in CI ever exercised the
+#   substrate's Postgres-dialect path. aiosqlite unit tests fell
+#   through to the String(512) fallback and never touched the
+#   broken Postgres branch.
+# - This workflow makes that gap permanent-history. From the F.5
+#   LTREE substrate-fix plan forward, every PR that touches
+#   charter.memory or the F.5 alembic migrations runs the full F.5
+#   live lane against real Postgres. Substrate regressions that
+#   would have re-shipped this kind of latent bug are caught at
+#   PR review.
+# - Failure here is a SAFETY-CRITICAL signal — keeping it on its
+#   own job name (charter-f5-live) makes branch-protection rules
+#   easy to wire.
+#
+# Why a separate workflow file (vs. extending ci.yml):
+# - The base ci.yml runs every PR; spinning up Postgres + pgvector
+#   for PRs that don't touch the charter substrate is wasted CI
+#   minutes.
+# - The paths-filter below targets exactly the surfaces whose change
+#   could break the F.5 substrate: the memory module, the alembic
+#   migrations, the live test itself, and this workflow.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/charter/src/charter/memory/**'
+      - 'packages/charter/alembic/**'
+      - 'packages/charter/tests/integration/test_memory_live_postgres.py'
+      - '.github/workflows/charter-f5-live.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/charter/src/charter/memory/**'
+      - 'packages/charter/alembic/**'
+      - 'packages/charter/tests/integration/test_memory_live_postgres.py'
+      - '.github/workflows/charter-f5-live.yml'
+
+jobs:
+  charter-f5-live-postgres:
+    name: charter-f5-live-postgres
+    runs-on: ubuntu-latest
+
+    # Pin the same image the dev compose uses (pgvector/pgvector:pg16)
+    # so the live lane runs against the exact provisioning shape the
+    # F.5 baseline migration (CREATE EXTENSION vector + ltree) targets
+    # in local development. POSTGRES_USER=nexus + POSTGRES_PASSWORD=
+    # nexus_dev match the dev compose's credentials so the test's
+    # default DSN (postgresql+asyncpg://nexus:nexus_dev@localhost:5432/
+    # ...) works against either environment without per-env overrides.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus_dev
+          POSTGRES_DB: nexus
+        ports:
+          - 5432:5432
+        # pg_isready returns 0 only after Postgres accepts connections;
+        # GitHub Actions waits for `healthy` before starting the job
+        # steps, so the test fixtures never race the server startup.
+        options: >-
+          --health-cmd "pg_isready -U nexus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          # Match the ci.yml + kg-loop-live.yml pin so workspace editable
+          # installs land the same way they do in the base + KG-loop CI
+          # lanes.
+          version: '0.11.1'
+
+      - run: uv python install 3.12
+
+      - run: uv sync --all-extras --all-packages
+
+      # F.5's live lane drives `alembic upgrade head` against the
+      # migrated DB. Alembic's sync env wants psycopg2 (the
+      # _alembic_url_from helper in the live test does the +asyncpg
+      # -> +psycopg2 swap). psycopg2 is not a declared workspace
+      # dependency — charter's runbook (memory_bootstrap.md) instructs
+      # an ad-hoc install for operator-local runs. Install it here as
+      # a CI-only need so the charter package's runtime surface stays
+      # clean. (This was the second-iteration finding from the
+      # KG-loop-live workflow's initial CI runs; documented in
+      # kg-loop-closure-verification-2026-05-18.md §13 process-discovery.)
+      - run: uv pip install psycopg2-binary
+
+      # The live proof file gates on NEXUS_LIVE_POSTGRES=1. The default
+      # admin URL the test uses (postgresql+asyncpg://nexus:nexus_dev@
+      # localhost:5432/postgres) is reachable because POSTGRES_USER=nexus
+      # is created as a superuser by the initdb step in the service
+      # container above, and the default `postgres` admin DB is always
+      # present. The target DB (nexus_memory_test) is dropped + recreated
+      # by the fresh_database fixture per-test.
+      - name: Run charter F.5 live-Postgres lane
+        env:
+          NEXUS_LIVE_POSTGRES: '1'
+        run: >-
+          uv run pytest -v
+          packages/charter/tests/integration/test_memory_live_postgres.py
