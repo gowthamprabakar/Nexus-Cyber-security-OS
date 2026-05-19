@@ -1,0 +1,75 @@
+name: f5-ltree-diagnostic
+
+# DIAGNOSTIC WORKFLOW — TEMPORARY.
+#
+# Purpose: confirm the F.5 LTREE substrate bug
+# (`postgresql.LTREE` missing in SQLAlchemy 2.0.49) reproduces in CI
+# against a real Postgres service container, exactly as recorded in
+# `docs/_meta/kg-loop-closure-verification-2026-05-18.md` §13.2.
+#
+# This workflow is one-off and should be DELETED after the diagnostic
+# captures the expected red signal. It is NOT a permanent CI lane.
+#
+# Pattern: same service-container shape as `.github/workflows/kg-loop-live.yml`
+# (the KG-loop keystone proof). Difference: this runs charter's OWN F.5
+# live-Postgres lane (`packages/charter/tests/integration/test_memory_live_postgres.py`)
+# instead of the KG-loop lane, and it installs psycopg2-binary because
+# the F.5 live lane drives `alembic upgrade head` against the migrated DB.
+#
+# Expected outcome on this run: FAILURE at the F.5 baseline alembic
+# migration with `AttributeError: module 'sqlalchemy.dialects.postgresql'
+# has no attribute 'LTREE'` against `packages/charter/src/charter/memory/
+# models.py:106` (`_PortableLtree.load_dialect_impl`). When the run goes
+# red exactly there, the §13.2 bug is empirically confirmed and this
+# workflow's job is done.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/f5-ltree-diagnostic.yml'
+  workflow_dispatch:
+
+jobs:
+  f5-live-diagnostic:
+    name: f5-live-diagnostic
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus_dev
+          POSTGRES_DB: nexus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.11.1'
+
+      - run: uv python install 3.12
+
+      - run: uv sync --all-extras --all-packages
+
+      # F.5's live lane drives `alembic upgrade head` against the
+      # migrated DB. Alembic's sync env wants psycopg2 (the
+      # _alembic_url_from helper does the +asyncpg -> +psycopg2 swap).
+      # psycopg2 is not a declared workspace dep; install it here for
+      # the diagnostic. (CI-only; not added to any pyproject.)
+      - run: uv pip install psycopg2-binary
+
+      - name: Run charter F.5 live-Postgres lane (expected to FAIL on LTREE)
+        env:
+          NEXUS_LIVE_POSTGRES: '1'
+        run: >-
+          uv run pytest -v
+          packages/charter/tests/integration/test_memory_live_postgres.py
