@@ -1,0 +1,13 @@
+case_id: 007_nvd_without_d4_workspace
+description: NVD feed present but no D.4 workspace — IOC correlator emits nothing.
+fixture:
+  nvd_cves:
+    - cve_id: CVE-2021-44228
+      description: Log4j RCE
+      published: '2021-12-10T00:00:00Z'
+      cvss_v3_score: 10.0
+      cvss_v3_severity: CRITICAL
+expected:
+  finding_count: 0
+  by_finding_type:
+    threat_intel_ioc_match_network: 0

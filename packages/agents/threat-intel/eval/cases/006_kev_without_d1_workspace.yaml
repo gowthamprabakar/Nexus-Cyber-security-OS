@@ -1,0 +1,15 @@
+case_id: 006_kev_without_d1_workspace
+description: KEV feed present but no D.1 workspace — no findings (CVE correlator skipped).
+fixture:
+  kev_entries:
+    - cve_id: CVE-2021-44228
+      vendor_project: Apache
+      product: Log4j
+      vulnerability_name: Apache Log4j2 RCE
+      date_added: '2021-12-10'
+expected:
+  finding_count: 0
+  by_finding_type:
+    threat_intel_cve_in_kev_catalog: 0
+    threat_intel_ioc_match_network: 0
+    threat_intel_ioc_match_runtime: 0

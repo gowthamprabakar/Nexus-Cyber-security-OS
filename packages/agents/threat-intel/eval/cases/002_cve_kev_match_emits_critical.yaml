@@ -1,0 +1,29 @@
+case_id: 002_cve_kev_match_emits_critical
+description: KEV feed + matching D.1 finding — emits 1 CVE_KEV finding at CRITICAL.
+fixture:
+  kev_entries:
+    - cve_id: CVE-2021-44228
+      vendor_project: Apache
+      product: Log4j
+      vulnerability_name: Apache Log4j2 Remote Code Execution Vulnerability
+      date_added: '2021-12-10'
+      due_date: '2021-12-24'
+      known_ransomware_campaign_use: true
+  d1_findings_with_cves:
+    - cve_id: CVE-2021-44228
+      package_name: log4j-core
+      package_version: 2.14.0
+      ecosystem: Maven
+      package_manager: maven
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+    medium: 0
+    low: 0
+  by_finding_type:
+    threat_intel_cve_in_kev_catalog: 1
+    threat_intel_ioc_match_network: 0
+    threat_intel_ioc_match_runtime: 0
+    threat_intel_attack_technique_observed: 0

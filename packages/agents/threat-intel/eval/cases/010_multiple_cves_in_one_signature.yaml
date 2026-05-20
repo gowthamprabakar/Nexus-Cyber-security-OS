@@ -1,0 +1,26 @@
+case_id: 010_multiple_cves_in_one_signature
+description: |
+  Suricata signature mentions two CVEs; both present in NVD index — 2 IOC_NET emits
+  (within-finding dedup by IOC value).
+fixture:
+  nvd_cves:
+    - cve_id: CVE-2021-44228
+      description: Log4j RCE
+      published: '2021-12-10T00:00:00Z'
+      cvss_v3_score: 10.0
+      cvss_v3_severity: CRITICAL
+    - cve_id: CVE-2022-22965
+      description: Spring4Shell
+      published: '2022-04-04T00:00:00Z'
+      cvss_v3_score: 9.8
+      cvss_v3_severity: CRITICAL
+  d4_suricata_with_cves:
+    - signature: 'ET EXPLOIT CVE-2021-44228 / CVE-2022-22965 chained exploit'
+      src_ip: 10.0.1.42
+      dst_ip: 203.0.113.55
+      signature_id: 2999999
+expected:
+  finding_count: 2
+  by_finding_type:
+    threat_intel_ioc_match_network: 2
+    threat_intel_cve_in_kev_catalog: 0
