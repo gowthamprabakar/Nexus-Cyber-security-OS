@@ -230,7 +230,7 @@ controls:
       - source_agent: cloud_posture
         source_rule_id: CSPM-AWS-S3-002
       - source_agent: data_security
-        source_rule_id: data_security_s3_bucket_unencrypted
+        source_rule_id: s3_bucket_unencrypted
 
   - control_id: '2.1.2'
     name: Deny non-TLS S3 requests
@@ -267,7 +267,7 @@ controls:
       - source_agent: cloud_posture
         source_rule_id: CSPM-AWS-S3-001
       - source_agent: data_security
-        source_rule_id: data_security_s3_bucket_public
+        source_rule_id: s3_bucket_public
 
   - control_id: '2.1.5'
     name: Block public ACLs and policies on individual buckets
@@ -280,7 +280,7 @@ controls:
       must be enabled.
     source_mappings:
       - source_agent: data_security
-        source_rule_id: data_security_s3_bucket_public
+        source_rule_id: s3_bucket_public
 
   - control_id: '2.1.6'
     name: Forbid cross-account oversharing of S3 buckets via IAM
@@ -293,7 +293,7 @@ controls:
       allowed principals explicitly.
     source_mappings:
       - source_agent: data_security
-        source_rule_id: data_security_s3_oversharing_iam
+        source_rule_id: s3_oversharing_iam
 
   - control_id: '2.1.7'
     name: Quarantine sensitive data in untrusted S3 locations
@@ -306,7 +306,7 @@ controls:
       surfaces these as compliance failures, not auto-remediation.
     source_mappings:
       - source_agent: data_security
-        source_rule_id: data_security_s3_object_sensitive_in_untrusted_location
+        source_rule_id: s3_object_sensitive_in_untrusted_location
 
   - control_id: '2.2.1'
     name: Enable encryption-at-rest for new EBS volumes

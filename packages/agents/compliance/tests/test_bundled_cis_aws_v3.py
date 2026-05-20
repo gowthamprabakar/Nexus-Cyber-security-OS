@@ -170,11 +170,17 @@ async def test_source_mappings_reference_real_d5_rule_ids() -> None:
     `DataSecurityFindingType` enum value (the 4-detector
     discriminator strings from D.5)."""
     controls = await read_cis_aws_benchmark()
+    # D.5 emits short rule_ids in `compliance.control`
+    # (see packages/agents/data-security/src/data_security/detectors/).
+    # The full `data_security_*` strings are the
+    # DataSecurityFindingType discriminator that lands in
+    # `evidence.source_finding_type`; D.6 joins on the short
+    # `compliance.control` form.
     real_d5_rules = {
-        "data_security_s3_bucket_public",
-        "data_security_s3_bucket_unencrypted",
-        "data_security_s3_object_sensitive_in_untrusted_location",
-        "data_security_s3_oversharing_iam",
+        "s3_bucket_public",
+        "s3_bucket_unencrypted",
+        "s3_object_sensitive_in_untrusted_location",
+        "s3_oversharing_iam",
     }
     d5_referenced: set[str] = set()
     for c in controls:
