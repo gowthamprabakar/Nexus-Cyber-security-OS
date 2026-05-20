@@ -1362,9 +1362,11 @@ source = { editable = "packages/agents/threat-intel" }
 dependencies = [
     { name = "click" },
     { name = "nexus-charter" },
+    { name = "nexus-cloud-posture" },
     { name = "nexus-eval-framework" },
     { name = "nexus-network-threat-agent" },
     { name = "nexus-shared" },
+    { name = "nexus-vulnerability" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "structlog" },
@@ -1383,9 +1385,11 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
+    { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
     { name = "nexus-network-threat-agent", editable = "packages/agents/network-threat" },
     { name = "nexus-shared", editable = "packages/shared" },
+    { name = "nexus-vulnerability", editable = "packages/agents/vulnerability" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
