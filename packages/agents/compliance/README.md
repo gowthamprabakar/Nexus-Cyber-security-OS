@@ -1,14 +1,14 @@
 # `nexus-compliance-agent`
 
-Compliance Agent — **D.6**; **third of the 7 unbuilt agents** under the [2026-05-20 Path-B-breadth-first operating rule](../../../docs/superpowers/sketches/2026-05-20-agent-version-roadmaps.md); **thirteenth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / A.1 / D.5 / D.8 / **D.6**). Maps sibling-agent findings to compliance-framework controls and emits framework-level compliance findings + a posture-summary report.
+Compliance Agent — **D.6**; **third of the 7 unbuilt agents** shipped under the [2026-05-20 Path-B-breadth-first operating rule](../../../docs/superpowers/sketches/2026-05-20-agent-version-roadmaps.md); **thirteenth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / A.1 / D.5 / D.8 / **D.6**). Maps sibling-agent findings (F.3 Cloud Posture + D.5 Data Security) to compliance-framework controls and emits framework-level compliance findings + a posture-summary report.
 
-> **Bootstrap (Task 1) — 2026-05-21.** Package scaffold + pyproject + smoke tests only. No framework loader, no correlators, no driver yet. See [`docs/superpowers/plans/2026-05-21-d-6-compliance-v0-1.md`](../../../docs/superpowers/plans/2026-05-21-d-6-compliance-v0-1.md) for the full 16-task plan.
+> **v0.1 shipped 2026-05-21.** 16 tasks, PRs #89-#104 merged. 225 tests passing. 10/10 eval cases pass. Q6 CIS Benchmarks® attribution + paraphrase posture verified at unit, render, and CLI layers. See [`docs/_meta/d-6-compliance-v0-1-verification-2026-05-21.md`](../../../docs/_meta/d-6-compliance-v0-1-verification-2026-05-21.md) for the closure record.
 
 ## Scope (v0.1)
 
 **1 framework** (bundled as paraphrased YAML; Q6 — CIS Securesuite licence restricts verbatim redistribution):
 
-- **CIS AWS Foundations Benchmark v3.0** (~50 paraphrased controls).
+- **CIS AWS Foundations Benchmark v3.0** — 45 paraphrased controls covering IAM (15), Storage (10), Logging (6), Monitoring (6), Networking (5).
 
 **2 sibling-workspace correlators** (read-only, operator-pinned via flags):
 
@@ -28,22 +28,82 @@ Full version trajectory: [`docs/superpowers/sketches/2026-05-20-agent-version-ro
 
 ## ADR-007 conformance
 
-D.6 is the **13th** agent under the reference template, **9th** shipped natively against v1.2. Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader`, lands in Task 12). **Not** in the v1.3 always-on class — D.6 honours every budget axis. **Does not consume** the v1.4 candidate; single-driver per the agent spec.
+D.6 is the **13th** agent under the reference template, **9th** shipped natively against v1.2 (D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8 / **D.6**). Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader`). **Not** in the v1.3 always-on class — D.6 honours every budget axis. **Does not consume** the v1.4 candidate; single-driver per the agent spec.
 
-**Schema reuse (Q1).** D.6 re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim (lands in Task 2) — `Severity`, `AffectedResource`, `build_finding`, `FindingsReport`. Adds `ComplianceFindingType` (one per CIS control) + `ControlMapping` (CIS Level → Severity table) on top.
+**Schema reuse (Q1).** D.6 re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim — `Severity`, `AffectedResource`, `FindingsReport`, OCSF constants. Adds `ComplianceFramework` enum + `ControlLevel` enum + `compliance_finding_type(framework, control_id)` discriminator builder + `severity_for_level(level, required)` canonical table + D.6-specific `COMPLIANCE_FINDING_ID_RE` and `build_finding` on top. Downstream consumers (D.7, Meta-Harness) filter on `class_uid == 2003` first then on `finding_info.types[0] == "compliance_*"` to disambiguate D.6 emits from F.3 / D.5 / multi-cloud / k8s posture emits.
 
-## Quick start
+## Smoke runbook
 
-Package is currently at Bootstrap stage (Task 1). CLI + driver land in Tasks 11 / 13 / 14. To run the smoke tests:
+### 1. Verify the bundled CIS library
+
+```bash
+uv run python -c "
+import asyncio
+from compliance.tools.cis_aws_benchmark import read_cis_aws_benchmark
+print(f'Loaded {len(asyncio.run(read_cis_aws_benchmark()))} CIS controls.')
+"
+```
+
+Expected: `Loaded 45 CIS controls.`
+
+### 2. Run the agent against sibling-agent workspaces
+
+```bash
+uv run compliance run \
+    --contract path/to/execution-contract.yaml \
+    --cloud-posture-workspace path/to/f3-cloud-posture-run/ \
+    --data-security-workspace path/to/d5-data-security-run/
+```
+
+Each sibling workspace must contain a `findings.json` produced by the corresponding agent (F.3 Cloud Posture, D.5 Data Security). The agent writes `findings.json` (OCSF 2003 array, one finding per failing CIS control) + `report.md` (markdown with Level-1 pinned + CIS attribution) to the contract's workspace and prints a one-line digest of severity + per-control counts.
+
+**Skipped inputs are tolerated.** Either workspace flag may be omitted; the corresponding correlator silently emits zero findings. The **CIS Benchmarks® attribution footer + paraphrase declaration** is rendered in `report.md` even on empty runs (Q6 / WI-2 compliance).
+
+### 3. Run the local eval suite
+
+```bash
+uv run compliance eval packages/agents/compliance/eval/cases
+```
+
+Expected output: `10/10 passed`. Exit code 1 on any failure with per-failure `FAIL <case_id>: <reason>` lines.
+
+### 4. Run the unit test suite
 
 ```bash
 uv run pytest packages/agents/compliance -q
 ```
 
+Expected: **225 passed** in <2s.
+
+## Architecture
+
+Seven-stage pipeline:
+
+```text
+INGEST    -> ENRICH      -> CORRELATE     -> AGGREGATE    -> SCORE     -> SUMMARIZE  -> HANDOFF
+(bundled    (build           (2 sibling       (per-control     (canonical    (markdown      (findings.json
+ CIS YAML    control          correlators      PASS/FAIL        Level x       with Level-     + report.md
+ via         index +          via TaskGroup)   roll-up;         required      1 pinned +      to charter
+ charter)    optional                          FAIL-floor       severity      CIS attrib-     workspace)
+             KG writes)                        on MEDIUM)       re-stamp)     ution footer)
+```
+
+| Stage        | Module                                                                    | Output                                                               |
+| ------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1. INGEST    | `tools/cis_aws_benchmark.py`                                              | `tuple[CisControl, ...]`                                             |
+| 2. ENRICH    | `correlators/control_index.build_control_index` + `kg_writer.py` (opt-in) | control index + optional SemanticStore writes                        |
+| 3. CORRELATE | `correlators/{cloud_posture,data_security}_correlator.py`                 | `tuple[ComplianceFinding, ...]` (per-mapping emits)                  |
+| 4. AGGREGATE | `aggregator.py`                                                           | per-control roll-up; arn-deduped resources; FAIL-only output in v0.1 |
+| 5. SCORE     | `scorer.py`                                                               | canonical-severity re-stamped findings                               |
+| 6. SUMMARIZE | `summarizer.py`                                                           | markdown with Level-1 pinned + CIS Benchmarks® attribution footer    |
+| 7. HANDOFF   | `agent.py`                                                                | `findings.json` + `report.md` to charter workspace                   |
+
 ## License
 
-BSL 1.1 per [ADR-001](../../../docs/_meta/decisions/ADR-001-monorepo-bootstrap.md). Substrate this agent consumes (`charter`, `cloud-posture`, `data-security`, `eval-framework`) is Apache 2.0; the agent itself is BSL.
+BSL 1.1 per [ADR-001](../../../docs/_meta/decisions/ADR-001-monorepo-bootstrap.md). Substrate this agent consumes (`charter`, `cloud-posture`, `data-security-agent`, `eval-framework`) is Apache 2.0; the agent itself is BSL.
 
-**Third-party framework attribution** (carried in every `report.md` per Q6; full text lands with the summarizer in Task 10):
+**Third-party framework attribution** (carried in every `report.md` per Q6):
 
-- **CIS Benchmarks®** — © Center for Internet Security — https://www.cisecurity.org/cis-benchmarks/
+- **CIS Benchmarks®** — © Center for Internet Security, Inc. — https://www.cisecurity.org/cis-benchmarks/
+
+The shipped control library (`control_libraries/cis_aws_v3.yaml`) carries **paraphrased operator-facing summaries written in-house** from public CIS reference metadata (control IDs + level + applicability). **No verbatim CIS Securesuite text is reproduced.** Per Q6 / WI-2: the `report.md` attribution footer + Task 4's `test_no_securesuite_anchor_text_in_descriptions` test enforce this posture.
