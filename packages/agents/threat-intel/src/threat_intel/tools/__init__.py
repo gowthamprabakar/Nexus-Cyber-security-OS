@@ -8,6 +8,11 @@ per the shim-behind-reader pattern (mirrors F.3 / multi-cloud-posture).
 
 from __future__ import annotations
 
+from threat_intel.tools.cisa_kev import (
+    CisaKevReaderError,
+    KevEntry,
+    read_cisa_kev,
+)
 from threat_intel.tools.nvd_feed import (
     NvdCveRecord,
     NvdFeedReaderError,
@@ -15,7 +20,10 @@ from threat_intel.tools.nvd_feed import (
 )
 
 __all__ = [
+    "CisaKevReaderError",
+    "KevEntry",
     "NvdCveRecord",
     "NvdFeedReaderError",
+    "read_cisa_kev",
     "read_nvd_feed",
 ]
