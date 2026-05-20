@@ -1,0 +1,30 @@
+case_id: 003_public_bucket_with_pii_critical
+description: Public bucket + SSN classifier hit → CRITICAL s3_bucket_public + HIGH sensitive_location.
+fixture:
+  buckets:
+    - name: corp-data-lake
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: [READ]
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: false
+        ignore_public_acls: false
+        block_public_policy: false
+        restrict_public_buckets: false
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: null
+      tags: {}
+  objects:
+    - bucket: corp-data-lake
+      key: pii-data.csv
+      content_sample_b64: dXNlciBkYXRhOiBTU04gMTIzLTQ1LTY3ODk=
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 1
+    high: 1
+    medium: 0

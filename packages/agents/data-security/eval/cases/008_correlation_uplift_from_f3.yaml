@@ -1,0 +1,35 @@
+case_id: 008_correlation_uplift_from_f3
+description: Public bucket + sibling F.3 finding on same ARN → s3_bucket_public uplifts HIGH→CRITICAL via correlation.
+fixture:
+  buckets:
+    - name: corp-public
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: [READ]
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: false
+        ignore_public_acls: false
+        block_public_policy: false
+        restrict_public_buckets: false
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: null
+      tags: {}
+  objects: []
+  cloud_posture_findings:
+    - class_uid: 2003
+      finding_info:
+        uid: CSPM-AWS-PROW-001-corp-public
+        title: F.3 finding on corp-public
+      resources:
+        - uid: arn:aws:s3:::corp-public
+          type: s3-bucket
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 1
+    high: 0
+    medium: 0

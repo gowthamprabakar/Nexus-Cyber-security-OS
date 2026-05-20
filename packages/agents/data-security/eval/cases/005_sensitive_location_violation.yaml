@@ -1,0 +1,31 @@
+case_id: 005_sensitive_location_violation
+description: Private encrypted bucket + email PII + no Sensitivity=Restricted tag → only sensitive_location HIGH.
+fixture:
+  buckets:
+    - name: dev-staging
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: []
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: true
+        ignore_public_acls: true
+        block_public_policy: true
+        restrict_public_buckets: true
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: null
+      tags:
+        Environment: dev
+  objects:
+    - bucket: dev-staging
+      key: data.txt
+      content_sample_b64: dXNlciByZWNvcmQ6IGFsaWNlQGV4YW1wbGUuY29t
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 0
+    high: 1
+    medium: 0

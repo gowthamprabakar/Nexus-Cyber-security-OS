@@ -1,0 +1,13 @@
+case_id: 001_clean_account
+description: No buckets in the inventory → no findings.
+fixture:
+  buckets: []
+  objects: []
+expected:
+  finding_count: 0
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0

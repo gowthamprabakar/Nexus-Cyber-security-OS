@@ -1,0 +1,31 @@
+case_id: 007_oversharing_iam_with_pii
+description: Cross-account oversharing + email PII → HIGH s3_oversharing_iam + HIGH sensitive_location.
+fixture:
+  buckets:
+    - name: shared-with-partner
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: []
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: true
+        ignore_public_acls: true
+        block_public_policy: true
+        restrict_public_buckets: true
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: |
+        {"Version":"2012-10-17","Statement":[{"Sid":"X","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::999988887777:root"},"Action":"s3:GetObject"}]}
+      tags: {}
+  objects:
+    - bucket: shared-with-partner
+      key: contacts.csv
+      content_sample_b64: dXNlciByZWNvcmQ6IGFsaWNlQGV4YW1wbGUuY29t
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 0
+    high: 2
+    medium: 0
