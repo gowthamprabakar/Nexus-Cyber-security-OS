@@ -1,0 +1,19 @@
+case_id: 003_multi_source_rollup
+description: |
+  F.3 and D.5 BOTH contribute to CIS 2.1.4 (account-level S3 BPA).
+  Aggregator collapses to one CIS 2.1.4 finding with 2 contributors.
+  D.5 also lights up CIS 2.1.5 alone — so 2 total findings.
+fixture:
+  f3_findings_with_rules:
+    - rule_id: CSPM-AWS-S3-001
+      finding_id: CSPM-AWS-S3-001-bucket-1
+      resource_arn: arn:aws:s3:::company-secrets
+  d5_findings_with_rules:
+    - rule_id: s3_bucket_public
+      finding_id: CSPM-AWS-PUBLIC-001-company-secrets
+      bucket: company-secrets
+expected:
+  finding_count: 2
+  by_control:
+    cis_aws_v3:2.1.4: 1
+    cis_aws_v3:2.1.5: 1

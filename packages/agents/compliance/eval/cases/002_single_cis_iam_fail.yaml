@@ -1,0 +1,16 @@
+case_id: 002_single_cis_iam_fail
+description: F.3 emits CSPM-AWS-IAM-001 — bundled YAML maps to CIS 1.10 at HIGH.
+fixture:
+  f3_findings_with_rules:
+    - rule_id: CSPM-AWS-IAM-001
+      finding_id: CSPM-AWS-IAM-001-alice
+      resource_arn: arn:aws:iam::123456789012:user/alice
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 0
+    high: 1
+    medium: 0
+    low: 0
+  by_control:
+    cis_aws_v3:1.10: 1

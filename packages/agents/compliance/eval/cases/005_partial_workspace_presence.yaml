@@ -1,0 +1,17 @@
+case_id: 005_partial_workspace_presence
+description: |
+  D.5 workspace present + valid; F.3 workspace present BUT findings.json
+  is intentionally malformed. The CVE correlator silently degrades; the
+  D.5 correlator still emits.
+fixture:
+  malformed_f3_findings_json: true
+  d5_findings_with_rules:
+    - rule_id: s3_bucket_public
+      finding_id: CSPM-AWS-PUBLIC-001-secrets
+      bucket: secrets
+expected:
+  # D.5 + s3_bucket_public -> CIS 2.1.4 + 2.1.5 -> 2 findings.
+  finding_count: 2
+  by_control:
+    cis_aws_v3:2.1.4: 1
+    cis_aws_v3:2.1.5: 1

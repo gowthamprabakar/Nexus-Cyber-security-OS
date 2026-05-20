@@ -1,0 +1,12 @@
+case_id: 006_no_source_workspaces
+description: |
+  No F.3 or D.5 workspace -> agent runs cleanly, no findings, but
+  the bundled CIS library is still loaded (Stage 2 ENRICH) so the
+  attribution footer must still be present.
+fixture: {}
+expected:
+  finding_count: 0
+  report_md_contains:
+    - 'CIS Benchmarks®'
+    - 'paraphrased'
+    - 'No verbatim CIS Securesuite text is reproduced'

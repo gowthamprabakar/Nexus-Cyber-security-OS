@@ -1,0 +1,17 @@
+case_id: 004_level_1_pinning
+description: |
+  CIS Level-1 failure pins to its own report section.
+  Bundled CIS 1.10 (IAM MFA) is Level 1 + required -> HIGH.
+fixture:
+  f3_findings_with_rules:
+    - rule_id: CSPM-AWS-IAM-001
+      finding_id: CSPM-AWS-IAM-001-bob
+expected:
+  finding_count: 1
+  by_severity:
+    high: 1
+  by_control:
+    cis_aws_v3:1.10: 1
+  report_md_contains:
+    - '## CIS Level 1 failures'
+    - 'CIS 1.10'
