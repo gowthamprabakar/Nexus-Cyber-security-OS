@@ -1,10 +1,12 @@
 # `nexus-multi-cloud-posture-agent`
 
-Multi-Cloud Posture Agent — D.5; **third Phase-1b agent**; **eighth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / **D.5**). Lifts CSPM coverage from AWS-only (F.3) to **Azure + GCP**.
+Multi-Cloud Posture Agent — **third Phase-1b agent**; **eighth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / **multi-cloud-posture**). Lifts CSPM coverage from AWS-only (F.3) to **Azure + GCP**.
+
+> **Agent-ID note (2026-05-20).** Prior README copy self-claimed the ID "D.5"; that identifier is reserved for the operator's Data Security agent (DSPM) per the 2026-05-20 remaining-agents sketch §0. This package is referenced by its package name (`multi-cloud-posture`) throughout the codebase going forward.
 
 ## What it does
 
-Four-feed offline forensic analysis. Given an `ExecutionContract` requesting a multi-cloud posture scan, D.5 runs a **five-stage pipeline**:
+Four-feed offline forensic analysis. Given an `ExecutionContract` requesting a multi-cloud posture scan, multi-cloud-posture runs a **five-stage pipeline**:
 
 ```
 INGEST → NORMALIZE → SCORE → SUMMARIZE → HANDOFF
@@ -17,15 +19,15 @@ Four concurrent input feeds (`asyncio.TaskGroup`):
 - **GCP Security Command Center** — findings JSON (canonical `ListFindingsResponse` + gcloud wrapper + bare-array shapes).
 - **GCP Cloud Asset Inventory IAM** — bindings analysed deterministically (public + impersonation → CRITICAL; `roles/owner` to external user → CRITICAL; `roles/editor` to user → MEDIUM; etc.).
 
-Two deterministic normalizers (`normalize_azure` + `normalize_gcp`) lift the typed reader outputs into OCSF v1.3 Compliance Findings via **F.3's re-exported `build_finding`** — D.5 emits the **identical wire shape** (`class_uid 2003`) as F.3 cloud-posture. Downstream consumers (Meta-Harness, D.7 Investigation, fabric routing) already filter on `class_uid 2003`; D.5 is invisible at the schema level. The `finding_info.types[0]` discriminator carries `cspm_azure_defender` / `cspm_azure_activity` / `cspm_gcp_scc` / `cspm_gcp_iam`.
+Two deterministic normalizers (`normalize_azure` + `normalize_gcp`) lift the typed reader outputs into OCSF v1.3 Compliance Findings via **F.3's re-exported `build_finding`** — multi-cloud-posture emits the **identical wire shape** (`class_uid 2003`) as F.3 cloud-posture. Downstream consumers (Meta-Harness, D.7 Investigation, fabric routing) already filter on `class_uid 2003`; multi-cloud-posture is invisible at the schema level. The `finding_info.types[0]` discriminator carries `cspm_azure_defender` / `cspm_azure_activity` / `cspm_gcp_scc` / `cspm_gcp_iam`.
 
 Operators see per-cloud breakdown (Azure: Defender + Activity counts; GCP: SCC + IAM counts) and CRITICAL findings **pinned above** the per-severity sections (mirrors F.3 + D.3 + D.4 patterns).
 
 ## ADR-007 conformance
 
-D.5 is the **eighth** agent under the reference template. Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader` — D.5 is the **5th native v1.2 agent**). **Not** in the v1.3 always-on class — D.5 honours every budget axis. **Does not consume** the v1.4 candidate (sub-agent spawning primitive); single-driver per the agent spec.
+multi-cloud-posture is the **eighth** agent under the reference template. Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader` — multi-cloud-posture is the **5th native v1.2 agent**). **Not** in the v1.3 always-on class — multi-cloud-posture honours every budget axis. **Does not consume** the v1.4 candidate (sub-agent spawning primitive); single-driver per the agent spec.
 
-**Schema reuse (Q1).** D.5 re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim — `Severity`, `AffectedResource`, `CloudPostureFinding`, `build_finding`, `FindingsReport`, and the cloud-agnostic `FINDING_ID_RE` (`CSPM-<CLOUD>-<SVC>-<NNN>-<context>`). Adds D.5-specific `CloudProvider` enum (AZURE / GCP) and `CSPMFindingType` enum (4 discriminators) on top.
+**Schema reuse (Q1).** multi-cloud-posture re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim — `Severity`, `AffectedResource`, `CloudPostureFinding`, `build_finding`, `FindingsReport`, and the cloud-agnostic `FINDING_ID_RE` (`CSPM-<CLOUD>-<SVC>-<NNN>-<context>`). Adds package-specific `CloudProvider` enum (AZURE / GCP) and `CSPMFindingType` enum (4 discriminators) on top.
 
 LLM use: **not load-bearing** (contrast with D.7). Normalizers are deterministic. The `LLMProvider` parameter on `agent.run` is plumbed but never called in v0.1 — keeps the contract surface stable when Phase 1c adds optional LLM narrative.
 
@@ -39,7 +41,7 @@ uv run multi-cloud-posture eval packages/agents/multi-cloud-posture/eval/cases
 uv run eval-framework run \
     --runner multi_cloud_posture \
     --cases packages/agents/multi-cloud-posture/eval/cases \
-    --output /tmp/d5-eval-out.json
+    --output /tmp/multi-cloud-posture-eval-out.json
 
 # 3. Run against an ExecutionContract — four optional feeds
 uv run multi-cloud-posture run \
@@ -100,7 +102,7 @@ uv run pytest packages/agents/multi-cloud-posture -q
 ```bash
 uv run eval-framework run --runner multi_cloud_posture \
     --cases packages/agents/multi-cloud-posture/eval/cases \
-    --output /tmp/d5-eval-out.json
+    --output /tmp/multi-cloud-posture-eval-out.json
 # → 10/10 passed (100.0%)
 ```
 
