@@ -13,6 +13,11 @@ from threat_intel.tools.cisa_kev import (
     KevEntry,
     read_cisa_kev,
 )
+from threat_intel.tools.mitre_attack import (
+    MitreAttackReaderError,
+    TechniqueRecord,
+    read_mitre_attack,
+)
 from threat_intel.tools.nvd_feed import (
     NvdCveRecord,
     NvdFeedReaderError,
@@ -22,8 +27,11 @@ from threat_intel.tools.nvd_feed import (
 __all__ = [
     "CisaKevReaderError",
     "KevEntry",
+    "MitreAttackReaderError",
     "NvdCveRecord",
     "NvdFeedReaderError",
+    "TechniqueRecord",
     "read_cisa_kev",
+    "read_mitre_attack",
     "read_nvd_feed",
 ]
