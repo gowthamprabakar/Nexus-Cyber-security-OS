@@ -19,6 +19,11 @@ Severity policy (per plan Tasks 5-8):
 from __future__ import annotations
 
 from data_security.detectors.public_bucket import detect_public_bucket
+from data_security.detectors.sensitive_location import detect_sensitive_location
 from data_security.detectors.unencrypted import detect_unencrypted
 
-__all__ = ["detect_public_bucket", "detect_unencrypted"]
+__all__ = [
+    "detect_public_bucket",
+    "detect_sensitive_location",
+    "detect_unencrypted",
+]
