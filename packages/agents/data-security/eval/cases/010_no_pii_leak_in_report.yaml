@@ -1,0 +1,38 @@
+case_id: 010_no_pii_leak_in_report
+description: |
+  Q6 ACCEPTANCE PROBE (load-bearing). Public bucket + object sample
+  containing SSN + Visa test card. Verifies that neither the raw
+  SSN nor the card number appears anywhere in findings.json or
+  report.md — only the classifier label tokens (ssn, credit_card)
+  surface. This is the system-level Q6 guard.
+fixture:
+  buckets:
+    - name: corp-data-lake
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: [READ]
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: false
+        ignore_public_acls: false
+        block_public_policy: false
+        restrict_public_buckets: false
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: null
+      tags: {}
+  objects:
+    - bucket: corp-data-lake
+      key: pii.csv
+      content_sample_b64: bmFtZSxzc24sY2MKYm9iLDk4Ny02NS00MzIxLDQxMTEtMTExMS0xMTExLTExMTE=
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 1
+    high: 1
+    medium: 0
+  no_pii_strings:
+    - '987-65-4321'
+    - '4111-1111-1111-1111'

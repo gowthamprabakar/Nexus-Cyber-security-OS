@@ -1,0 +1,31 @@
+case_id: 006_oversharing_iam_no_pii
+description: Cross-account oversharing policy + no PII → MEDIUM s3_oversharing_iam only.
+fixture:
+  buckets:
+    - name: analytics-export
+      region: us-east-1
+      account_id: '123456789012'
+      acl:
+        grants_all_users: []
+        grants_authenticated_users: []
+      public_access_block:
+        block_public_acls: true
+        ignore_public_acls: true
+        block_public_policy: true
+        restrict_public_buckets: true
+      encryption:
+        algorithm: AES256
+        kms_master_key_id: null
+      policy_json: |
+        {"Version":"2012-10-17","Statement":[{"Sid":"X","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::999988887777:root"},"Action":["s3:GetObject","s3:ListBucket"]}]}
+      tags: {}
+  objects:
+    - bucket: analytics-export
+      key: README.txt
+      content_sample_b64: aGVsbG8gd29ybGQsIG5vIHBpaSBoZXJl
+expected:
+  finding_count: 1
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 1
