@@ -20,6 +20,7 @@ members = [
     "packages/agents/k8s-posture",
     "packages/agents/remediation",
     "packages/agents/data-security",
+    "packages/agents/threat-intel",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -74,6 +75,7 @@ files = [
     "packages/agents/k8s-posture/src",
     "packages/agents/remediation/src",
     "packages/agents/data-security/src",
+    "packages/agents/threat-intel/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
