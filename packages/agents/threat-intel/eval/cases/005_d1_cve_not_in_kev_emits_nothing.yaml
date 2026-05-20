@@ -1,0 +1,19 @@
+case_id: 005_d1_cve_not_in_kev_emits_nothing
+description: D.1 has CVE that isn't in the KEV catalog — no findings emitted.
+fixture:
+  kev_entries:
+    - cve_id: CVE-2021-44228
+      vendor_project: Apache
+      product: Log4j
+      vulnerability_name: Apache Log4j2 RCE
+      date_added: '2021-12-10'
+  d1_findings_with_cves:
+    - cve_id: CVE-2024-99999
+      package_name: somepkg
+      package_version: 1.0.0
+      ecosystem: PyPI
+      package_manager: pip
+expected:
+  finding_count: 0
+  by_finding_type:
+    threat_intel_cve_in_kev_catalog: 0

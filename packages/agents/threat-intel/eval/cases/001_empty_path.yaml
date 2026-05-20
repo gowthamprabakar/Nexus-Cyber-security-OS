@@ -1,0 +1,19 @@
+case_id: 001_empty_path
+description: No feeds, no sibling workspaces — agent emits zero findings.
+fixture:
+  kev_entries: []
+  nvd_cves: []
+  mitre_techniques: []
+expected:
+  finding_count: 0
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  by_finding_type:
+    threat_intel_cve_in_kev_catalog: 0
+    threat_intel_ioc_match_network: 0
+    threat_intel_ioc_match_runtime: 0
+    threat_intel_attack_technique_observed: 0

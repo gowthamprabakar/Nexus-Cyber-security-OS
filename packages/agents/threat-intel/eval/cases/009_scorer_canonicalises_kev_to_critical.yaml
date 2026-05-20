@@ -1,0 +1,37 @@
+case_id: 009_scorer_canonicalises_kev_to_critical
+description: |
+  Two distinct CVE-in-KEV findings — both must land at CRITICAL via
+  the canonical scorer; verifies severity table is the single source
+  of truth for downstream consumers (Meta-Harness, D.7).
+fixture:
+  kev_entries:
+    - cve_id: CVE-2021-44228
+      vendor_project: Apache
+      product: Log4j
+      vulnerability_name: Apache Log4j2 RCE
+      date_added: '2021-12-10'
+    - cve_id: CVE-2022-22965
+      vendor_project: VMware
+      product: Spring Framework
+      vulnerability_name: Spring4Shell
+      date_added: '2022-04-04'
+  d1_findings_with_cves:
+    - cve_id: CVE-2021-44228
+      package_name: log4j-core
+      package_version: 2.14.0
+      ecosystem: Maven
+      package_manager: maven
+    - cve_id: CVE-2022-22965
+      package_name: spring-beans
+      package_version: 5.3.18
+      ecosystem: Maven
+      package_manager: maven
+expected:
+  finding_count: 2
+  by_severity:
+    critical: 2
+    high: 0
+    medium: 0
+    low: 0
+  by_finding_type:
+    threat_intel_cve_in_kev_catalog: 2
