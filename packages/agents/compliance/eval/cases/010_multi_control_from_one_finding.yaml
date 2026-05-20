@@ -1,0 +1,17 @@
+case_id: 010_multi_control_from_one_finding
+description: |
+  One D.5 finding (s3_bucket_public) maps to TWO CIS controls
+  (2.1.4 + 2.1.5) per the bundled YAML. Both controls emit as
+  separate aggregated findings.
+fixture:
+  d5_findings_with_rules:
+    - rule_id: s3_bucket_public
+      finding_id: CSPM-AWS-PUBLIC-001-leaky
+      bucket: leaky-bucket
+expected:
+  finding_count: 2
+  by_severity:
+    high: 2
+  by_control:
+    cis_aws_v3:2.1.4: 1
+    cis_aws_v3:2.1.5: 1

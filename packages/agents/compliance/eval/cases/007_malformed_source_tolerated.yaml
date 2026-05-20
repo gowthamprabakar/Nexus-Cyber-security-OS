@@ -1,0 +1,10 @@
+case_id: 007_malformed_source_tolerated
+description: |
+  F.3 findings.json malformed; no D.5 workspace -> agent runs cleanly
+  with zero findings (F.3 silently degrades; D.5 absent).
+fixture:
+  malformed_f3_findings_json: true
+expected:
+  finding_count: 0
+  report_md_contains:
+    - 'CIS Benchmarks®'

@@ -1,0 +1,17 @@
+case_id: 008_cis_attribution_in_output
+description: |
+  WI-2 regression probe — the CIS Benchmarks® attribution footer
+  (with paraphrase declaration + canonical URL) appears in every
+  rendered report.md, including runs with findings.
+fixture:
+  f3_findings_with_rules:
+    - rule_id: CSPM-AWS-IAM-001
+      finding_id: CSPM-AWS-IAM-001-carol
+expected:
+  finding_count: 1
+  report_md_contains:
+    - '## Attribution'
+    - 'CIS Benchmarks®'
+    - 'Center for Internet Security'
+    - 'cisecurity.org/cis-benchmarks/'
+    - 'No verbatim CIS Securesuite text is reproduced'

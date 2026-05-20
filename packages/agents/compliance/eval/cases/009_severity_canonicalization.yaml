@@ -1,0 +1,35 @@
+case_id: 009_severity_canonicalization
+description: |
+  Use a custom 2-control library to verify Task 9's canonical scorer:
+  Level 1 + required -> HIGH; Level 2 + recommended -> LOW (but
+  LOW collapses to PASS under the FAIL-only gate -> 1 emit total).
+fixture:
+  custom_controls:
+    - control_id: '1.99'
+      name: Eval Level-1 required
+      level: level_1
+      required: true
+      source_mappings:
+        - source_agent: cloud_posture
+          source_rule_id: CSPM-AWS-IAM-001
+    - control_id: '2.99'
+      name: Eval Level-2 recommended
+      level: level_2
+      required: false
+      source_mappings:
+        - source_agent: cloud_posture
+          source_rule_id: CSPM-AWS-IAM-002
+  f3_findings_with_rules:
+    - rule_id: CSPM-AWS-IAM-001
+      finding_id: CSPM-AWS-IAM-001-eve
+    - rule_id: CSPM-AWS-IAM-002
+      finding_id: CSPM-AWS-IAM-002-eve
+expected:
+  # CIS 1.99 -> HIGH (kept); CIS 2.99 -> LOW (dropped by FAIL gate).
+  finding_count: 1
+  by_severity:
+    high: 1
+    low: 0
+  by_control:
+    cis_aws_v3:1.99: 1
+    cis_aws_v3:2.99: 0

@@ -1,0 +1,14 @@
+case_id: 001_clean_no_sources
+description: No sibling workspaces — agent emits zero compliance findings.
+fixture: {}
+expected:
+  finding_count: 0
+  by_severity:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  report_md_contains:
+    - 'CIS Benchmarks®'
+    - 'No CIS controls failed'
