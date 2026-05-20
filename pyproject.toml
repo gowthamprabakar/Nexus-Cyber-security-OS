@@ -19,6 +19,7 @@ members = [
     "packages/agents/multi-cloud-posture",
     "packages/agents/k8s-posture",
     "packages/agents/remediation",
+    "packages/agents/data-security",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -72,6 +73,7 @@ files = [
     "packages/agents/multi-cloud-posture/src",
     "packages/agents/k8s-posture/src",
     "packages/agents/remediation/src",
+    "packages/agents/data-security/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
