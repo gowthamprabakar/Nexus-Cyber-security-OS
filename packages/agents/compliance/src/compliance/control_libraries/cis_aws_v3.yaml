@@ -1,0 +1,539 @@
+# CIS AWS Foundations Benchmark v3.0 — D.6 control library.
+#
+# Q6 compliance: this file ships PARAPHRASED operator-facing
+# summaries written in-house from public CIS reference metadata
+# (control id + level + applicability). No verbatim CIS Securesuite
+# text is reproduced here.
+#
+# Schema (see compliance/tools/cis_aws_benchmark.py + schemas.py):
+#   framework: cis_aws_v3
+#   version: <semver>
+#   controls:
+#     - control_id: <dotted decimal>
+#       name: <paraphrased short label>
+#       level: level_1 | level_2
+#       applicability: [<aws_service tags>]
+#       required: <bool>
+#       description: <paraphrased operator-facing summary>
+#       source_mappings:
+#         - source_agent: cloud_posture | data_security
+#           source_rule_id: <sibling-agent rule string>
+#           # Optional per-mapping overrides:
+#           # level: level_1 | level_2
+#           # required: <bool>
+#
+# v0.2+ frameworks (SOC2 / PCI / HIPAA / NIST) land alongside this
+# file under the same schema.
+
+framework: cis_aws_v3
+version: '3.0.0'
+
+controls:
+  # ---------------------------------------------------------------
+  # 1.x — Identity and Access Management
+  # ---------------------------------------------------------------
+  - control_id: '1.1'
+    name: Maintain current contact details on the AWS account
+    level: level_1
+    applicability: [aws_account]
+    required: true
+    description: >-
+      Operational hygiene: the AWS root account should carry current
+      billing and security contact details so the cloud provider can
+      reach an accountable human when an incident is detected.
+    source_mappings: []
+
+  - control_id: '1.2'
+    name: Ensure security contact information is registered
+    level: level_1
+    applicability: [aws_account]
+    required: true
+    description: >-
+      AWS Security must have a dedicated contact channel separate
+      from billing so incident notifications reach the security
+      function.
+    source_mappings: []
+
+  - control_id: '1.4'
+    name: Eliminate use of the root user for everyday tasks
+    level: level_1
+    applicability: [aws_iam, aws_root_account]
+    required: true
+    description: >-
+      The root user has unrestricted permissions and must not be
+      used for routine operational work. Limit root activity to
+      account-creation flows and emergencies.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-IAM-002
+
+  - control_id: '1.5'
+    name: Enable MFA on the root user account
+    level: level_1
+    applicability: [aws_iam, aws_root_account]
+    required: true
+    description: >-
+      Multi-factor authentication on the root account raises the
+      bar against credential-only compromise of the account-wide
+      authority.
+    source_mappings: []
+
+  - control_id: '1.6'
+    name: Enforce hardware MFA on the root user
+    level: level_2
+    applicability: [aws_iam, aws_root_account]
+    required: false
+    description: >-
+      Defense-in-depth on the root user: prefer a hardware MFA
+      device over a virtual authenticator, removing the host
+      device as a single point of compromise.
+    source_mappings: []
+
+  - control_id: '1.7'
+    name: Avoid use of the root account in day-to-day operations
+    level: level_1
+    applicability: [aws_iam, aws_root_account]
+    required: true
+    description: >-
+      Recent root-user activity is a strong signal of misconfigured
+      automation or operator habit creep. Flag any root API call
+      outside the documented break-glass window.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-IAM-002
+
+  - control_id: '1.8'
+    name: Require strong IAM password policy
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Set minimum length, complexity, and rotation to make
+      credential brute force and reuse uneconomic.
+    source_mappings: []
+
+  - control_id: '1.10'
+    name: Enable MFA for every IAM user with a console password
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Console-capable IAM users without MFA are the highest-volume
+      account-compromise vector. Every interactive identity must
+      carry MFA.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-IAM-001
+
+  - control_id: '1.11'
+    name: Disable IAM user access keys created during onboarding
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Initial-access keys carry implicit trust and are rarely
+      tracked. Treat them as transient and rotate-or-disable on
+      first login.
+    source_mappings: []
+
+  - control_id: '1.12'
+    name: Disable credentials unused for 45 days
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Dormant credentials are a low-cost foothold for an attacker
+      with persistent access. Disable on a fixed-window cadence,
+      not on user-request.
+    source_mappings: []
+
+  - control_id: '1.13'
+    name: Restrict each user to a single active access key
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Multiple active keys per principal break credential
+      attribution. The benchmark allows the second key to exist
+      transiently during rotation but flags steady-state duplicates.
+    source_mappings: []
+
+  - control_id: '1.14'
+    name: Rotate IAM access keys every 90 days or less
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Periodic rotation bounds the blast radius of a leaked access
+      key. Pair with credential-leak monitoring; rotation alone is
+      not sufficient.
+    source_mappings: []
+
+  - control_id: '1.15'
+    name: Attach IAM permissions to groups or roles, not individuals
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      Inline user-attached policies break least-privilege review.
+      Centralise permission grants on groups and roles so changes
+      have one inspection point.
+    source_mappings: []
+
+  - control_id: '1.16'
+    name: Avoid full-administrative policies
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      A policy granting Action:* on Resource:* defeats every
+      downstream guardrail. Flag AdministratorAccess attachments
+      and any custom equivalent.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-IAM-002
+
+  - control_id: '1.17'
+    name: Configure an explicit support-role principal
+    level: level_1
+    applicability: [aws_iam]
+    required: true
+    description: >-
+      A named support role lets AWS Support engineers act under
+      audit. Anonymous account-team access defeats the audit
+      chain.
+    source_mappings: []
+
+  - control_id: '1.20'
+    name: Configure IAM Access Analyzer for all regions in use
+    level: level_2
+    applicability: [aws_iam, aws_access_analyzer]
+    required: false
+    description: >-
+      Defense-in-depth: continuous public-access analysis catches
+      drift that the originating-team's review may miss.
+    source_mappings: []
+
+  # ---------------------------------------------------------------
+  # 2.x — Storage (S3 + KMS + EBS + RDS)
+  # ---------------------------------------------------------------
+  - control_id: '2.1.1'
+    name: Enable default encryption for every S3 bucket
+    level: level_1
+    applicability: [aws_s3]
+    required: true
+    description: >-
+      Server-side default encryption ensures objects are encrypted
+      at rest even if a writer omits the explicit SSE header. Pair
+      with an aws:SecureTransport bucket policy.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-S3-002
+      - source_agent: data_security
+        source_rule_id: data_security_s3_bucket_unencrypted
+
+  - control_id: '2.1.2'
+    name: Deny non-TLS S3 requests
+    level: level_1
+    applicability: [aws_s3]
+    required: true
+    description: >-
+      A bucket policy condition aws:SecureTransport=false blocks
+      clear-text writes that would leak object names and bodies
+      in transit.
+    source_mappings: []
+
+  - control_id: '2.1.3'
+    name: Enable MFA-delete on critical S3 buckets
+    level: level_2
+    applicability: [aws_s3]
+    required: false
+    description: >-
+      MFA-delete blocks bulk-deletion attacks that target audit
+      and archive buckets. v0.1 does not enumerate which buckets
+      qualify; sets this as recommended for sensitive datasets.
+    source_mappings: []
+
+  - control_id: '2.1.4'
+    name: Block public access at the S3 account level
+    level: level_1
+    applicability: [aws_s3]
+    required: true
+    description: >-
+      Account-level Block Public Access overrides any per-bucket
+      ACL that allows public read or list. Drift back to per-bucket
+      public is the most common data-exposure incident.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-S3-001
+      - source_agent: data_security
+        source_rule_id: data_security_s3_bucket_public
+
+  - control_id: '2.1.5'
+    name: Block public ACLs and policies on individual buckets
+    level: level_1
+    applicability: [aws_s3]
+    required: true
+    description: >-
+      Per-bucket Block Public Access settings provide a second
+      independent control after the account-level toggle. Both
+      must be enabled.
+    source_mappings:
+      - source_agent: data_security
+        source_rule_id: data_security_s3_bucket_public
+
+  - control_id: '2.1.6'
+    name: Forbid cross-account oversharing of S3 buckets via IAM
+    level: level_1
+    applicability: [aws_s3, aws_iam]
+    required: true
+    description: >-
+      Wildcard cross-account Allow on s3:* (or on the bucket's
+      object actions) eliminates the audit trail. Enumerate
+      allowed principals explicitly.
+    source_mappings:
+      - source_agent: data_security
+        source_rule_id: data_security_s3_oversharing_iam
+
+  - control_id: '2.1.7'
+    name: Quarantine sensitive data in untrusted S3 locations
+    level: level_1
+    applicability: [aws_s3]
+    required: true
+    description: >-
+      Sensitive data discovered in a bucket without the right
+      sensitivity-tag prefix indicates accidental egress. v0.1
+      surfaces these as compliance failures, not auto-remediation.
+    source_mappings:
+      - source_agent: data_security
+        source_rule_id: data_security_s3_object_sensitive_in_untrusted_location
+
+  - control_id: '2.2.1'
+    name: Enable encryption-at-rest for new EBS volumes
+    level: level_1
+    applicability: [aws_ebs]
+    required: true
+    description: >-
+      Account-wide default EBS encryption ensures volumes spun up
+      by IaC pipelines are encrypted even when the template
+      forgets the explicit flag.
+    source_mappings: []
+
+  - control_id: '2.3.1'
+    name: Enable encryption for every RDS instance
+    level: level_1
+    applicability: [aws_rds]
+    required: true
+    description: >-
+      RDS storage encryption is set at creation. Drift to an
+      unencrypted snapshot followed by restore is a known
+      regression path.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-RDS-001
+
+  - control_id: '2.4.1'
+    name: Rotate customer-managed KMS keys annually
+    level: level_2
+    applicability: [aws_kms]
+    required: false
+    description: >-
+      Automatic key rotation on customer-managed CMKs limits the
+      time a key is in service if its material is compromised.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-KMS-001
+
+  # ---------------------------------------------------------------
+  # 3.x — Logging (CloudTrail + Config)
+  # ---------------------------------------------------------------
+  - control_id: '3.1'
+    name: Enable CloudTrail in every region
+    level: level_1
+    applicability: [aws_cloudtrail]
+    required: true
+    description: >-
+      A multi-region trail with management + data events is the
+      backbone of the AWS audit chain. Single-region trails miss
+      cross-region attacker pivots.
+    source_mappings: []
+
+  - control_id: '3.2'
+    name: Encrypt CloudTrail logs at rest with a CMK
+    level: level_2
+    applicability: [aws_cloudtrail, aws_kms]
+    required: false
+    description: >-
+      CMK-backed encryption on CloudTrail S3 destinations gives
+      the security team key-policy control independent of the
+      logs bucket owner.
+    source_mappings: []
+
+  - control_id: '3.3'
+    name: Enable S3 bucket logging on the CloudTrail destination
+    level: level_1
+    applicability: [aws_cloudtrail, aws_s3]
+    required: true
+    description: >-
+      Access logs on the trail's destination bucket catch
+      tampering with the audit chain itself.
+    source_mappings: []
+
+  - control_id: '3.4'
+    name: Validate CloudTrail log-file integrity
+    level: level_1
+    applicability: [aws_cloudtrail]
+    required: true
+    description: >-
+      Digest delivery + signature validation lets the operator
+      confirm the log stream was not altered after CloudTrail
+      wrote it.
+    source_mappings: []
+
+  - control_id: '3.5'
+    name: Enable AWS Config in every region
+    level: level_2
+    applicability: [aws_config]
+    required: false
+    description: >-
+      Config provides resource-snapshot history that lets the
+      security team reconstruct state at incident time even when
+      the original resource has been deleted.
+    source_mappings: []
+
+  - control_id: '3.6'
+    name: Enable VPC Flow Logs for every VPC
+    level: level_2
+    applicability: [aws_vpc]
+    required: false
+    description: >-
+      VPC Flow Logs feed D.4 Network Threat detectors (port-scan,
+      beacon) and are the only audit-chain record of L4 traffic
+      shape in many environments.
+    source_mappings: []
+
+  # ---------------------------------------------------------------
+  # 4.x — Monitoring (CloudWatch alarms)
+  # ---------------------------------------------------------------
+  - control_id: '4.1'
+    name: Alarm on unauthorised API calls
+    level: level_2
+    applicability: [aws_cloudwatch, aws_cloudtrail]
+    required: false
+    description: >-
+      A CloudWatch metric filter + alarm on errorCode
+      UnauthorizedOperation surfaces probing activity that
+      would otherwise be invisible.
+    source_mappings: []
+
+  - control_id: '4.2'
+    name: Alarm on console sign-in without MFA
+    level: level_2
+    applicability: [aws_cloudwatch, aws_cloudtrail]
+    required: false
+    description: >-
+      Even if Control 1.10 prevents new MFA-less users, a missing
+      alarm here means a regression to MFA-less sign-in lives
+      until the next manual audit.
+    source_mappings: []
+
+  - control_id: '4.3'
+    name: Alarm on root-user activity
+    level: level_1
+    applicability: [aws_cloudwatch, aws_cloudtrail, aws_root_account]
+    required: true
+    description: >-
+      Pair with Control 1.4/1.7. The detective control catches
+      drift even when the preventive policy is in place.
+    source_mappings: []
+
+  - control_id: '4.6'
+    name: Alarm on policy changes
+    level: level_2
+    applicability: [aws_cloudwatch, aws_iam]
+    required: false
+    description: >-
+      IAM policy changes outside of the documented IaC pipeline
+      are a strong signal of an attacker establishing persistence.
+    source_mappings: []
+
+  - control_id: '4.8'
+    name: Alarm on S3 bucket policy changes
+    level: level_2
+    applicability: [aws_cloudwatch, aws_s3]
+    required: false
+    description: >-
+      A bucket-policy change that opens public access is the
+      classic data-exposure event. Detective control on the
+      change itself, independent of the eventual breach probe.
+    source_mappings: []
+
+  - control_id: '4.11'
+    name: Alarm on Security Group changes
+    level: level_2
+    applicability: [aws_cloudwatch, aws_vpc]
+    required: false
+    description: >-
+      Security Group churn outside the IaC pipeline indicates
+      either ad-hoc operator work that bypasses review or an
+      attacker opening an exfil path.
+    source_mappings: []
+
+  # ---------------------------------------------------------------
+  # 5.x — Networking (VPC + Security Groups)
+  # ---------------------------------------------------------------
+  - control_id: '5.1'
+    name: Forbid Network ACLs allowing ingress on remote-admin ports
+    level: level_1
+    applicability: [aws_vpc, aws_nacl]
+    required: true
+    description: >-
+      A NACL allowing 0.0.0.0/0 to TCP/22 or TCP/3389 makes the
+      Security Group the only barrier — single-control posture
+      is fragile.
+    source_mappings: []
+
+  - control_id: '5.2'
+    name: Forbid Security Groups allowing 0.0.0.0/0 on remote-admin ports
+    level: level_1
+    applicability: [aws_vpc, aws_security_group]
+    required: true
+    description: >-
+      The single highest-impact preventive control on the network
+      surface. Remote-admin ports must be reachable only from
+      named jump hosts or SSM Session Manager.
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-EC2-001
+
+  - control_id: '5.3'
+    name: Restrict the default Security Group of every VPC
+    level: level_2
+    applicability: [aws_vpc, aws_security_group]
+    required: false
+    description: >-
+      The default SG is implicitly attached to fresh ENIs. Empty
+      its rules so newly-created resources start network-isolated
+      until explicitly opened.
+    source_mappings: []
+
+  - control_id: '5.4'
+    name: Restrict route tables to known peer VPCs
+    level: level_2
+    applicability: [aws_vpc]
+    required: false
+    description: >-
+      Stale VPC peering routes can carry traffic to deprecated
+      accounts that no longer enforce posture controls.
+    source_mappings: []
+
+  - control_id: '5.5'
+    name: Forbid open ICMP on Security Groups
+    level: level_2
+    applicability: [aws_vpc, aws_security_group]
+    required: false
+    description: >-
+      Internet-wide ICMP reachability supports reconnaissance and
+      provides little operational value. Restrict to named
+      monitoring sources.
+    source_mappings: []
