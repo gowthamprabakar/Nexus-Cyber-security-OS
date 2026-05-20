@@ -11,6 +11,7 @@ dependencies = [
     "nexus-network-threat-agent",
     "nexus-cloud-posture",
     "nexus-vulnerability",
+    "nexus-runtime-threat",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
     "click>=8.1.0",
@@ -39,6 +40,7 @@ nexus-eval-framework = { workspace = true }
 nexus-network-threat-agent = { workspace = true }
 nexus-cloud-posture = { workspace = true }
 nexus-vulnerability = { workspace = true }
+nexus-runtime-threat = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
