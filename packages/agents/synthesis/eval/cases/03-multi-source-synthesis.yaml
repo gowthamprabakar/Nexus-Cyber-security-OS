@@ -1,8 +1,12 @@
 case_id: multi_source_synthesis
-description: |
-  Three findings spread across two sources (F.3 + D.6). 2-section
+description: 'Three findings spread across two sources (F.3 + D.6). 2-section
+
   narrative spans both sources; cited_finding_count = 3 after dedup.
-tags: [happy-path, multi-source]
+
+  '
+tags:
+  - happy-path
+  - multi-source
 fixture:
   cloud_posture_findings:
     - class_uid: 2003
@@ -23,29 +27,15 @@ fixture:
         title: CIS 1.10 root MFA failure
       compliance:
         control: cis_aws_v3:1.10
-  llm_responses:
-    - |
-      {"overall_narrative_intent": "Cover identity + storage posture.",
-       "sections": [{"heading": "Identity posture",
-                     "intent": "IAM and root MFA gaps.",
-                     "cited_finding_ids": ["CSPM-AWS-IAM-001", "COMPLY-1.10"]},
-                    {"heading": "Storage exposure",
-                     "intent": "Bucket exposure.",
-                     "cited_finding_ids": ["CSPM-AWS-S3-001"]}]}
-    - 'Two identity-side findings demand attention: `CSPM-AWS-IAM-001` (user MFA gap) and `COMPLY-1.10` (CIS root-MFA control failure). Address both before the next audit cycle.'
-    - 'One S3 bucket is configured with public-read ACLs, triggering `CSPM-AWS-S3-001`. Close the bucket policy and audit any exposed objects.'
-    - |
-      {"paragraph": "The scan window surfaced three high-severity findings across IAM and storage posture; CIS Level-1 control 1.10 failed. Address the root MFA gap first.",
-       "key_metrics": {"total_findings": 3, "critical": 0, "high": 3, "top_failing_control": "1.10"}}
 expected:
   section_count: 2
   review_retries: 0
   cited_finding_count: 3
   narrative_md_contains:
-    - 'Identity posture'
-    - 'Storage exposure'
-    - 'CSPM-AWS-IAM-001'
-    - 'COMPLY-1.10'
-    - 'CSPM-AWS-S3-001'
+    - Identity posture
+    - Storage exposure
+    - CSPM-AWS-IAM-001
+    - COMPLY-1.10
+    - CSPM-AWS-S3-001
   executive_summary_md_contains:
     - '1.10'

@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"Cover the PII exposure.\",\n \"sections\": [{\"heading\": \"PII exposure\",\n               \"intent\": \"S3 bucket with classified ssn + credit_card.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-PII-001\"]}]}\n",
+  "The bucket contains data classified as `ssn` and `credit_card` per `CSPM-AWS-PII-001`. The classifier labels are reported categorically; refer to the source finding for evidence. Close the bucket and rotate any exposed credentials.",
+  "{\"paragraph\": \"One bucket contains data classified as `ssn` and `credit_card` per `CSPM-AWS-PII-001`. Close the bucket and audit objects.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 1, \"top_failing_control\": \"\"}}\n"
+]

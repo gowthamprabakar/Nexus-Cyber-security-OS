@@ -1,13 +1,23 @@
 case_id: stub_llm_determinism
-description: |
-  WI-3 acceptance probe. Stub-LLM canned responses + deterministic
+description: "WI-3 acceptance probe. Stub-LLM canned responses + deterministic
+
   context bundle => byte-equal output across reruns. The runner's
+
   default fake provider has fixed 100/50 token counts; the agent's
+
   cited-id dedupe is deterministic; the markdown renderer is
+
   deterministic. This case asserts the substring contract; the
+
   Task 13 stub harness will lift byte-equality to a top-level
+
   invariant.
-tags: [happy-path, wi-3, determinism]
+
+  "
+tags:
+  - happy-path
+  - wi-3
+  - determinism
 fixture:
   cloud_posture_findings:
     - class_uid: 2003
@@ -15,21 +25,11 @@ fixture:
       finding_info:
         uid: CSPM-AWS-LOG-001
         title: CloudTrail not multi-region
-  llm_responses:
-    - |
-      {"overall_narrative_intent": "Cover the logging gap.",
-       "sections": [{"heading": "Logging posture",
-                     "intent": "CloudTrail multi-region.",
-                     "cited_finding_ids": ["CSPM-AWS-LOG-001"]}]}
-    - 'CloudTrail is not configured as multi-region per `CSPM-AWS-LOG-001`. Enable multi-region capture to satisfy audit retention requirements.'
-    - |
-      {"paragraph": "The scan window surfaced one medium-severity logging gap; CloudTrail is not multi-region. Address before the next audit cycle.",
-       "key_metrics": {"total_findings": 1, "critical": 0, "high": 0, "top_failing_control": ""}}
 expected:
   section_count: 1
   review_retries: 0
   cited_finding_count: 1
   narrative_md_contains:
-    - 'Logging posture'
-    - 'CSPM-AWS-LOG-001'
-    - 'multi-region'
+    - Logging posture
+    - CSPM-AWS-LOG-001
+    - multi-region

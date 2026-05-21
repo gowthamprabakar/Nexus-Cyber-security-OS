@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"Address the IAM MFA gap.\",\n \"sections\": [{\"heading\": \"Identity posture\",\n               \"intent\": \"Discuss the IAM MFA gap.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-IAM-001\"]}]}\n",
+  "One IAM user lacks MFA on console access. Finding `CSPM-AWS-IAM-001` should be remediated by enabling MFA on the affected account before the next audit cycle.",
+  "{\"paragraph\": \"The scan window surfaced one high-severity IAM finding: a user account is missing console MFA. Address `CSPM-AWS-IAM-001` before the next audit.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 1, \"top_failing_control\": \"\"}}\n"
+]

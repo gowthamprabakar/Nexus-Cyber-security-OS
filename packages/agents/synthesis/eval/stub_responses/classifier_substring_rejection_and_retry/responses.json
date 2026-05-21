@@ -1,0 +1,8 @@
+[
+  "{\"overall_narrative_intent\": \"Cover the PII exposure.\",\n \"sections\": [{\"heading\": \"PII exposure\",\n               \"intent\": \"S3 bucket with classified data.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-S3-PII-001\"]}]}\n",
+  "The bucket contained SSN 123-45-6789 in plaintext as flagged by `CSPM-AWS-S3-PII-001`.",
+  "{\"paragraph\": \"One bucket contains data classified as `ssn` per the F.3 finding `CSPM-AWS-S3-PII-001`. Close the bucket and audit objects.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 1, \"top_failing_control\": \"\"}}\n",
+  "{\"overall_narrative_intent\": \"Cover the PII exposure.\",\n \"sections\": [{\"heading\": \"PII exposure\",\n               \"intent\": \"S3 bucket with classified data.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-S3-PII-001\"]}]}\n",
+  "The bucket contains data classified as type `ssn` per `CSPM-AWS-S3-PII-001`. The classifier label is reported categorically; refer to the source finding for evidence. Close the bucket and audit objects.",
+  "{\"paragraph\": \"One bucket contains data classified as `ssn` per the F.3 finding `CSPM-AWS-S3-PII-001`. Close the bucket and audit objects.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 1, \"top_failing_control\": \"\"}}\n"
+]

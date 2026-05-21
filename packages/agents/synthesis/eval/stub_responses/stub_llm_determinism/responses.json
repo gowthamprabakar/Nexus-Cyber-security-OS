@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"Cover the logging gap.\",\n \"sections\": [{\"heading\": \"Logging posture\",\n               \"intent\": \"CloudTrail multi-region.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-LOG-001\"]}]}\n",
+  "CloudTrail is not configured as multi-region per `CSPM-AWS-LOG-001`. Enable multi-region capture to satisfy audit retention requirements.",
+  "{\"paragraph\": \"The scan window surfaced one medium-severity logging gap; CloudTrail is not multi-region. Address before the next audit cycle.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 0, \"top_failing_control\": \"\"}}\n"
+]

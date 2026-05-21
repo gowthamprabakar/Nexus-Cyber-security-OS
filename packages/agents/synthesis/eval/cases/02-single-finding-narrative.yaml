@@ -1,9 +1,14 @@
 case_id: single_finding_narrative
-description: |
-  One F.3 Cloud Posture finding feeds a 1-section narrative that
+description: 'One F.3 Cloud Posture finding feeds a 1-section narrative that
+
   cites the finding by ID. Sanity check that the cited_finding_ids
+
   thread through from outline to narrative.md.
-tags: [happy-path, single-source]
+
+  '
+tags:
+  - happy-path
+  - single-source
 fixture:
   cloud_posture_findings:
     - class_uid: 2003
@@ -11,22 +16,12 @@ fixture:
       finding_info:
         uid: CSPM-AWS-IAM-001
         title: IAM user missing MFA
-  llm_responses:
-    - |
-      {"overall_narrative_intent": "Address the IAM MFA gap.",
-       "sections": [{"heading": "Identity posture",
-                     "intent": "Discuss the IAM MFA gap.",
-                     "cited_finding_ids": ["CSPM-AWS-IAM-001"]}]}
-    - 'One IAM user lacks MFA on console access. Finding `CSPM-AWS-IAM-001` should be remediated by enabling MFA on the affected account before the next audit cycle.'
-    - |
-      {"paragraph": "The scan window surfaced one high-severity IAM finding: a user account is missing console MFA. Address `CSPM-AWS-IAM-001` before the next audit.",
-       "key_metrics": {"total_findings": 1, "critical": 0, "high": 1, "top_failing_control": ""}}
 expected:
   section_count: 1
   review_retries: 0
   cited_finding_count: 1
   narrative_md_contains:
-    - 'Identity posture'
-    - 'CSPM-AWS-IAM-001'
+    - Identity posture
+    - CSPM-AWS-IAM-001
   executive_summary_md_contains:
-    - 'CSPM-AWS-IAM-001'
+    - CSPM-AWS-IAM-001
