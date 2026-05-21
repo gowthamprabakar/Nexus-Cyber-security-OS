@@ -1,13 +1,17 @@
 case_id: clean_no_gaps
-description: |
-  Empty SemanticStore -> no gaps detected -> hypothesizer short-
+description: 'Empty SemanticStore -> no gaps detected -> hypothesizer short-
+
   circuits (no LLM call) -> empty CuriosityReport. Both PERSIST
+
   and PUBLISH no-op on empty entities/claims lists.
-tags: [happy-path, empty]
+
+  '
+tags:
+  - happy-path
+  - empty
 fixture:
   regions: []
   finding_aggregates: []
-  llm_responses: []
 expected:
   total_claims: 0
   review_retries: 0
@@ -16,4 +20,4 @@ expected:
   semantic_store_upsert_count: 0
   fabric_publish_count: 0
   markdown_contains:
-    - 'No coverage gaps detected'
+    - No coverage gaps detected

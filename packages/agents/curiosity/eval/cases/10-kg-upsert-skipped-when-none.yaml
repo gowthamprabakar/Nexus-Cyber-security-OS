@@ -1,17 +1,24 @@
 case_id: kg_upsert_skipped_when_none
-description: |
-  Q5 single-tenant default — fixture sets semantic_store: false so
+description: 'Q5 single-tenant default — fixture sets semantic_store: false so
+
   the runner passes semantic_store=None to the agent driver. Both
+
   INGEST and PERSIST no-op gracefully; the driver short-circuits at
+
   the empty-state path (no SemanticStore -> no regions -> no gaps
+
   -> no LLM call). semantic_store_upsert_count=0; fabric_publish_count=0.
-tags: [q5, single-tenant, opt-in]
+
+  '
+tags:
+  - q5
+  - single-tenant
+  - opt-in
 fixture:
   semantic_store: false
   js_client: false
   regions: []
   finding_aggregates: []
-  llm_responses: []
 expected:
   total_claims: 0
   review_retries: 0
