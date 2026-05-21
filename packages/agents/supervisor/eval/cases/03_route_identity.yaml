@@ -1,0 +1,10 @@
+case_id: 03_route_identity
+description: Explicit target_agent=identity routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: identity
+expected:
+  decision_kind: match
+  target_agent: identity
+  delegation_count: 1
+  escalation_count: 0

@@ -1,0 +1,21 @@
+case_id: 14_over_capacity_parallel_tasks
+description: 6 declared sub-tasks under Semaphore(5) -> 5 in first wave, 1 queued in second wave; all 6 complete.
+fixture:
+  task_id: t1
+  target_agent: cloud_posture
+  extra_triggers:
+    - task_id: t2
+      target_agent: cloud_posture
+    - task_id: t3
+      target_agent: cloud_posture
+    - task_id: t4
+      target_agent: cloud_posture
+    - task_id: t5
+      target_agent: cloud_posture
+    - task_id: t6
+      target_agent: cloud_posture
+  concurrency: 5
+expected:
+  triggers_received: 6
+  delegation_count: 6
+  escalation_count: 0

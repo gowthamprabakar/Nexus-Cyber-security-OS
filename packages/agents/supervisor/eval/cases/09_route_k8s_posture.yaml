@@ -1,0 +1,10 @@
+case_id: 09_route_k8s_posture
+description: Explicit target_agent=k8s_posture routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: k8s_posture
+expected:
+  decision_kind: match
+  target_agent: k8s_posture
+  delegation_count: 1
+  escalation_count: 0

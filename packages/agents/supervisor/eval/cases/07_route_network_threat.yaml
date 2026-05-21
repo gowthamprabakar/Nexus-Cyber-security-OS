@@ -1,0 +1,10 @@
+case_id: 07_route_network_threat
+description: Explicit target_agent=network_threat routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: network_threat
+expected:
+  decision_kind: match
+  target_agent: network_threat
+  delegation_count: 1
+  escalation_count: 0

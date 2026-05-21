@@ -1,0 +1,10 @@
+case_id: 08_route_multi_cloud_posture
+description: Explicit target_agent=multi_cloud_posture routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: multi_cloud_posture
+expected:
+  decision_kind: match
+  target_agent: multi_cloud_posture
+  delegation_count: 1
+  escalation_count: 0

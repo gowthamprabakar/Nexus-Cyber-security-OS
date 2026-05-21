@@ -1,0 +1,11 @@
+case_id: 15_escalation_on_budget_exceeded
+description: Invoker raises -> ERROR outcome -> escalation raised; the canonical non-OK probe.
+fixture:
+  task_id: t1
+  target_agent: cloud_posture
+  invoker_behavior: raise
+expected:
+  decision_kind: match
+  target_agent: cloud_posture
+  delegation_count: 1
+  escalation_count: 1

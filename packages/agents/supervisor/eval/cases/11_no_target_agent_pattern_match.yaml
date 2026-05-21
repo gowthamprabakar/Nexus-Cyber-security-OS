@@ -1,0 +1,15 @@
+case_id: 11_no_target_agent_pattern_match
+description: Task carries no explicit target_agent; pattern-match rule routes via delta_type.
+fixture:
+  task_id: t1
+  delta_type: S3_misconfiguration
+  extra_rules:
+    - rule_id: delta_match_s3
+      target_agent: cloud_posture
+      delta_type_pattern: S3_misconfiguration
+      priority: 10
+expected:
+  decision_kind: match
+  target_agent: cloud_posture
+  delegation_count: 1
+  escalation_count: 0

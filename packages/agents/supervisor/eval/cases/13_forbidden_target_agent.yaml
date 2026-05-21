@@ -1,0 +1,9 @@
+case_id: 13_forbidden_target_agent
+description: Task tries to route to an agent not in any rule -> NoMatch -> escalate.
+fixture:
+  task_id: t1
+  target_agent: ghost_agent
+expected:
+  decision_kind: no_match
+  delegation_count: 0
+  escalation_count: 1

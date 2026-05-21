@@ -1,0 +1,10 @@
+case_id: 06_route_investigation
+description: Explicit target_agent=investigation routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: investigation
+expected:
+  decision_kind: match
+  target_agent: investigation
+  delegation_count: 1
+  escalation_count: 0

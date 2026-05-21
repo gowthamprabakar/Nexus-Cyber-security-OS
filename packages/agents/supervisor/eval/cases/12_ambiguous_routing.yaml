@@ -1,0 +1,18 @@
+case_id: 12_ambiguous_routing
+description: Two rules at the same priority match the same task -> Ambiguous -> escalate.
+fixture:
+  task_id: t1
+  target_agent: dual_match
+  extra_rules:
+    - rule_id: ambig_a
+      target_agent: cloud_posture
+      target_agent_declared: dual_match
+      priority: 50
+    - rule_id: ambig_b
+      target_agent: vulnerability
+      target_agent_declared: dual_match
+      priority: 50
+expected:
+  decision_kind: ambiguous
+  delegation_count: 0
+  escalation_count: 1
