@@ -239,6 +239,37 @@ class SemanticStore:
             rows = (await session.execute(entities_stmt)).scalars().all()
             return [self._row(m) for m in rows]
 
+    async def list_entities_by_type(
+        self,
+        *,
+        tenant_id: str,
+        entity_type: str,
+    ) -> list[EntityRow]:
+        """List all entities of a given type for a tenant.
+
+        Used by query-side consumers (e.g. D.12 Curiosity's
+        coverage-gap detector) that scan the KG for aggregate state.
+        Returns rows in insertion order; callers that need ordering
+        guarantees should sort by ``EntityRow.created_at`` or by a
+        property field. Returns ``[]`` when no entities of that type
+        exist for the tenant.
+
+        Tenant-scoped per ADR-007 v1.1 — never returns rows from
+        other tenants. Cross-tenant reads must go through an
+        explicit control-plane path (out of scope here).
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id must be a non-empty string")
+        if not entity_type:
+            raise ValueError("entity_type must be a non-empty string")
+        stmt = select(EntityModel).where(
+            EntityModel.tenant_id == tenant_id,
+            EntityModel.entity_type == entity_type,
+        )
+        async with self._session_factory() as session:
+            models = (await session.execute(stmt)).scalars().all()
+            return [self._row(m) for m in models]
+
     @staticmethod
     def _row(model: EntityModel) -> EntityRow:
         return EntityRow(
