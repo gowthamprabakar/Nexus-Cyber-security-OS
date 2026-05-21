@@ -116,7 +116,11 @@ class ProbeDirective(BaseModel):
     target_resource_arn: str | None = Field(default=None, min_length=1, max_length=256)
     target_finding_id: str | None = Field(default=None, min_length=1, max_length=128)
     action: ProbeAction
-    rationale_ref: str = Field(min_length=1, max_length=64)
+    # ``rationale_ref`` carries the parent claim_id. The LLM emits it
+    # as ``""`` (template-instructed) and the driver populates with
+    # the freshly-minted ULID before the claim is published. Empty
+    # string is the legal "pending driver fill" state.
+    rationale_ref: str = Field(default="", max_length=64)
 
     @model_validator(mode="after")
     def _exactly_one_target(self) -> ProbeDirective:
