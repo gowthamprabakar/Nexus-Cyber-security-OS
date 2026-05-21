@@ -9,7 +9,7 @@ A.4 v0.1 ships **no charter-registered tools.** The four in-driver helpers below
 Stage 1 INTROSPECT — read-only walker over one agent's `nlah/` directory.
 
 - **Signature:** `parse_nlah_dir(nlah_dir, *, agent_id, eval_cases_dir=None) -> AgentManifest`
-- **Behaviour:** Required `README.md` → persona extracted from first non-heading paragraph (collapsed whitespace, 1024-char bound). Optional `tools.md` → declared tools parsed from `## \`tool_name(...)\``level-2 headers (deduplicated, first-occurrence order). Optional`examples/`→`_.md`file count. Optional`eval_cases_dir`cross-reference →`_.yaml` count.
+- **Behaviour:** Required `README.md` → persona extracted from first non-heading paragraph (collapsed whitespace, 1024-char bound). Optional `tools.md` → declared tools parsed from level-2 headers shaped like `## tool_name(...)` (deduplicated, first-occurrence order). Optional `examples/` → markdown file count. Optional `eval_cases_dir` cross-reference → YAML file count.
 - **Errors:** `NlahParseError` on missing dir / missing README / empty README. Caught at the driver boundary (Stage 1 INTROSPECT skip-with-log) — does not kill the batch.
 - **WI-4:** Every read goes through `Path.read_text(encoding="utf-8")`. The companion integration test patches `Path.open` + `builtins.open` and asserts every mode is read-only.
 
