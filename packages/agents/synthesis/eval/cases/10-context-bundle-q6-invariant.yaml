@@ -1,0 +1,42 @@
+case_id: context_bundle_q6_invariant
+description: |
+  Q6 first-line scrub probe. F.3 findings carry an evidence block
+  with classifier_labels_found arrays. The ENRICH stage projects
+  the labels through but DROPS the matched-text fields. The
+  rendered narrative must NEVER carry the matched substring even
+  if the LLM is tempted (and here the canned response is clean).
+  Reviewer also catches any leak as a second line of defence.
+tags: [q6, wi-2, invariant]
+fixture:
+  cloud_posture_findings:
+    - class_uid: 2003
+      severity_id: 4
+      finding_info:
+        uid: CSPM-AWS-PII-001
+        title: S3 bucket contains classified data
+      evidences:
+        - classifier_labels_found: ['ssn', 'credit_card']
+          # The matched-text field below would be a Q6 leak source;
+          # the ENRICH layer must strip it from the context bundle.
+          matched_text: 'SECRET_LEAK_DO_NOT_RENDER_123-45-6789'
+  llm_responses:
+    - |
+      {"overall_narrative_intent": "Cover the PII exposure.",
+       "sections": [{"heading": "PII exposure",
+                     "intent": "S3 bucket with classified ssn + credit_card.",
+                     "cited_finding_ids": ["CSPM-AWS-PII-001"]}]}
+    - 'The bucket contains data classified as `ssn` and `credit_card` per `CSPM-AWS-PII-001`. The classifier labels are reported categorically; refer to the source finding for evidence. Close the bucket and rotate any exposed credentials.'
+    - |
+      {"paragraph": "One bucket contains data classified as `ssn` and `credit_card` per `CSPM-AWS-PII-001`. Close the bucket and audit objects.",
+       "key_metrics": {"total_findings": 1, "critical": 0, "high": 1, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 0
+  cited_finding_count: 1
+  narrative_md_contains:
+    - 'PII exposure'
+    - 'ssn'
+    - 'credit_card'
+  narrative_md_excludes:
+    - 'SECRET_LEAK_DO_NOT_RENDER'
+    - '123-45-6789'

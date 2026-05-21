@@ -1,0 +1,28 @@
+case_id: clean_no_findings
+description: |
+  Zero findings across all 3 sibling sources. Narrator returns a
+  minimal 1-section outline + benign narration + clean exec summary.
+  No Q6 retries.
+tags: [happy-path, no-findings]
+fixture:
+  investigation_findings: []
+  compliance_findings: []
+  cloud_posture_findings: []
+  llm_responses:
+    - |
+      {"overall_narrative_intent": "The scan window surfaced no findings.",
+       "sections": [{"heading": "No findings",
+                     "intent": "Confirm a clean scan window.",
+                     "cited_finding_ids": []}]}
+    - 'The scan window completed cleanly with zero findings across all three sibling sources. No further action is required.'
+    - |
+      {"paragraph": "The scan window completed cleanly with no findings detected across cloud posture, compliance, or investigation sources. No remediation actions are required for this run.",
+       "key_metrics": {"total_findings": 0, "critical": 0, "high": 0, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 0
+  cited_finding_count: 0
+  narrative_md_contains:
+    - 'No findings'
+  executive_summary_md_contains:
+    - 'no findings detected'

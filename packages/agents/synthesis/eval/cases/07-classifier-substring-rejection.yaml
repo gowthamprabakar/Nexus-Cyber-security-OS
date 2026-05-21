@@ -1,0 +1,46 @@
+case_id: classifier_substring_rejection_and_retry
+description: |
+  WI-2 acceptance probe. First narration pass leaks an SSN-shape
+  substring; the reviewer rejects with retry_hint=q6_violation and
+  the driver re-runs narrate() with q6_violation_retry_hint=True.
+  Second pass renders the same content categorically (no SSN).
+  review_retries=1; narrative.md must NOT contain the leaked SSN.
+tags: [q6, wi-2, retry]
+fixture:
+  cloud_posture_findings:
+    - class_uid: 2003
+      severity_id: 4
+      finding_info:
+        uid: CSPM-AWS-S3-PII-001
+        title: S3 bucket contains classified data
+  llm_responses:
+    # Pass 1 — leaky:
+    - |
+      {"overall_narrative_intent": "Cover the PII exposure.",
+       "sections": [{"heading": "PII exposure",
+                     "intent": "S3 bucket with classified data.",
+                     "cited_finding_ids": ["CSPM-AWS-S3-PII-001"]}]}
+    - 'The bucket contained SSN 123-45-6789 in plaintext as flagged by `CSPM-AWS-S3-PII-001`.'
+    - |
+      {"paragraph": "One bucket contains data classified as `ssn` per the F.3 finding `CSPM-AWS-S3-PII-001`. Close the bucket and audit objects.",
+       "key_metrics": {"total_findings": 1, "critical": 0, "high": 1, "top_failing_control": ""}}
+    # Pass 2 — clean retry:
+    - |
+      {"overall_narrative_intent": "Cover the PII exposure.",
+       "sections": [{"heading": "PII exposure",
+                     "intent": "S3 bucket with classified data.",
+                     "cited_finding_ids": ["CSPM-AWS-S3-PII-001"]}]}
+    - 'The bucket contains data classified as type `ssn` per `CSPM-AWS-S3-PII-001`. The classifier label is reported categorically; refer to the source finding for evidence. Close the bucket and audit objects.'
+    - |
+      {"paragraph": "One bucket contains data classified as `ssn` per the F.3 finding `CSPM-AWS-S3-PII-001`. Close the bucket and audit objects.",
+       "key_metrics": {"total_findings": 1, "critical": 0, "high": 1, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 1
+  cited_finding_count: 1
+  narrative_md_contains:
+    - 'PII exposure'
+    - 'CSPM-AWS-S3-PII-001'
+    - 'ssn'
+  narrative_md_excludes:
+    - '123-45-6789'

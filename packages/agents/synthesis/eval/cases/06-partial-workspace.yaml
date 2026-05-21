@@ -1,0 +1,30 @@
+case_id: partial_workspace
+description: |
+  Only one of three workspaces is provided (F.3 only). Driver
+  produces a narrative scoped to that source.
+tags: [edge-case, partial-workspace]
+fixture:
+  omit_workspace: ['investigation', 'compliance']
+  cloud_posture_findings:
+    - class_uid: 2003
+      severity_id: 4
+      finding_info:
+        uid: CSPM-AWS-NET-001
+        title: Security group allows 0.0.0.0/0 on port 22
+  llm_responses:
+    - |
+      {"overall_narrative_intent": "Cover the network exposure.",
+       "sections": [{"heading": "Network exposure",
+                     "intent": "SG allows SSH from anywhere.",
+                     "cited_finding_ids": ["CSPM-AWS-NET-001"]}]}
+    - 'A security group permits SSH (port 22) from `0.0.0.0/0`. Finding `CSPM-AWS-NET-001` should be remediated by restricting the source CIDR.'
+    - |
+      {"paragraph": "The scan window surfaced one network-exposure finding: a security group permits SSH from the public internet. Restrict the rule before further ingress.",
+       "key_metrics": {"total_findings": 1, "critical": 0, "high": 1, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 0
+  cited_finding_count: 1
+  narrative_md_contains:
+    - 'Network exposure'
+    - 'CSPM-AWS-NET-001'

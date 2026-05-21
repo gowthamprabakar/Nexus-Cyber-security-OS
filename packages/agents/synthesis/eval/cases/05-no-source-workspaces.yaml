@@ -1,0 +1,25 @@
+case_id: no_source_workspaces
+description: |
+  All three sibling workspaces omitted. Driver still runs cleanly
+  and produces a "no findings" narrative; review_retries=0.
+tags: [edge-case, no-workspaces]
+fixture:
+  omit_workspace: ['investigation', 'compliance', 'cloud_posture']
+  llm_responses:
+    - |
+      {"overall_narrative_intent": "No sibling workspaces were provided.",
+       "sections": [{"heading": "No data",
+                     "intent": "Operator omitted all workspace paths.",
+                     "cited_finding_ids": []}]}
+    - 'No sibling-agent workspaces were provided for this run. There are no findings to narrate. Operator should re-run with at least one workspace flag set.'
+    - |
+      {"paragraph": "This run completed with no sibling-agent workspaces provided; zero findings were available for synthesis. Re-run with workspace flags set.",
+       "key_metrics": {"total_findings": 0, "critical": 0, "high": 0, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 0
+  cited_finding_count: 0
+  narrative_md_contains:
+    - 'No data'
+  executive_summary_md_contains:
+    - 'no sibling-agent workspaces'
