@@ -85,6 +85,15 @@ _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
     # apply, policy patches). Acting on speculative state would
     # remediate problems that aren't real. See ADR-012.
     "remediation": frozenset({"claims.>"}),
+    # Supervisor (#0) routes work that triggers downstream specialist
+    # invocations — including A.1 Remediation. If Supervisor consumed
+    # a hypothesis from claims.> and routed it as a finding, it would
+    # launder speculation into action — the same failure mode the A.1
+    # fence exists to prevent. Added in Supervisor v0.1 Task 8. See
+    # ADR-012 §"Subscriber ACL" for the trajectory: a third subscriber
+    # (A.4 v0.2+ once NLAH auto-deploy ships) is anticipated and
+    # captured as WI-5 in the Supervisor v0.1 verification record.
+    "supervisor": frozenset({"claims.>"}),
 }
 """Q7: connect timeout (seconds). nats-py expects an int."""
 
