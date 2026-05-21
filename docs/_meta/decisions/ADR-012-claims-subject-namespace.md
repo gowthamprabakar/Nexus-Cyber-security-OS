@@ -78,11 +78,12 @@ ACLs follow the existing per-tenant scoping. Producers in tenant `T` may publish
 
 The v0.1 forbidden-subscriber set:
 
-| Agent               | Why forbidden                                                                                                                                                                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **A.1 Remediation** | Takes destructive action — kubectl apply, policy patches, rollback rollouts. Speculative inputs would feed straight into authorized auto-execute paths. The entire `RemediationMode.EXECUTE` pipeline is built around the assumption that inputs are confirmed findings. |
+| Agent               | Why forbidden                                                                                                                                                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A.1 Remediation** | Takes destructive action — kubectl apply, policy patches, rollback rollouts. Speculative inputs would feed straight into authorized auto-execute paths. The entire `RemediationMode.EXECUTE` pipeline is built around the assumption that inputs are confirmed findings.                                                 |
+| **Supervisor (#0)** | Routes work that triggers downstream specialist invocations — including A.1 Remediation. If Supervisor consumed a hypothesis from `claims.>` and routed it as a finding, it would launder speculation into action — the same failure mode the A.1 fence exists to prevent. Added in Supervisor v0.1 Task 8 (2026-05-21). |
 
-Future auto-acting agents (e.g. an auto-block firewall agent, an auto-quarantine workflow) inherit the same rule. Every new agent that ships with an auto-execute mode must either appear in this list or document in its v0.1 plan why it's exempt.
+Future auto-acting agents (e.g. an auto-block firewall agent, an auto-quarantine workflow, or A.4 v0.2+ once NLAH auto-deploy ships) inherit the same rule. Every new agent that ships with an auto-execute mode must either appear in this list or document in its v0.1 plan why it's exempt. **WI-5 carry-forward (from Supervisor v0.1 verification record):** A.4 v0.2 plan author MUST add `_FORBIDDEN_SUBSCRIPTIONS["meta_harness"] = frozenset({"claims.>"})` before any auto-acting code lands — the third forbidden subscriber.
 
 **Non-acting consumers of `claims.>` (permitted by default):**
 
@@ -100,6 +101,7 @@ The forbidden-subscriber set is enforced **at the substrate layer** in [`package
 ```python
 _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
     "remediation": frozenset({"claims.>"}),
+    "supervisor": frozenset({"claims.>"}),
 }
 ```
 
