@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Final
 
 import nats
 from nats.aio.client import Client as NATSClient
@@ -70,6 +70,22 @@ from shared.fabric.envelope import NexusEnvelope, wrap_ocsf
 from shared.fabric.streams import ALL_STREAMS, FINDINGS_STREAM, StreamSpec
 
 _DEFAULT_CONNECT_TIMEOUT_SECONDS = 5
+
+# Per ADR-012 §"Subscriber ACL — autonomous-action safety". Agents that
+# take destructive action MUST NOT consume speculative ``claims.>``
+# state. The fence is keyed by ``agent_id`` (threaded through
+# ``JetStreamClient.__init__``); attempting a forbidden subscribe()
+# raises ``ForbiddenSubscriptionError`` BEFORE the NATS call.
+#
+# Patterns use NATS-style wildcards. Trailing ``.>`` matches any
+# subject under that subtree. Add an agent here only after the threat
+# model has been written down in an ADR or verification record.
+_FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
+    # A.1 Remediation takes destructive action (rollback, kubectl
+    # apply, policy patches). Acting on speculative state would
+    # remediate problems that aren't real. See ADR-012.
+    "remediation": frozenset({"claims.>"}),
+}
 """Q7: connect timeout (seconds). nats-py expects an int."""
 
 CORRELATION_ID_HEADER = "Nexus-Correlation-Id"
@@ -107,6 +123,20 @@ class StreamSpecMismatchError(RuntimeError):
     """
 
 
+class ForbiddenSubscriptionError(PermissionError):
+    """Raised when an agent attempts to subscribe to a subject it is
+    explicitly forbidden from consuming.
+
+    Per ADR-012 §"Subscriber ACL — autonomous-action safety": agents
+    that take destructive action MUST NOT consume ``claims.>`` (which
+    carries speculative state). The check is enforced at the substrate
+    layer in :class:`JetStreamClient.subscribe` and keyed by
+    ``agent_id``.
+
+    See also ``_FORBIDDEN_SUBSCRIPTIONS`` in this module.
+    """
+
+
 class MissingCorrelationIdError(ValueError):
     """`publish()` was called without a resolvable `correlation_id`.
 
@@ -138,12 +168,25 @@ class JetStreamClient:
         servers: list[str],
         creds: str | None = None,
         connect_timeout_seconds: int = _DEFAULT_CONNECT_TIMEOUT_SECONDS,
+        *,
+        agent_id: str | None = None,
     ) -> None:
+        """Construct the client.
+
+        ``agent_id`` (per ADR-012) keys the subscriber-ACL fence in
+        :meth:`subscribe`. Agents enumerated in ``_FORBIDDEN_SUBSCRIPTIONS``
+        (currently ``"remediation"``) raise ``ForbiddenSubscriptionError``
+        when attempting forbidden subject subscriptions. ``None`` (the
+        default) skips the check — appropriate for tests + library
+        callers that don't carry an agent identity. Production agent
+        drivers MUST pass their agent_id.
+        """
         if not servers:
             raise ValueError("servers must be a non-empty list of NATS URIs")
         self._servers = list(servers)
         self._creds = creds
         self._connect_timeout = connect_timeout_seconds
+        self._agent_id = agent_id
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
 
@@ -345,6 +388,11 @@ class JetStreamClient:
         `subject_filter` must lie under the stream's root; cross-stream
         subscription is rejected to prevent the same typo class
         `publish()` rejects.
+
+        Per ADR-012, agents listed in ``_FORBIDDEN_SUBSCRIPTIONS`` (keyed
+        by the client's ``agent_id``) cannot subscribe to subjects matching
+        their forbidden patterns; ``ForbiddenSubscriptionError`` is raised
+        BEFORE the NATS call.
         """
         expected_prefix = stream.name + "."
         if not subject_filter.startswith(expected_prefix) and subject_filter != stream.name:
@@ -354,6 +402,7 @@ class JetStreamClient:
             )
         if not durable_name:
             raise ValueError("durable_name must be a non-empty string")
+        self._enforce_subscriber_acl(subject_filter)
         js = self._require_js()
         return await js.subscribe(
             subject_filter,
@@ -380,3 +429,35 @@ class JetStreamClient:
                 "JetStreamClient is not connected; call `await connect()` first"
             )
         return self._js
+
+    def _enforce_subscriber_acl(self, subject_filter: str) -> None:
+        """Raise ``ForbiddenSubscriptionError`` if this client's agent_id
+        is forbidden from consuming ``subject_filter`` per ADR-012.
+
+        No-op when ``agent_id`` is None (library / test callers).
+        """
+        if self._agent_id is None:
+            return
+        forbidden = _FORBIDDEN_SUBSCRIPTIONS.get(self._agent_id, frozenset())
+        for pattern in forbidden:
+            if _subject_matches_pattern(subject_filter, pattern):
+                raise ForbiddenSubscriptionError(
+                    f"agent {self._agent_id!r} is forbidden from subscribing "
+                    f"to {subject_filter!r} (matches pattern {pattern!r} "
+                    f"per ADR-012 subscriber-ACL)"
+                )
+
+
+def _subject_matches_pattern(subject: str, pattern: str) -> bool:
+    """Does ``subject`` fall under NATS-style ``pattern``?
+
+    Supports trailing ``>`` (multi-token wildcard) — sufficient for the
+    forbidden-subscriptions enforcement which always uses ``bus.>``
+    patterns. Does NOT implement NATS's single-token ``*`` wildcard;
+    add it when a forbidden pattern needs it.
+    """
+    if pattern.endswith(".>"):
+        prefix = pattern[:-1]  # "claims.>" -> "claims."
+        bare = pattern[:-2]  # "claims.>" -> "claims"
+        return subject.startswith(prefix) or subject == bare
+    return subject == pattern

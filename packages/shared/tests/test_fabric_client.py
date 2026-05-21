@@ -43,6 +43,7 @@ from pytest_mock import MockerFixture
 from shared.fabric.client import (
     CORRELATION_ID_HEADER,
     FabricConnectionError,
+    ForbiddenSubscriptionError,
     JetStreamClient,
     MissingCorrelationIdError,
     StreamSpecMismatchError,
@@ -53,6 +54,7 @@ from shared.fabric.streams import (
     ALL_STREAMS,
     APPROVALS_STREAM,
     AUDIT_STREAM,
+    CLAIMS_STREAM,
     COMMANDS_STREAM,
     EVENTS_STREAM,
     FINDINGS_STREAM,
@@ -1031,3 +1033,144 @@ async def test_reconnect_after_close_works(mocker: MockerFixture) -> None:
         correlation_id="cid",
     )
     js.publish.assert_awaited()
+
+
+# ─── ADR-012 — subscriber ACL (autonomous-action safety) ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_remediation_agent_forbidden_from_claims_subscription(
+    mocker: MockerFixture,
+) -> None:
+    """A.1 attempting to subscribe to claims.> raises before the NATS call."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="remediation")
+    await client.connect()
+
+    async def _cb(msg: Any) -> None:
+        return None
+
+    with pytest.raises(ForbiddenSubscriptionError, match="remediation"):
+        await client.subscribe(
+            CLAIMS_STREAM,
+            "claims.tenant.acme.>",
+            _cb,
+            durable_name="d1",
+        )
+    js.subscribe.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remediation_forbidden_for_specific_claims_subject(
+    mocker: MockerFixture,
+) -> None:
+    """The fence matches subjects that fall under the forbidden pattern,
+    not just literal `claims.>`. A.1 subscribing to a specific tenant
+    or agent under claims is equally blocked."""
+    nc, _ = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="remediation")
+    await client.connect()
+
+    async def _cb(msg: Any) -> None:
+        return None
+
+    with pytest.raises(ForbiddenSubscriptionError):
+        await client.subscribe(
+            CLAIMS_STREAM,
+            "claims.tenant.acme.agent.curiosity",
+            _cb,
+            durable_name="d1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_remediation_can_still_subscribe_to_findings(mocker: MockerFixture) -> None:
+    """The fence is targeted — A.1 may freely subscribe to findings.>;
+    only claims.> is forbidden."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="remediation")
+    await client.connect()
+
+    async def _cb(msg: Any) -> None:
+        return None
+
+    await client.subscribe(
+        FINDINGS_STREAM,
+        "findings.tenant.acme.>",
+        _cb,
+        durable_name="d1",
+    )
+    js.subscribe.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_non_remediation_agent_may_subscribe_to_claims(mocker: MockerFixture) -> None:
+    """Curiosity / Investigation / Threat-Intel / Data-Security / Meta-Harness
+    subscribe to claims.> as a normal operation. Only agents enumerated in
+    _FORBIDDEN_SUBSCRIPTIONS are blocked."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="investigation")
+    await client.connect()
+
+    async def _cb(msg: Any) -> None:
+        return None
+
+    await client.subscribe(
+        CLAIMS_STREAM,
+        "claims.tenant.acme.>",
+        _cb,
+        durable_name="d1",
+    )
+    js.subscribe.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unset_agent_id_skips_acl_check(mocker: MockerFixture) -> None:
+    """Backwards-compat: clients constructed without agent_id (tests +
+    library callers) skip the ACL check. Production agent drivers MUST
+    pass their agent_id."""
+    nc, js = _make_nats_mock()
+    _patch_nats_connect(mocker, nc_mock=nc)
+    client = JetStreamClient(servers=["nats://localhost:4222"])  # no agent_id
+    await client.connect()
+
+    async def _cb(msg: Any) -> None:
+        return None
+
+    # Even though "claims.>" is a forbidden pattern for the remediation
+    # agent, this client carries no agent identity so the check is skipped.
+    await client.subscribe(
+        CLAIMS_STREAM,
+        "claims.tenant.acme.>",
+        _cb,
+        durable_name="d1",
+    )
+    js.subscribe.assert_awaited_once()
+
+
+def test_forbidden_subscription_error_inherits_from_permission_error() -> None:
+    """Per ADR-012: defensive code can catch the stdlib PermissionError
+    category without importing the fabric module."""
+    assert issubclass(ForbiddenSubscriptionError, PermissionError)
+
+
+@pytest.mark.parametrize(
+    ("subject", "pattern", "expected"),
+    [
+        ("claims.tenant.acme.>", "claims.>", True),
+        ("claims.tenant.acme.agent.curiosity", "claims.>", True),
+        ("claims", "claims.>", True),  # bare bus name matches
+        ("findings.tenant.acme.>", "claims.>", False),
+        ("findings.tenant.acme.agent.curiosity", "claims.>", False),
+        ("claimsx.tenant.acme.>", "claims.>", False),  # not a prefix match
+    ],
+)
+def test_subject_pattern_matcher(subject: str, pattern: str, expected: bool) -> None:
+    """The matcher correctly distinguishes prefix matches from substring matches."""
+    from shared.fabric.client import _subject_matches_pattern
+
+    assert _subject_matches_pattern(subject, pattern) is expected

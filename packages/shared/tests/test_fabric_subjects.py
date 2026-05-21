@@ -1,9 +1,10 @@
-"""Tests for fabric subject builders (per ADR-004)."""
+"""Tests for fabric subject builders (per ADR-004 + ADR-012)."""
 
 import pytest
 from shared.fabric.subjects import (
     approvals_subject,
     audit_subject,
+    claims_subject,
     commands_subject,
     events_subject,
     findings_subject,
@@ -58,3 +59,41 @@ def test_invalid_tenant_id_rejected(bad_tenant: str) -> None:
 def test_invalid_event_type_rejected() -> None:
     with pytest.raises(ValueError):
         events_subject("tnt-abc", "with space")
+
+
+# ADR-012 — claims.> subject (sixth bus)
+
+
+def test_claims_subject_shape() -> None:
+    assert claims_subject("tnt-abc", "curiosity") == "claims.tenant.tnt-abc.agent.curiosity"
+
+
+def test_claims_subject_per_agent_scoping() -> None:
+    """Different agents in the same tenant get distinct subjects."""
+    a = claims_subject("tnt-abc", "curiosity")
+    b = claims_subject("tnt-abc", "meta_harness")
+    assert a != b
+    assert a.startswith("claims.tenant.tnt-abc.agent.")
+    assert b.startswith("claims.tenant.tnt-abc.agent.")
+
+
+def test_claims_subject_per_tenant_scoping() -> None:
+    """Same agent in different tenants gets distinct subjects (ACL boundary)."""
+    a = claims_subject("tnt-a", "curiosity")
+    b = claims_subject("tnt-b", "curiosity")
+    assert a != b
+
+
+def test_claims_subject_invalid_tenant_rejected() -> None:
+    with pytest.raises(ValueError, match="tenant_id"):
+        claims_subject("tnt with space", "curiosity")
+
+
+def test_claims_subject_invalid_agent_rejected() -> None:
+    with pytest.raises(ValueError, match="agent_id"):
+        claims_subject("tnt-abc", "with.dot")
+
+
+def test_claims_subject_empty_agent_rejected() -> None:
+    with pytest.raises(ValueError, match="agent_id"):
+        claims_subject("tnt-abc", "")
