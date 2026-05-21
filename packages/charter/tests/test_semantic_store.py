@@ -239,3 +239,74 @@ async def test_neighbors_returns_empty_for_unknown_entity(store: SemanticStore) 
         depth=2,
     )
     assert rows == []
+
+
+# ---------------------------- list_entities_by_type ----------------------
+
+
+@pytest.mark.asyncio
+async def test_list_entities_by_type_returns_all_matching(store: SemanticStore) -> None:
+    await store.upsert_entity(
+        tenant_id=_TENANT,
+        entity_type="aws_account_region",
+        external_id="us-east-1",
+        properties={"asset_count": 42},
+    )
+    await store.upsert_entity(
+        tenant_id=_TENANT,
+        entity_type="aws_account_region",
+        external_id="eu-west-3",
+        properties={"asset_count": 17},
+    )
+    await store.upsert_entity(
+        tenant_id=_TENANT,
+        entity_type="host",
+        external_id="other-type-should-not-appear",
+    )
+
+    rows = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="aws_account_region")
+    external_ids = {r.external_id for r in rows}
+    assert external_ids == {"us-east-1", "eu-west-3"}
+
+
+@pytest.mark.asyncio
+async def test_list_entities_by_type_returns_empty_when_none_match(
+    store: SemanticStore,
+) -> None:
+    rows = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="nonexistent_type")
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_list_entities_by_type_is_tenant_scoped(store: SemanticStore) -> None:
+    """Per ADR-007 v1.1 — must not return rows from other tenants."""
+    await store.upsert_entity(
+        tenant_id=_TENANT,
+        entity_type="aws_account_region",
+        external_id="us-east-1",
+    )
+    await store.upsert_entity(
+        tenant_id=_OTHER,
+        entity_type="aws_account_region",
+        external_id="us-east-1",
+    )
+
+    rows = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="aws_account_region")
+    assert len(rows) == 1
+    assert rows[0].tenant_id == _TENANT
+
+
+@pytest.mark.asyncio
+async def test_list_entities_by_type_rejects_empty_tenant_id(
+    store: SemanticStore,
+) -> None:
+    with pytest.raises(ValueError, match="tenant_id"):
+        await store.list_entities_by_type(tenant_id="", entity_type="x")
+
+
+@pytest.mark.asyncio
+async def test_list_entities_by_type_rejects_empty_entity_type(
+    store: SemanticStore,
+) -> None:
+    with pytest.raises(ValueError, match="entity_type"):
+        await store.list_entities_by_type(tenant_id=_TENANT, entity_type="")
