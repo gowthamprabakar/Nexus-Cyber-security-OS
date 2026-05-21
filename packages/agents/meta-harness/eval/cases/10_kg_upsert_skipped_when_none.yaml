@@ -1,0 +1,15 @@
+case_id: 10_kg_upsert_skipped_when_none
+description: semantic_store=None -> kg upsert no-op-with-log; scorecard_upserts must equal zero; markdown still emitted.
+fixture:
+  agents:
+    - agent_id: silent_agent
+      default_passed: true
+      case_count: 2
+  semantic_store: false
+expected:
+  total_agents_evaluated: 1
+  successful_runs: 1
+  scorecard_upserts: 0
+  markdown_contains:
+    - 'Meta-Harness Report'
+    - 'silent_agent'

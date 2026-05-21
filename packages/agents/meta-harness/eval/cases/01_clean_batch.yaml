@@ -1,0 +1,22 @@
+case_id: 01_clean_batch
+description: Clean 3-agent batch, no prior runs, no regressions, no A/B.
+fixture:
+  agents:
+    - agent_id: agent_alpha
+      default_passed: true
+      case_count: 3
+    - agent_id: agent_beta
+      default_passed: true
+      case_count: 2
+    - agent_id: agent_gamma
+      default_passed: true
+      case_count: 4
+expected:
+  total_agents_evaluated: 3
+  successful_runs: 3
+  regressions_count: 0
+  ab_present: false
+  markdown_contains:
+    - 'Meta-Harness Report'
+    - 'Batch eval summary'
+    - 'No regressions detected'

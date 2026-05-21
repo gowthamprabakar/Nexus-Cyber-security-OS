@@ -1,0 +1,12 @@
+case_id: 09_introspection_shape
+description: Synthetic agents have no NLAH dir on disk; introspection skips gracefully -> manifest_count=0 but eval still runs.
+fixture:
+  agents:
+    - agent_id: shape_agent
+      default_passed: true
+      case_count: 1
+expected:
+  total_agents_evaluated: 1
+  manifest_count: 0
+  markdown_contains:
+    - 'shape_agent'

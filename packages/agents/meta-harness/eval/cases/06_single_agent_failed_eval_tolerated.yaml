@@ -1,0 +1,18 @@
+case_id: 06_single_agent_failed_eval_tolerated
+description: One agent's runner raises mid-suite; the batch must continue and the other agent's scorecard must surface.
+fixture:
+  agents:
+    - agent_id: boom_agent
+      case_count: 1
+      raises: 'synthetic ImportError'
+    - agent_id: clean_agent
+      default_passed: true
+      case_count: 2
+expected:
+  total_agents_evaluated: 2
+  successful_runs: 1
+  regressions_count: 0
+  markdown_contains:
+    - 'boom_agent'
+    - 'clean_agent'
+    - 'synthetic ImportError'

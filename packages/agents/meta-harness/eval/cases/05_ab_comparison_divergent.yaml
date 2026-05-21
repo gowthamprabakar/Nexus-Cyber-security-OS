@@ -1,0 +1,17 @@
+case_id: 05_ab_comparison_divergent
+description: A/B compare where the runner's outcome differs across variants -> byte_equal=False.
+fixture:
+  agents:
+    - agent_id: divergent_agent
+      default_passed: false
+      case_count: 1
+  ab:
+    target_agent: divergent_agent
+    variant_a_dirname: variant_a
+    variant_b_dirname: variant_b
+expected:
+  total_agents_evaluated: 1
+  ab_present: true
+  markdown_contains:
+    - 'A/B comparison'
+    - 'divergent_agent'
