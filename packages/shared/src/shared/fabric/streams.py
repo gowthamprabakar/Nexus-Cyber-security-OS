@@ -1,4 +1,4 @@
-"""StreamSpec declarations for the five ADR-004 buses.
+"""StreamSpec declarations for the six fabric buses (ADR-004 + ADR-012).
 
 Pure declarations — no NATS dependency, no client behaviour. The
 `JetStreamClient.ensure_streams()` async method (Task 3 of the F.7 v0.1
@@ -6,9 +6,11 @@ plan) consumes these specs to create / verify JetStream streams.
 
 Cross-references:
 - ADR-004 §"The five buses": ../../../../../../docs/_meta/decisions/ADR-004-fabric-layer.md
+- ADR-012 added the sixth bus (`claims.>`) for agent-proposed
+  speculative state; see ../../../../../../docs/_meta/decisions/ADR-012-claims-subject-namespace.md
 - F.7 v0.1 plan resolved Q2 (ensure_streams idempotent + drift detection)
-  and Q5 (OCSF envelope on `findings.>` only; the other four streams
-  accept arbitrary bytes).
+  and Q5 (OCSF envelope on `findings.>` only; the other streams accept
+  arbitrary bytes — `claims.>`'s wire format is deferred to D.12 v0.1 Q1).
 - Subject builders in `shared.fabric.subjects` realize the per-stream
   ordering granularity ADR-004 prescribes (per-tenant per-asset,
   per-edge, etc.) via subject hierarchy; the stream-config side is
@@ -106,6 +108,20 @@ AUDIT_STREAM: StreamSpec = StreamSpec(
     discard_policy="old",
 )
 
+CLAIMS_STREAM: StreamSpec = StreamSpec(
+    name="claims",
+    subjects=("claims.>",),
+    retention_seconds=30 * _SECONDS_PER_DAY,
+    max_msgs_per_subject=-1,
+    discard_policy="old",
+)
+"""ADR-012's sixth bus — agent-proposed speculative state.
+
+30-day retention sits between `events.>` (7d) and `findings.>` (90d):
+claims that don't materialize into a finding or remediation within
+30 days are stale and the operator should observe the staleness.
+"""
+
 
 ALL_STREAMS: tuple[StreamSpec, ...] = (
     EVENTS_STREAM,
@@ -113,9 +129,11 @@ ALL_STREAMS: tuple[StreamSpec, ...] = (
     COMMANDS_STREAM,
     APPROVALS_STREAM,
     AUDIT_STREAM,
+    CLAIMS_STREAM,
 )
-"""All five ADR-004 streams in declaration order.
+"""All six fabric streams in declaration order.
 
-Order mirrors ADR-004's "The five buses" table top-to-bottom for review
-ergonomics. Consumers should not depend on this order semantically.
+Order mirrors ADR-004's "The five buses" table top-to-bottom (with
+ADR-012's CLAIMS_STREAM appended) for review ergonomics. Consumers
+should not depend on this order semantically.
 """

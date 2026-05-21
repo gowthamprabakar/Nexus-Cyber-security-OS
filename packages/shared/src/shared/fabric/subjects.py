@@ -1,9 +1,12 @@
-"""Subject builders for the five fabric buses (per ADR-004).
+"""Subject builders for the six fabric buses (per ADR-004 + ADR-012).
 
 NATS subjects are dot-separated tokens; only [A-Za-z0-9_-] is permitted in our
 tokens (NATS itself allows more, but we narrow for predictability and to keep
 ACL-by-prefix simple). Inputs that are user/cloud-supplied (asset ARNs etc.)
 are SHA-256-truncated to a stable hash so the subject space is always safe.
+
+ADR-012 added the sixth bus (`claims.>`) for agent-proposed speculative state
+(hypotheses + probe directives) — distinct from the observed state on `findings.>`.
 """
 
 from __future__ import annotations
@@ -57,3 +60,16 @@ def audit_subject(tenant_id: str) -> str:
     """`audit.tenant.<tid>` — append-only signed audit stream."""
     _validate_token(tenant_id, "tenant_id")
     return f"audit.tenant.{tenant_id}"
+
+
+def claims_subject(tenant_id: str, agent_id: str) -> str:
+    """`claims.tenant.<tid>.agent.<agent_id>` — agent-proposed speculative state.
+
+    Per ADR-012, claims are agent-proposed hypotheses + probe directives
+    (vs ``findings.>`` which carries observed state). Per-agent scoping
+    threads the originating agent into the subject so consumers can
+    filter on emitter (`claims.tenant.<tid>.agent.curiosity` vs `>`).
+    """
+    _validate_token(tenant_id, "tenant_id")
+    _validate_token(agent_id, "agent_id")
+    return f"claims.tenant.{tenant_id}.agent.{agent_id}"
