@@ -1,0 +1,32 @@
+case_id: executive_summary_shape
+description: |
+  Verify the executive_summary.md output carries the key-metrics
+  block + the C-suite paragraph + the scan-window metadata.
+tags: [happy-path, exec-summary]
+fixture:
+  cloud_posture_findings:
+    - class_uid: 2003
+      severity_id: 5
+      finding_info:
+        uid: CSPM-AWS-CRIT-001
+        title: Critical exposure
+  llm_responses:
+    - |
+      {"overall_narrative_intent": "Cover the critical finding.",
+       "sections": [{"heading": "Critical exposures",
+                     "intent": "Triage the critical finding.",
+                     "cited_finding_ids": ["CSPM-AWS-CRIT-001"]}]}
+    - 'One critical-severity finding (`CSPM-AWS-CRIT-001`) was surfaced this window. Escalate to on-call.'
+    - |
+      {"paragraph": "The 2026-05-21 scan surfaced one critical-severity finding; on-call escalation is recommended within 24 hours.",
+       "key_metrics": {"total_findings": 1, "critical": 1, "high": 0, "top_failing_control": ""}}
+expected:
+  section_count: 1
+  review_retries: 0
+  cited_finding_count: 1
+  executive_summary_md_contains:
+    - 'Executive Summary'
+    - 'Key Metrics'
+    - 'total_findings'
+    - 'critical'
+    - 'Run ID'
