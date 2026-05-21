@@ -1,0 +1,19 @@
+case_id: 04_ab_comparison_clean
+description: A/B compare between two variant NLAH dirs; both produce identical outcomes -> byte_equal=True.
+fixture:
+  agents:
+    - agent_id: agent_under_test
+      default_passed: true
+      case_count: 2
+  ab:
+    target_agent: agent_under_test
+    variant_a_dirname: variant_a
+    variant_b_dirname: variant_b
+expected:
+  total_agents_evaluated: 1
+  ab_present: true
+  ab_byte_equal: true
+  markdown_contains:
+    - 'A/B comparison'
+    - 'agent_under_test'
+    - 'byte-equal'

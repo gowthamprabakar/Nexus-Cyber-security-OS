@@ -1,0 +1,14 @@
+case_id: 07_never_prior_scorecard
+description: No prior scorecards exist -> every delta is first-run; zero regressions surface even when pass rates are low.
+fixture:
+  agents:
+    - agent_id: brand_new_agent
+      default_passed: false
+      case_count: 10
+  prior_scorecards: []
+expected:
+  total_agents_evaluated: 1
+  successful_runs: 1
+  regressions_count: 0
+  markdown_contains:
+    - 'No regressions detected'

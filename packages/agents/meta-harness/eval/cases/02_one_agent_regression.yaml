@@ -1,0 +1,24 @@
+case_id: 02_one_agent_regression
+description: Two agents, prior scorecards present; one agent regresses, the other holds steady.
+fixture:
+  agents:
+    - agent_id: agent_alpha
+      default_passed: false
+      case_count: 10
+    - agent_id: agent_beta
+      default_passed: true
+      case_count: 1
+  prior_scorecards:
+    - agent_id: agent_alpha
+      pass_rate: 1.0
+    - agent_id: agent_beta
+      pass_rate: 1.0
+expected:
+  total_agents_evaluated: 2
+  successful_runs: 2
+  regressions_count: 1
+  markdown_contains:
+    - 'Regressions flagged'
+    - 'agent_alpha'
+  markdown_excludes:
+    - 'No regressions detected'

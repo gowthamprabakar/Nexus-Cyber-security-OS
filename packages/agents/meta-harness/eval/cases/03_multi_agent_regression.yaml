@@ -1,0 +1,28 @@
+case_id: 03_multi_agent_regression
+description: Three agents, two regress past the 5% threshold, one improves.
+fixture:
+  agents:
+    - agent_id: regressor_a
+      default_passed: false
+      case_count: 10
+    - agent_id: regressor_b
+      default_passed: false
+      case_count: 10
+    - agent_id: improver
+      default_passed: true
+      case_count: 10
+  prior_scorecards:
+    - agent_id: regressor_a
+      pass_rate: 1.0
+    - agent_id: regressor_b
+      pass_rate: 0.9
+    - agent_id: improver
+      pass_rate: 0.5
+expected:
+  total_agents_evaluated: 3
+  successful_runs: 3
+  regressions_count: 2
+  markdown_contains:
+    - 'regressor_a'
+    - 'regressor_b'
+    - '2 agent(s) crossed'

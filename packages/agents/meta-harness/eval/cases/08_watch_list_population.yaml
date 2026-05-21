@@ -1,0 +1,12 @@
+case_id: 08_watch_list_population
+description: v0.1 driver passes an empty watch-list (multi-run trending is a v0.2 surface); rendered placeholder must appear.
+fixture:
+  agents:
+    - agent_id: alpha
+      default_passed: true
+      case_count: 1
+expected:
+  total_agents_evaluated: 1
+  markdown_contains:
+    - 'Watch-list'
+    - 'No agents trending down'
