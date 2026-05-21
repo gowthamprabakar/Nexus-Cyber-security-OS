@@ -23,6 +23,7 @@ members = [
     "packages/agents/threat-intel",
     "packages/agents/compliance",
     "packages/agents/synthesis",
+    "packages/agents/curiosity",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -80,6 +81,7 @@ files = [
     "packages/agents/threat-intel/src",
     "packages/agents/compliance/src",
     "packages/agents/synthesis/src",
+    "packages/agents/curiosity/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
