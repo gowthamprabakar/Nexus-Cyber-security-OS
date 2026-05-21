@@ -1,0 +1,39 @@
+case_id: probe_directive_shape
+description: |
+  Verifies the ProbeDirective XOR constraint at the schema layer.
+  LLM emits a hypothesis where probe_directive targets a
+  target_finding_id (not target_resource_arn) — uses the
+  investigate action against D.7.
+tags: [shape, schema]
+fixture:
+  regions:
+    - external_id: us-east-1
+      properties: { asset_count: 40 }
+  finding_aggregates: []
+  llm_responses:
+    - |
+      {
+        "hypotheses": [
+          {
+            "statement": "Re-investigate CSPM finding to confirm root-cause.",
+            "rationale": "The existing CSPM-AWS-IAM-001 finding has not been deeply investigated; recommend D.7 Investigation run a multi-step analysis against the finding to surface lateral-movement evidence or confirm the finding is benign. The us-east-1 region's 40 assets warrant a focused investigation rather than a broad scan.",
+            "probe_directive": {
+              "target_agent": "investigation",
+              "target_finding_id": "CSPM-AWS-IAM-001-alice",
+              "action": "investigate",
+              "rationale_ref": ""
+            },
+            "cited_gap": {"region": "us-east-1", "asset_count": 40, "days_since_last_finding": 0, "severity_hint": "medium"}
+          }
+        ]
+      }
+expected:
+  total_claims: 1
+  review_retries: 0
+  probe_directives_count: 1
+  semantic_store_upsert_count: 1
+  fabric_publish_count: 1
+  markdown_contains:
+    - 'investigation'
+    - 'investigate'
+    - 'CSPM-AWS-IAM-001-alice'

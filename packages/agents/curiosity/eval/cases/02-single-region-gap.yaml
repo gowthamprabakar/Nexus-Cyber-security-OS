@@ -1,0 +1,48 @@
+case_id: single_region_gap
+description: |
+  One region with 42 assets + 60 days since last finding -> 1
+  CoverageGap detected -> 1 hypothesis emitted -> 1 KG upsert
+  + 1 fabric publish.
+tags: [happy-path, single-gap]
+fixture:
+  regions:
+    - external_id: eu-west-3
+      properties:
+        asset_count: 42
+  finding_aggregates:
+    - properties:
+        region: eu-west-3
+        days_since_last_finding: 60
+        last_finding_severity: medium
+  llm_responses:
+    - |
+      {
+        "hypotheses": [
+          {
+            "statement": "The eu-west-3 region has 42 assets but no findings in 60 days.",
+            "rationale": "F.3 Cloud Posture and D.5 Data Security have not surfaced any findings for assets in eu-west-3 within the 60-day window, despite an inventory of 42 entities. This is consistent with either clean posture or a coverage gap. Recommend running D.5 across the region's S3 buckets to establish a baseline; if D.5 returns clean, schedule D.7 Investigation against any flagged finding.",
+            "probe_directive": {
+              "target_agent": "data_security",
+              "target_resource_arn": "arn:aws:s3:::eu-west-3-buckets",
+              "action": "scan",
+              "rationale_ref": ""
+            },
+            "cited_gap": {
+              "region": "eu-west-3",
+              "asset_count": 42,
+              "days_since_last_finding": 60,
+              "severity_hint": "medium"
+            }
+          }
+        ]
+      }
+expected:
+  total_claims: 1
+  review_retries: 0
+  total_gaps_addressed: 1
+  probe_directives_count: 1
+  semantic_store_upsert_count: 1
+  fabric_publish_count: 1
+  markdown_contains:
+    - 'eu-west-3'
+    - 'Hypothesis 1'
