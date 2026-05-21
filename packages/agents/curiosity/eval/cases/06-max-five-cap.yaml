@@ -1,0 +1,43 @@
+case_id: max_5_hypotheses_cap
+description: |
+  LLM emits 7 hypotheses against 7 gaps; the hypothesizer truncates
+  to _MAX_HYPOTHESES_PER_RUN=5 with a warning log + the per-run
+  cap holds. Verifies the truncation is at the schema/hypothesizer
+  layer, not the driver.
+tags: [edge-case, cap]
+fixture:
+  regions:
+    - external_id: a-region
+      properties: { asset_count: 30 }
+    - external_id: b-region
+      properties: { asset_count: 30 }
+    - external_id: c-region
+      properties: { asset_count: 30 }
+    - external_id: d-region
+      properties: { asset_count: 30 }
+    - external_id: e-region
+      properties: { asset_count: 30 }
+    - external_id: f-region
+      properties: { asset_count: 30 }
+    - external_id: g-region
+      properties: { asset_count: 30 }
+  finding_aggregates: []
+  llm_responses:
+    - |
+      {
+        "hypotheses": [
+          {"statement": "a-region has 30 assets and no findings.", "rationale": "Recommend scanning a-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::a-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "a-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "b-region has 30 assets and no findings.", "rationale": "Recommend scanning b-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::b-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "b-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "c-region has 30 assets and no findings.", "rationale": "Recommend scanning c-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::c-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "c-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "d-region has 30 assets and no findings.", "rationale": "Recommend scanning d-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::d-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "d-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "e-region has 30 assets and no findings.", "rationale": "Recommend scanning e-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::e-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "e-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "f-region has 30 assets and no findings.", "rationale": "Recommend scanning f-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::f-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "f-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}},
+          {"statement": "g-region has 30 assets and no findings.", "rationale": "Recommend scanning g-region; F.3 and D.5 have no findings recorded.", "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::g-region", "action": "scan", "rationale_ref": ""}, "cited_gap": {"region": "g-region", "asset_count": 30, "days_since_last_finding": 0, "severity_hint": "medium"}}
+        ]
+      }
+expected:
+  total_claims: 5
+  review_retries: 0
+  probe_directives_count: 5
+  semantic_store_upsert_count: 5
+  fabric_publish_count: 5

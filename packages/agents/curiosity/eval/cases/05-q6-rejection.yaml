@@ -1,0 +1,51 @@
+case_id: q6_no_classifier_substring_in_hypothesis
+description: |
+  WI-2 acceptance probe. Pass 1 LLM leaks SSN substring; reviewer
+  rejects with retry_hint=q6_violation; driver re-runs with
+  q6_violation_retry_hint=True; Pass 2 LLM emits clean text. Final
+  CuriosityReport has review_retries=1; rendered markdown excludes
+  the leaked SSN substring.
+tags: [q6, wi-2, retry]
+fixture:
+  regions:
+    - external_id: eu-west-3
+      properties:
+        asset_count: 42
+  finding_aggregates: []
+  llm_responses:
+    # Pass 1 — leaky
+    - |
+      {
+        "hypotheses": [
+          {
+            "statement": "The eu-west-3 buckets likely contain unscanned PII.",
+            "rationale": "Buckets in eu-west-3 may contain SSN values like 123-45-6789 in plaintext. Recommend a classification scan to confirm. The data sensitivity is unknown until D.5 runs.",
+            "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::eu-west-3-buckets", "action": "scan", "rationale_ref": ""},
+            "cited_gap": {"region": "eu-west-3", "asset_count": 42, "days_since_last_finding": 0, "severity_hint": "medium"}
+          }
+        ]
+      }
+    # Pass 2 — clean retry
+    - |
+      {
+        "hypotheses": [
+          {
+            "statement": "The eu-west-3 buckets may contain unscanned classified data.",
+            "rationale": "Buckets in eu-west-3 may contain data classified as `ssn`. The classifier label is reported categorically; refer to the source finding for any underlying evidence once D.5 has run. Recommend a classification scan across the region's S3 buckets.",
+            "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::eu-west-3-buckets", "action": "scan", "rationale_ref": ""},
+            "cited_gap": {"region": "eu-west-3", "asset_count": 42, "days_since_last_finding": 0, "severity_hint": "medium"}
+          }
+        ]
+      }
+expected:
+  total_claims: 1
+  review_retries: 1
+  total_gaps_addressed: 1
+  probe_directives_count: 1
+  semantic_store_upsert_count: 1
+  fabric_publish_count: 1
+  markdown_contains:
+    - 'eu-west-3'
+    - 'ssn'
+  markdown_excludes:
+    - '123-45-6789'

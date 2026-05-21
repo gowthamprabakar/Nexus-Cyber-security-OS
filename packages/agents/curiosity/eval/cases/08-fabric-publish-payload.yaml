@@ -1,0 +1,32 @@
+case_id: fabric_publish_payload_shape
+description: |
+  Verifies the claims.> publish path. The publisher serialises
+  the CuriosityClaim as nexus_claim JSON; the agent_id must be
+  "curiosity"; the subject must use claims_subject not
+  findings_subject. Eval counts publish() awaits.
+tags: [fabric, claims-subject]
+fixture:
+  regions:
+    - external_id: us-west-2
+      properties: { asset_count: 100 }
+  finding_aggregates: []
+  llm_responses:
+    - |
+      {
+        "hypotheses": [
+          {
+            "statement": "us-west-2 region is large and under-scanned.",
+            "rationale": "us-west-2 has 100 assets — the largest under-scanned region detected this run. Recommend D.5 Data Security run a baseline classification pass; the high asset count makes coverage gaps operationally significant.",
+            "probe_directive": {"target_agent": "data_security", "target_resource_arn": "arn:aws:s3:::us-west-2-buckets", "action": "scan", "rationale_ref": ""},
+            "cited_gap": {"region": "us-west-2", "asset_count": 100, "days_since_last_finding": 0, "severity_hint": "high"}
+          }
+        ]
+      }
+expected:
+  total_claims: 1
+  review_retries: 0
+  probe_directives_count: 1
+  semantic_store_upsert_count: 1
+  fabric_publish_count: 1
+  markdown_contains:
+    - 'us-west-2'

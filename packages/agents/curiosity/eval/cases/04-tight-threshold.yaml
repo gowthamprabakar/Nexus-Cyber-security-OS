@@ -1,0 +1,22 @@
+case_id: region_gap_with_tight_threshold
+description: |
+  Region with only 9 assets does NOT qualify under the default
+  min_asset_count=10 floor. Hypothesizer short-circuits (zero
+  gaps from the detector) -> empty draft.
+tags: [edge-case, threshold]
+fixture:
+  regions:
+    - external_id: us-east-2
+      properties:
+        asset_count: 9
+  finding_aggregates: []
+  llm_responses: []
+expected:
+  total_claims: 0
+  review_retries: 0
+  total_gaps_addressed: 0
+  probe_directives_count: 0
+  semantic_store_upsert_count: 0
+  fabric_publish_count: 0
+  markdown_contains:
+    - 'No coverage gaps detected'
