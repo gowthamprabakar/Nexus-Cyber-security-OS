@@ -8,11 +8,15 @@ instantiates a deterministic stub ``LLMProvider`` from inline
 ``llm_responses``, runs ``curiosity.agent.run``, then compares
 the resulting ``CuriosityReport`` to ``case.expected``.
 
-**Stub LLM provider.** v0.1 ships the canned responses **inline in
-the YAML case fixtures** under ``fixture.llm_responses``. Task 14
-refactors to per-case ``eval/stub_responses/<case_id>/responses.json``
-files (WI-3 byte-equal acceptance gate); the runner's public surface
-stays stable across that refactor.
+**Stub LLM provider (Task 14).** Canned LLM outputs live in
+``eval/stub_responses/<case_id>/responses.json`` (a JSON array of
+strings). The runner loads them per case_id. The legacy inline
+``fixture.llm_responses`` key is still honoured as a fallback for
+external case authors who haven't migrated yet.
+
+The split lets stub responses evolve independently of the case
+fixture: byte-equal eval outputs across reruns are the WI-3
+acceptance gate.
 
 **Stub SemanticStore.** Built from fixture's ``regions`` +
 ``finding_aggregates`` lists. ``list_entities_by_type`` dispatches
@@ -27,8 +31,10 @@ Fixture keys (under ``fixture``):
 - ``regions: list[dict]`` — aws_account_region entity rows (each
   with external_id + properties).
 - ``finding_aggregates: list[dict]`` — finding_aggregate entity rows.
-- ``llm_responses: list[str]`` — canned LLM response texts in
-  exact call order (one per LLM call; happy-path is one).
+- ``llm_responses: list[str]`` — **legacy** inline canned LLM
+  responses. Now superseded by per-case ``stub_responses/<case_id>/
+  responses.json``; kept as a fallback for external case authors
+  who haven't migrated.
 - ``semantic_store: bool`` — when False, the runner passes
   ``semantic_store=None`` to ``curiosity.agent.run`` (default
   True so the runner exercises the persistence path).
@@ -126,7 +132,8 @@ async def _run_case_async(
 
     store_mock = _build_semantic_store_mock(fixture) if use_store else None
     js_mock = _build_js_client_mock() if use_js else None
-    provider = llm_provider or _build_stub_provider(fixture.get("llm_responses") or [])
+    canned_responses = _resolve_canned_responses(case)
+    provider = llm_provider or _build_stub_provider(canned_responses)
 
     report = await agent_mod.run(
         contract=contract,
@@ -161,6 +168,38 @@ def _build_contract(case: EvalCase, workspace_root: Path) -> ExecutionContract:
         created_at=datetime.now(UTC),
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
+
+
+_STUB_RESPONSES_ROOT = Path(__file__).parent.parent.parent / "eval" / "stub_responses"
+
+
+def _resolve_canned_responses(case: EvalCase) -> list[str]:
+    """Locate canned LLM responses for ``case``.
+
+    Precedence:
+
+    1. ``eval/stub_responses/<case_id>/responses.json`` — the Task 14
+       layout (canonical for v0.1+).
+    2. ``fixture.llm_responses`` — legacy inline fallback for cases
+       authored before the Task 14 refactor.
+    3. ``[]`` — no canned responses (runner will short-circuit the
+       LLM call on empty gaps; useful for clean-run / threshold
+       cases).
+    """
+    case_dir = _STUB_RESPONSES_ROOT / case.case_id
+    responses_file = case_dir / "responses.json"
+    if responses_file.is_file():
+        raw = json.loads(responses_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, list):
+            raise ValueError(
+                f"stub_responses/{case.case_id}/responses.json must be a JSON list, "
+                f"got {type(raw).__name__}"
+            )
+        return [str(r) for r in raw]
+    legacy_inline = case.fixture.get("llm_responses")
+    if isinstance(legacy_inline, list):
+        return [str(r) for r in legacy_inline]
+    return []
 
 
 def _build_stub_provider(responses: Iterable[str]) -> FakeLLMProvider:

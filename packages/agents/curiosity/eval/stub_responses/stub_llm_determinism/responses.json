@@ -1,0 +1,3 @@
+[
+  "{\n  \"hypotheses\": [\n    {\n      \"statement\": \"us-east-1 has not been scanned in 90 days.\",\n      \"rationale\": \"us-east-1 has 35 assets with the most recent finding 90 days ago at low severity. The 30-day gap threshold has been exceeded threefold; recommend re-running F.3 Cloud Posture + D.5 Data Security to surface any drift in posture since the last scan.\",\n      \"probe_directive\": {\"target_agent\": \"data_security\", \"target_resource_arn\": \"arn:aws:s3:::us-east-1-buckets\", \"action\": \"scan\", \"rationale_ref\": \"\"},\n      \"cited_gap\": {\"region\": \"us-east-1\", \"asset_count\": 35, \"days_since_last_finding\": 90, \"severity_hint\": \"medium\"}\n    }\n  ]\n}\n"
+]
