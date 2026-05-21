@@ -20,6 +20,7 @@ ships the explicit-kwarg baseline.
 from shared.fabric.client import (
     CORRELATION_ID_HEADER,
     FabricConnectionError,
+    ForbiddenSubscriptionError,
     JetStreamClient,
     MissingCorrelationIdError,
     StreamSpecMismatchError,
@@ -61,6 +62,7 @@ __all__ = [
     "FINDINGS_STREAM",
     "DiscardPolicy",
     "FabricConnectionError",
+    "ForbiddenSubscriptionError",
     "JetStreamClient",
     "MissingCorrelationIdError",
     "NexusEnvelope",

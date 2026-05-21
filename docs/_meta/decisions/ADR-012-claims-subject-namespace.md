@@ -72,12 +72,50 @@ Consumers subscribe to `claims.tenant.<tid>.>` (all claim emitters for a tenant)
 
 ACLs follow the existing per-tenant scoping. Producers in tenant `T` may publish to `claims.tenant.T.agent.*`. Consumers in tenant `T` may subscribe to `claims.tenant.T.>`. Cross-tenant fanout is forbidden at the broker layer (matches ADR-004's mandatory cross-cutting).
 
+### Subscriber ACL — autonomous-action safety
+
+**Agents that take destructive action MUST NOT consume `claims.>`.** Claims are speculative state; acting on them autonomously would risk remediating problems that aren't real, deleting resources based on a hypothesis, or applying policy patches against ungrounded conjecture. Findings are observed, hash-chained, and signed — claims are none of those things.
+
+The v0.1 forbidden-subscriber set:
+
+| Agent               | Why forbidden                                                                                                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A.1 Remediation** | Takes destructive action — kubectl apply, policy patches, rollback rollouts. Speculative inputs would feed straight into authorized auto-execute paths. The entire `RemediationMode.EXECUTE` pipeline is built around the assumption that inputs are confirmed findings. |
+
+Future auto-acting agents (e.g. an auto-block firewall agent, an auto-quarantine workflow) inherit the same rule. Every new agent that ships with an auto-execute mode must either appear in this list or document in its v0.1 plan why it's exempt.
+
+**Non-acting consumers of `claims.>` (permitted by default):**
+
+| Agent                   | What it does with claims                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D.7 Investigation       | Treats a claim as a probe directive (e.g. "investigate finding X") — runs investigation, emits findings. The investigation itself is read-only over evidence; no destructive action. |
+| D.5 Data Security       | Treats a claim as a scan suggestion — schedules a classification pass. Read-only over buckets.                                                                                       |
+| D.8 Threat Intel        | Treats a claim as an IOC-enrichment hint — fetches CTI data. Read-only over external feeds.                                                                                          |
+| A.4 Meta-Harness (v0.1) | Aggregates meta-claims about other agents' behaviour. Pure observation.                                                                                                              |
+
+#### Enforcement
+
+The forbidden-subscriber set is enforced **at the substrate layer** in [`packages/shared/src/shared/fabric/client.py`](../../../packages/shared/src/shared/fabric/client.py):
+
+```python
+_FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
+    "remediation": frozenset({"claims.>"}),
+}
+```
+
+`JetStreamClient.subscribe(...)` checks `self._agent_id` against this map and raises `ForbiddenSubscriptionError` BEFORE the NATS call. The client's `agent_id` is passed at construction time (`JetStreamClient(servers=..., agent_id="remediation")`). The check is silent when `agent_id=None` (the default — appropriate for tests + library callers); production agent drivers MUST pass their `agent_id`.
+
+`ForbiddenSubscriptionError` inherits from `PermissionError` (Python stdlib) so callers can catch the broader category in defensive code without importing the fabric module.
+
+Adding an agent to this list is a SAFETY-CRITICAL change: it requires a verification record or ADR documenting the threat model that motivated the addition.
+
 ### What changes immediately
 
 - [`packages/shared/src/shared/fabric/subjects.py`](../../../packages/shared/src/shared/fabric/subjects.py): adds `claims_subject(tenant_id, agent_id) -> str`.
 - [`packages/shared/src/shared/fabric/streams.py`](../../../packages/shared/src/shared/fabric/streams.py): adds `CLAIMS_STREAM: StreamSpec`; extends `ALL_STREAMS` from 5 to 6 entries.
-- F.7 v0.1's `JetStreamClient.ensure_streams()` is unchanged at the call-site — it iterates `ALL_STREAMS`, so the 6th stream is picked up automatically by every deployment.
-- Tests in [`packages/shared/tests/fabric/`](../../../packages/shared/tests/fabric/) extended with subject-builder + stream-spec coverage.
+- [`packages/shared/src/shared/fabric/client.py`](../../../packages/shared/src/shared/fabric/client.py): adds `JetStreamClient(agent_id=...)` constructor kwarg, the `_FORBIDDEN_SUBSCRIPTIONS` map, the `ForbiddenSubscriptionError` exception, and the `_enforce_subscriber_acl` hook on `subscribe()`. See §"Subscriber ACL" above.
+- F.7 v0.1's `JetStreamClient.ensure_streams()` is unchanged at the call-site — it iterates `ALL_STREAMS`, so the 6th stream is picked up automatically by every deployment. Existing `JetStreamClient(servers=...)` constructors continue to work (agent_id defaults to None — back-compat for tests + non-agent library callers).
+- Tests in [`packages/shared/tests/`](../../../packages/shared/tests/) extended with subject-builder + stream-spec + subscriber-ACL coverage.
 
 ### What does NOT change
 
