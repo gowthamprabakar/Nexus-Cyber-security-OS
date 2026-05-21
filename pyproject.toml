@@ -25,6 +25,7 @@ members = [
     "packages/agents/synthesis",
     "packages/agents/curiosity",
     "packages/agents/meta-harness",
+    "packages/agents/supervisor",
     "packages/control-plane",
     "packages/shared",
 ]
