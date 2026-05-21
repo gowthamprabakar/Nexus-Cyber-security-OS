@@ -1,0 +1,157 @@
+"""F.6 audit-chain emitters — Stage 4 AUDIT helpers.
+
+Per Q6: 4 additive audit-action vocabulary entries (per
+[ADR-010](../../../../docs/_meta/decisions/ADR-010-within-agent-version-extension.md)
+condition 4 — additive-only; no existing strings touched):
+
+- ``supervisor.heartbeat.started`` — every heartbeat tick start;
+  carries ``customer_id`` + ``tick_id`` + trigger-source counts.
+- ``supervisor.delegation.dispatched`` — one per delegation;
+  carries ``target_agent`` + ``delegation_id`` + ``rule_id``.
+- ``supervisor.delegation.completed`` — one per delegation; carries
+  ``status`` + ``duration_sec`` + ``reason`` (if non-OK).
+- ``supervisor.escalation.raised`` — one per escalation; carries
+  ``reason`` + escalation markdown path.
+
+F.6 hash-chain semantics inherited unchanged from ``charter.audit``.
+The driver (Task 10) constructs ONE ``AuditLog`` per heartbeat
+tick (per Q-ARCH discipline — one audit file per run) and threads
+these helpers around the pipeline.
+
+**Write-only (Q5).** Supervisor v0.1 does NOT read the audit
+chain for decision-making. These helpers are side-effect-only.
+
+**No bus emission.** Audit entries land in the hash-chained file;
+no fabric publish.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from charter.audit import AuditLog
+
+from supervisor.schemas import (
+    DelegationContract,
+    DelegationOutcome,
+    EscalationNotice,
+    IncomingTask,
+)
+
+# The 4 additive audit-action vocabulary entries — used by the
+# driver + asserted by Task 9's tests + Task 12's eval cases.
+ACTION_HEARTBEAT_STARTED = "supervisor.heartbeat.started"
+ACTION_DELEGATION_DISPATCHED = "supervisor.delegation.dispatched"
+ACTION_DELEGATION_COMPLETED = "supervisor.delegation.completed"
+ACTION_ESCALATION_RAISED = "supervisor.escalation.raised"
+
+
+def emit_heartbeat_started(
+    audit_log: AuditLog,
+    *,
+    customer_id: str,
+    tick_id: str,
+    triggers: Sequence[IncomingTask],
+) -> None:
+    """Emit the per-tick start entry."""
+    source_counts = _count_triggers_by_source(triggers)
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "tick_id": tick_id,
+        "trigger_count_total": len(triggers),
+        "triggers_by_source": source_counts,
+    }
+    audit_log.append(ACTION_HEARTBEAT_STARTED, payload)
+
+
+def emit_delegation_dispatched(
+    audit_log: AuditLog,
+    *,
+    contract: DelegationContract,
+    rule_id: str,
+) -> None:
+    """Emit one entry per delegation at dispatch time."""
+    payload: dict[str, Any] = {
+        "customer_id": contract.customer_id,
+        "delegation_id": contract.delegation_id,
+        "target_agent": contract.target_agent,
+        "task_id": contract.task_id,
+        "rule_id": rule_id,
+        "budget_wall_clock_sec": contract.budget_wall_clock_sec,
+        "budget_max_tool_calls": contract.budget_max_tool_calls,
+    }
+    audit_log.append(ACTION_DELEGATION_DISPATCHED, payload)
+
+
+def emit_delegation_completed(
+    audit_log: AuditLog,
+    *,
+    outcome: DelegationOutcome,
+    customer_id: str,
+) -> None:
+    """Emit one entry per delegation at completion time."""
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "delegation_id": outcome.delegation_id,
+        "target_agent": outcome.target_agent,
+        "status": outcome.status.value,
+        "duration_sec": outcome.duration_sec,
+        "completed_at": outcome.completed_at.isoformat(),
+    }
+    if outcome.reason is not None:
+        payload["reason"] = outcome.reason
+    audit_log.append(ACTION_DELEGATION_COMPLETED, payload)
+
+
+def emit_escalation_raised(
+    audit_log: AuditLog,
+    *,
+    notice: EscalationNotice,
+    escalation_markdown_path: Path | None,
+) -> None:
+    """Emit one entry per escalation."""
+    payload: dict[str, Any] = {
+        "customer_id": notice.customer_id,
+        "escalation_id": notice.escalation_id,
+        "task_id": notice.task_id,
+        "reason": notice.reason,
+        "raised_at": notice.raised_at.isoformat(),
+    }
+    if escalation_markdown_path is not None:
+        payload["escalation_markdown"] = str(escalation_markdown_path)
+    audit_log.append(ACTION_ESCALATION_RAISED, payload)
+
+
+def _count_triggers_by_source(triggers: Sequence[IncomingTask]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for trigger in triggers:
+        counts[trigger.trigger_source.value] += 1
+    return dict(counts)
+
+
+# All 4 vocabulary entries — surfaced so tests + ADR docs can
+# reference the canonical set in one place.
+SUPERVISOR_AUDIT_ACTIONS: frozenset[str] = frozenset(
+    {
+        ACTION_HEARTBEAT_STARTED,
+        ACTION_DELEGATION_DISPATCHED,
+        ACTION_DELEGATION_COMPLETED,
+        ACTION_ESCALATION_RAISED,
+    }
+)
+
+
+__all__ = [
+    "ACTION_DELEGATION_COMPLETED",
+    "ACTION_DELEGATION_DISPATCHED",
+    "ACTION_ESCALATION_RAISED",
+    "ACTION_HEARTBEAT_STARTED",
+    "SUPERVISOR_AUDIT_ACTIONS",
+    "emit_delegation_completed",
+    "emit_delegation_dispatched",
+    "emit_escalation_raised",
+    "emit_heartbeat_started",
+]
