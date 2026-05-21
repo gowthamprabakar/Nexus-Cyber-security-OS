@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"No sibling workspaces were provided.\",\n \"sections\": [{\"heading\": \"No data\",\n               \"intent\": \"Operator omitted all workspace paths.\",\n               \"cited_finding_ids\": []}]}\n",
+  "No sibling-agent workspaces were provided for this run. There are no findings to narrate. Operator should re-run with at least one workspace flag set.",
+  "{\"paragraph\": \"This run completed with no sibling-agent workspaces provided; zero findings were available for synthesis. Re-run with workspace flags set.\",\n \"key_metrics\": {\"total_findings\": 0, \"critical\": 0, \"high\": 0, \"top_failing_control\": \"\"}}\n"
+]

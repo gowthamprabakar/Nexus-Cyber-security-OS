@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"Cover the network exposure.\",\n \"sections\": [{\"heading\": \"Network exposure\",\n               \"intent\": \"SG allows SSH from anywhere.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-NET-001\"]}]}\n",
+  "A security group permits SSH (port 22) from `0.0.0.0/0`. Finding `CSPM-AWS-NET-001` should be remediated by restricting the source CIDR.",
+  "{\"paragraph\": \"The scan window surfaced one network-exposure finding: a security group permits SSH from the public internet. Restrict the rule before further ingress.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 0, \"high\": 1, \"top_failing_control\": \"\"}}\n"
+]

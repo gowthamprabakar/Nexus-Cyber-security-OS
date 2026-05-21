@@ -1,0 +1,5 @@
+[
+  "{\"overall_narrative_intent\": \"Cover the critical finding.\",\n \"sections\": [{\"heading\": \"Critical exposures\",\n               \"intent\": \"Triage the critical finding.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-CRIT-001\"]}]}\n",
+  "One critical-severity finding (`CSPM-AWS-CRIT-001`) was surfaced this window. Escalate to on-call.",
+  "{\"paragraph\": \"The 2026-05-21 scan surfaced one critical-severity finding; on-call escalation is recommended within 24 hours.\",\n \"key_metrics\": {\"total_findings\": 1, \"critical\": 1, \"high\": 0, \"top_failing_control\": \"\"}}\n"
+]

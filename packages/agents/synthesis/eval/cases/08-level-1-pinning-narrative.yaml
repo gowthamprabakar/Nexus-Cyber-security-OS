@@ -1,9 +1,14 @@
 case_id: level_1_pinning_narrative
-description: |
-  Multiple CIS controls failed; narrator pins Level-1 controls to
+description: "Multiple CIS controls failed; narrator pins Level-1 controls to
+
   the top of the narrative. Verifies the operator's mental model
+
   (Level-1 = mandatory) propagates into the rendered prose.
-tags: [happy-path, cis-level-1]
+
+  "
+tags:
+  - happy-path
+  - cis-level-1
 fixture:
   compliance_findings:
     - class_uid: 2003
@@ -32,26 +37,12 @@ fixture:
             control_id: '3.1'
             level: level_2
             required: false
-  llm_responses:
-    - |
-      {"overall_narrative_intent": "Pin Level-1 failures ahead of Level-2 recommendations.",
-       "sections": [{"heading": "Level-1 mandatory controls",
-                     "intent": "1.10 root MFA",
-                     "cited_finding_ids": ["COMPLY-1.10"]},
-                    {"heading": "Level-2 recommendations",
-                     "intent": "3.1 CloudTrail",
-                     "cited_finding_ids": ["COMPLY-3.1"]}]}
-    - 'CIS control 1.10 (Level-1 mandatory) failed; `COMPLY-1.10` should be remediated before the next audit window.'
-    - 'CIS control 3.1 (Level-2 recommendation) failed; `COMPLY-3.1` should be reviewed but is not blocking.'
-    - |
-      {"paragraph": "Two CIS controls failed this scan: 1.10 (Level-1 mandatory) and 3.1 (Level-2 recommendation). Address the Level-1 failure first.",
-       "key_metrics": {"total_findings": 2, "critical": 0, "high": 1, "top_failing_control": "1.10"}}
 expected:
   section_count: 2
   review_retries: 0
   cited_finding_count: 2
   narrative_md_contains:
-    - 'Level-1'
-    - 'Level-2'
-    - 'COMPLY-1.10'
-    - 'COMPLY-3.1'
+    - Level-1
+    - Level-2
+    - COMPLY-1.10
+    - COMPLY-3.1

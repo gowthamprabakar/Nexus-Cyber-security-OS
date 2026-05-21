@@ -1,0 +1,6 @@
+[
+  "{\"overall_narrative_intent\": \"Cover identity + storage posture.\",\n \"sections\": [{\"heading\": \"Identity posture\",\n               \"intent\": \"IAM and root MFA gaps.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-IAM-001\", \"COMPLY-1.10\"]},\n              {\"heading\": \"Storage exposure\",\n               \"intent\": \"Bucket exposure.\",\n               \"cited_finding_ids\": [\"CSPM-AWS-S3-001\"]}]}\n",
+  "Two identity-side findings demand attention: `CSPM-AWS-IAM-001` (user MFA gap) and `COMPLY-1.10` (CIS root-MFA control failure). Address both before the next audit cycle.",
+  "One S3 bucket is configured with public-read ACLs, triggering `CSPM-AWS-S3-001`. Close the bucket policy and audit any exposed objects.",
+  "{\"paragraph\": \"The scan window surfaced three high-severity findings across IAM and storage posture; CIS Level-1 control 1.10 failed. Address the root MFA gap first.\",\n \"key_metrics\": {\"total_findings\": 3, \"critical\": 0, \"high\": 3, \"top_failing_control\": \"1.10\"}}\n"
+]
