@@ -1,0 +1,15 @@
+case_id: 01_route_cloud_posture
+description: Explicit target_agent=cloud_posture routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: cloud_posture
+expected:
+  decision_kind: match
+  target_agent: cloud_posture
+  delegation_count: 1
+  escalation_count: 0
+  triggers_received: 1
+  audit_actions:
+    - supervisor.heartbeat.started
+    - supervisor.delegation.dispatched
+    - supervisor.delegation.completed

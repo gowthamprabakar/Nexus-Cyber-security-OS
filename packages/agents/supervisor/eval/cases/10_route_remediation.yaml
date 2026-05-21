@@ -1,0 +1,10 @@
+case_id: 10_route_remediation
+description: Explicit target_agent=remediation routes via the bundled rule.
+fixture:
+  task_id: t1
+  target_agent: remediation
+expected:
+  decision_kind: match
+  target_agent: remediation
+  delegation_count: 1
+  escalation_count: 0
