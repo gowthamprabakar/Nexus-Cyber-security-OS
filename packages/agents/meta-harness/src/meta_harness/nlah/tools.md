@@ -38,13 +38,37 @@ Stages 4 DELTA + 5 REPORT — pure-function consumers of `Scorecard` and `Scorec
 - **`compute_batch_deltas(current_scorecards, previous_scorecards) -> tuple[ScorecardDelta, ...]`** matches by `agent_id`; orphan previous agents (not in current) are silently dropped; first-run rows flagged with `delta_pct=0.0`. Either side `pass_rate=None` → `delta_pct=0.0`, `is_comparable=False`.
 - **`flag_regressions(deltas, *, threshold_pct=5.0) -> tuple[RegressionFlag, ...]`** filters to rows crossing `delta_pct <= -threshold_pct` (≤ is conservative; the boundary 5% drop IS flagged). First-run and non-comparable rows never flag. `threshold_pct <= 0` raises `ValueError`.
 
-## Audit-action vocabulary (per Q6)
+## Audit-action vocabulary
 
-The driver emits four additive `audit.>` entries per ADR-010 condition 4 (additive-only; no existing strings touched):
+### v0.1 actions (4)
+
+The v0.1 driver emits four additive `audit.>` entries per ADR-010 condition 4 (additive-only; no existing strings touched):
 
 - `meta_harness.batch_eval.started` — run start; carries `customer_id`, `run_id`, `evaluated_agent_count`.
 - `meta_harness.batch_eval.completed` — run end; carries per-agent pass-rate summary.
 - `meta_harness.regression_detected` — one per regression; carries `agent_id`, `delta_pct`, previous-run pointer.
 - `meta_harness.ab_comparison.completed` — only when the A/B subcommand is invoked.
 
-These land via F.6 hash-chain semantics unchanged. **No substrate writes to `packages/charter/`.**
+### v0.2 actions (+4, total 8)
+
+Task 12 of v0.2 adds four skill-lifecycle entries — emit helpers in `meta_harness.audit_emit`:
+
+- **`meta_harness.skill.candidate_emitted`** — emitted by `emit_skill_candidate_emitted(audit_log, *, candidate)` after Task 7's `skill_writer.write_skill_candidate` writes the shadow `SKILL.md`. Payload: `skill_id`, `target_agent`, `category`, `shadow_path`, `tool_sequence_hash`, `emitted_at`.
+- **`meta_harness.skill.eval_gate_completed`** — emitted by `emit_skill_eval_gate_completed(audit_log, *, result)` after Task 8's `run_skill_eval_gate` produces an `EvalGateResult` — pass OR fail, the event fires on both verdicts so the audit chain is complete. Payload: `skill_id`, `target_agent`, `passed`, `baseline_pass_rate`, `candidate_pass_rate`, `per_case_regression_count` (count only — full per-case detail lives in the cached `eval_gate_result.json` beside the shadow), `evaluated_at`.
+- **`meta_harness.skill.deployed`** — emitted by `emit_skill_deployed(audit_log, *, decision)` after Task 10 promotes shadow → canonical (auto-approved refinement OR operator-approved first-of-class). Payload: `skill_id`, `target_agent`, `category`, `approval_mode` (`auto_approved` or `operator_approved`), `deployed_path`, `decided_at`. **Raises `ValueError` if `decision.deployed=False`** (routing-bug guard).
+- **`meta_harness.skill.rejected`** — emitted by `emit_skill_rejected(audit_log, *, decision)` after Task 10 removes the shadow (eval-gate failure or operator rejection). Payload: `skill_id`, `target_agent`, `category`, `rejection_reason`, `decided_at`. **Raises `ValueError` if `decision.deployed=True`** (routing-bug guard).
+
+All eight entries land via F.6 hash-chain semantics unchanged — each entry's `previous_hash` is the prior entry's `entry_hash`. **Substrate writes to `packages/charter/` are limited to the additive ADR-007 v1.4 progressive-disclosure loader (Task 4) and the additive ADR-012 §v1.1 forbidden-subscriber entry (Task 11). Both are SAFETY-CRITICAL substrate touches.**
+
+## Skill-lifecycle helpers (v0.2)
+
+Five module surfaces that Tasks 13's driver wires through Stages 6 + 7:
+
+- **`meta_harness.skill_discovery`** (Task 5) — `discover_all_agent_skills(workspace_root, ...)` walks every `nexus_eval_runners` entry point + per-agent `nlah/skills/` subtree, builds `AgentSkillRegistry` per agent merging bundled + overlay (shadow) entries.
+- **`meta_harness.skill_triggers`** (Task 6) — `detect_skill_trigger(agent_id, run_id, audit_entries, deployed_tool_sequence_hashes)` applies the Q3 3-condition gate (≥5 tool calls + no failure/escalation + hash novelty). Returns `SkillTrigger | None`.
+- **`meta_harness.skill_writer`** (Task 7) — `await write_skill_candidate(trigger, audit_log_path, workspace_root, llm_provider, ...)` composes `SKILL.md` via a single `charter.llm.LLMProvider.complete(...)` call, overrides trust-boundary fields (`target_agent`, `created_by`, `deployment_status`, `eval_gate_status`, `provenance`), writes to the Q1 shadow path.
+- **`meta_harness.skill_eval_gate`** (Task 8) — `await run_skill_eval_gate(candidate, workspace_root, cases, runner, llm_provider)` runs Option-B mandatory eval-gate (two runs of the target agent's eval suite, no `--force`). `with_candidate_skill_overlay(overlay_dir)` is a `contextvars.ContextVar`-based wrapper agents migrating to v0.2-aware NLAH loading consult via `get_active_skill_overlay()`.
+- **`meta_harness.skill_registry`** (Task 9) — persistent skill-class registry at `<workspace>/.nexus/skill-class-registry.json`. `register_class(...)` is idempotent — re-registering preserves the original `first_approved_at` (audit-trail integrity). `deployed_tool_sequence_hashes(agent_id)` is the Task 6 input shape.
+- **`meta_harness.skill_approval`** (Task 10) — three routing paths: `approve_candidate` (operator-approved first-of-class), `auto_deploy_candidate` (refinement within registered class), `reject_candidate` (eval-gate failure OR operator rejection). Promotion flips `deployment_status` `CANDIDATE → DEPLOYED` and removes the shadow.
+
+All six modules are stitched together by `meta_harness.skill_lifecycle.run_skill_lifecycle(...)` (Task 13) — the Stage 6 + 7 orchestrator. The driver invokes it between Stage 5 REPORT (data assembly) and Stage 8 HANDOFF (markdown + KG write). When any of `llm_provider`, `audit_chain_loader`, `eval_runner_loader` is `None`, the orchestrator returns an empty `SkillLifecycleSummary` — v0.1-equivalent backwards-compat.
