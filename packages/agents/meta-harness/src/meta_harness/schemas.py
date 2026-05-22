@@ -36,6 +36,7 @@ pipeline:
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -277,12 +278,256 @@ class MetaHarnessReport(BaseModel):
         return sum(1 for s in self.scorecards if s.pass_rate is not None)
 
 
+# ---------------------------------------------------------------------------
+# v0.2 skill-lifecycle pydantic types (Wave 0 / Phase 1)
+# ---------------------------------------------------------------------------
+#
+# These five types model the skill subsystem A.4 v0.2 introduces:
+#
+#   SkillClassKey      — first-of-class registry key (agent_id, category)
+#   Skill              — a deployed SKILL.md entry (frontmatter parsed)
+#   SkillCandidate     — pre-deployment shadow-path artefact + provenance
+#   EvalGateResult     — eval-gate outcome (Q4 / Q-ARCH-2)
+#   DeploymentDecision — Q5 / Q-ARCH-3 outcome (auto / operator-approved /
+#                        rejected)
+#
+# All five are frozen pydantic with bounded fields; serialise cleanly to
+# JSON for the audit-chain payload + the candidate-notification markdown.
+# ---------------------------------------------------------------------------
+
+
+_MAX_SKILL_NAME_LENGTH = 128
+_MAX_SKILL_DESCRIPTION_LENGTH = 512
+_MAX_SKILL_VERSION_LENGTH = 32
+_MAX_CATEGORY_LENGTH = 64
+_MAX_SKILL_ID_LENGTH = 128
+_MAX_REJECTION_REASON_LENGTH = 512
+_MAX_AUDIT_LOG_PATH_LENGTH = 512
+_MAX_AUDIT_ENTRY_HASH_LENGTH = 128
+_MAX_PROVENANCE_ENTRIES = 64
+_MAX_SKILL_PLATFORMS = 16
+_MAX_PLATFORM_LENGTH = 32
+
+
+# Frontmatter status enums per Q2 (agentskills.io + Nexus extensions).
+
+
+class SkillEvalGateStatus(StrEnum):
+    PASSED = "passed"
+    FAILED = "failed"
+    NOT_RUN = "not_run"
+
+
+class SkillDeploymentStatus(StrEnum):
+    CANDIDATE = "candidate"
+    DEPLOYED = "deployed"
+    ARCHIVED = "archived"
+    REJECTED = "rejected"
+
+
+class SkillApprovalMode(StrEnum):
+    OPERATOR_APPROVED = "operator_approved"
+    AUTO_APPROVED = "auto_approved"
+
+
+class SkillClassKey(BaseModel):
+    """Composite key for the skill-class registry (per Q-ARCH-3).
+
+    Operator approves once per ``(agent_id, category)`` pair. Subsequent
+    skills in the same class auto-deploy on eval-gate pass.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    agent_id: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    category: str = Field(min_length=1, max_length=_MAX_CATEGORY_LENGTH)
+
+    def as_key(self) -> str:
+        """Stable string form for JSON keys: ``<agent_id>:<category>``."""
+        return f"{self.agent_id}:{self.category}"
+
+
+class Skill(BaseModel):
+    """A deployed Nexus skill — agentskills.io frontmatter + markdown body.
+
+    Materialised from a ``SKILL.md`` file parsed by ``skill_format.py``
+    (Task 3). Carries the agentskills.io required fields + the Nexus
+    extensions (per Q2 of the plan doc).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # agentskills.io required fields.
+    name: str = Field(min_length=1, max_length=_MAX_SKILL_NAME_LENGTH)
+    description: str = Field(min_length=1, max_length=_MAX_SKILL_DESCRIPTION_LENGTH)
+    version: str = Field(min_length=1, max_length=_MAX_SKILL_VERSION_LENGTH)
+    platforms: tuple[str, ...] = Field(default_factory=tuple, max_length=_MAX_SKILL_PLATFORMS)
+    # Nexus-specific extensions.
+    target_agent: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    category: str = Field(min_length=1, max_length=_MAX_CATEGORY_LENGTH)
+    created_by: str = Field(min_length=1, max_length=128)
+    provenance: tuple[tuple[str, str], ...] = Field(
+        default_factory=tuple,
+        max_length=_MAX_PROVENANCE_ENTRIES,
+        description="list[tuple[audit_log_path, entry_hash]] per drift #7 / ADR-007 v1.4",
+    )
+    eval_gate_status: SkillEvalGateStatus = SkillEvalGateStatus.NOT_RUN
+    deployment_status: SkillDeploymentStatus = SkillDeploymentStatus.CANDIDATE
+    # The body is the markdown content below the frontmatter; carried
+    # alongside frontmatter for round-trip serialisation.
+    body: str = Field(default="", max_length=64_000)
+
+    @model_validator(mode="after")
+    def _platforms_validation(self) -> Skill:
+        if len(self.platforms) == 0:
+            raise ValueError("platforms must declare at least one entry (e.g. 'nexus')")
+        for platform in self.platforms:
+            if not platform:
+                raise ValueError("platforms entries must be non-empty")
+            if len(platform) > _MAX_PLATFORM_LENGTH:
+                raise ValueError(
+                    f"platform name exceeds {_MAX_PLATFORM_LENGTH} chars: {platform!r}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _provenance_pair_validation(self) -> Skill:
+        for i, entry in enumerate(self.provenance):
+            if len(entry) != 2:
+                raise ValueError(f"provenance[{i}] must be a (audit_log_path, entry_hash) pair")
+            audit_log_path, entry_hash = entry
+            if not audit_log_path or len(audit_log_path) > _MAX_AUDIT_LOG_PATH_LENGTH:
+                raise ValueError(
+                    f"provenance[{i}].audit_log_path must be 1..{_MAX_AUDIT_LOG_PATH_LENGTH} chars"
+                )
+            if not entry_hash or len(entry_hash) > _MAX_AUDIT_ENTRY_HASH_LENGTH:
+                raise ValueError(
+                    f"provenance[{i}].entry_hash must be 1..{_MAX_AUDIT_ENTRY_HASH_LENGTH} chars"
+                )
+        return self
+
+    @property
+    def class_key(self) -> SkillClassKey:
+        """Composite key for the first-of-class registry."""
+        return SkillClassKey(agent_id=self.target_agent, category=self.category)
+
+
+class SkillCandidate(BaseModel):
+    """A pre-deployment skill artefact written by A.4 to the shadow path.
+
+    Lives at ``<workspace>/.nexus/candidate-skills/<agent>/<category>/
+    <skill-name>/SKILL.md``. Materialised back to a deployed ``Skill``
+    only after the eval-gate passes AND (the class is registered OR the
+    operator approves it).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    skill: Skill
+    shadow_path: str = Field(min_length=1, max_length=512)
+    tool_sequence_hash: str = Field(
+        min_length=1,
+        max_length=128,
+        description=(
+            "Deterministic SHA-256 of the colon-joined tool-call sequence (per Q3 novelty check)."
+        ),
+    )
+    emitted_at: datetime
+
+    @model_validator(mode="after")
+    def _deployment_status_is_candidate(self) -> SkillCandidate:
+        if self.skill.deployment_status != SkillDeploymentStatus.CANDIDATE:
+            raise ValueError(
+                "SkillCandidate.skill.deployment_status must be 'candidate'; "
+                f"got {self.skill.deployment_status.value!r}"
+            )
+        return self
+
+
+class EvalGateResult(BaseModel):
+    """Outcome of the per-candidate eval-gate run (per Q4 / Q-ARCH-2).
+
+    Two eval runs per candidate (Option B baseline + with-candidate);
+    cached at ``<shadow_path>/eval_gate_result.json`` so the deployment
+    step can replay the decision without re-running the suite.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    target_agent: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    baseline_pass_rate: float = Field(ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+    candidate_pass_rate: float = Field(ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+    per_case_regressions: tuple[tuple[str, float], ...] = Field(
+        default_factory=tuple,
+        max_length=_MAX_CASES_PER_AGENT,
+        description=(
+            "list[tuple[case_id, drop_pct]] for cases that regressed; non-empty "
+            "doesn't imply failure unless any entry's drop_pct >= 5.0."
+        ),
+    )
+    passed: bool
+    evaluated_at: datetime
+
+    @property
+    def overall_drop_pct(self) -> float:
+        """Aggregate pass-rate drop in percentage points."""
+        return (self.baseline_pass_rate - self.candidate_pass_rate) * 100.0
+
+
+class DeploymentDecision(BaseModel):
+    """The Q5 / Q-ARCH-3 outcome — final disposition of a candidate skill.
+
+    Emitted by the approval workflow (Task 10). Drives the
+    ``meta_harness.skill.deployed`` / ``meta_harness.skill.rejected``
+    audit entries (Task 12).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    target_agent: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    category: str = Field(min_length=1, max_length=_MAX_CATEGORY_LENGTH)
+    deployed: bool
+    approval_mode: SkillApprovalMode | None = None
+    deployed_path: str | None = Field(default=None, max_length=512)
+    rejection_reason: str | None = Field(default=None, max_length=_MAX_REJECTION_REASON_LENGTH)
+    decided_at: datetime
+
+    @model_validator(mode="after")
+    def _deployed_xor_rejected(self) -> DeploymentDecision:
+        if self.deployed:
+            if self.approval_mode is None:
+                raise ValueError("DeploymentDecision.deployed=True requires approval_mode")
+            if self.deployed_path is None:
+                raise ValueError("DeploymentDecision.deployed=True requires deployed_path")
+            if self.rejection_reason is not None:
+                raise ValueError("DeploymentDecision.deployed=True cannot carry rejection_reason")
+        else:
+            if self.rejection_reason is None:
+                raise ValueError("DeploymentDecision.deployed=False requires rejection_reason")
+            if self.approval_mode is not None:
+                raise ValueError("DeploymentDecision.deployed=False cannot carry approval_mode")
+            if self.deployed_path is not None:
+                raise ValueError("DeploymentDecision.deployed=False cannot carry deployed_path")
+        return self
+
+
 __all__ = [
     "ABComparison",
     "ABComparisonCaseDelta",
     "AgentManifest",
+    "DeploymentDecision",
+    "EvalGateResult",
     "MetaHarnessReport",
     "RegressionFlag",
     "Scorecard",
     "ScorecardDelta",
+    "Skill",
+    "SkillApprovalMode",
+    "SkillCandidate",
+    "SkillClassKey",
+    "SkillDeploymentStatus",
+    "SkillEvalGateStatus",
 ]
