@@ -262,6 +262,7 @@ class MetaHarnessReport(BaseModel):
     scorecard_deltas: tuple[ScorecardDelta, ...] = Field(default_factory=tuple)
     regressions_flagged: tuple[RegressionFlag, ...] = Field(default_factory=tuple)
     ab_comparison: ABComparison | None = None
+    skill_lifecycle: SkillLifecycleSummary = Field(default_factory=lambda: SkillLifecycleSummary())
     schema_version: Literal["meta_harness.v0.1"] = "meta_harness.v0.1"
 
     @property
@@ -514,6 +515,36 @@ class DeploymentDecision(BaseModel):
         return self
 
 
+class SkillLifecycleSummary(BaseModel):
+    """Per-run outcome of A.4 v0.2 Stages 6 (SKILL_TRIGGER) + 7 (SKILL_CREATE).
+
+    Carried on every ``MetaHarnessReport``. All-zero / empty-tuple
+    defaults — that's the v0.1-equivalent backwards-compat shape when
+    Stages 6 + 7 are skipped (no LLM provider OR no audit-chain loader).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    triggers_detected: int = Field(default=0, ge=0)
+    candidates_emitted: int = Field(default=0, ge=0)
+    eval_gate_results: tuple[EvalGateResult, ...] = ()
+    deployments: tuple[DeploymentDecision, ...] = ()
+    pending_operator_review: tuple[str, ...] = ()
+
+    @property
+    def deployed_count(self) -> int:
+        return sum(1 for d in self.deployments if d.deployed)
+
+    @property
+    def rejected_count(self) -> int:
+        return sum(1 for d in self.deployments if not d.deployed)
+
+
+# Rebuild MetaHarnessReport now that SkillLifecycleSummary is defined —
+# the forward-reference in the field annotation gets resolved here.
+MetaHarnessReport.model_rebuild()
+
+
 __all__ = [
     "ABComparison",
     "ABComparisonCaseDelta",
@@ -530,4 +561,5 @@ __all__ = [
     "SkillClassKey",
     "SkillDeploymentStatus",
     "SkillEvalGateStatus",
+    "SkillLifecycleSummary",
 ]
