@@ -276,6 +276,113 @@ The driver wraps every `consume()` call site with the helper. Tests cover:
 | No changes to other agents' drivers                 | 0 files — only opted-in members of the always-on class touch the helper |
 | Repo tests after amendment                          | 1168 passed / 11 skipped (was 1133; +35 from F.6 task work, 0 lost)     |
 
-### v1.4 candidate flagged
+### v1.4 candidate flagged — REASSIGNED to v1.5 (2026-05-22)
 
 If a future agent (e.g. D.7 Investigation when it consumes the audit chain at scale) needs the same exception, **promote `_enforce_always_on` to `charter.audit`** as a public helper. The pattern is duplicated at #2 → hoist at #3 per the established rule.
+
+**Note (2026-05-22):** the v1.4 slot was reassigned to the progressive-disclosure NLAH loader extension landing in A.4 Meta-Harness v0.2 — a more architecturally urgent amendment driven by the Hermes-pattern absorption (Phase 1 / Wave 0). The `_enforce_always_on` hoist remains queued for the **v1.5** slot if/when the third consumer arrives. See `## v1.4 amendment (2026-05-22) — Progressive-disclosure NLAH-loader extension` below.
+
+---
+
+## v1.4 amendment (2026-05-22) — Progressive-disclosure NLAH-loader extension
+
+> **v1.4-slot reassignment note.** v1.4 was originally flagged as a candidate slot for hoisting `_enforce_always_on` to `charter.audit` when the pattern reached its third consumer. That candidate is now deferred to a future v1.5 amendment. v1.4 lands the progressive-disclosure NLAH loader extension instead — a more architecturally urgent amendment driven by A.4 Meta-Harness v0.2 (Phase 1 / Wave 0).
+
+### Trigger
+
+A.4 Meta-Harness v0.2 / Phase 1 / Wave 0 (per the [Hermes-pattern absorption doc](../hermes-pattern-absorption-2026-05-22.md) §6 landing map) absorbs nectar items **N1** (progressive-disclosure NLAH) + **N2** (autonomous skill creation) + **N5** (agentskills.io open format). The skill-loading machinery applies to all 17 v0.1 agents' NLAH directories, not just A.4's. Hoisting the progressive-disclosure loader into `charter.nlah_loader` keeps every agent's runtime aligned with the v1.2 surface — they continue to call into `charter.nlah_loader` for any NLAH read.
+
+### The decision
+
+Add four new public functions + one frozen dataclass + one error class to `charter.nlah_loader`, **strictly additive** to the v1.2 surface. The existing `default_nlah_dir` and `load_system_prompt` are unchanged; v1.2 callers (every 17 agents at v0.1) continue to work identically.
+
+New surface:
+
+- **`default_skills_dir(package_file)`** — sibling helper to `default_nlah_dir`. Returns `<package_dir>/nlah/skills`.
+- **`SkillMetadataEntry`** — frozen dataclass carrying `(skill_id, name, description, version, category, target_agent, platforms, source)`. Level 0 metadata only; no markdown body. `source ∈ {"bundled", "overlay"}` distinguishes shipped skills from candidate-shadow-path skills.
+- **`load_skill_metadata_index(nlah_dir, *, skills_overlay=None) -> tuple[SkillMetadataEntry, ...]`** — Level 0; walks `<nlah_dir>/skills/<category>/<skill-name>/SKILL.md` (+ optional overlay). Overlay entries take precedence over bundled entries with the same `skill_id`. Returns empty tuple when the skills dir doesn't exist (backwards-compat per WI-4 of A.4 v0.2).
+- **`load_skill(nlah_dir, skill_id, *, skills_overlay=None) -> str`** — Level 1; returns the full SKILL.md text. Charter doesn't parse the body — agents pass the text into their own typed parser (e.g. `meta_harness.skill_format.parse_skill_md_content`). Overlay first, then bundled.
+- **`load_skill_reference(nlah_dir, skill_id, ref_filename, *, skills_overlay=None) -> str`** — Level 2; one reference file under the skill's `references/` subdir. Overlay first, then bundled.
+- **`SkillLoaderError`** — raised only when a SKILL.md file is _present_ but malformed (missing frontmatter, missing required keys, malformed YAML). Missing files raise `FileNotFoundError` per the v1.2 convention.
+
+### The `skill_id` shape
+
+`skill_id` is the relative path from the skills dir to the skill's parent directory: `<category>/<skill-name>`. Example: `iam-privesc/aws-assumed-role-chain`. The `(target_agent, category)` pair forms the first-of-class registry key consumed by A.4 v0.2's `skill_registry` (Task 9).
+
+### The `provenance` frontmatter shape
+
+Per drift #7 of A.4 v0.2's brainstorm, the `provenance` field on each SKILL.md's YAML frontmatter is `list[list[audit_log_path: str, entry_hash: str]]` — a list of 2-item pairs. YAML serialises tuples as lists, so the on-disk shape is:
+
+```yaml
+provenance:
+  - [audit/r_eval.jsonl, deadbeefcafebabe]
+  - [audit/r_another.jsonl, cafef00dcafef00d]
+```
+
+Charter's loader does not parse this field structurally — it surfaces the raw frontmatter at Level 1 and the agent's typed parser (e.g. `meta_harness.schemas.Skill`) interprets the pairs.
+
+### Required SKILL.md frontmatter keys
+
+Per agentskills.io + Nexus extensions (Q2 of the A.4 v0.2 plan):
+
+- `name`, `description`, `version`, `platforms` (agentskills.io required).
+- `target_agent`, `category` (Nexus required for routing the skill to a specific agent + first-of-class key).
+- `created_by`, `provenance`, `eval_gate_status`, `deployment_status` (Nexus extensions; consumed by A.4's typed parser, not by charter).
+
+A SKILL.md missing any of the first 6 keys raises `SkillLoaderError` at metadata-index parse time. The last 4 are validated by the per-agent typed parser, not charter.
+
+### Why not a separate `charter.skills` module?
+
+Three reasons:
+
+1. **Surface cohesion.** Skills are loaded _alongside_ the rest of an NLAH (README + tools + examples). Putting them in `charter.nlah_loader` keeps the per-agent loader shim simple — one import, one entry-point for all NLAH-related I/O.
+2. **No second hoist surface.** Per ADR-007's 3rd-consumer hoist rule, splitting skills into a new module would invite each agent to either depend on a second charter package or duplicate skill-loading code. The hoist-once-when-third-consumer-arrives rule says: hoist into the existing module.
+3. **Backwards-compat is structural.** Adding to `nlah_loader.py` keeps the v1.2 import path stable; every v0.1 agent that already imports `charter.nlah_loader` gets the new surface without code changes.
+
+### Cross-package blast radius
+
+| Change                                                                                                                                                                               | Files affected                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Additive functions in `charter/nlah_loader.py` (`default_skills_dir`, `load_skill_metadata_index`, `load_skill`, `load_skill_reference`) + `SkillMetadataEntry` + `SkillLoaderError` | 1 file (~200 LOC added)                                               |
+| Tests covering the v1.4 surface in `packages/charter/tests/test_nlah_loader.py`                                                                                                      | 1 file (~14 new tests; existing tests untouched)                      |
+| No changes to `default_nlah_dir` or `load_system_prompt`                                                                                                                             | 0 lines modified in the v1.2 surface — backwards-compat is structural |
+| No changes to any agent's NLAH shim                                                                                                                                                  | 0 files — agents continue to use the v1.2 surface unchanged           |
+| New `pyyaml` dependency on `packages/charter/pyproject.toml`? **No** — already present transitively via existing eval-framework path                                                 | 0 dependency additions                                                |
+
+### What this validates
+
+- ADR-007 v1.1's "hoist on the 3rd duplicate" rule extends naturally: the progressive-disclosure pattern would have been duplicated 17 times if each agent grew its own skills loader. Hoisting on Wave 0 (before any agent grows the duplication) is the equivalent move ADR-007 v1.2 made for the basic NLAH loader after the third per-agent copy.
+- The v1.2 → v1.4 path is structurally additive — adding capability without breaking the existing surface. Same shape as v1.1 + v1.2 amendments.
+
+### Future agents
+
+When any v0.2+ agent ships its first `nlah/skills/` directory:
+
+1. The agent's `nlah_loader.py` shim already calls `charter.nlah_loader`; no change needed.
+2. The agent's runtime calls `load_skill_metadata_index(default_nlah_dir(__file__))` for Level 0 + `load_skill(...)` for Level 1 + `load_skill_reference(...)` for Level 2 as needed.
+3. The agent's eval suite can opt-in to the skills overlay via `with_candidate_skill_overlay` (A.4 v0.2 Task 8's `BatchEvalRunner` extension) — eval-gate runs against the candidate without touching the canonical tree.
+
+### Pattern: how a v0.2+ agent opts in
+
+```python
+from charter.nlah_loader import default_nlah_dir, load_skill_metadata_index, load_skill
+
+NLAH_DIR = default_nlah_dir(__file__)
+
+# Level 0 — pick a skill by description-match.
+metadata = load_skill_metadata_index(NLAH_DIR)
+chosen = next((m for m in metadata if "S3 policy" in m.description), None)
+
+# Level 1 — load the full SKILL.md content.
+if chosen is not None:
+    skill_text = load_skill(NLAH_DIR, chosen.skill_id)
+    # ... thread into the LLM system prompt, or parse via
+    # meta_harness.skill_format.parse_skill_md_content if typed.
+```
+
+### What this does NOT change
+
+- **v1.2 NLAH-loader contract.** `default_nlah_dir(__file__)` returns the same path; `load_system_prompt(nlah_dir)` returns the same concatenated text. Zero behavioural diff for existing agents.
+- **Per-agent 21-LOC shim.** Each agent's `nlah_loader.py` shim is unchanged. Agents can choose to wrap the new v1.4 functions in their own typed surface (as A.4 v0.2 will via `meta_harness.skill_format`) or call charter directly.
+- **F.5 SemanticStore.** Skills are file-backed in `nlah/skills/`; no SemanticStore entity persistence. Multi-tenant skill libraries remain post-SET-LOCAL-fix territory.
+- **Audit chain.** Skill loading is read-only and produces no audit-chain entries on its own. A.4's skill-lifecycle entries (Task 12: `skill.candidate_emitted`, etc.) are the only F.6 surface here.
