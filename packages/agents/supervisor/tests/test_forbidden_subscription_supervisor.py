@@ -11,9 +11,12 @@ check in ``JetStreamClient.subscribe(...)``, these tests fail
 loudly.
 
 The Supervisor entry is the **second** in the registry (after
-A.1 Remediation, ADR-012's original fence). A future third entry
-is anticipated for A.4 v0.2 when NLAH auto-deploy lands — captured
-as WI-5 forward-carry in the Supervisor v0.1 verification record.
+A.1 Remediation, ADR-012's original fence). The third entry —
+A.4 Meta-Harness — landed in A.4 v0.2 Task 11 (ADR-012 §v1.1
+amendment, 2026-05-22), realising the WI-5 forward-carry from
+the Supervisor v0.1 verification record. The trajectory CLOSES
+at three subscribers for Phase 1; ``test_registry_has_three_entries``
+locks that in.
 """
 
 from __future__ import annotations
@@ -41,14 +44,19 @@ def test_remediation_still_in_registry_after_extension() -> None:
     assert _FORBIDDEN_SUBSCRIPTIONS["remediation"] == frozenset({"claims.>"})
 
 
-def test_registry_has_exactly_two_v0_1_entries() -> None:
-    """v0.1 forbidden-subscriber set: A.1 + Supervisor only.
+def test_registry_has_three_entries_after_a_4_v0_2() -> None:
+    """Forbidden-subscriber set after A.4 v0.2 Task 11 (ADR-012 §v1.1):
+    A.1 Remediation + Supervisor + A.4 Meta-Harness.
 
-    A.4 v0.2 will add a third entry (the WI-5 carry-forward); this
-    test will be updated at that point to assert the third entry.
-    The current expected size is 2.
+    The Q-ARCH-1 trajectory CLOSES at three subscribers for Phase 1 —
+    no further additions are queued. Future auto-acting agents inherit
+    the standing rule; they don't pre-register here.
     """
-    assert set(_FORBIDDEN_SUBSCRIPTIONS.keys()) == {"remediation", "supervisor"}
+    assert set(_FORBIDDEN_SUBSCRIPTIONS.keys()) == {
+        "remediation",
+        "supervisor",
+        "meta_harness",
+    }
 
 
 def test_jetstream_client_rejects_supervisor_claims_subscribe() -> None:
