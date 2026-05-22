@@ -1,47 +1,58 @@
-"""Nexus Meta-Harness Agent — A.4 / Agent #16 under ADR-007.
+"""Nexus Meta-Harness Agent — A.4 v0.2 / Phase 1 Wave 0.
 
-The sixth of the 7 unbuilt agents shipped under the 2026-05-20
-Path-B-breadth-first operating rule. **The first agent that reads
-other agents** — runs cross-agent batch eval, A/B-compares NLAH
-variants, tracks scorecard deltas, flags regressions. Producer of
-operator-facing diagnostics; ruthlessly read-only in v0.1.
+**v0.2 transitions A.4 from read-only diagnostics (v0.1) to the
+platform's first auto-acting Meta-Harness.** Composes SKILL.md
+candidates from successful complex agent runs, eval-gates them
+against the target agent's eval suite, and auto-deploys them to
+the target agent's NLAH directory after operator approval (for
+first-of-class) or eval-gate pass (for refinements of proven
+classes). Becomes the **third forbidden subscriber** under ADR-012,
+closing the Q-ARCH-1 trajectory predicted in Supervisor v0.1's
+verification record.
 
-Scope (v0.1, locked 2026-05-21):
+Phase 1 / Wave 0 scope (locked 2026-05-22):
 
-- 2 emit directions per run:
-    1. ``SemanticStore`` entities (``entity_type="agent_scorecard"``
-       and ``"ab_comparison_result"``; persistent KG record).
-    2. ``meta_harness_report.md`` workspace markdown for operator
-       review.
-- **No bus emission** (Q-ARCH-2 deferred to v0.2).
-- **No NLAH writes** (Q-ARCH-1 deferred to v0.2 — v0.2 MUST review
-  subscriber-ACL per ADR-012 since it introduces auto-acting).
-- Single-tenant ``semantic_store=None`` opt-in default.
-- Eval-framework consumed directly; agent-local ``BatchEvalRunner``
-  stays package-local per ADR-007 3rd-consumer hoist rule
-  (Q-ARCH-3).
+- **N1** Progressive-disclosure NLAH loader — Level 0 metadata
+  index, Level 1 full SKILL.md, Level 2 references.
+- **N2** Autonomous skill creation — >=5 tool calls + successful
+  + tool-sequence-hash novel vs deployed skills.
+- **N5** agentskills.io open format from day one.
+- **NLAH auto-deploy with safety rails** — mandatory eval-gate +
+  first-of-class operator approval.
+- **Subscriber-ACL self-registration** — Task 11 SAFETY-CRITICAL
+  adds ``_FORBIDDEN_SUBSCRIPTIONS["meta_harness"]``.
 
-Six-stage pipeline (one fewer than D.12 — no PUBLISH stage):
+Seven-stage pipeline (extends v0.1's 6-stage):
 
-  INTROSPECT -> BATCH_EVAL -> AB_COMPARE -> DELTA -> REPORT -> HANDOFF
+  INTROSPECT -> BATCH_EVAL -> AB_COMPARE -> DELTA -> REPORT
+                -> SKILL_TRIGGER -> SKILL_CREATE -> HANDOFF
 
-Watch-items:
+LLM consumption first introduced in v0.2 at Stage 7 SKILL_CREATE
+via ``charter.llm_adapter`` (same pattern as D.13 / D.12).
 
-- WI-1: substrate sealed (zero ``packages/charter/`` or
-  ``packages/shared/`` touches).
+Watch-items (v0.2):
+
+- WI-1: substrate sealed except Tasks 4 + 11 (both SAFETY-CRITICAL).
 - WI-2: single-tenant default (``semantic_store=None`` opt-in).
-- WI-3: stub-LLM determinism; A/B byte-equal under identical NLAH.
-- WI-4: read-only NLAH access enforced by integration-test guard.
-- WI-5: Q-ARCH-1 carry-forward — A.4 v0.2 plan MUST include
-  subscriber-ACL review per ADR-012 since v0.2 introduces
-  auto-acting behavior.
+- WI-3: stub-LLM determinism extended to skill content.
+- WI-4: auto-deploy safety rails — no skill deploys without
+  eval-gate pass + (first-of-class) operator approval.
+- WI-5: **Q-ARCH-1 trajectory CLOSES** at 3 forbidden subscribers
+  (A.1 + Supervisor + A.4 v0.2). No further pending additions
+  in Phase 1.
 
-Autonomous skill creation, NLAH auto-deploy, new fabric subject,
-autonomous Curator behavior, multi-tenant production, and
-eval-framework substrate hoist are all deferred per the
-2026-05-21 plan doc (A.4 v0.2 / v0.3 / v0.x post-SET-LOCAL-fix).
+Deferred to A.4 v0.3 (per the 2026-05-22 plan doc): N3 Autonomous
+Curator (skill pruning); semantic-similarity novelty. Deferred
+post-GA: Skills Hub marketplace (S2); cross-customer sharing.
+Deferred post-SET-LOCAL-fix: multi-tenant production +
+per-customer skill paths.
+
+**Backwards-compatible with v0.1.** ``meta-harness run`` against
+an empty ``skills/`` directory + zero novel-pattern runs produces
+byte-identical output to v0.1 (modulo timestamps). Task 1's smoke
+suite enforces this regression test (load-bearing).
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

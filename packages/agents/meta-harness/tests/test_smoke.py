@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 _SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "meta_harness"
 
 
@@ -47,7 +49,9 @@ def test_package_imports() -> None:
 
     assert hasattr(meta_harness, "__version__")
     assert isinstance(meta_harness.__version__, str)
-    assert meta_harness.__version__ == "0.1.0"
+    # Phase 1 / Wave 0 — v0.2 ships autonomous skill creation +
+    # progressive-disclosure NLAH loader + auto-deploy safety rails.
+    assert meta_harness.__version__ == "0.2.0"
 
 
 def test_charter_nlah_loader_import_works() -> None:
@@ -184,3 +188,127 @@ def test_wi1_substrate_sealed_substrate_imports_reachable() -> None:
     surface exists.
     """
     from charter.memory.semantic import SemanticStore  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# v0.2 invariants
+# ---------------------------------------------------------------------------
+
+
+def test_v0_2_pyproject_version_matches() -> None:
+    """Bootstrap regression — the pyproject.toml + ``__version__``
+    must agree at v0.2.0."""
+    import importlib.metadata
+
+    distribution_version = importlib.metadata.version("nexus-meta-harness-agent")
+    assert distribution_version == "0.2.0"
+
+
+def test_v0_2_charter_llm_adapter_now_permitted_for_skill_create() -> None:
+    """v0.2 introduces LLM consumption at Stage 7 SKILL_CREATE.
+    ``charter.llm_adapter`` must be reachable; the v0.1 anti-pattern
+    guard (no per-agent ``meta_harness.llm`` module) still holds."""
+    import importlib.util
+
+    from charter.llm_adapter import config_from_env, make_provider  # noqa: F401
+
+    # Per-agent llm.py anti-pattern guard still holds in v0.2 —
+    # A.4 consumes the LLM via charter.llm_adapter, not a local
+    # module.
+    assert importlib.util.find_spec("meta_harness.llm") is None
+
+
+@pytest.mark.asyncio
+async def test_v0_2_backwards_compat_empty_skills_v0_1_equivalent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**WI-4 backwards-compat regression probe — LOAD-BEARING per
+    plan drift #5.** Running ``meta_harness.agent.run`` against an
+    empty skills/ directory (Task 1 ships nothing skill-related
+    yet) + zero novel-pattern runs MUST produce a
+    ``MetaHarnessReport`` structurally equivalent to v0.1 output.
+    Fields that legitimately vary (timestamps, ULIDs) are not
+    compared; the shape + counts must be identical.
+
+    Task 1 ships the version bump only; no skills code lives in
+    the repo yet. This probe asserts that no skills-related
+    side-effects sneak in via the version bump alone. Tasks 5-13
+    introduce the skill subsystem; this same probe re-runs after
+    each task to catch regressions.
+    """
+    from meta_harness import agent as agent_mod
+    from meta_harness.eval import batch as batch_module
+
+    # Empty entry-point set -> v0.1 happy-path with zero work.
+    monkeypatch.setattr(batch_module, "entry_points", lambda *, group: [])
+    report = await agent_mod.run(
+        customer_id="acme",
+        run_id="r_v0_2_bootstrap_compat_probe",
+        workspace_root=tmp_path,
+    )
+
+    # v0.1-equivalent expectations: empty inputs -> empty outputs.
+    assert report.total_agents_evaluated == 0
+    assert report.successful_runs == 0
+    assert report.total_regressions == 0
+    assert report.ab_comparison is None
+    assert report.scorecards == ()
+    assert report.scorecard_deltas == ()
+    assert report.manifests == ()
+    # Report markdown written to workspace (v0.1 behavior).
+    assert (tmp_path / "meta_harness_report.md").is_file()
+
+
+def test_v0_2_progressive_disclosure_skills_dir_convention() -> None:
+    """Bootstrap-stage probe — the v0.2 skills/ subdirectory
+    convention is established but not yet populated (Tasks 4 + 5
+    add the loader + discovery; Task 1 just version-bumps).
+
+    Future agents' NLAH directories will gain a ``skills/`` sibling
+    under their existing ``nlah/`` directory:
+
+        packages/agents/<agent>/src/<agent>/nlah/skills/
+
+    Per ADR-007 v1.4 (lands paired with Task 4). At Task 1 stage,
+    the convention is a documented intent; the probe asserts the
+    plan doc names it verbatim so a future regression that drops
+    the convention is caught at the next smoke run.
+    """
+    plan_path = (
+        Path(__file__).resolve().parents[4]
+        / "docs"
+        / "superpowers"
+        / "plans"
+        / "2026-05-22-a-4-meta-harness-v0-2.md"
+    )
+    plan_text = plan_path.read_text(encoding="utf-8")
+    # The conventional path must appear verbatim in the plan.
+    assert "nlah/skills/" in plan_text
+    # ADR-007 v1.4 must be named in the plan (v1.3 was already taken
+    # by the 2026-05-12 always-on agent class amendment).
+    assert "ADR-007 v1.4" in plan_text
+    # The plan must explicitly flag the reassignment from the
+    # previously-flagged v1.4 candidate slot.
+    assert "v1.3 was already taken" in plan_text
+
+
+def test_v0_2_q_arch_5_trajectory_closes_at_three_subscribers() -> None:
+    """**WI-5 closure probe.** Plan doc must record that A.4 v0.2's
+    forbidden-subscriber registration closes the Q-ARCH-1 trajectory
+    at THREE forbidden subscribers (A.1 + Supervisor + A.4 v0.2)
+    with no further pending additions in Phase 1."""
+    plan_path = (
+        Path(__file__).resolve().parents[4]
+        / "docs"
+        / "superpowers"
+        / "plans"
+        / "2026-05-22-a-4-meta-harness-v0-2.md"
+    )
+    plan_text = plan_path.read_text(encoding="utf-8")
+    assert "Q-ARCH-1 trajectory CLOSES" in plan_text
+    # The plan records "3 forbidden subscribers" in the WI-5 closure
+    # section (digit form), naming A.1 + Supervisor + A.4 v0.2 as
+    # the final v0.2 set.
+    assert "3 forbidden subscribers" in plan_text
+    assert "no further pending additions" in plan_text.lower()
