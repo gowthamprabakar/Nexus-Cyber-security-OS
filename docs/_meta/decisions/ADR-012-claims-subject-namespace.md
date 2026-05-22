@@ -173,3 +173,43 @@ Adding an agent to this list is a SAFETY-CRITICAL change: it requires a verifica
 - Related: [F.7 v0.1 verification record](../d-2-f4-verification-2026-05-11.md) and the F.7 v0.1 plan — `JetStreamClient.ensure_streams()` consumes `ALL_STREAMS` declaratively; the 6th stream is picked up without code changes there.
 - Sketch context: [`docs/superpowers/sketches/2026-05-20-remaining-agents-sketch.md`](../../superpowers/sketches/2026-05-20-remaining-agents-sketch.md) §1 (D.12 substrate flag) + §8 (Path-B sequence sequencing rationale).
 - Operating rule: [Path-B-breadth-first (2026-05-20)](../../superpowers/sketches/2026-05-20-agent-version-roadmaps.md) — substrate plans unblocking an unbuilt v0.1 are the only mid-sequence exception; this ADR exercises that clause.
+
+---
+
+## v1.1 amendment (2026-05-22) — Meta-Harness forbidden subscriber (A.4 v0.2 Task 11)
+
+**Status.** Accepted. SAFETY-CRITICAL substrate amendment paired with the `packages/shared/src/shared/fabric/client.py` change in the same PR (A.4 Meta-Harness v0.2 Task 11). Manual review required; no auto-merge.
+
+**Trigger.** A.4 Meta-Harness v0.2 ships NLAH auto-deploy — it composes candidate `SKILL.md` files from successful agent traces (Task 7) and, after eval-gate pass (Task 8) and either operator approval or first-of-class auto-approval (Task 10), writes them into target agents' `nlah/skills/<category>/<skill-name>/SKILL.md` directories. From that point onward every subsequent run of the target agent loads the deployed skill via the progressive-disclosure NLAH loader (ADR-007 v1.4 / Task 4). **A.4 v0.2 is the first agent in the platform whose output is procedural memory that other agents will then act on.**
+
+If A.4 v0.2 were permitted to subscribe to `claims.>`, a hypothesis from Curiosity (or any future speculative-state emitter) could be picked up as evidence for skill composition. The composed SKILL.md would then be evaluated against the target agent's eval suite, possibly pass, and be deployed — laundering speculation into deployed procedural memory that downstream agent runs consume as authoritative guidance. This is the same failure mode the A.1 and Supervisor fences exist to prevent, now extended to procedural-memory writes.
+
+**Change to the forbidden-subscriber set.**
+
+| Agent (post-v1.1)            | Why forbidden                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A.1 Remediation**          | (unchanged from v1.0) Takes destructive action — kubectl apply, policy patches, rollback rollouts.                                                                                                                                                                                                                                                     |
+| **Supervisor (#0)**          | (unchanged from v1.0) Routes work that triggers downstream specialist invocations — including A.1 Remediation.                                                                                                                                                                                                                                         |
+| **A.4 Meta-Harness (v0.2+)** | NEW in v1.1. Writes deployed procedural memory (SKILL.md files into target agents' NLAH skills directories) that every subsequent run of the target agent loads as authoritative guidance. A claim consumed as composition input would launder speculation into deployed memory. The fence prevents that path. Added in A.4 v0.2 Task 11 (2026-05-22). |
+
+Enforcement code in `packages/shared/src/shared/fabric/client.py` after this amendment:
+
+```python
+_FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
+    "remediation": frozenset({"claims.>"}),
+    "supervisor": frozenset({"claims.>"}),
+    "meta_harness": frozenset({"claims.>"}),
+}
+```
+
+**Q-ARCH-1 trajectory CLOSED at three subscribers.** Supervisor v0.1's verification record (2026-05-21) §"WI-5 forward-carry" predicted that A.4 v0.2 would be the third — and final — forbidden subscriber for Phase 1. This amendment realises that prediction verbatim. **No further additions are pending for Phase 1.** Future auto-acting agents (a hypothetical auto-block firewall, an auto-quarantine workflow, or any new agent class that ships with an auto-execute mode) inherit the same rule — they must either appear in the list above or document in their v0.1 plan why they're exempt. That's the standing rule; not a queued addition.
+
+**Supersession note for the v1.0 "Non-acting consumers of `claims.>`" table.** The row "A.4 Meta-Harness (v0.1) | Aggregates meta-claims about other agents' behaviour. Pure observation." remains historically accurate for v0.1 (read-only diagnostics; no auto-deploy). From v0.2 onward A.4 belongs in the forbidden-subscriber set above; the v0.1 row stays in this ADR as a record of the v0.1 stance, not as current authorisation.
+
+**WI-5 closure.** [Supervisor v0.1 verification record §"A.4 v0.2 — three forbidden subscribers (WI-5)"](../supervisor-v0-1-verification-2026-05-21.md) named this amendment verbatim ("A.4 v0.2 plan author MUST add `_FORBIDDEN_SUBSCRIPTIONS['meta_harness'] = frozenset({'claims.>'})` before any auto-acting code lands"). Closed by this PR.
+
+**References.**
+
+- Supervisor v0.1 verification record (2026-05-21) — WI-5 forward-carry text.
+- ADR-007 v1.4 (2026-05-22) — progressive-disclosure NLAH loader; the substrate A.4 v0.2 uses to read deployed skills.
+- A.4 Meta-Harness v0.2 plan (`docs/superpowers/plans/2026-05-22-a-4-meta-harness-v0-2.md`) §"Q-ARCH-1" — predicted this amendment in the plan-resolution table.

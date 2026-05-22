@@ -1108,9 +1108,10 @@ async def test_remediation_can_still_subscribe_to_findings(mocker: MockerFixture
 
 @pytest.mark.asyncio
 async def test_non_remediation_agent_may_subscribe_to_claims(mocker: MockerFixture) -> None:
-    """Curiosity / Investigation / Threat-Intel / Data-Security / Meta-Harness
-    subscribe to claims.> as a normal operation. Only agents enumerated in
-    _FORBIDDEN_SUBSCRIPTIONS are blocked."""
+    """Curiosity / Investigation / Threat-Intel / Data-Security subscribe to
+    claims.> as a normal operation. Only agents enumerated in
+    _FORBIDDEN_SUBSCRIPTIONS are blocked — A.4 Meta-Harness joined that list
+    in ADR-012 §v1.1 (A.4 v0.2 Task 11)."""
     nc, js = _make_nats_mock()
     _patch_nats_connect(mocker, nc_mock=nc)
     client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="investigation")

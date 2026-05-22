@@ -94,6 +94,16 @@ _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
     # (A.4 v0.2+ once NLAH auto-deploy ships) is anticipated and
     # captured as WI-5 in the Supervisor v0.1 verification record.
     "supervisor": frozenset({"claims.>"}),
+    # A.4 Meta-Harness v0.2 ships NLAH auto-deploy — it WRITES SKILL.md
+    # files into target agents' nlah/skills/ directories after eval-gate
+    # pass. If A.4 consumed claims.> and treated a hypothesis as evidence
+    # for skill composition, it would launder speculation into deployed
+    # procedural memory that every subsequent run of the target agent
+    # would consume. The fence prevents that path. Closes the Q-ARCH-1
+    # trajectory predicted in Supervisor v0.1's verification record
+    # (WI-5). Third — and final, for Phase 1 — forbidden subscriber.
+    # Added in A.4 v0.2 Task 11. See ADR-012 §v1.1.
+    "meta_harness": frozenset({"claims.>"}),
 }
 """Q7: connect timeout (seconds). nats-py expects an int."""
 
