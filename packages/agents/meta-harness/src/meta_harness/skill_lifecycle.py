@@ -186,6 +186,7 @@ async def run_skill_lifecycle(
             decision = reject_candidate(
                 candidate,
                 rejection_reason=_failure_reason(eval_result),
+                workspace_root=workspace_root,
             )
             emit_skill_rejected(audit_log, decision=decision)
             deployments.append(decision)

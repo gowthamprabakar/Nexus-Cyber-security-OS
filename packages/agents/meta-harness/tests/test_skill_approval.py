@@ -266,6 +266,7 @@ def test_reject_candidate_removes_shadow_and_returns_rejected_decision(tmp_path:
     decision = reject_candidate(
         candidate,
         rejection_reason="eval-gate failed: per-case regression on c1",
+        workspace_root=tmp_path,
         decided_at=_DECIDED_AT,
     )
     assert decision.deployed is False

@@ -1,0 +1,32 @@
+case_id: 15_skill_no_trigger
+description: >
+  Agent has <5 tool calls in its audit chain → Q3 condition 1 fails →
+  no skill trigger fires. The skill_lifecycle summary stays empty.
+fixture:
+  agents:
+    - agent_id: investigation
+      default_passed: true
+      case_count: 3
+      fail_when_overlay: false
+      audit_entries:
+        - action: tool.call
+          payload:
+            tool_name: memory_neighbors_walk
+          entry_hash: h0
+        - action: tool.call
+          payload:
+            tool_name: ocsf_lookup
+          entry_hash: h1
+  skill_lifecycle_enabled: true
+  llm_responses: []
+  semantic_store: false
+expected:
+  total_agents_evaluated: 1
+  successful_runs: 1
+  regressions_count: 0
+  ab_present: false
+  skill_pending_review_count: 0
+  skill_deployment_count: 0
+  markdown_contains:
+    - 'Meta-Harness Report'
+  scorecard_upserts: 0

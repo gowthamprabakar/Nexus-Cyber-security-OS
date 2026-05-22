@@ -51,9 +51,9 @@ def test_entry_point_registered() -> None:
     assert "meta_harness" in names
 
 
-def test_all_ten_cases_load_cleanly() -> None:
+def test_all_cases_load_cleanly() -> None:
     cases = load_cases(_CASES_DIR)
-    assert len(cases) == 10
+    assert len(cases) == 15
 
 
 def test_case_ids_match_filenames() -> None:
@@ -98,11 +98,11 @@ async def test_individual_case_passes(case_filename: str, tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_full_suite_10_of_10_via_run_suite(tmp_path: Path) -> None:
+async def test_full_suite_15_of_15_via_run_suite(tmp_path: Path) -> None:
     """End-to-end via the eval-framework's run_suite — the same way the
     CLI eval will invoke the runner in Task 13."""
     cases = load_cases(_CASES_DIR)
     result = await run_suite(cases, MetaHarnessEvalRunner(), workspace_root=tmp_path)
     passed_count = sum(1 for r in result.cases if r.passed)
     failures = [(r.case_id, r.failure_reason) for r in result.cases if not r.passed]
-    assert passed_count == 10, f"expected 10/10; failures: {failures}"
+    assert passed_count == 15, f"expected 15/15; failures: {failures}"

@@ -1,28 +1,35 @@
-"""Tests — `meta_harness.cli` (Task 13).
+"""Tests — ``meta_harness.cli`` (Tasks 13 + 15).
 
-14 tests covering the three CLI subcommands via Click's CliRunner:
+20 tests covering the CLI subcommands via Click's CliRunner:
 
-1.  Top-level ``meta-harness --help`` lists three subcommands.
-2.  ``meta-harness --version`` prints the package version.
-3.  ``meta-harness eval`` against the bundled cases exits 0
-    (10/10 PASS).
-4.  ``meta-harness eval <bad-dir>`` exits 2 (cases dir not found).
-5.  ``meta-harness eval <empty-dir>`` exits 0 with "0/0 passed".
-6.  ``meta-harness run --customer-id ... --run-id ...`` writes
-    meta_harness_report.md.
-7.  ``meta-harness run`` prints the agent/regression digest.
-8.  ``meta-harness run --workspace-root <dir>`` honors the dir.
-9.  ``meta-harness ab-compare`` happy path (synthetic agent
-    registered via entry-point monkey-patch) prints byte_equal flag.
-10. ``meta-harness ab-compare`` --variant-a missing → exit code != 0.
-11. ``meta-harness ab-compare`` --variant-b missing → exit code != 0.
-12. ``meta-harness ab-compare`` against unknown agent → exit code != 0.
-13. ``meta-harness eval`` with a failing case → exits 1 + prints FAIL.
-14. ``meta-harness run`` rejects when --customer-id is missing.
+v0.1 diagnostic:
+1.  ``--help`` lists subcommands.
+2.  ``--version`` prints the package version.
+3.  ``eval`` against bundled cases exits 0 (15/15 PASS).
+4.  ``eval <bad-dir>`` exits 2.
+5.  ``eval <empty-dir>`` exits 0 with "0/0 passed".
+6.  ``run`` writes meta_harness_report.md.
+7.  ``run`` prints the agent/regression digest.
+8.  ``run --workspace-root`` honors the dir.
+9.  ``ab-compare`` happy path prints byte_equal flag.
+10. ``ab-compare`` --variant-a missing → error.
+11. ``ab-compare`` --variant-b missing → error.
+12. ``ab-compare`` unknown agent → error.
+13. ``eval`` failing case → exits 1 + prints FAIL.
+14. ``run`` rejects missing --customer-id.
+
+v0.2 skill-curation (Task 15):
+15. ``approve-skill`` promotes a candidate out of the shadow tree.
+16. ``approve-skill`` on nonexistent skill_id → exits 1.
+17. ``reject-skill`` removes candidate + cleans up.
+18. ``reject-skill`` missing --reason → error.
+19. ``list-skills`` prints pending candidates.
+20. ``list-skills`` prints "no pending candidates" when empty.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +38,13 @@ from click.testing import CliRunner
 from meta_harness import __version__
 from meta_harness.cli import main
 from meta_harness.eval import batch as batch_module
+from meta_harness.schemas import (
+    Skill,
+    SkillCandidate,
+    SkillDeploymentStatus,
+    SkillEvalGateStatus,
+)
+from meta_harness.skill_candidate_store import write_candidate_meta
 from meta_harness.tools import ab_compare as ab_module
 
 
@@ -55,7 +69,7 @@ def test_version_prints_package_version(cli: CliRunner) -> None:
 def test_eval_bundled_cases_pass(cli: CliRunner) -> None:
     result = cli.invoke(main, ["eval"])
     assert result.exit_code == 0, result.output
-    assert "10/10 passed" in result.output
+    assert "15/15 passed" in result.output
 
 
 def test_eval_bad_dir_exits_2(cli: CliRunner, tmp_path: Path) -> None:
@@ -278,3 +292,162 @@ def test_run_rejects_missing_customer_id(cli: CliRunner, tmp_path: Path) -> None
     result = cli.invoke(main, ["run", "--run-id", "r1", "--workspace-root", str(tmp_path)])
     assert result.exit_code != 0
     assert "customer-id" in result.output.lower()
+
+
+# ---------------------- v0.2 skill-curation CLI tests (Task 15) ------------
+
+
+_EMITTED_AT = datetime(2026, 5, 23, 12, 0, 0, tzinfo=UTC)
+
+
+def _seed_candidate(
+    workspace: Path,
+    *,
+    agent_id: str = "investigation",
+    skill_id: str = "iam-privesc/test-skill",
+    tool_sequence_hash: str = "abc123",
+) -> SkillCandidate:
+    category, name = skill_id.split("/", 1)
+    skill = Skill(
+        name=name,
+        description="A test skill.",
+        version="0.1.0",
+        platforms=("nexus",),
+        target_agent=agent_id,
+        category=category,
+        created_by="meta_harness@v0.2.0",
+        provenance=(),
+        eval_gate_status=SkillEvalGateStatus.PASSED,
+        deployment_status=SkillDeploymentStatus.CANDIDATE,
+        body="Test body.",
+    )
+    candidate = SkillCandidate(
+        skill_id=skill_id,
+        skill=skill,
+        shadow_path=str(
+            workspace / ".nexus" / "candidate-skills" / agent_id / skill_id / "SKILL.md"
+        ),
+        tool_sequence_hash=tool_sequence_hash,
+        emitted_at=_EMITTED_AT,
+    )
+    # Write shadow SKILL.md + sidecar.
+    from meta_harness.skill_format import write_skill_md
+
+    Path(candidate.shadow_path).parent.mkdir(parents=True, exist_ok=True)
+    write_skill_md(skill, Path(candidate.shadow_path))
+    write_candidate_meta(candidate, workspace_root=workspace)
+    return candidate
+
+
+def test_help_lists_skill_curation_subcommands(cli: CliRunner) -> None:
+    result = cli.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    for sub in ("approve-skill", "reject-skill", "list-skills"):
+        assert sub in result.output
+
+
+def test_approve_skill_promotes_candidate(cli: CliRunner, tmp_path: Path) -> None:
+    skill_id = "iam-privesc/test-skill"
+    _seed_candidate(tmp_path, skill_id=skill_id)
+
+    result = cli.invoke(
+        main,
+        ["approve-skill", skill_id, "--workspace-root", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert f"approved {skill_id}" in result.output
+    # Canonical SKILL.md should exist.
+    canonical = (
+        tmp_path
+        / "packages"
+        / "agents"
+        / "investigation"
+        / "src"
+        / "investigation"
+        / "nlah"
+        / "skills"
+        / skill_id
+        / "SKILL.md"
+    )
+    assert canonical.is_file()
+    # Shadow should be gone.
+    shadow = tmp_path / ".nexus" / "candidate-skills" / "investigation" / skill_id / "SKILL.md"
+    assert not shadow.is_file()
+    # Sidecar should be gone.
+    meta = (
+        tmp_path
+        / ".nexus"
+        / "candidate-skills"
+        / "investigation"
+        / skill_id
+        / "candidate_meta.json"
+    )
+    assert not meta.is_file()
+    # Registry should exist.
+    assert (tmp_path / ".nexus" / "skill-class-registry.json").is_file()
+
+
+def test_approve_skill_missing_skill_id_fails(cli: CliRunner, tmp_path: Path) -> None:
+    result = cli.invoke(
+        main,
+        ["approve-skill", "nonexistent/skill", "--workspace-root", str(tmp_path)],
+    )
+    assert result.exit_code != 0
+
+
+def test_reject_skill_removes_candidate(cli: CliRunner, tmp_path: Path) -> None:
+    skill_id = "iam-privesc/test-skill"
+    _seed_candidate(tmp_path, skill_id=skill_id)
+
+    result = cli.invoke(
+        main,
+        [
+            "reject-skill",
+            skill_id,
+            "--reason",
+            "not production quality",
+            "--workspace-root",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert f"rejected {skill_id}" in result.output
+    # Shadow should be gone.
+    shadow = tmp_path / ".nexus" / "candidate-skills" / "investigation" / skill_id / "SKILL.md"
+    assert not shadow.is_file()
+    # Sidecar should be gone.
+    meta = (
+        tmp_path
+        / ".nexus"
+        / "candidate-skills"
+        / "investigation"
+        / skill_id
+        / "candidate_meta.json"
+    )
+    assert not meta.is_file()
+
+
+def test_reject_skill_missing_reason_fails(cli: CliRunner, tmp_path: Path) -> None:
+    result = cli.invoke(
+        main,
+        ["reject-skill", "x/y", "--workspace-root", str(tmp_path)],
+    )
+    assert result.exit_code != 0
+
+
+def test_list_skills_prints_pending(cli: CliRunner, tmp_path: Path) -> None:
+    _seed_candidate(tmp_path, agent_id="agent_a", skill_id="cat/skill_a")
+    _seed_candidate(tmp_path, agent_id="agent_b", skill_id="cat/skill_b")
+
+    result = cli.invoke(main, ["list-skills", "--workspace-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "skill_a" in result.output
+    assert "skill_b" in result.output
+    assert "agent=agent_a" in result.output
+    assert "agent=agent_b" in result.output
+
+
+def test_list_skills_empty(cli: CliRunner, tmp_path: Path) -> None:
+    result = cli.invoke(main, ["list-skills", "--workspace-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "no pending candidates" in result.output
