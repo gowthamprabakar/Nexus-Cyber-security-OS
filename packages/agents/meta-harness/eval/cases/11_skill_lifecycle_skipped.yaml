@@ -1,0 +1,21 @@
+case_id: 11_skill_lifecycle_skipped
+description: >
+  v0.2 backwards-compat — when skill_lifecycle is not enabled the
+  report's skill_lifecycle field is the empty default, matching v0.1
+  output shape (drift #5 regression probe).
+fixture:
+  agents:
+    - agent_id: agent_alpha
+      default_passed: true
+      case_count: 3
+  semantic_store: false
+expected:
+  total_agents_evaluated: 1
+  successful_runs: 1
+  regressions_count: 0
+  ab_present: false
+  skill_pending_review_count: 0
+  skill_deployment_count: 0
+  markdown_contains:
+    - 'Meta-Harness Report'
+  scorecard_upserts: 0

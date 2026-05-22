@@ -1,0 +1,71 @@
+case_id: 13_skill_auto_deploy
+description: >
+  Skill trigger fires, eval-gate passes (no overlay failure), and the
+  (agent_id, category) class is already registered → auto-deploy via
+  AUTO_APPROVED path. The shadow + sidecar are cleaned up.
+fixture:
+  agents:
+    - agent_id: investigation
+      default_passed: true
+      case_count: 3
+      fail_when_overlay: false
+      audit_entries:
+        - action: tool.call
+          payload:
+            tool_name: memory_neighbors_walk
+          entry_hash: h0
+        - action: tool.call
+          payload:
+            tool_name: ocsf_lookup
+          entry_hash: h1
+        - action: tool.call
+          payload:
+            tool_name: iam_query
+          entry_hash: h2
+        - action: tool.call
+          payload:
+            tool_name: s3_get
+          entry_hash: h3
+        - action: tool.call
+          payload:
+            tool_name: lambda_invoke
+          entry_hash: h4
+  skill_lifecycle_enabled: true
+  llm_responses:
+    - |
+      ---
+      name: test-skill
+      description: Detect IAM privilege escalation via cross-account role chain.
+      version: 0.1.0
+      platforms:
+        - nexus
+      target_agent: SHOULD_BE_OVERRIDDEN
+      category: iam-privesc
+      created_by: llm-stub
+      ---
+      # Test Skill
+
+      When you see cross-account AssumeRole chains, follow the chain head-first.
+  skill_registry:
+    entries:
+      - agent_id: investigation
+        category: iam-privesc
+        first_approved_at: '2026-05-22T00:00:00Z'
+        first_skill_id: iam-privesc/existing-skill
+        deployed_skill_ids:
+          - iam-privesc/existing-skill
+        deployed_tool_sequence_hashes:
+          - abc123def
+  semantic_store: false
+expected:
+  total_agents_evaluated: 1
+  successful_runs: 1
+  regressions_count: 0
+  ab_present: false
+  skill_pending_review_count: 0
+  skill_deployment_count: 1
+  skill_auto_deploy_count: 1
+  candidate_meta_exists: false
+  markdown_contains:
+    - 'Meta-Harness Report'
+  scorecard_upserts: 0

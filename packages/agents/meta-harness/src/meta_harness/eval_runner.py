@@ -1,32 +1,33 @@
 """``MetaHarnessEvalRunner`` — the canonical ``EvalRunner`` for A.4.
 
-Per Task 12 of the A.4 v0.1 plan. Each case fixture defines a small
-synthetic fleet of agents that the runner registers as ephemeral
-``nexus_eval_runners`` entry points; the runner then invokes
-``meta_harness.agent.run`` against that fleet and compares the
-returned ``MetaHarnessReport`` to ``case.expected``.
+Per Task 12 of the A.4 v0.1 plan + Task 15 of the A.4 v0.2 plan.
+Each case fixture defines a small synthetic fleet of agents that the
+runner registers as ephemeral ``nexus_eval_runners`` entry points; the
+runner then invokes ``meta_harness.agent.run`` against that fleet and
+compares the returned ``MetaHarnessReport`` to ``case.expected``.
 
-**Stub LLM provider (Task 14).** Canned LLM outputs (when needed
-by the meta-eval cases) live in
-``eval/stub_responses/<case_id>/responses.json`` (JSON array of
-strings). Meta-harness itself does not consume an LLM in v0.1, but
-the runner threads any provided ``llm_provider`` through to the
-batch (downstream agents may need it).
+**v0.2 skill-lifecycle support (Task 15).** When ``skill_lifecycle_enabled``
+is ``true`` in the fixture, the runner wires ``llm_provider``,
+``audit_chain_loader``, and ``eval_runner_loader`` so Stages 6 + 7
+execute. The fixture can also pre-populate the skill-class registry
+and configure per-agent audit entries + overlay-failure behaviour.
 
 **Fixture keys** (under ``fixture``):
 
 - ``agents: list[dict]`` — synthetic agents to register. Each entry:
   ``{"agent_id": str, "default_passed": bool, "case_count": int,
-  "raises": Optional[str]}``.
-- ``prior_scorecards: list[dict]`` — previous-run scorecards to
-  inject via the mocked SemanticStore. Each entry:
-  ``{"agent_id": str, "pass_rate": float, "run_id": Optional[str]}``.
-- ``semantic_store: bool`` — when False, the runner passes
-  ``semantic_store=None`` (default True so cases exercise the
-  persistence path).
-- ``ab: Optional[dict]`` — A/B-compare inputs. Shape:
-  ``{"target_agent": str, "variant_a_dirname": str,
-  "variant_b_dirname": str}``. When absent, the run skips Stage 3.
+  "raises": Optional[str], "fail_when_overlay": Optional[bool],
+  "audit_entries": Optional[list[dict]]}``.
+- ``prior_scorecards: list[dict]`` — previous-run scorecards.
+- ``semantic_store: bool`` — when False, passes ``semantic_store=None``.
+- ``ab: Optional[dict]`` — A/B-compare inputs.
+- ``skill_lifecycle_enabled: bool`` (v0.2) — when True, wires
+  ``llm_provider`` / ``audit_chain_loader`` / ``eval_runner_loader``
+  so Stages 6 + 7 run.
+- ``llm_responses: list[str]`` (v0.2) — canned LLM responses for
+  ``FakeLLMProvider``.
+- ``skill_registry: dict`` (v0.2) — pre-populated registry shape
+  ``{"classes": [{"agent_id": ..., "category": ..., ...}]}``.
 
 **Expected keys** (under ``expected``):
 
@@ -38,11 +39,16 @@ batch (downstream agents may need it).
 - ``manifest_count: int``
 - ``markdown_contains: list[str]``
 - ``markdown_excludes: list[str]``
-- ``scorecard_upserts: Optional[int]`` — total ``upsert_entity``
-  calls observed when ``semantic_store=True``.
+- ``scorecard_upserts: Optional[int]``
+- ``skill_pending_review_count: int`` (v0.2)
+- ``skill_deployment_count: int`` (v0.2)
+- ``skill_auto_deploy_count: int`` (v0.2)
+- ``skill_rejected_count: int`` (v0.2)
+- ``notification_file_exists: bool`` (v0.2)
+- ``candidate_meta_exists: bool`` (v0.2)
 
 Registered via the ``[project.entry-points."nexus_eval_runners"]``
-hook in ``pyproject.toml`` (shipped in Task 1).
+hook in ``pyproject.toml``.
 """
 
 from __future__ import annotations
@@ -53,13 +59,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock
 
 from charter.llm import LLMProvider
 from charter.memory.semantic import EntityRow, SemanticStore
 from eval_framework.cases import EvalCase
 from eval_framework.runner import RunOutcome
+
+if TYPE_CHECKING:
+    from eval_framework.runner import EvalRunner
 
 from meta_harness import agent as agent_mod
 from meta_harness.eval import batch as batch_module
@@ -86,6 +95,7 @@ class MetaHarnessEvalRunner:
         workspace.mkdir(parents=True, exist_ok=True)
         fixture = case.fixture
         use_store = bool(fixture.get("semantic_store", True))
+        lifecycle_enabled = bool(fixture.get("skill_lifecycle_enabled", False))
 
         synthetic_agents = _SyntheticAgent.from_fixture(fixture.get("agents") or [])
         cases_root = workspace / "cases_root"
@@ -96,17 +106,27 @@ class MetaHarnessEvalRunner:
 
         ab_inputs = _parse_ab_inputs(fixture.get("ab"), workspace)
 
+        lifecycle_kwargs: dict[str, Any] = {}
+        if lifecycle_enabled:
+            lifecycle_kwargs = _build_lifecycle_kwargs(
+                fixture=fixture,
+                synthetic_agents=synthetic_agents,
+                workspace=workspace,
+            )
+
         with _patched_entry_points(synthetic_agents):
             report = await agent_mod.run(
                 customer_id="cust_eval",
                 run_id="r_eval",
                 workspace_root=workspace,
                 semantic_store=cast(SemanticStore, store_mock) if store_mock else None,
-                llm_provider=llm_provider,
+                llm_provider=lifecycle_kwargs.get("llm_provider", llm_provider),
                 ab_variant_a=ab_inputs.variant_a if ab_inputs else None,
                 ab_variant_b=ab_inputs.variant_b if ab_inputs else None,
                 ab_target_agent=ab_inputs.target_agent if ab_inputs else None,
                 cases_resolver=lambda aid: cases_root / aid,
+                audit_chain_loader=lifecycle_kwargs.get("audit_chain_loader"),
+                eval_runner_loader=lifecycle_kwargs.get("eval_runner_loader"),
             )
 
         passed, failure_reason = _evaluate(case, report, workspace, store_mock=store_mock)
@@ -118,6 +138,14 @@ class MetaHarnessEvalRunner:
             "ab_byte_equal": report.ab_comparison.byte_equal if report.ab_comparison else None,
             "manifest_count": len(report.manifests),
             "scorecard_upserts": _count_upserts(store_mock),
+            "skill_pending_review_count": len(report.skill_lifecycle.pending_operator_review),
+            "skill_deployment_count": len(report.skill_lifecycle.deployments),
+            "skill_auto_deploy_count": sum(
+                1 for d in report.skill_lifecycle.deployments if d.approval_mode == "auto_approved"
+            ),
+            "skill_rejected_count": sum(
+                1 for d in report.skill_lifecycle.deployments if not d.deployed
+            ),
         }
         return passed, failure_reason, actuals, None
 
@@ -133,6 +161,8 @@ class _SyntheticAgent:
     default_passed: bool
     case_count: int
     raises: str | None
+    fail_when_overlay: bool = False
+    audit_entries: list[dict[str, Any]] | None = None
 
     @classmethod
     def from_fixture(cls, entries: list[dict[str, Any]]) -> list[_SyntheticAgent]:
@@ -144,6 +174,8 @@ class _SyntheticAgent:
                     default_passed=bool(entry.get("default_passed", True)),
                     case_count=int(entry.get("case_count", 1)),
                     raises=entry.get("raises"),
+                    fail_when_overlay=bool(entry.get("fail_when_overlay", False)),
+                    audit_entries=entry.get("audit_entries"),
                 )
             )
         return out
@@ -173,10 +205,11 @@ def _materialize_case_dirs(root: Path, agents: list[_SyntheticAgent]) -> None:
             )
 
 
-def _make_runner_class(agent: _SyntheticAgent) -> type:
+def _make_runner_class(agent: _SyntheticAgent) -> type[EvalRunner]:
     raises_msg = agent.raises
     default_passed = agent.default_passed
     agent_name = agent.agent_id
+    fail_when_overlay = agent.fail_when_overlay
 
     class _Runner:
         @property
@@ -193,6 +226,11 @@ def _make_runner_class(agent: _SyntheticAgent) -> type:
             del case, workspace, llm_provider
             if raises_msg is not None:
                 raise RuntimeError(raises_msg)
+            if fail_when_overlay:
+                from meta_harness.skill_eval_gate import get_active_skill_overlay
+
+                if get_active_skill_overlay() is not None:
+                    return False, "regression under candidate overlay", {}, None
             return default_passed, None if default_passed else "synthetic fail", {}, None
 
     return _Runner
@@ -317,6 +355,74 @@ def _parse_ab_inputs(spec: dict[str, Any] | None, workspace: Path) -> _ABInputs 
 
 
 # ---------------------------------------------------------------------------
+# Skill-lifecycle wiring (v0.2 / Task 15)
+# ---------------------------------------------------------------------------
+
+
+def _build_lifecycle_kwargs(
+    *,
+    fixture: dict[str, Any],
+    synthetic_agents: list[_SyntheticAgent],
+    workspace: Path,
+) -> dict[str, Any]:
+    """Construct ``llm_provider``, ``audit_chain_loader``, and
+    ``eval_runner_loader`` from the fixture so Stages 6 + 7 execute.
+
+    Also pre-populates the skill-class registry on disk when the
+    fixture carries a ``skill_registry`` key.
+    """
+    from charter.llm import (
+        FakeLLMProvider,
+        LLMResponse,
+        TokenUsage,
+    )
+
+    # Build FakeLLMProvider from canned responses.
+    canned: list[str] = fixture.get("llm_responses") or []
+    responses = [
+        LLMResponse(
+            text=r,
+            stop_reason="end_turn",
+            usage=TokenUsage(input_tokens=0, output_tokens=0),
+        )
+        for r in canned
+    ]
+    llm_provider = FakeLLMProvider(responses=responses)
+
+    # Build per-agent audit-entry map.
+    agent_map: dict[str, list[dict[str, Any]]] = {}
+    for agent in synthetic_agents:
+        if agent.audit_entries:
+            agent_map[agent.agent_id] = list(agent.audit_entries)
+
+    def audit_chain_loader(agent_id: str) -> list[dict[str, Any]]:
+        return agent_map.get(agent_id, [])
+
+    # Build eval_runner_loader that returns the synthetic runner for
+    # each target agent (same class that BATCH_EVAL uses).
+    def eval_runner_loader(agent_id: str) -> EvalRunner:
+        agent = next(a for a in synthetic_agents if a.agent_id == agent_id)
+        return _make_runner_class(agent)()
+
+    # Pre-populate registry on disk if the fixture provides one.
+    registry_fixture = fixture.get("skill_registry")
+    if registry_fixture is not None:
+        from meta_harness.skill_registry import (
+            SkillClassRegistry,
+            save_skill_class_registry,
+        )
+
+        registry = SkillClassRegistry.model_validate(registry_fixture)
+        save_skill_class_registry(registry, workspace_root=workspace)
+
+    return {
+        "llm_provider": llm_provider,
+        "audit_chain_loader": audit_chain_loader,
+        "eval_runner_loader": eval_runner_loader,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Stub responses (Task 14 layout; meta-harness rarely needs LLM, but
 # the hook is here for cases that may add one in v0.2)
 # ---------------------------------------------------------------------------
@@ -416,6 +522,68 @@ def _evaluate(
         actual = _count_upserts(store_mock)
         if actual != int(expected_upserts):
             return False, f"scorecard_upserts expected {expected_upserts}, got {actual}"
+
+    # ----- v0.2 skill-lifecycle checks (Task 15) -----
+
+    expected_pending = expected.get("skill_pending_review_count")
+    if expected_pending is not None:
+        actual_pending = len(report.skill_lifecycle.pending_operator_review)
+        if actual_pending != int(expected_pending):
+            return (
+                False,
+                f"skill_pending_review_count expected {expected_pending}, got {actual_pending}",
+            )
+
+    expected_deployments = expected.get("skill_deployment_count")
+    if expected_deployments is not None:
+        actual_deployments = len(report.skill_lifecycle.deployments)
+        if actual_deployments != int(expected_deployments):
+            return (
+                False,
+                f"skill_deployment_count expected {expected_deployments}, got {actual_deployments}",
+            )
+
+    expected_auto = expected.get("skill_auto_deploy_count")
+    if expected_auto is not None:
+        actual_auto = sum(
+            1 for d in report.skill_lifecycle.deployments if d.approval_mode == "auto_approved"
+        )
+        if actual_auto != int(expected_auto):
+            return False, f"skill_auto_deploy_count expected {expected_auto}, got {actual_auto}"
+
+    expected_rejected = expected.get("skill_rejected_count")
+    if expected_rejected is not None:
+        actual_rejected = sum(1 for d in report.skill_lifecycle.deployments if not d.deployed)
+        if actual_rejected != int(expected_rejected):
+            return (
+                False,
+                f"skill_rejected_count expected {expected_rejected}, got {actual_rejected}",
+            )
+
+    expected_notification = expected.get("notification_file_exists")
+    if expected_notification is not None:
+        from meta_harness.skill_approval import compute_notification_path
+
+        for skill_id in report.skill_lifecycle.pending_operator_review:
+            npath = compute_notification_path(workspace, skill_id)
+            actual_exists = npath.is_file()
+            if actual_exists != bool(expected_notification):
+                return False, (
+                    f"notification_file_exists expected {expected_notification}, "
+                    f"got {actual_exists} for {skill_id}"
+                )
+
+    expected_meta = expected.get("candidate_meta_exists")
+    if expected_meta is not None:
+        meta_dir = workspace / ".nexus" / "candidate-skills"
+        any_meta = False
+        if meta_dir.is_dir():
+            for meta_file in meta_dir.rglob("candidate_meta.json"):
+                if meta_file.is_file():
+                    any_meta = True
+                    break
+        if any_meta != bool(expected_meta):
+            return False, f"candidate_meta_exists expected {expected_meta}, got {any_meta}"
 
     return True, None
 

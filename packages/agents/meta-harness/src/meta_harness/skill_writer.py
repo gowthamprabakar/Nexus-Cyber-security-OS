@@ -44,6 +44,7 @@ from meta_harness.schemas import (
     SkillDeploymentStatus,
     SkillEvalGateStatus,
 )
+from meta_harness.skill_candidate_store import write_candidate_meta
 from meta_harness.skill_format import (
     SkillFormatError,
     parse_skill_md_content,
@@ -73,7 +74,7 @@ frontmatter between '---' fences, then a markdown body capturing the
 reusable procedural pattern.
 
 Required frontmatter keys: name, description, version, platforms,
-target_agent, category. Optional: created_by, provenance.
+target_agent, category, created_by. Optional: provenance.
 
 Output the raw SKILL.md content only — no preamble, no explanation,
 no code fences around the YAML."""
@@ -226,6 +227,7 @@ async def write_skill_candidate(
         emitted_at=when,
     )
     write_skill_md(candidate.skill, Path(candidate.shadow_path))
+    write_candidate_meta(candidate, workspace_root=workspace_root)
     return candidate
 
 
