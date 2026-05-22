@@ -1,33 +1,53 @@
-"""Meta-Harness Agent driver — wires the 6-stage pipeline.
+"""Meta-Harness Agent driver — wires the 8-stage v0.2 pipeline.
 
-Task 10 of the A.4 v0.1 plan. One fewer stage than D.12 (no
-PUBLISH — A.4 v0.1 doesn't emit on any fabric bus).
+Task 10 of the A.4 v0.1 plan + Task 13 of the A.4 v0.2 plan. One
+fewer stage than D.12 still (no PUBLISH — A.4 doesn't emit on any
+fabric bus).
 
-Six-stage pipeline:
+Eight-stage pipeline (v0.2; v0.1 had six, Stages 6 + 7 are new and
+the old Stage 6 became Stage 8):
 
-  1. INTROSPECT    — parse each evaluated agent's NLAH directory.
-  2. BATCH_EVAL    — run each agent's eval suite (BatchEvalRunner).
-  3. AB_COMPARE    — optional; only when --ab subcommand invoked
-                     (variant_a, variant_b, target_agent all set).
-  4. DELTA         — diff current Scorecards against previous-run
-                     entities loaded from SemanticStore.
-  5. REPORT        — assemble MetaHarnessReport via
-                     flag_regressions + reporter.render_report.
-  6. HANDOFF       — write meta_harness_report.md to workspace +
-                     persist agent_scorecard / ab_comparison_result
-                     entities (Q5 opt-in).
+  1. INTROSPECT       — parse each evaluated agent's NLAH directory.
+  2. BATCH_EVAL       — run each agent's eval suite (BatchEvalRunner).
+  3. AB_COMPARE       — optional; only when --ab subcommand invoked
+                        (variant_a, variant_b, target_agent all set).
+  4. DELTA            — diff current Scorecards against previous-run
+                        entities loaded from SemanticStore.
+  5. REPORT           — assemble MetaHarnessReport via
+                        flag_regressions + reporter.render_report.
+  6. SKILL_TRIGGER    — NEW v0.2. Walk each agent's audit-chain entries
+                        + apply ``detect_skill_trigger`` (Task 6) against
+                        the registry's deployed-hash set (Task 9).
+  7. SKILL_CREATE     — NEW v0.2. LLM-compose candidate SKILL.md
+                        (Task 7) → eval-gate (Task 8) → approve / auto-
+                        deploy / reject (Task 10) + audit emissions
+                        (Task 12). Persists the skill-class registry.
+                        Implementation lives in ``skill_lifecycle.py``.
+  8. HANDOFF          — RENAMED from v0.1 Stage 6. Writes
+                        meta_harness_report.md to workspace + persists
+                        agent_scorecard / ab_comparison_result entities
+                        (Q5 opt-in).
+
+**Backwards-compat (drift #5 / Task 1 v0.2 regression probe).** Stages
+6 + 7 are SKIPPED when any of ``llm_provider``, ``audit_chain_loader``,
+``eval_runner_loader`` is ``None``. The report's ``skill_lifecycle``
+field is the all-empty ``SkillLifecycleSummary()`` default — v0.1-
+equivalent shape with no behavioural change.
 
 **Q5 single-tenant.** ``semantic_store`` defaults to ``None``.
 Production wires a real instance when the SET LOCAL ``$1``
 tenant-RLS substrate-fix lands; v0.1 default exercises the no-op
 paths cleanly.
 
-**Read-only contract preserved.** No write surface against any
-agent's NLAH directory. The driver writes the report markdown to
-``<workspace_root>/meta_harness_report.md`` (NOT under any NLAH
-path) and persists KG entities (NOT NLAH files).
+**v0.2 write surface.** A.4 v0.2 introduces deliberate writes outside
+``meta_harness_report.md``: shadow SKILL.md candidates at
+``<workspace>/.nexus/candidate-skills/<agent>/<skill_id>/SKILL.md``
+(Task 7) and, on auto-deploy / operator approval, canonical SKILL.md
+at ``packages/agents/<agent>/src/<agent>/nlah/skills/<skill_id>/SKILL.md``
+(Task 10). The Q-ARCH-1 fence on ``claims.>`` (Task 11 / ADR-012 v1.1)
+guards what those writes are allowed to consume.
 
-**Q-ARCH-2 reminder.** No fabric publish.
+**Q-ARCH-2 reminder.** Still no fabric publish.
 """
 
 from __future__ import annotations
@@ -55,6 +75,12 @@ from meta_harness.schemas import (
     MetaHarnessReport,
     Scorecard,
     ScorecardDelta,
+    SkillLifecycleSummary,
+)
+from meta_harness.skill_lifecycle import (
+    AuditChainLoader,
+    EvalRunnerLoader,
+    run_skill_lifecycle,
 )
 from meta_harness.tools.ab_compare import (
     ABCompareRequest,
@@ -99,8 +125,17 @@ async def run(
     nlah_dir_resolver: NlahDirResolver | None = None,
     cases_resolver: CasesRootResolver | None = None,
     agent_filter: frozenset[str] = frozenset(),
+    audit_chain_loader: AuditChainLoader | None = None,
+    eval_runner_loader: EvalRunnerLoader | None = None,
 ) -> MetaHarnessReport:
-    """Run the 6-stage Meta-Harness pipeline end-to-end."""
+    """Run the 8-stage Meta-Harness pipeline end-to-end.
+
+    v0.2 adds two skill-lifecycle stages (6 + 7) between REPORT (5)
+    and HANDOFF (renamed to 8). The new stages are skipped when any
+    of ``llm_provider``, ``audit_chain_loader``, ``eval_runner_loader``
+    is ``None`` — the report's ``skill_lifecycle`` field becomes the
+    empty default and the run produces v0.1-equivalent output.
+    """
     nlah_resolver = nlah_dir_resolver or default_nlah_dir_resolver(workspace_root)
     cases_root = cases_resolver or default_cases_root(workspace_root)
     started_at = datetime.now(UTC)
@@ -142,8 +177,24 @@ async def run(
     )
     deltas = compute_batch_deltas(scorecards, previous_scorecards)
 
-    # Stage 5: REPORT.
+    # Stage 5: REPORT (assembly only — final report constructed after
+    # Stages 6 + 7 so skill_lifecycle is populated).
     regressions = flag_regressions(deltas)
+
+    # Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE (v0.2). Returns the
+    # empty summary when any of the lifecycle inputs is None —
+    # v0.1-equivalent backwards-compat shape.
+    skill_lifecycle: SkillLifecycleSummary = await run_skill_lifecycle(
+        scorecards=scorecards,
+        customer_id=customer_id,
+        run_id=run_id,
+        workspace_root=workspace_root,
+        cases_resolver=cases_root,
+        audit_chain_loader=audit_chain_loader,
+        llm_provider=llm_provider,
+        eval_runner_loader=eval_runner_loader,
+    )
+
     completed_at = datetime.now(UTC)
     report = MetaHarnessReport(
         customer_id=customer_id,
@@ -155,9 +206,10 @@ async def run(
         scorecard_deltas=deltas,
         regressions_flagged=regressions,
         ab_comparison=ab_result,
+        skill_lifecycle=skill_lifecycle,
     )
 
-    # Stage 6: HANDOFF.
+    # Stage 8 HANDOFF (renamed from v0.1 Stage 6).
     await _handoff(
         report=report,
         workspace_root=workspace_root,
