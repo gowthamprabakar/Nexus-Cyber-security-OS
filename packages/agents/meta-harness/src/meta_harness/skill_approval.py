@@ -49,6 +49,7 @@ from meta_harness.schemas import (
     SkillCandidate,
     SkillDeploymentStatus,
 )
+from meta_harness.skill_candidate_store import delete_candidate_meta
 from meta_harness.skill_format import write_skill_md
 from meta_harness.skill_registry import (
     SkillClassRegistry,
@@ -207,6 +208,11 @@ def _promote_to_canonical(
     shadow_path = Path(candidate.shadow_path)
     if shadow_path.is_file():
         shadow_path.unlink()
+    delete_candidate_meta(
+        workspace_root=workspace_root,
+        agent_id=candidate.skill.target_agent,
+        skill_id=candidate.skill_id,
+    )
     return canonical_path
 
 
@@ -306,6 +312,7 @@ def reject_candidate(
     candidate: SkillCandidate,
     *,
     rejection_reason: str,
+    workspace_root: Path | str,
     decided_at: datetime | None = None,
 ) -> DeploymentDecision:
     """Reject and remove the shadow SKILL.md.
@@ -318,6 +325,11 @@ def reject_candidate(
     shadow_path = Path(candidate.shadow_path)
     if shadow_path.is_file():
         shadow_path.unlink()
+    delete_candidate_meta(
+        workspace_root=workspace_root,
+        agent_id=candidate.skill.target_agent,
+        skill_id=candidate.skill_id,
+    )
     return DeploymentDecision(
         skill_id=candidate.skill_id,
         target_agent=candidate.skill.target_agent,
