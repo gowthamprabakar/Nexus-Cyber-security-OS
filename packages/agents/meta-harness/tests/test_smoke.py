@@ -51,7 +51,7 @@ def test_package_imports() -> None:
     assert isinstance(meta_harness.__version__, str)
     # Phase 1 / Wave 0 — v0.2 ships autonomous skill creation +
     # progressive-disclosure NLAH loader + auto-deploy safety rails.
-    assert meta_harness.__version__ == "0.2.0"
+    assert meta_harness.__version__ == "0.2.1"
 
 
 def test_charter_nlah_loader_import_works() -> None:
@@ -197,11 +197,18 @@ def test_wi1_substrate_sealed_substrate_imports_reachable() -> None:
 
 def test_v0_2_pyproject_version_matches() -> None:
     """Bootstrap regression — the pyproject.toml + ``__version__``
-    must agree at v0.2.0."""
-    import importlib.metadata
+    must agree."""
+    import tomllib
 
-    distribution_version = importlib.metadata.version("nexus-meta-harness-agent")
-    assert distribution_version == "0.2.0"
+    import meta_harness
+
+    pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    pyproject_version = data["project"]["version"]
+    assert pyproject_version == meta_harness.__version__, (
+        f"pyproject.toml {pyproject_version} != __version__ {meta_harness.__version__}"
+    )
 
 
 def test_v0_2_charter_llm_adapter_now_permitted_for_skill_create() -> None:
