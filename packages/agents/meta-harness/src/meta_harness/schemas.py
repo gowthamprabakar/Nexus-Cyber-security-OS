@@ -515,6 +515,236 @@ class DeploymentDecision(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# G1 effectiveness-scoring pydantic types (Wave 0 / Phase 1)
+# ---------------------------------------------------------------------------
+#
+# These five types model the G1 post-deployment telemetry layer that
+# assigns a confidence-weighted composite effectiveness score (0-1) to
+# every deployed skill. G1 answers: "Did this skill actually make the
+# agent better?"
+#
+#   EffectivenessReason    — enum of zero-confidence states
+#   OperatorRatingValue    — operator feedback rating enum
+#   AxisBreakdown          — per-axis score + confidence
+#   EffectivenessAxes      — 3-axis breakdown (adoption / outcome / feedback)
+#   EffectivenessScore     — composite score with confidence + per-agent +
+#                            per-tenant breakdowns
+#   SkillTelemetry         — raw per-run event record for sidecar JSONL
+#   OperatorRating         — operator feedback with timestamp + note
+#   RunOutcomeCorrelation  — correlation between skill load and run outcome
+#
+# Score range: 0.0 ≤ score ≤ 1.0. Confidence range: 0.0 ≤ confidence ≤ 1.0.
+# Tenant-keyed from day one: tenant_id="default" until SET LOCAL $1 fix.
+# Zero-confidence scores carry a mandatory ``reason`` enum.
+# --------------------------------------------------------------------------
+
+_MAX_TENANT_ID_LENGTH = 64
+_MAX_OPERATOR_ID_LENGTH = 128
+_MAX_RATING_NOTE_LENGTH = 2048
+_MAX_EFFECTIVENESS_BY_MAP_ENTRIES = 64
+
+
+class EffectivenessReason(StrEnum):
+    """Zero-confidence reason codes (per G1-Q7 / backwards-compat).
+
+    Agents not emitting skill-lifecycle events yield
+    ``{global_score: null, confidence: 0.0, reason: "agent_not_emitting_events"}``.
+    GEPA compilation naturally ignores zero-confidence signals.
+    """
+
+    AGENT_NOT_EMITTING_EVENTS = "agent_not_emitting_events"
+    INSUFFICIENT_DATA = "insufficient_data"
+    OPERATOR_MARKED_ARCHIVED = "operator_marked_archived"
+    EFFECTIVENESS_ERROR_DURING_AGGREGATION = "effectiveness_error_during_aggregation"
+
+
+class OperatorRatingValue(StrEnum):
+    """Operator feedback rating for a deployed skill (per G1-Q10)."""
+
+    USEFUL = "useful"
+    NEUTRAL = "neutral"
+    HARMFUL = "harmful"
+
+
+class AxisBreakdown(BaseModel):
+    """Per-axis score and confidence for one effectiveness axis.
+
+    Composite formula (per G1):
+      w_adoption=0.25, w_outcome=0.35, w_feedback=0.40
+
+    An axis with zero confidence drops out of the composite numerator
+    and denominator — it contributes neither signal nor noise.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    score: float = Field(ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+    confidence: float = Field(ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+
+
+class EffectivenessAxes(BaseModel):
+    """Three-axis effectiveness breakdown.
+
+    Carried inside ``EffectivenessScore.axes_breakdown`` when
+    ``confidence > 0.0``. ``None`` when zero-confidence (no data
+    to break down).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    adoption: AxisBreakdown
+    outcome: AxisBreakdown
+    feedback: AxisBreakdown
+
+
+class EffectivenessScore(BaseModel):
+    """Confidence-weighted composite effectiveness score for one deployed skill.
+
+    Per G1-Q11: single payload carries global_score + per-agent +
+    per-tenant breakdowns. Per G1-Q4: tenant_keyed from day one with
+    ``tenant_id="default"`` until SET LOCAL $1 fix lands.
+
+    When ``confidence == 0.0``, ``global_score`` and ``axes_breakdown``
+    are ``None`` and ``reason`` is set to an ``EffectivenessReason``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    agent_id: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    tenant_id: str = Field(default="default", min_length=1, max_length=_MAX_TENANT_ID_LENGTH)
+    global_score: float | None = Field(default=None, ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+    confidence: float = Field(default=0.0, ge=_MIN_PASS_RATE, le=_MAX_PASS_RATE)
+    by_agent: dict[str, float] = Field(
+        default_factory=dict, max_length=_MAX_EFFECTIVENESS_BY_MAP_ENTRIES
+    )
+    by_tenant: dict[str, float] = Field(
+        default_factory=dict, max_length=_MAX_EFFECTIVENESS_BY_MAP_ENTRIES
+    )
+    axes_breakdown: EffectivenessAxes | None = None
+    reason: EffectivenessReason | None = None
+    computed_at: datetime
+
+    @model_validator(mode="after")
+    def _zero_confidence_requires_reason(self) -> EffectivenessScore:
+        if self.confidence == 0.0 and self.reason is None:
+            raise ValueError("confidence=0.0 requires a reason from EffectivenessReason enum")
+        return self
+
+    @model_validator(mode="after")
+    def _zero_confidence_forces_null_score(self) -> EffectivenessScore:
+        if self.confidence == 0.0:
+            if self.global_score is not None:
+                raise ValueError("global_score must be None when confidence=0.0")
+            if self.axes_breakdown is not None:
+                raise ValueError("axes_breakdown must be None when confidence=0.0")
+        return self
+
+    @model_validator(mode="after")
+    def _nonzero_confidence_forces_score(self) -> EffectivenessScore:
+        if self.confidence > 0.0:
+            if self.global_score is None:
+                raise ValueError("global_score must not be None when confidence > 0.0")
+            if self.axes_breakdown is None:
+                raise ValueError("axes_breakdown must not be None when confidence > 0.0")
+        return self
+
+    @model_validator(mode="after")
+    def _by_agent_scores_in_range(self) -> EffectivenessScore:
+        for agent, score in self.by_agent.items():
+            if not agent:
+                raise ValueError("by_agent keys must be non-empty")
+            if not (_MIN_PASS_RATE <= score <= _MAX_PASS_RATE):
+                raise ValueError(
+                    f"by_agent[{agent!r}] score {score} out of [{_MIN_PASS_RATE}, {_MAX_PASS_RATE}]"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _by_tenant_scores_in_range(self) -> EffectivenessScore:
+        for tenant, score in self.by_tenant.items():
+            if not tenant:
+                raise ValueError("by_tenant keys must be non-empty")
+            if not (_MIN_PASS_RATE <= score <= _MAX_PASS_RATE):
+                raise ValueError(
+                    f"by_tenant[{tenant!r}] score {score} out of [{_MIN_PASS_RATE}, {_MAX_PASS_RATE}]"
+                )
+        return self
+
+
+class SkillTelemetry(BaseModel):
+    """Per-run raw telemetry record for sidecar ``run-events.jsonl``.
+
+    Agent-emitted at run start (``agent.skill.loaded``) and run end
+    (``agent.skill.contributed``). Stored in workspace-scoped sidecar:
+    ``<workspace>/.nexus/deployed-skills/<agent_id>/<skill_id>/run-events.jsonl``.
+
+    Per G1-Q8-C: raw telemetry stays in sidecar JSONL; state transitions
+    go to audit chain.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    agent_id: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    run_id: str = Field(min_length=1, max_length=128)
+    tenant_id: str = Field(default="default", min_length=1, max_length=_MAX_TENANT_ID_LENGTH)
+    loaded_at: datetime
+    contributed_at: datetime | None = Field(
+        default=None,
+        description="None when the agent crashed or exited before reporting contribution",
+    )
+
+
+class OperatorRating(BaseModel):
+    """Operator feedback rating for a deployed skill.
+
+    Emitted via ``meta-harness rate-skill <skill_id> --useful|--neutral|--harmful
+    [--note "..."]``. Stored per-skill for aggregation into the feedback axis
+    of the composite score.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    agent_id: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    tenant_id: str = Field(default="default", min_length=1, max_length=_MAX_TENANT_ID_LENGTH)
+    rating: OperatorRatingValue
+    note: str | None = Field(default=None, max_length=_MAX_RATING_NOTE_LENGTH)
+    rated_at: datetime
+    rated_by: str = Field(min_length=1, max_length=_MAX_OPERATOR_ID_LENGTH)
+
+
+class RunOutcomeCorrelation(BaseModel):
+    """Correlation between a skill load and the resulting run outcome.
+
+    Computed by the run-outcome correlator (Task 6) from sidecar JSONL
+    ``contributed`` events cross-referenced against the audit chain's
+    run success/failure events.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str = Field(min_length=1, max_length=128)
+    skill_id: str = Field(min_length=1, max_length=_MAX_SKILL_ID_LENGTH)
+    agent_id: str = Field(min_length=1, max_length=_MAX_AGENT_ID_LENGTH)
+    tenant_id: str = Field(default="default", min_length=1, max_length=_MAX_TENANT_ID_LENGTH)
+    skill_loaded: bool
+    skill_contributed: bool
+    run_success: bool
+    correlated_at: datetime
+
+    @model_validator(mode="after")
+    def _contribution_implies_loaded(self) -> RunOutcomeCorrelation:
+        if self.skill_contributed and not self.skill_loaded:
+            raise ValueError(
+                "skill_contributed=True requires skill_loaded=True — "
+                "a skill must be loaded before it can contribute"
+            )
+        return self
+
+
 class SkillLifecycleSummary(BaseModel):
     """Per-run outcome of A.4 v0.2 Stages 6 (SKILL_TRIGGER) + 7 (SKILL_CREATE).
 
@@ -549,10 +779,17 @@ __all__ = [
     "ABComparison",
     "ABComparisonCaseDelta",
     "AgentManifest",
+    "AxisBreakdown",
     "DeploymentDecision",
+    "EffectivenessAxes",
+    "EffectivenessReason",
+    "EffectivenessScore",
     "EvalGateResult",
     "MetaHarnessReport",
+    "OperatorRating",
+    "OperatorRatingValue",
     "RegressionFlag",
+    "RunOutcomeCorrelation",
     "Scorecard",
     "ScorecardDelta",
     "Skill",
@@ -562,4 +799,5 @@ __all__ = [
     "SkillDeploymentStatus",
     "SkillEvalGateStatus",
     "SkillLifecycleSummary",
+    "SkillTelemetry",
 ]
