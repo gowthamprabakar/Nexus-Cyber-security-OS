@@ -32,9 +32,18 @@ and threads these helpers through Stages 6 + 7.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
+from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from charter.audit import AuditLog
+from shared.skill_telemetry import (
+    ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR,
+    emit_agent_skill_contributed,
+    emit_agent_skill_loaded,
+)
 
 from meta_harness.schemas import (
     DeploymentDecision,
@@ -46,6 +55,28 @@ ACTION_SKILL_CANDIDATE_EMITTED = "meta_harness.skill.candidate_emitted"
 ACTION_SKILL_EVAL_GATE_COMPLETED = "meta_harness.skill.eval_gate_completed"
 ACTION_SKILL_DEPLOYED = "meta_harness.skill.deployed"
 ACTION_SKILL_REJECTED = "meta_harness.skill.rejected"
+
+# ---------------------------------------------------------------------------
+# G1 skill-lifecycle event emission helpers (Task 4)
+# ---------------------------------------------------------------------------
+
+
+class SkillRunOutcome(StrEnum):
+    """Outcome of a run for skill telemetry (per G1-Q2 / agent.skill.*)."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    PARTIAL = "partial"
+
+
+# Idempotency registry: tracks (skill_id, run_id) pairs that have already
+# emitted a ``skill.loaded`` event.  Duplicate calls are silently skipped.
+_emitted_loads: set[tuple[str, str]] = set()
+
+# Context-manager registry: tracks which skills were loaded within an active
+# ``skill_telemetry_context`` block, keyed by run_id.  On context exit the
+# registry is drained and each skill gets a ``skill.contributed`` emission.
+_context_skills: dict[str, set[str]] = {}
 
 
 def emit_skill_candidate_emitted(
@@ -174,13 +205,219 @@ def emit_skill_rejected(
     audit_log.append(ACTION_SKILL_REJECTED, payload)
 
 
+# ---------------------------------------------------------------------------
+# G1 agent-side emission helpers (Task 4)
+# ---------------------------------------------------------------------------
+
+
+def _emit_effectiveness_error(
+    audit_log: AuditLog,
+    *,
+    skill_id: str,
+    agent_id: str,
+    error_type: str,
+    error_detail: str,
+    tenant_id: str = "default",
+) -> None:
+    """Emit ``meta_harness.skill.effectiveness_error`` to the audit chain.
+
+    Per CF #2 silent-swallow fix-pattern: when a sidecar write fails the
+    error is surfaced as a proper audit-chain event, NOT buried in a bare
+    ``_LOG.warning``.
+    """
+    import traceback
+
+    payload: dict[str, Any] = {
+        "skill_id": skill_id,
+        "agent_id": agent_id,
+        "tenant_id": tenant_id,
+        "error_type": error_type,
+        "error_detail": error_detail,
+        "stack_trace": traceback.format_exc(),
+    }
+    audit_log.append(ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR, payload)
+
+
+def _try_read_skill_version(agent_id: str, skill_id: str) -> str | None:
+    """Best-effort read of the skill version from its deployed SKILL.md.
+
+    Returns ``None`` when the skill path doesn't exist or the frontmatter
+    can't be parsed — callers treat a missing version as non-fatal.
+    """
+    return None  # Deferred to Task 13 (ADR-007 v1.5 NLAH skills/ reader)
+
+
+def emit_skill_loaded(
+    agent_id: str,
+    skill_id: str,
+    run_id: str,
+    *,
+    workspace_root: Path | None = None,
+    tenant_id: str = "default",
+    audit_log: AuditLog | None = None,
+) -> Path | None:
+    """Emit ``agent.skill.loaded`` to sidecar JSONL (agent run start).
+
+    Wraps ``shared.skill_telemetry.emit_agent_skill_loaded`` with
+    Meta-Harness-specific context: optionally attaches the skill version
+    from the NLAH manifest, and enforces idempotency — duplicate calls
+    for the same ``(skill_id, run_id)`` pair are silently skipped.
+
+    Per CF #2: if the sidecar write raises an exception and ``audit_log``
+    is provided, the error is emitted as
+    ``meta_harness.skill.effectiveness_error`` rather than silently
+    swallowed.
+    """
+    dedup_key = (skill_id, run_id)
+    if dedup_key in _emitted_loads:
+        return None
+    _version = _try_read_skill_version(agent_id, skill_id)
+    if workspace_root is None:
+        _emitted_loads.add(dedup_key)
+        return None
+    try:
+        path = emit_agent_skill_loaded(
+            workspace_root=workspace_root,
+            skill_id=skill_id,
+            agent_id=agent_id,
+            run_id=run_id,
+            tenant_id=tenant_id,
+        )
+    except Exception:
+        if audit_log is not None:
+            _emit_effectiveness_error(
+                audit_log,
+                skill_id=skill_id,
+                agent_id=agent_id,
+                error_type="sidecar_write_failure",
+                error_detail=f"emit_agent_skill_loaded failed for run_id={run_id!r}",
+                tenant_id=tenant_id,
+            )
+        raise
+    _emitted_loads.add(dedup_key)
+    # Track for context-manager auto-contribute on exit.
+    _context_skills.setdefault(run_id, set()).add(skill_id)
+    return path
+
+
+def emit_skill_contributed(
+    agent_id: str,
+    skill_id: str,
+    run_id: str,
+    outcome: SkillRunOutcome,
+    *,
+    workspace_root: Path | None = None,
+    tenant_id: str = "default",
+    audit_log: AuditLog | None = None,
+) -> Path | None:
+    """Emit ``agent.skill.contributed`` to sidecar JSONL (agent run end).
+
+    Wraps ``shared.skill_telemetry.emit_agent_skill_contributed``,
+    attaching the run ``outcome`` (success / failure / partial) for
+    downstream run-outcome correlation (Task 6).
+
+    Per CF #2: if the sidecar write raises and ``audit_log`` is provided,
+    the error is emitted as ``meta_harness.skill.effectiveness_error``.
+    """
+    if workspace_root is None:
+        return None
+    try:
+        path = emit_agent_skill_contributed(
+            workspace_root=workspace_root,
+            skill_id=skill_id,
+            agent_id=agent_id,
+            run_id=run_id,
+            tenant_id=tenant_id,
+        )
+    except Exception:
+        if audit_log is not None:
+            _emit_effectiveness_error(
+                audit_log,
+                skill_id=skill_id,
+                agent_id=agent_id,
+                error_type="sidecar_write_failure",
+                error_detail=f"emit_agent_skill_contributed failed for run_id={run_id!r}",
+                tenant_id=tenant_id,
+            )
+        raise
+    return path
+
+
+@contextmanager
+def skill_telemetry_context(
+    agent_id: str,
+    run_id: str,
+    *,
+    workspace_root: Path,
+    audit_log: AuditLog,
+    tenant_id: str = "default",
+) -> Generator[None, None, None]:
+    """Context manager that wraps a run with skill-telemetry bookkeeping.
+
+    On exit, emits ``agent.skill.contributed`` (outcome defaults to
+    ``SUCCESS`` unless an exception propagates) for every skill that
+    had ``emit_skill_loaded`` called during the context block.
+
+    Usage (the 2-line opt-in per G1-Q7)::
+
+        with skill_telemetry_context(
+            agent_id="cloud-posture", run_id=run_id,
+            workspace_root=ws, audit_log=audit,
+        ):
+            ...
+
+    Per CF #2: if a sidecar write fails during exit, the error is
+    emitted as ``meta_harness.skill.effectiveness_error`` via the
+    provided ``audit_log`` — no bare ``_LOG.warning``.
+    """
+    _context_skills.setdefault(run_id, set())
+    outcome = SkillRunOutcome.SUCCESS
+    try:
+        yield
+    except Exception:
+        outcome = SkillRunOutcome.FAILURE
+        raise
+    finally:
+        skills_to_close = _context_skills.pop(run_id, set())
+        for skill_id in sorted(skills_to_close):
+            try:
+                emit_skill_contributed(
+                    agent_id=agent_id,
+                    skill_id=skill_id,
+                    run_id=run_id,
+                    outcome=outcome,
+                    workspace_root=workspace_root,
+                    tenant_id=tenant_id,
+                    audit_log=audit_log,
+                )
+            except Exception:
+                if audit_log is not None:
+                    _emit_effectiveness_error(
+                        audit_log,
+                        skill_id=skill_id,
+                        agent_id=agent_id,
+                        error_type="context_exit_contribute_failure",
+                        error_detail=(
+                            f"emit_skill_contributed failed during context exit "
+                            f"for run_id={run_id!r}, outcome={outcome.value}"
+                        ),
+                        tenant_id=tenant_id,
+                    )
+                # Do not re-raise — context-exit errors must not mask the
+                # original exception (if any) or crash a healthy run.
+
+
 __all__ = [
     "ACTION_SKILL_CANDIDATE_EMITTED",
     "ACTION_SKILL_DEPLOYED",
     "ACTION_SKILL_EVAL_GATE_COMPLETED",
     "ACTION_SKILL_REJECTED",
+    "SkillRunOutcome",
     "emit_skill_candidate_emitted",
+    "emit_skill_contributed",
     "emit_skill_deployed",
     "emit_skill_eval_gate_completed",
+    "emit_skill_loaded",
     "emit_skill_rejected",
+    "skill_telemetry_context",
 ]
