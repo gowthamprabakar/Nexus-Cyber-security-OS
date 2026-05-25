@@ -1,6 +1,6 @@
 """G1 outcome correlator tests — Task 6 (outcome-axis computation).
 
-12 tests covering read_outcome_events, compute_outcome_correlation, and
+15 tests covering read_outcome_events, compute_outcome_correlation, and
 OutcomeCorrelation for the skill outcome axis.
 """
 
@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from charter.audit import AuditLog
 from meta_harness.skill_adoption import _sidecar_path
 from meta_harness.skill_outcome import (
     compute_outcome_correlation,
@@ -18,6 +19,10 @@ from meta_harness.skill_outcome import (
 )
 
 _NOW = datetime(2026, 5, 25, 12, 0, 0, tzinfo=UTC)
+
+
+def _audit_log(tmp_path: Path) -> AuditLog:
+    return AuditLog(tmp_path / "audit.jsonl", agent="test-agent", run_id="test-run")
 
 
 def _write_sidecar(
@@ -62,9 +67,11 @@ def _contributed_event(
 
 
 def test_g1_missing_sidecar_returns_empty_metrics(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     metrics = compute_outcome_correlation(
         skill_id="sk_nonexistent",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 0
@@ -75,10 +82,12 @@ def test_g1_missing_sidecar_returns_empty_metrics(tmp_path: Path) -> None:
 
 
 def test_g1_empty_sidecar_returns_empty_metrics(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(tmp_path, "test-agent", "sk_empty", [])
     metrics = compute_outcome_correlation(
         skill_id="sk_empty",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 0
@@ -92,6 +101,7 @@ def test_g1_empty_sidecar_returns_empty_metrics(tmp_path: Path) -> None:
 
 
 def test_g1_all_success_returns_score_one(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -105,6 +115,7 @@ def test_g1_all_success_returns_score_one(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_success",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 3
@@ -115,6 +126,7 @@ def test_g1_all_success_returns_score_one(tmp_path: Path) -> None:
 
 
 def test_g1_all_failure_returns_score_zero(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -127,6 +139,7 @@ def test_g1_all_failure_returns_score_zero(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_fail",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 0
@@ -135,6 +148,7 @@ def test_g1_all_failure_returns_score_zero(tmp_path: Path) -> None:
 
 
 def test_g1_all_partial_returns_score_half(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -147,14 +161,15 @@ def test_g1_all_partial_returns_score_half(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_partial",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.partial_count == 2
-    # (0 + 0.5*2) / 2 = 1.0 / 2 = 0.5
     assert metrics.correlation_score == 0.5
 
 
 def test_g1_mixed_outcomes_weighted_correctly(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -171,12 +186,12 @@ def test_g1_mixed_outcomes_weighted_correctly(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_mixed",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 3
     assert metrics.failure_count == 2
     assert metrics.partial_count == 1
-    # (3 + 0.5*1) / 6 = 3.5 / 6 ≈ 0.58333...
     assert metrics.correlation_score == pytest.approx(0.58333, abs=0.001)
     assert metrics.confidence == pytest.approx(0.6)
 
@@ -200,6 +215,7 @@ def test_g1_mixed_outcomes_weighted_correctly(tmp_path: Path) -> None:
 def test_g1_confidence_growth_curve(
     tmp_path: Path, contribution_count: int, expected_confidence: float
 ) -> None:
+    al = _audit_log(tmp_path)
     events = [
         _contributed_event(skill_id="sk_conf", run_id=f"run_{i}", outcome="success")
         for i in range(contribution_count)
@@ -208,12 +224,13 @@ def test_g1_confidence_growth_curve(
     metrics = compute_outcome_correlation(
         skill_id="sk_conf",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     if contribution_count == 0:
         assert metrics.correlation_score is None
     else:
-        assert metrics.correlation_score == 1.0  # all success
+        assert metrics.correlation_score == 1.0
     assert metrics.confidence == pytest.approx(expected_confidence)
 
 
@@ -223,6 +240,7 @@ def test_g1_confidence_growth_curve(
 
 
 def test_g1_loaded_events_not_counted(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     loaded = {
         "action": "agent.skill.loaded",
         "skill_id": "sk_filter",
@@ -245,9 +263,10 @@ def test_g1_loaded_events_not_counted(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_filter",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
-    assert metrics.success_count == 1  # only the contributed event
+    assert metrics.success_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +275,7 @@ def test_g1_loaded_events_not_counted(tmp_path: Path) -> None:
 
 
 def test_g1_tenant_filtering(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -275,6 +295,7 @@ def test_g1_tenant_filtering(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_tenant",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
         tenant_id="acme",
     )
@@ -284,11 +305,12 @@ def test_g1_tenant_filtering(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Missing / unknown outcome field
+# Missing / unknown outcome field → effectiveness_error (CF #2)
 # ---------------------------------------------------------------------------
 
 
-def test_g1_missing_outcome_field_skipped(tmp_path: Path) -> None:
+def test_g1_missing_outcome_field_emits_error_and_skips(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     contributed_no_outcome = {
         "action": "agent.skill.contributed",
         "skill_id": "sk_missing",
@@ -310,13 +332,21 @@ def test_g1_missing_outcome_field_skipped(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_missing",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 1
     assert metrics.correlation_score == 1.0
 
+    # CF #2: missing outcome emitted as effectiveness_error in audit chain.
+    audit_text = al.path.read_text(encoding="utf-8")
+    assert "meta_harness.skill.effectiveness_error" in audit_text
+    assert "unknown_outcome_value" in audit_text
+    assert "sk_missing" in audit_text
 
-def test_g1_unknown_outcome_value_skipped(tmp_path: Path) -> None:
+
+def test_g1_unknown_outcome_value_emits_error_and_skips(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     _write_sidecar(
         tmp_path,
         "test-agent",
@@ -329,9 +359,16 @@ def test_g1_unknown_outcome_value_skipped(tmp_path: Path) -> None:
     metrics = compute_outcome_correlation(
         skill_id="sk_unknown",
         agent_id="test-agent",
+        audit_log=al,
         workspace_root=tmp_path,
     )
     assert metrics.success_count == 1
+
+    # CF #2: unknown outcome emitted as effectiveness_error in audit chain.
+    audit_text = al.path.read_text(encoding="utf-8")
+    assert "meta_harness.skill.effectiveness_error" in audit_text
+    assert "unknown_outcome_value" in audit_text
+    assert "sk_unknown" in audit_text
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +377,7 @@ def test_g1_unknown_outcome_value_skipped(tmp_path: Path) -> None:
 
 
 def test_g1_read_outcome_events_yields_only_contributed(tmp_path: Path) -> None:
+    al = _audit_log(tmp_path)
     loaded = {
         "action": "agent.skill.loaded",
         "skill_id": "sk_read",
@@ -363,6 +401,7 @@ def test_g1_read_outcome_events_yields_only_contributed(tmp_path: Path) -> None:
         read_outcome_events(
             agent_id="test-agent",
             skill_id="sk_read",
+            audit_log=al,
             workspace_root=tmp_path,
         )
     )

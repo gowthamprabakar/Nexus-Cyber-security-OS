@@ -67,6 +67,45 @@ class OutcomeCorrelation(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# CF #2 effectiveness-error emission
+# ---------------------------------------------------------------------------
+
+
+def _emit_effectiveness_error(
+    audit_log: AuditLog,
+    *,
+    error_type: str,
+    skill_id: str,
+    agent_id: str,
+    tenant_id: str = "default",
+    outcome_value: str | None = None,
+    record_keys: list[str] | None = None,
+    exception_message: str | None = None,
+) -> None:
+    """Emit ``meta_harness.skill.effectiveness_error`` to the audit chain.
+
+    Per CF #2: error paths route to the audit chain, never a bare
+    ``_LOG.warning``.
+    """
+    import traceback
+
+    payload: dict[str, object] = {
+        "skill_id": skill_id,
+        "agent_id": agent_id,
+        "tenant_id": tenant_id,
+        "error_type": error_type,
+        "stack_trace": traceback.format_exc(),
+    }
+    if outcome_value is not None:
+        payload["outcome_value"] = outcome_value
+    if record_keys is not None:
+        payload["record_keys"] = record_keys
+    if exception_message is not None:
+        payload["exception_message"] = exception_message
+    audit_log.append(ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR, payload)
+
+
+# ---------------------------------------------------------------------------
 # Sidecar outcome-event reader
 # ---------------------------------------------------------------------------
 
@@ -75,6 +114,7 @@ def read_outcome_events(
     agent_id: str,
     skill_id: str,
     *,
+    audit_log: AuditLog,
     workspace_root: Path,
     tenant_id: str = "default",
 ) -> Iterator[dict[str, object]]:
@@ -87,6 +127,7 @@ def read_outcome_events(
     for record in read_run_events(
         agent_id=agent_id,
         skill_id=skill_id,
+        audit_log=audit_log,
         workspace_root=workspace_root,
         tenant_id=tenant_id,
     ):
@@ -100,42 +141,13 @@ def read_outcome_events(
 # ---------------------------------------------------------------------------
 
 
-def _emit_effectiveness_error(
-    audit_log: AuditLog,
-    *,
-    skill_id: str,
-    agent_id: str,
-    error_type: str,
-    error_detail: str,
-    tenant_id: str = "default",
-) -> None:
-    """Emit ``meta_harness.skill.effectiveness_error`` to the audit chain.
-
-    Per CF #2: error paths route to the audit chain, never a bare
-    ``_LOG.warning``.
-    """
-    import traceback
-
-    audit_log.append(
-        ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR,
-        {
-            "skill_id": skill_id,
-            "agent_id": agent_id,
-            "tenant_id": tenant_id,
-            "error_type": error_type,
-            "error_detail": error_detail,
-            "stack_trace": traceback.format_exc(),
-        },
-    )
-
-
 def compute_outcome_correlation(
     skill_id: str,
     agent_id: str,
     *,
+    audit_log: AuditLog,
     workspace_root: Path,
     tenant_id: str = "default",
-    audit_log: AuditLog | None = None,
 ) -> OutcomeCorrelation:
     """Compute outcome-axis metrics from sidecar contributed events.
 
@@ -145,15 +157,14 @@ def compute_outcome_correlation(
     correlation score, and confidence.
 
     Events whose ``outcome`` field doesn't match ``success``, ``failure``,
-    or ``partial`` are silently skipped — the outcome axis only considers
-    explicitly annotated contributions.
+    or ``partial`` are emitted as ``meta_harness.skill.effectiveness_error``
+    audit-chain events per CF #2 and skipped.
 
     Returns ``OutcomeCorrelation`` with all counts zero,
     ``correlation_score=None``, and ``confidence=0.0`` when the sidecar
     file is missing or contains no matching contributed events.
 
-    Per CF #2: when ``audit_log`` is provided and a sidecar read error
-    occurs, the error is emitted as
+    Per CF #2: read errors are emitted as
     ``meta_harness.skill.effectiveness_error`` rather than silently
     swallowed.
     """
@@ -165,6 +176,7 @@ def compute_outcome_correlation(
         for record in read_outcome_events(
             agent_id=agent_id,
             skill_id=skill_id,
+            audit_log=audit_log,
             workspace_root=workspace_root,
             tenant_id=tenant_id,
         ):
@@ -175,16 +187,26 @@ def compute_outcome_correlation(
                 failure_count += 1
             elif outcome == "partial":
                 partial_count += 1
-    except Exception:
-        if audit_log is not None:
-            _emit_effectiveness_error(
-                audit_log,
-                skill_id=skill_id,
-                agent_id=agent_id,
-                error_type="outcome_correlation_read_failure",
-                error_detail="compute_outcome_correlation failed reading sidecar events",
-                tenant_id=tenant_id,
-            )
+            else:
+                _emit_effectiveness_error(
+                    audit_log,
+                    error_type="unknown_outcome_value",
+                    skill_id=skill_id,
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    outcome_value=str(outcome) if outcome else "<empty>",
+                    record_keys=list(record.keys()),
+                )
+                continue
+    except Exception as exc:
+        _emit_effectiveness_error(
+            audit_log,
+            error_type="outcome_correlation_failure",
+            skill_id=skill_id,
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            exception_message=str(exc),
+        )
         raise
 
     total = success_count + failure_count + partial_count

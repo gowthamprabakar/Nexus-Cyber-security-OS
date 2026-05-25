@@ -4,9 +4,10 @@ Read-only consumer of sidecar ``run-events.jsonl`` files.  Computes
 per-skill adoption metrics from ``agent.skill.loaded`` events.
 
 **Leaf-module discipline (per G1-Q6):** imports ONLY from
-``meta_harness.schemas``, stdlib, and pydantic.  Does NOT import from
-``skill_lifecycle``, ``skill_writer``, ``skill_eval_gate``,
-``skill_approval``, or any future effectiveness-computation modules.
+``meta_harness.schemas``, stdlib, pydantic, ``charter.audit``, and
+``shared.skill_telemetry``.  Does NOT import from ``skill_lifecycle``,
+``skill_writer``, ``skill_eval_gate``, ``skill_approval``, or any
+future effectiveness-computation modules.
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
+from charter.audit import AuditLog
 from pydantic import BaseModel, ConfigDict, Field
+from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
 
 from meta_harness.schemas import _MAX_AGENT_ID_LENGTH, _MAX_SKILL_ID_LENGTH, _MAX_TENANT_ID_LENGTH
 
@@ -64,6 +67,45 @@ def _sidecar_path(
 
 
 # ---------------------------------------------------------------------------
+# CF #2 effectiveness-error emission
+# ---------------------------------------------------------------------------
+
+
+def _emit_effectiveness_error(
+    audit_log: AuditLog,
+    *,
+    error_type: str,
+    skill_id: str,
+    agent_id: str,
+    tenant_id: str = "default",
+    line_number: int | None = None,
+    parse_error: str | None = None,
+    sidecar_path: str | None = None,
+) -> None:
+    """Emit ``meta_harness.skill.effectiveness_error`` to the audit chain.
+
+    Per CF #2: error paths route to the audit chain, never a bare
+    ``_LOG.warning``.
+    """
+    import traceback
+
+    payload: dict[str, object] = {
+        "skill_id": skill_id,
+        "agent_id": agent_id,
+        "tenant_id": tenant_id,
+        "error_type": error_type,
+        "stack_trace": traceback.format_exc(),
+    }
+    if line_number is not None:
+        payload["line_number"] = line_number
+    if parse_error is not None:
+        payload["parse_error"] = parse_error
+    if sidecar_path is not None:
+        payload["sidecar_path"] = sidecar_path
+    audit_log.append(ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR, payload)
+
+
+# ---------------------------------------------------------------------------
 # Sidecar reader
 # ---------------------------------------------------------------------------
 
@@ -72,14 +114,16 @@ def read_run_events(
     agent_id: str,
     skill_id: str,
     *,
+    audit_log: AuditLog,
     workspace_root: Path,
     tenant_id: str = "default",
 ) -> Iterator[dict[str, object]]:
     """Yield every sidecar event for a given (agent, skill, tenant) triple.
 
     Reads the ``run-events.jsonl`` file line by line.  Malformed JSON
-    lines are logged at warning level and skipped — they do not crash
-    the generator (per CF #2 / WI-4 graceful degradation).
+    lines are emitted as ``meta_harness.skill.effectiveness_error``
+    audit-chain events per CF #2 and skipped — they do not crash the
+    generator.
     """
     path = _sidecar_path(workspace_root, agent_id, skill_id)
     if not path.is_file():
@@ -91,10 +135,18 @@ def read_run_events(
                 continue
             try:
                 record = json.loads(stripped)
-            except json.JSONDecodeError:
-                _logger.warning("Skipping malformed JSONL line %d in %s", lineno, path)
+            except json.JSONDecodeError as exc:
+                _emit_effectiveness_error(
+                    audit_log,
+                    error_type="malformed_sidecar_line",
+                    skill_id=skill_id,
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    line_number=lineno,
+                    parse_error=str(exc),
+                    sidecar_path=str(path),
+                )
                 continue
-            # Tenant filter: only yield records matching the requested tenant.
             record_tenant = record.get("tenant_id", "default")
             if record_tenant != tenant_id:
                 continue
@@ -110,6 +162,7 @@ def compute_adoption_metrics(
     skill_id: str,
     agent_id: str,
     *,
+    audit_log: AuditLog,
     workspace_root: Path,
     tenant_id: str = "default",
 ) -> AdoptionMetrics:
@@ -133,6 +186,7 @@ def compute_adoption_metrics(
     for record in read_run_events(
         agent_id=agent_id,
         skill_id=skill_id,
+        audit_log=audit_log,
         workspace_root=workspace_root,
         tenant_id=tenant_id,
     ):
