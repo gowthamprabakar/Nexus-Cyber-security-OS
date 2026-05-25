@@ -1,0 +1,29 @@
+case_id: 18_non_emitting_agent_yields_zero_confidence
+description: >
+  Skill X is deployed to an agent that has never emitted loaded or
+  contributed events. compute_effectiveness_score returns
+  confidence = 0.0 with reason = "agent_not_emitting_events"
+  after apply_backwards_compat_reason upgrades from the generic
+  "insufficient_data" reason (Q7 Option A + Task 10 compat layer).
+fixture:
+  agent_id: silent-agent
+  skill_id: test-skill
+  tenant_id: default
+  sidecar_events: []
+  operator_ratings: []
+expected:
+  confidence:
+    op: eq
+    value: 0.0
+  reason:
+    op: eq
+    value: agent_not_emitting_events
+  global_score_null: true
+  axes_breakdown_null: true
+notes: >
+  Zero sidecar events → all three axes have zero confidence → denominator=0
+  → global_score=None, confidence=0.0, reason="insufficient_data".
+  apply_backwards_compat_reason then detects AgentEmissionStatus.SILENT
+  and upgrades reason to "agent_not_emitting_events" (Q7 Option A).
+  GEPA v0.2.5 naturally ignores confidence=0.0 signals during compilation.
+  Cross-reference: Task 10 (effectiveness_compat.py), Q7 Option A.
