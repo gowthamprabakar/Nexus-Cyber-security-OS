@@ -1,0 +1,55 @@
+case_id: 19_aggregator_idempotent_under_repeated_invocation
+description: >
+  Skill X has stable telemetry (5 loaded + 5 contributed events).
+  Run score-effectiveness twice. The second invocation produces the
+  identical global_score and confidence. No duplicate
+  effectiveness_updated audit event is emitted (Task 9 idempotency
+  guard: write_effectiveness_score compares against existing sidecar
+  score before emitting).
+fixture:
+  agent_id: investigation
+  skill_id: test-skill
+  tenant_id: default
+  sidecar_events:
+    - action: agent.skill.loaded
+      run_id: run_001
+    - action: agent.skill.loaded
+      run_id: run_002
+    - action: agent.skill.loaded
+      run_id: run_003
+    - action: agent.skill.loaded
+      run_id: run_004
+    - action: agent.skill.loaded
+      run_id: run_005
+    - action: agent.skill.contributed
+      run_id: run_001
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_002
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_003
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_004
+      outcome: failure
+    - action: agent.skill.contributed
+      run_id: run_005
+      outcome: success
+  operator_ratings: []
+expected:
+  second_score_equals_first: true
+  second_confidence_equals_first: true
+  audit_effectiveness_updated_count:
+    op: eq
+    value: 1
+notes: >
+  First invocation: score computed, written to effectiveness.json,
+  one effectiveness_updated audit event emitted.
+  Second invocation: same score → write_effectiveness_score detects
+  global_score + confidence unchanged → no second audit event.
+  Adoption confidence = min(1.0, 5/10) = 0.5, score = 1.0.
+  Outcome: 4 success + 1 failure → correlation_score = 4/5 = 0.8.
+  Composite = (0.25×1.0×0.5 + 0.35×0.8×0.5) / (0.25×0.5 + 0.35×0.5)
+  = (0.125 + 0.14) / (0.125 + 0.175) = 0.265/0.30 ≈ 0.883.
+  Cross-reference: Task 9 (effectiveness_store.py idempotency), Task 11 (CLI score-effectiveness).

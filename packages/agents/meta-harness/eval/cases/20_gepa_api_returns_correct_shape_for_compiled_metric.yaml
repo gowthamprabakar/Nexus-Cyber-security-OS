@@ -1,0 +1,65 @@
+case_id: 20_gepa_api_returns_correct_shape_for_compiled_metric
+description: >
+  Deployed skill with computed score across all three axes (adoption,
+  outcome, feedback). get_effectiveness_score returns an
+  EffectivenessScore with the correct shape: global_score (float),
+  by_agent (dict), by_tenant (dict), confidence (float), reason
+  (optional str), axes_breakdown (adoption + outcome + feedback
+  AxisBreakdowns). Type-safe consumption verified — GEPA v0.2.5 can
+  depend on this contract.
+fixture:
+  agent_id: investigation
+  skill_id: test-skill
+  tenant_id: default
+  sidecar_events:
+    - action: agent.skill.loaded
+      run_id: run_001
+    - action: agent.skill.loaded
+      run_id: run_002
+    - action: agent.skill.loaded
+      run_id: run_003
+    - action: agent.skill.contributed
+      run_id: run_001
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_002
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_003
+      outcome: success
+  operator_ratings:
+    - rating: useful
+      rated_by: operator-1
+    - rating: useful
+      rated_by: operator-2
+    - rating: useful
+      rated_by: operator-3
+    - rating: neutral
+      rated_by: operator-4
+    - rating: useful
+      rated_by: operator-5
+expected:
+  has_global_score: true
+  has_confidence: true
+  has_by_agent: true
+  has_by_tenant: true
+  has_axes_breakdown: true
+  axes_breakdown_has_adoption: true
+  axes_breakdown_has_outcome: true
+  axes_breakdown_has_feedback: true
+  global_score_type: float
+  confidence_type: float
+  adoption_score_type: float
+  outcome_score_type: float
+  feedback_score_type: float
+  reason_null: true
+notes: >
+  EffectivenessScore fields: skill_id, agent_id, tenant_id, global_score,
+  confidence, by_agent (dict[str, float]), by_tenant (dict[str, float]),
+  axes_breakdown (EffectivenessAxes | None), reason (EffectivenessReason | None),
+  computed_at (datetime).
+  GEPA v0.2.5 reads effectiveness.json via get_effectiveness_score and
+  passes global_score as the metric= callable input. Skills with higher
+  scores get more optimisation budget. Zero-confidence skills are skipped.
+  Cross-reference: Task 9 (effectiveness_store.py), GEPA plan doc §4.2,
+  example 05-effectiveness-scoring.md Step 5.

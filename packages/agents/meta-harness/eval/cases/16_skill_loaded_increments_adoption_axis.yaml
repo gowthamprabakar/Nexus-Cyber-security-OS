@@ -1,0 +1,43 @@
+case_id: 16_skill_loaded_increments_adoption_axis
+description: >
+  Deploy skill X to agent investigation; emit 10 agent.skill.loaded
+  events across 10 unique runs. compute_effectiveness_score returns
+  adoption-axis confidence = 1.0 (saturated at 10 loads) and the
+  composite score reflects adoption weight (0.25) with full confidence.
+fixture:
+  agent_id: investigation
+  skill_id: test-skill
+  tenant_id: default
+  sidecar_events:
+    - action: agent.skill.loaded
+      run_id: run_001
+    - action: agent.skill.loaded
+      run_id: run_002
+    - action: agent.skill.loaded
+      run_id: run_003
+    - action: agent.skill.loaded
+      run_id: run_004
+    - action: agent.skill.loaded
+      run_id: run_005
+    - action: agent.skill.loaded
+      run_id: run_006
+    - action: agent.skill.loaded
+      run_id: run_007
+    - action: agent.skill.loaded
+      run_id: run_008
+    - action: agent.skill.loaded
+      run_id: run_009
+    - action: agent.skill.loaded
+      run_id: run_010
+  operator_ratings: []
+expected:
+  adoption_confidence:
+    op: gte
+    value: 0.5
+  global_score_not_null: true
+  reason_null: true
+  axes_breakdown_not_null: true
+notes: >
+  Adoption-axis confidence = min(1.0, load_count / 10.0) = min(1.0, 10/10) = 1.0.
+  With no outcome or feedback data, composite = adoption alone weighted at 0.25.
+  Cross-reference: Task 5 (skill_adoption.py), Task 8 (skill_effectiveness.py Q9 weights).

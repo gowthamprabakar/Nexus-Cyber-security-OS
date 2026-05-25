@@ -1,0 +1,85 @@
+case_id: 17_operator_marks_skill_harmful_drops_composite
+description: >
+  Skill X has good adoption (10 loads) + perfect outcome (10 successes)
+  — composite = 1.0 from adoption + outcome axes. Then an operator runs
+  rate-skill --harmful against the skill. Feedback axis score = 0.0
+  (single harmful rating maps to 0.0 on the 0-1 scale), confidence = 0.2
+  (1 rating / 5 needed). Composite drops by feedback weight (0.40)
+  proportionally.
+fixture:
+  agent_id: investigation
+  skill_id: test-skill
+  tenant_id: default
+  sidecar_events:
+    # 10 loaded events (adoption saturated)
+    - action: agent.skill.loaded
+      run_id: run_001
+    - action: agent.skill.loaded
+      run_id: run_002
+    - action: agent.skill.loaded
+      run_id: run_003
+    - action: agent.skill.loaded
+      run_id: run_004
+    - action: agent.skill.loaded
+      run_id: run_005
+    - action: agent.skill.loaded
+      run_id: run_006
+    - action: agent.skill.loaded
+      run_id: run_007
+    - action: agent.skill.loaded
+      run_id: run_008
+    - action: agent.skill.loaded
+      run_id: run_009
+    - action: agent.skill.loaded
+      run_id: run_010
+    # 10 contributed events (outcome saturated, all success)
+    - action: agent.skill.contributed
+      run_id: run_001
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_002
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_003
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_004
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_005
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_006
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_007
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_008
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_009
+      outcome: success
+    - action: agent.skill.contributed
+      run_id: run_010
+      outcome: success
+  operator_ratings:
+    - rating: harmful
+      rated_by: operator-1
+      note: skill produces excessive false positives in staging
+expected:
+  feedback_score:
+    op: lt
+    value: 0.3
+  global_score:
+    op: lt
+    value: 0.9
+  feedback_confidence:
+    op: lt
+    value: 0.5
+notes: >
+  Before rating: adoption=1.0×1.0 + outcome=1.0×1.0 → composite=(0.25+0.35)/(0.25+0.35)=1.0.
+  After harmful rating: feedback raw=(0-1)/1=-1.0, score=(-1+1)/2=0.0, conf=0.2.
+  Composite = (0.25×1.0×1.0 + 0.35×1.0×1.0 + 0.40×0.0×0.2) / (0.25+0.35+0.08)
+  = 0.60 / 0.68 ≈ 0.882. Global score drops from 1.0 to ~0.882.
+  Cross-reference: Task 7 (skill_feedback.py), Task 11 (CLI rate-skill).

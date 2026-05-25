@@ -44,6 +44,14 @@ _STUB_DIR = Path(__file__).parent.parent / "eval" / "stub_responses"
 _CASE_FILES = sorted(_CASES_DIR.glob("*.yaml"))
 _CASE_IDS = [load_case_file(p).case_id for p in _CASE_FILES]
 
+# G1 effectiveness-scoring cases (16-20) are validated by
+# ``test_g1_eval_cases.py`` — they do not use MetaHarnessEvalRunner.
+_RUNNER_CASE_FILES = [
+    p
+    for p in _CASE_FILES
+    if not any(p.stem.startswith(prefix) for prefix in ("16_", "17_", "18_", "19_", "20_"))
+]
+
 
 def _all_stub_dirs() -> list[Path]:
     return sorted([p for p in _STUB_DIR.glob("*") if p.is_dir()])
@@ -135,7 +143,7 @@ def test_resolver_raises_on_malformed_responses_json(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("case_filename", [p.name for p in _CASE_FILES])
+@pytest.mark.parametrize("case_filename", [p.name for p in _RUNNER_CASE_FILES])
 @pytest.mark.asyncio
 async def test_wi3_byte_equal_across_reruns(case_filename: str, tmp_path: Path) -> None:
     """Run the case twice; assert the serialized RunOutcome payloads
@@ -182,7 +190,7 @@ def _canonical_bytes(outcome: tuple) -> bytes:  # type: ignore[type-arg]
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("case_filename", [p.name for p in _CASE_FILES])
+@pytest.mark.parametrize("case_filename", [p.name for p in _RUNNER_CASE_FILES])
 @pytest.mark.asyncio
 async def test_each_bundled_case_still_passes(case_filename: str, tmp_path: Path) -> None:
     case = load_case_file(_CASES_DIR / case_filename)
