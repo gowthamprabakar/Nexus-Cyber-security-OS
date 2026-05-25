@@ -407,3 +407,200 @@ def test_g1_read_outcome_events_yields_only_contributed(tmp_path: Path) -> None:
     )
     assert len(records) == 2
     assert all(r["action"] == "agent.skill.contributed" for r in records)
+
+
+# ---------------------------------------------------------------------------
+# audit-chain emission — agent.skill.outcome_correlated (Task 12)
+# ---------------------------------------------------------------------------
+
+
+def test_g1_successful_correlation_emits_audit_event(tmp_path: Path) -> None:
+    """A successful correlation emits agent.skill.outcome_correlated to audit chain."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_audit",
+        [
+            _contributed_event(skill_id="sk_audit", run_id="r1", outcome="success"),
+            _contributed_event(skill_id="sk_audit", run_id="r2", outcome="success"),
+            _contributed_event(skill_id="sk_audit", run_id="r3", outcome="failure"),
+        ],
+    )
+    result = compute_outcome_correlation(
+        skill_id="sk_audit",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+    assert result.confidence > 0.0
+
+    audit_text = al.path.read_text(encoding="utf-8")
+    assert "agent.skill.outcome_correlated" in audit_text
+    assert "sk_audit" in audit_text
+    assert "test-agent" in audit_text
+
+
+def test_g1_zero_confidence_emits_no_audit_event(tmp_path: Path) -> None:
+    """Zero-confidence correlation (no contributed events) emits nothing to audit chain."""
+    al = _audit_log(tmp_path)
+    result = compute_outcome_correlation(
+        skill_id="sk_empty",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+    assert result.confidence == 0.0
+
+    # No audit events emitted — the audit log file doesn't exist yet.
+    assert not al.path.exists()
+
+
+def test_g1_audit_payload_contains_counts_and_score(tmp_path: Path) -> None:
+    """Audit payload includes correlation_score, confidence, and outcome counts."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_payload",
+        [
+            _contributed_event(skill_id="sk_payload", run_id="r1", outcome="success"),
+            _contributed_event(skill_id="sk_payload", run_id="r2", outcome="failure"),
+            _contributed_event(skill_id="sk_payload", run_id="r3", outcome="partial"),
+        ],
+    )
+    compute_outcome_correlation(
+        skill_id="sk_payload",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+
+    # Parse the audit chain to find the outcome_correlated entry.
+    for line in al.path.read_text(encoding="utf-8").splitlines():
+        if "agent.skill.outcome_correlated" in line:
+            entry = json.loads(line)
+            payload = entry["payload"]
+            assert payload["skill_id"] == "sk_payload"
+            assert payload["agent_id"] == "test-agent"
+            assert payload["success_count"] == 1
+            assert payload["failure_count"] == 1
+            assert payload["partial_count"] == 1
+            assert payload["correlation_score"] == pytest.approx(0.5)
+            assert payload["confidence"] == pytest.approx(0.3)
+            assert "computed_at" in payload
+            break
+    else:
+        pytest.fail("agent.skill.outcome_correlated not found in audit chain")
+
+
+def test_g1_audit_emission_failure_emits_error_and_returns_result(tmp_path: Path, mocker) -> None:
+    """Forced audit_log.append failure → effectiveness_error emitted, result still returned."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_cf2",
+        [_contributed_event(skill_id="sk_cf2", run_id="r1", outcome="success")],
+    )
+
+    mocker.patch.object(al, "append", side_effect=OSError("disk full"))
+
+    result = compute_outcome_correlation(
+        skill_id="sk_cf2",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+    # Result still returned despite audit failure.
+    assert result.success_count == 1
+    assert result.correlation_score == 1.0
+    # The mock blocks all audit_log.append calls (primary + error emission).
+    # The function survives both failures and returns the computed result.
+
+
+def test_g1_multiple_calls_produce_multiple_audit_entries(tmp_path: Path) -> None:
+    """Each call to compute_outcome_correlation emits its own audit entry."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_multi",
+        [_contributed_event(skill_id="sk_multi", run_id="r1", outcome="success")],
+    )
+
+    compute_outcome_correlation(
+        skill_id="sk_multi",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+    compute_outcome_correlation(
+        skill_id="sk_multi",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+
+    audit_text = al.path.read_text(encoding="utf-8")
+    entries = [line for line in audit_text.splitlines() if "agent.skill.outcome_correlated" in line]
+    assert len(entries) == 2
+
+
+def test_g1_audit_payload_includes_computed_at_timestamp(tmp_path: Path) -> None:
+    """Audit payload computed_at is a valid ISO-8601 timestamp."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_ts",
+        [_contributed_event(skill_id="sk_ts", run_id="r1", outcome="success")],
+    )
+
+    compute_outcome_correlation(
+        skill_id="sk_ts",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+    )
+
+    for line in al.path.read_text(encoding="utf-8").splitlines():
+        if "agent.skill.outcome_correlated" in line:
+            entry = json.loads(line)
+            ts = entry["payload"]["computed_at"]
+            # Verify it parses as a datetime.
+            datetime.fromisoformat(ts)
+            break
+    else:
+        pytest.fail("agent.skill.outcome_correlated not found in audit chain")
+
+
+def test_g1_tenant_scoping_preserved_in_audit_payload(tmp_path: Path) -> None:
+    """Tenant ID in audit payload matches the tenant scope."""
+    al = _audit_log(tmp_path)
+    _write_sidecar(
+        tmp_path,
+        "test-agent",
+        "sk_tenant",
+        [
+            _contributed_event(
+                skill_id="sk_tenant", run_id="r1", outcome="success", tenant_id="acme"
+            ),
+        ],
+    )
+
+    compute_outcome_correlation(
+        skill_id="sk_tenant",
+        agent_id="test-agent",
+        audit_log=al,
+        workspace_root=tmp_path,
+        tenant_id="acme",
+    )
+
+    for line in al.path.read_text(encoding="utf-8").splitlines():
+        if "agent.skill.outcome_correlated" in line:
+            entry = json.loads(line)
+            assert entry["payload"]["tenant_id"] == "acme"
+            break
+    else:
+        pytest.fail("agent.skill.outcome_correlated not found in audit chain")

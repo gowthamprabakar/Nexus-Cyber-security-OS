@@ -21,11 +21,15 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 from charter.audit import AuditLog
 from pydantic import BaseModel, ConfigDict, Field
-from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
+from shared.skill_telemetry import (
+    ACTION_AGENT_SKILL_OUTCOME_CORRELATED,
+    ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR,
+)
 
 from meta_harness.schemas import (
     _MAX_AGENT_ID_LENGTH,
@@ -214,7 +218,7 @@ def compute_outcome_correlation(
 
     confidence = min(1.0, total / 10.0)
 
-    return OutcomeCorrelation(
+    result = OutcomeCorrelation(
         skill_id=skill_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
@@ -224,6 +228,43 @@ def compute_outcome_correlation(
         correlation_score=correlation_score,
         confidence=confidence,
     )
+
+    # Emit audit-chain event when we have real signal (per G1-Q8-C).
+    if result.confidence > 0.0:
+        try:
+            audit_log.append(
+                action=ACTION_AGENT_SKILL_OUTCOME_CORRELATED,
+                payload={
+                    "skill_id": skill_id,
+                    "agent_id": agent_id,
+                    "tenant_id": tenant_id,
+                    "correlation_score": correlation_score,
+                    "confidence": confidence,
+                    "success_count": success_count,
+                    "failure_count": failure_count,
+                    "partial_count": partial_count,
+                    "computed_at": datetime.now(UTC).isoformat(),
+                },
+            )
+        except Exception as exc:
+            try:
+                _emit_effectiveness_error(
+                    audit_log,
+                    error_type="outcome_correlated_audit_emission_failure",
+                    skill_id=skill_id,
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    exception_message=str(exc),
+                )
+            except Exception:
+                _logger.warning(
+                    "Failed to emit effectiveness_error for %s/%s",
+                    agent_id,
+                    skill_id,
+                    exc_info=True,
+                )
+
+    return result
 
 
 __all__ = [
