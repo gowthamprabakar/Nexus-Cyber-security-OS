@@ -22,15 +22,23 @@ Skill-curation (v0.2 / Task 15):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
+from charter.audit import AuditLog
 from eval_framework.cases import load_cases
 from eval_framework.suite import run_suite
 
 from meta_harness import __version__
 from meta_harness.agent import run as agent_run
+from meta_harness.effectiveness_compat import apply_backwards_compat_reason
+from meta_harness.effectiveness_store import (
+    list_deployed_skills_with_scores,
+    write_effectiveness_score,
+)
 from meta_harness.eval_runner import MetaHarnessEvalRunner
 from meta_harness.skill_approval import (
     approve_candidate,
@@ -42,6 +50,8 @@ from meta_harness.skill_candidate_store import (
     find_candidate_by_skill_id,
     list_pending_candidates,
 )
+from meta_harness.skill_effectiveness import compute_effectiveness_score
+from meta_harness.skill_feedback import _operator_ratings_path
 from meta_harness.skill_registry import (
     load_skill_class_registry,
     save_skill_class_registry,
@@ -302,6 +312,193 @@ def list_skills_cmd(workspace_root: Path) -> None:
             f"{c.skill_id:40s}  agent={c.skill.target_agent:20s}  "
             f"status={c.skill.deployment_status.value}"
         )
+
+
+# ---------------------- score-effectiveness (v0.2.5 / Task 11) ------------
+
+
+@main.command("score-effectiveness")
+@click.option(
+    "--agent",
+    "agent_id",
+    default=None,
+    help="Scope to a specific agent.",
+)
+@click.option(
+    "--skill",
+    "skill_id",
+    default=None,
+    help="Scope to a specific skill (requires --agent).",
+)
+@click.option(
+    "--tenant",
+    "tenant_id",
+    default="default",
+    show_default=True,
+    help="Scope to a specific tenant.",
+)
+@click.option(
+    "--workspace-root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path.cwd(),
+    show_default=True,
+    help="Workspace root containing .nexus/deployed-skills/.",
+)
+def score_effectiveness_cmd(
+    agent_id: str | None,
+    skill_id: str | None,
+    tenant_id: str,
+    workspace_root: Path,
+) -> None:
+    """Compute and persist effectiveness scores for deployed skills.
+
+    Without flags, aggregates all deployed skills across all agents.
+    Use --agent to scope to a specific agent, --skill + --agent for a
+    single skill.
+    """
+    if skill_id is not None and agent_id is None:
+        click.echo("ERROR: --skill requires --agent", err=True)
+        raise SystemExit(2)
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    audit_path = workspace_root / ".nexus" / "audit" / f"cli-score-{run_id}.jsonl"
+    audit_log = AuditLog(audit_path, agent="meta-harness-cli", run_id=run_id)
+
+    # Collect (agent_id, skill_id) pairs.
+    pairs: list[tuple[str, str]]
+    if agent_id is not None and skill_id is not None:
+        pairs = [(agent_id, skill_id)]
+    elif agent_id is not None:
+        all_results = list_deployed_skills_with_scores(workspace_root, tenant_id=tenant_id)
+        pairs = [(a, s) for a, s, _ in all_results if a == agent_id]
+    else:
+        all_results = list_deployed_skills_with_scores(workspace_root, tenant_id=tenant_id)
+        pairs = [(a, s) for a, s, _ in all_results]
+
+    if not pairs:
+        click.echo("no deployed skills found")
+        return
+
+    scores: list[tuple[str, str, str, str, str]] = []
+    for aid, sid in pairs:
+        try:
+            score = compute_effectiveness_score(
+                skill_id=sid,
+                agent_id=aid,
+                audit_log=audit_log,
+                workspace_root=workspace_root,
+                tenant_id=tenant_id,
+            )
+            score = apply_backwards_compat_reason(
+                score,
+                agent_id=aid,
+                audit_log=audit_log,
+                workspace_root=workspace_root,
+            )
+            write_effectiveness_score(score, audit_log=audit_log, workspace_root=workspace_root)
+        except Exception as err:
+            click.echo(f"FAIL {aid}/{sid}: computation error", err=True)
+            _LOG.exception("score-effectiveness failed for %s/%s", aid, sid)
+            raise SystemExit(1) from err
+
+        gs = f"{score.global_score:.3f}" if score.global_score is not None else "N/A"
+        conf = f"{score.confidence:.2f}"
+        reason = score.reason.value if score.reason else "-"
+        scores.append((aid, sid, gs, conf, reason))
+
+    # Print table.
+    header = f"{'AGENT':30s} {'SKILL':40s} {'SCORE':>7s} {'CONF':>6s} {'REASON'}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for aid, sid, gs, conf, reason in sorted(scores):
+        click.echo(f"{aid:30s} {sid:40s} {gs:>7s} {conf:>6s} {reason}")
+
+
+# ---------------------- rate-skill (v0.2.5 / Task 11) --------------------
+
+
+@main.command("rate-skill")
+@click.argument("skill_id")
+@click.option(
+    "--rating",
+    type=click.Choice(["useful", "neutral", "harmful"]),
+    required=True,
+    help="Operator rating for the skill.",
+)
+@click.option("--note", default=None, help="One-line note attached to the rating.")
+@click.option(
+    "--note-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="File containing a multi-line note.",
+)
+@click.option(
+    "--agent",
+    "agent_id",
+    default="default-agent",
+    show_default=True,
+    help="Agent that owns the skill.",
+)
+@click.option(
+    "--tenant",
+    "tenant_id",
+    default="default",
+    show_default=True,
+    help="Tenant scope for the rating.",
+)
+@click.option(
+    "--workspace-root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path.cwd(),
+    show_default=True,
+    help="Workspace root for audit chain and sidecar.",
+)
+def rate_skill_cmd(
+    skill_id: str,
+    rating: str,
+    note: str | None,
+    note_file: Path | None,
+    agent_id: str,
+    tenant_id: str,
+    workspace_root: Path,
+) -> None:
+    """Record an operator rating for a deployed skill.
+
+    Ratings are written to the audit chain (canonical source per Q8)
+    and appended to the sidecar operator-ratings.jsonl projection.
+    """
+    if note_file is not None:
+        note = note_file.read_text(encoding="utf-8").strip()
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    audit_path = workspace_root / ".nexus" / "audit" / f"cli-rate-{run_id}.jsonl"
+    audit_log = AuditLog(audit_path, agent="meta-harness-cli", run_id=run_id)
+
+    rated_at = datetime.now(UTC).isoformat()
+    payload: dict[str, object] = {
+        "action": "agent.skill.operator_rated",
+        "skill_id": skill_id,
+        "agent_id": agent_id,
+        "tenant_id": tenant_id,
+        "rating": rating,
+        "rated_by": "cli-operator",
+        "rated_at": rated_at,
+    }
+    if note:
+        payload["note"] = note
+
+    # Primary: audit chain (canonical per Q8).
+    audit_log.append("agent.skill.operator_rated", payload)
+
+    # Secondary: sidecar projection (cross-run persistence, CF #6).
+    sidecar_path = _operator_ratings_path(workspace_root, agent_id, skill_id)
+    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(sidecar_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
+
+    click.echo(f"rated {skill_id} as {rating} at {rated_at}")
+    if note:
+        click.echo(f"note: {note}")
 
 
 if __name__ == "__main__":
