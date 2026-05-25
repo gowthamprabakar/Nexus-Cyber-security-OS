@@ -1,7 +1,7 @@
 # ADR-007 — Cloud Posture is the reference NLAH
 
-- **Status:** accepted (v1.3 — amended 2026-05-12 with the always-on agent class for F.6 Audit Agent; see [§v1.3 amendment](#v13-amendment-2026-05-12---always-on-agent-class) · prior v1.2 hoisted the NLAH loader · prior v1.1 hoisted the LLM adapter)
-- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2); 2026-05-12 (v1.3)
+- **Status:** accepted (v1.5 — amended 2026-05-25 with G1 effectiveness-scoring canonical patterns; see [§v1.5 amendment](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns) · prior v1.4 added progressive-disclosure NLAH loader · prior v1.3 added the always-on agent class · prior v1.2 hoisted the NLAH loader · prior v1.1 hoisted the LLM adapter)
+- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2); 2026-05-12 (v1.3); 2026-05-22 (v1.4); 2026-05-25 (v1.5)
 - **Authors:** AI/Agent Eng, Detection Eng
 - **Stakeholders:** every agent author; PM (capacity planning); compliance (audit-chain consistency across agents)
 
@@ -280,7 +280,7 @@ The driver wraps every `consume()` call site with the helper. Tests cover:
 
 If a future agent (e.g. D.7 Investigation when it consumes the audit chain at scale) needs the same exception, **promote `_enforce_always_on` to `charter.audit`** as a public helper. The pattern is duplicated at #2 → hoist at #3 per the established rule.
 
-**Note (2026-05-22):** the v1.4 slot was reassigned to the progressive-disclosure NLAH loader extension landing in A.4 Meta-Harness v0.2 — a more architecturally urgent amendment driven by the Hermes-pattern absorption (Phase 1 / Wave 0). The `_enforce_always_on` hoist remains queued for the **v1.5** slot if/when the third consumer arrives. See `## v1.4 amendment (2026-05-22) — Progressive-disclosure NLAH-loader extension` below.
+**Note (2026-05-25):** the v1.4 slot was reassigned to the progressive-disclosure NLAH loader extension (A.4 Meta-Harness v0.2). v1.5 was then taken by G1 effectiveness-scoring canonical patterns. The `_enforce_always_on` hoist is now deferred to v1.6 if/when the third consumer arrives.
 
 ---
 
@@ -386,3 +386,111 @@ if chosen is not None:
 - **Per-agent 21-LOC shim.** Each agent's `nlah_loader.py` shim is unchanged. Agents can choose to wrap the new v1.4 functions in their own typed surface (as A.4 v0.2 will via `meta_harness.skill_format`) or call charter directly.
 - **F.5 SemanticStore.** Skills are file-backed in `nlah/skills/`; no SemanticStore entity persistence. Multi-tenant skill libraries remain post-SET-LOCAL-fix territory.
 - **Audit chain.** Skill loading is read-only and produces no audit-chain entries on its own. A.4's skill-lifecycle entries (Task 12: `skill.candidate_emitted`, etc.) are the only F.6 surface here.
+
+---
+
+## v1.5 amendment (2026-05-25) — G1 effectiveness-scoring canonical patterns
+
+### Trigger
+
+A.4 Meta-Harness v0.2.5 shipped G1 effectiveness scoring ([ADR-011](../../adr/011-g1-effectiveness-scoring.md)): a confidence-weighted composite score for every deployed skill, computed from three axes — adoption (load frequency), outcome (run success correlation), and feedback (operator ratings). The implementation spans 12 tasks across 10 modules in `packages/agents/meta-harness/src/meta_harness/`, plus a 6-action audit-event vocabulary in `packages/shared/src/shared/skill_telemetry.py`.
+
+G1 established five patterns that any future agent consuming or producing effectiveness telemetry must follow. These are now canonical — same status as the ten reference-template patterns in the table above.
+
+### The five canonical patterns
+
+#### Pattern 1: Effectiveness scoring is the canonical post-deployment telemetry layer
+
+**What it is:** `meta_harness.skill_effectiveness.compute_effectiveness_score(skill_id, agent_id, *, audit_log, workspace_root, tenant_id="default")` returns an `EffectivenessScore` with `global_score` (0–1 float), `confidence` (0–1 float), per-axis breakdown, and a `reason` enum. The composite formula is confidence-weighted: axes with zero confidence drop out; denominator is the sum of remaining weights (adoption=0.25, outcome=0.35, feedback=0.40). `global_score` is `None` when all three axes have zero confidence (no data anywhere).
+
+**Why it's canonical:** v0.2.5 GEPA compilation consumes `EffectivenessScore.global_score` as its `metric=` callable input for prompt optimization. Any future agent that deploys skills and wants GEPA to optimize those skills' prompts MUST produce scores through this interface. Per-skill scores are persisted to `<workspace>/.nexus/deployed-skills/<agent_id>/<skill_id>/effectiveness.json` — the workspace-scoped sidecar that mirrors the v1.4 candidate-sidecar pattern.
+
+**Future agents:** call `compute_effectiveness_score` from their telemetry path (or rely on A.4's CLI `score-effectiveness` command). The function signature requires `audit_log` (CF #2 fix-pattern) and `workspace_root` (sidecar location). No agent should compute its own ad-hoc effectiveness formula — the composite weights and confidence curves are locked here.
+
+#### Pattern 2: The 6 G1 audit actions are the canonical effectiveness-event vocabulary
+
+**What it is:** Six audit-action constants defined in `shared.skill_telemetry`:
+
+| Action                                     | Emitter                                        | Destination                      | Purpose                               |
+| ------------------------------------------ | ---------------------------------------------- | -------------------------------- | ------------------------------------- |
+| `agent.skill.loaded`                       | Agent runtime (via `meta_harness.audit_emit`)  | Sidecar `run-events.jsonl`       | Skill activated at run start          |
+| `agent.skill.contributed`                  | Agent runtime (via `meta_harness.audit_emit`)  | Sidecar `run-events.jsonl`       | Skill outcome recorded at run end     |
+| `agent.skill.outcome_correlated`           | A.4 aggregator (`compute_outcome_correlation`) | Audit chain                      | Outcome-axis correlation computed     |
+| `agent.skill.operator_rated`               | CLI (`rate-skill` command)                     | Audit chain + sidecar projection | Operator feedback recorded            |
+| `meta_harness.skill.effectiveness_updated` | A.4 store (`write_effectiveness_score`)        | Audit chain                      | Composite score changed               |
+| `meta_harness.skill.effectiveness_error`   | G1 error paths (CF #2)                         | Audit chain                      | Any effectiveness computation failure |
+
+**Why it's canonical:** Future agents that emit skill-lifecycle events MUST use these constants — not invent their own `agent.skill.activated` or `skill.run.completed`. The vocabulary is closed; extending it requires an ADR amendment. Audit-chain consumers (GEPA v0.2.5, D.6 Compliance Agent) walk these specific action strings. A divergent action name silently breaks downstream consumers.
+
+**Future agents:** import directly from `shared.skill_telemetry`:
+
+```python
+from shared.skill_telemetry import (
+    ACTION_AGENT_SKILL_LOADED,
+    ACTION_AGENT_SKILL_CONTRIBUTED,
+)
+```
+
+For emission, use the `meta_harness.audit_emit` wrappers (`emit_skill_loaded`, `emit_skill_contributed`) which handle sidecar path resolution and error emission. Do not call `audit_log.append` directly for lifecycle events — the wrappers enforce the G1-Q8-C split (raw telemetry → sidecar; state transitions → audit chain).
+
+#### Pattern 3: Leaf-module discipline (Q6) is a canonical constraint for telemetry-consumer modules
+
+**What it is:** Telemetry-consumer modules that read sidecar data and produce effectiveness scores MUST NOT be imported by lifecycle modules. Specifically:
+
+- **Allowed imports (leaf modules):** `meta_harness.schemas`, `charter.audit`, stdlib, pydantic, `shared.skill_telemetry`, and peer telemetry-consumer modules within the G1 family (e.g., `skill_outcome` may import from `skill_adoption`).
+- **Forbidden imports (upward):** `skill_lifecycle`, `skill_writer`, `skill_eval_gate`, `skill_approval`, `skill_format`, `skill_candidate_store`, `skill_registry`, `skill_triggers`, `skill_discovery`, `audit_emit`.
+
+**Why it's canonical:** The lifecycle modules import from the telemetry modules at runtime (e.g., `skill_lifecycle` calls `compute_effectiveness_score` during deployment decisions). If a telemetry module imports back upward, it creates a circular dependency at Python import time. This isn't theoretical — the v0.2 codebase hit this during A.4 v0.2 integration and resolved it with the leaf-module rule. Breaking this rule produces `ImportError` at agent startup.
+
+**Future agents:** when adding a new telemetry module that reads effectiveness data, check the import graph first. The test is: "can this module be imported without any lifecycle module on `sys.modules`?" If no → it's a leaf module. If yes → it's a lifecycle module and must not be imported by leaf modules.
+
+#### Pattern 4: CF #2 fix-pattern (audit-emit on error, not silent-swallow) is canonical
+
+**What it is:** Every error path in a telemetry computation emits `meta_harness.skill.effectiveness_error` to the audit chain — never a bare `_LOG.warning`. The audit payload carries `error_type` (a machine-readable slug like `"unknown_outcome_value"` or `"outcome_correlated_audit_emission_failure"`), `skill_id`, `agent_id`, `tenant_id`, `stack_trace`, and an optional `exception_message`.
+
+The pattern has two tiers:
+
+1. **Fatal errors** (e.g., sidecar read failure during outcome computation): emit `effectiveness_error`, then **re-raise**. The caller (CLI or agent driver) handles the raised exception. The audit chain records what failed and why.
+2. **Recoverable errors** (e.g., audit-chain append fails during success-path emission): emit `effectiveness_error` if possible, log a warning if the error emission itself fails, then **continue** returning the computed result. Don't lose a valid computation because the audit chain is unavailable.
+
+**Why it's canonical:** A.4 v0.2's verification record (PR #194) identified silent error swallowing as a systemic risk — a telemetry failure that logs only a warning is invisible to operators walking the audit chain. The CF #2 pattern makes every failure auditable. G1 proved the pattern across 10 modules (Tasks 5–12); every module enforces it.
+
+**Future agents:** any code path that reads G1 telemetry or produces effectiveness data must follow the same two-tier pattern. The `_emit_effectiveness_error` helper in each G1 module is the reference implementation. Do not `try: ... except: pass` or `_LOG.warning(...)` without a corresponding audit-chain emission.
+
+#### Pattern 5: Audit-chain + sidecar projection pattern (Q8 + CF #6) is canonical for decision-level events
+
+**What it is:** Decision-level events (state transitions: correlation computed, operator rated, score updated, error occurred) go to the **audit chain** with full hash-chain linkage. Raw telemetry events (per-run loaded/contributed records) go to **sidecar JSONL** (`run-events.jsonl` and `operator-ratings.jsonl`) as append-only performance projections. The audit chain is the source of truth; the sidecar is a cross-run cache that avoids re-scanning the full audit history on every computation.
+
+This split follows the A.4 v0.2 verification record CF #6 pattern: "decision in chain, detail in cached JSON."
+
+| Event type                                                                             | Destination                                             | Rationale                                                                    |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `loaded`, `contributed`                                                                | Sidecar only                                            | High-frequency per-run records; auditing every one would flood the chain     |
+| `outcome_correlated`, `operator_rated`, `effectiveness_updated`, `effectiveness_error` | Audit chain (+ sidecar projection for `operator_rated`) | State transitions; downstream consumers (GEPA, D.6) walk the chain for these |
+
+**Why it's canonical:** Mixing raw telemetry into the audit chain would produce unbounded chain growth (one `loaded` + one `contributed` per skill per run). Mixing decision events into sidecar-only would lose hash-chain linkage and make the audit trail non-verifiable. The split is load-bearing for both performance and compliance.
+
+**Future agents:** when designing a new telemetry event, classify it first: is this a per-run record (→ sidecar) or a state transition (→ audit chain)? If the latter, does it carry enough context for a downstream consumer to act on it without reading the sidecar? The audit-chain entry should be self-contained — skill_id, agent_id, tenant_id, and the decision payload.
+
+### What this validates
+
+- ADR-007's pattern-hoisting discipline extends beyond code to **architectural patterns**. G1 established five patterns that any effectiveness-telemetry producer or consumer must follow. Codifying them here prevents future agents from re-litigating the same design questions.
+- The "amend on the third consumer" rule (v1.1, v1.2) now has a corollary for patterns: **codify when the pattern is proven, not when the third consumer arrives.** G1 proved all five patterns across 12 tasks and 10 modules; waiting for three agents to trip over the same gap would be wasteful.
+- The relationship between ADR-007 (reference agent template) and ADR-011 (G1 architecture) is now explicit: ADR-011 defines the scoring mechanism; ADR-007 v1.5 declares it canonical for all future agents.
+
+### Cross-references
+
+- [ADR-011 — G1 effectiveness scoring](../../adr/011-g1-effectiveness-scoring.md) — full architecture decision for the scoring mechanism
+- [G1 plan doc](../../superpowers/plans/2026-05-24-g1-effectiveness-scoring.md) — 16-task implementation plan with Q&A resolutions
+- [G1 agent migration runbook](../../_meta/g1-agent-migration-runbook.md) — 2-line opt-in for Wave 1+ agents
+- [A.4 v0.2 verification record](../../_meta/a4-v0.2-verification-2026-05-22.md) — CF #2, CF #6, CF #9 origin
+- Implementation: `packages/agents/meta-harness/src/meta_harness/skill_effectiveness.py` (composite score), `skill_outcome.py` (outcome axis), `skill_adoption.py` (adoption axis), `skill_feedback.py` (feedback axis), `effectiveness_store.py` (persistence), `effectiveness_compat.py` (backwards-compat), `audit_emit.py` (agent-side emitters), `cli.py` (score-effectiveness + rate-skill commands)
+- Audit-action vocabulary: `packages/shared/src/shared/skill_telemetry.py`
+
+### What this does NOT change
+
+- **Existing ten reference-template patterns.** The table in the main body is unchanged. Effectiveness scoring is an additional layer that agents opt into; it doesn't replace any existing pattern.
+- **v0.1 agents.** Agents built before G1 (Wave 0) that don't emit lifecycle events are handled by the backwards-compat layer (`effectiveness_compat.apply_backwards_compat_reason`): they get `confidence=0.0` with `reason="agent_not_emitting_events"`. They don't need code changes.
+- **Charter substrate.** No changes to `charter.audit`, `charter.nlah_loader`, or any other charter module. G1 is pure meta-harness — it consumes the audit chain, it doesn't modify it.
+- **Per-agent NLAH shim.** The v1.4 progressive-disclosure loader is unchanged. Skills are loaded the same way; effectiveness scoring is a post-deployment layer on top.
+- **The `_enforce_always_on` hoist.** Still deferred to v1.6. v1.5 is exclusively the G1 effectiveness-scoring canonical patterns.
