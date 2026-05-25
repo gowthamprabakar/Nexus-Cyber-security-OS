@@ -1,11 +1,11 @@
-"""Tests — NLAH bundle v0.2 persona + tools + new example (Task 14).
+"""Tests — NLAH bundle v0.2.5 persona + tools + G1 example (Task 14).
 
-17 tests covering the NLAH bundle's v0.2 surface. The bundle is what
+25 tests covering the NLAH bundle's v0.2 + v0.2.5 surface. The bundle is what
 A.4 itself loads at runtime, so its content is part of the
-configuration contract — these tests lock the v0.2 phrasing in place
+configuration contract — these tests lock the v0.2 / v0.2.5 phrasing in place
 so future edits surface as deliberate diffs.
 
-README.md (8 tests):
+README.md (10 tests):
 1.  Mentions v0.2 explicitly.
 2.  Pipeline section names 8 stages, not 6.
 3.  Stage 6 SKILL_TRIGGER described.
@@ -15,19 +15,30 @@ README.md (8 tests):
 7.  "What you do NOT do" section explicitly mentions DSPy+GEPA v0.2.5
     forward-carry.
 8.  Shadow path layout documented verbatim.
+9.  Persona enumerates G1 effectiveness-scoring capability.
+10. References ADR-007 v1.5 (G1 canonical patterns).
 
-tools.md (5 tests):
-9.   v0.2 audit-action vocabulary lists 4 new entries.
-10.  Total audit-action count documented as 8 in v0.2.
-11.  Skill-lifecycle helpers section names all 6 modules (Tasks 5-10).
-12.  References the deployed_tool_sequence_hashes registry input.
-13.  References Q-ARCH-1 fence enforcement.
+tools.md (9 tests):
+9.  (reindexed) v0.2 audit-action vocabulary lists 4 new entries.
+10. Total audit-action count documented as 8 in v0.2.
+11. Skill-lifecycle helpers section names all 6 modules (Tasks 5-10).
+12. References the deployed_tool_sequence_hashes registry input.
+13. References Q-ARCH-1 fence enforcement.
+14. Documents G1 CLI commands (score-effectiveness, rate-skill).
+15. Documents 6 G1 audit actions (agent.skill.* + meta_harness.skill.*).
+16. Documents G1 Python API surface (compute_effectiveness_score,
+    get_effectiveness_score, write_effectiveness_score,
+    apply_backwards_compat_reason).
 
-examples/04-skill-curation.md (4 tests):
-14. File exists.
-15. Lists three routing paths (reject / operator approval / auto-deploy).
-16. Names ``meta-harness approve-skill`` / ``reject-skill`` CLI invocations.
-17. Documents Q4 mandatory eval-gate (no --force).
+examples/05-effectiveness-scoring.md (5 tests):
+17. File exists.
+18. Describes full scoring lifecycle (deploy → emit → score → rate → GEPA).
+19. Names CLI commands verbatim.
+20. Documents audit-chain trace.
+21. References backwards-compat path for Wave 0 agents.
+
+examples/ count (1 test):
+22. Examples dir now has 5 files (was 4 in v0.2 — 05 added in v0.2.5).
 """
 
 from __future__ import annotations
@@ -153,3 +164,111 @@ def test_example_04_names_cli_commands(example_04_text: str) -> None:
 def test_example_04_documents_mandatory_eval_gate_no_force(example_04_text: str) -> None:
     assert "mandatory" in example_04_text
     assert "--force" in example_04_text
+
+
+# ---------------------------- README.md G1 additions ----------------------------
+
+
+def test_readme_enumerates_g1_effectiveness_scoring(readme_text: str) -> None:
+    """v0.2.5 persona must state A.4 measures skill effectiveness."""
+    assert "effectiveness" in readme_text.lower()
+    assert "G1" in readme_text or "composite" in readme_text
+    assert "adoption" in readme_text
+    assert "outcome correlation" in readme_text or "outcome" in readme_text
+    assert "operator feedback" in readme_text or "feedback" in readme_text
+
+
+def test_readme_references_adr_007_v1_5(readme_text: str) -> None:
+    """The persona should point maintainers at the G1 canonical patterns amendment."""
+    assert "ADR-007 v1.5" in readme_text
+
+
+# ---------------------------- tools.md G1 additions ----------------------------
+
+
+def test_tools_documents_g1_cli_commands(tools_text: str) -> None:
+    """tools.md must document score-effectiveness and rate-skill CLI commands."""
+    assert "score-effectiveness" in tools_text
+    assert "rate-skill" in tools_text
+    assert "--rating" in tools_text
+    assert "useful|neutral|harmful" in tools_text or "{useful" in tools_text
+    assert "--agent" in tools_text
+
+
+def test_tools_documents_g1_audit_actions(tools_text: str) -> None:
+    """tools.md must name all 6 G1 effectiveness audit actions."""
+    for action in (
+        "agent.skill.loaded",
+        "agent.skill.contributed",
+        "agent.skill.outcome_correlated",
+        "agent.skill.operator_rated",
+        "meta_harness.skill.effectiveness_updated",
+        "meta_harness.skill.effectiveness_error",
+    ):
+        assert action in tools_text
+
+
+def test_tools_documents_g1_python_api(tools_text: str) -> None:
+    """tools.md must document the G1 Python API surface."""
+    for api in (
+        "compute_effectiveness_score",
+        "get_effectiveness_score",
+        "write_effectiveness_score",
+        "apply_backwards_compat_reason",
+        "emit_skill_loaded",
+        "emit_skill_contributed",
+    ):
+        assert api in tools_text
+
+
+# ---------------------------- examples/05-effectiveness-scoring.md ----------------------------
+
+
+@pytest.fixture(scope="module")
+def example_05_text() -> str:
+    return (NLAH_DIR / "examples" / "05-effectiveness-scoring.md").read_text(encoding="utf-8")
+
+
+def test_example_05_file_exists() -> None:
+    path = NLAH_DIR / "examples" / "05-effectiveness-scoring.md"
+    assert path.is_file()
+
+
+def test_example_05_describes_full_scoring_lifecycle(example_05_text: str) -> None:
+    """The example must walk through deploy → emit → score → rate → GEPA."""
+    assert "Step 1" in example_05_text
+    assert "Step 2" in example_05_text
+    assert "Step 3" in example_05_text
+    assert "Step 4" in example_05_text
+    assert "Step 5" in example_05_text
+    assert "emit_skill_loaded" in example_05_text
+    assert "emit_skill_contributed" in example_05_text
+    assert "score-effectiveness" in example_05_text
+    assert "rate-skill" in example_05_text
+    assert "GEPA" in example_05_text
+
+
+def test_example_05_documents_audit_chain_trace(example_05_text: str) -> None:
+    """The example must show the full audit-chain trace after scoring."""
+    assert "audit chain" in example_05_text
+    assert "outcome_correlated" in example_05_text
+    assert "effectiveness_updated" in example_05_text
+    assert "operator_rated" in example_05_text
+
+
+def test_example_05_references_backwards_compat(example_05_text: str) -> None:
+    """The example must mention the backwards-compat path for Wave 0 agents."""
+    assert "backwards-compat" in example_05_text or "Wave 0" in example_05_text
+    assert "agent_not_emitting_events" in example_05_text
+
+
+# ---------------------------- examples/ count ----------------------------
+
+
+def test_examples_dir_has_five_files() -> None:
+    """v0.2.5 adds 05-effectiveness-scoring.md (was 4 in v0.2)."""
+    examples_dir = NLAH_DIR / "examples"
+    md_files = sorted(examples_dir.glob("*.md"))
+    assert len(md_files) == 5, (
+        f"expected 5 examples, got {len(md_files)}: {[f.name for f in md_files]}"
+    )

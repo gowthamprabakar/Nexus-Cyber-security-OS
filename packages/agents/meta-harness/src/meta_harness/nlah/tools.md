@@ -72,3 +72,75 @@ Five module surfaces that Tasks 13's driver wires through Stages 6 + 7:
 - **`meta_harness.skill_approval`** (Task 10) — three routing paths: `approve_candidate` (operator-approved first-of-class), `auto_deploy_candidate` (refinement within registered class), `reject_candidate` (eval-gate failure OR operator rejection). Promotion flips `deployment_status` `CANDIDATE → DEPLOYED` and removes the shadow.
 
 All six modules are stitched together by `meta_harness.skill_lifecycle.run_skill_lifecycle(...)` (Task 13) — the Stage 6 + 7 orchestrator. The driver invokes it between Stage 5 REPORT (data assembly) and Stage 8 HANDOFF (markdown + KG write). When any of `llm_provider`, `audit_chain_loader`, `eval_runner_loader` is `None`, the orchestrator returns an empty `SkillLifecycleSummary` — v0.1-equivalent backwards-compat.
+
+## G1 effectiveness scoring (v0.2.5)
+
+A.4 measures the real-world effectiveness of every deployed skill via G1 composite scoring ([ADR-011](../../../../../../docs/_meta/decisions/ADR-011-g1-effectiveness-scoring.md)). The scoring pipeline spans three axes — adoption, outcome correlation, operator feedback — and produces an `EffectivenessScore` consumed by GEPA v0.2.5 for prompt optimisation.
+
+### CLI commands
+
+#### `meta-harness score-effectiveness`
+
+Compute and persist G1 effectiveness scores for deployed skills.
+
+```
+meta-harness score-effectiveness [--agent <id>] [--skill <id>] [--tenant <id>] [--workspace-root <path>]
+```
+
+- **No flags:** aggregates all deployed skills across all agents.
+- **`--agent <id>`:** scope to a single agent.
+- **`--skill <id>` + `--agent <id>`:** scope to a single skill (requires `--agent`).
+- **`--tenant <id>`:** scope to a specific tenant (default `"default"`).
+- **Output:** table with columns `AGENT`, `SKILL`, `SCORE`, `CONF`, `REASON`.
+- **Side-effects:** writes `effectiveness.json` to each skill's workspace-scoped sidecar directory at `<workspace>/.nexus/deployed-skills/<agent_id>/<skill_id>/effectiveness.json`.
+
+#### `meta-harness rate-skill`
+
+Record an operator rating for a deployed skill.
+
+```
+meta-harness rate-skill <skill_id> --rating {useful|neutral|harmful} [--note <text>] [--note-file <path>] [--agent <id>] [--tenant <id>] [--workspace-root <path>]
+```
+
+- **`--rating`:** required; one of `useful`, `neutral`, `harmful`.
+- **`--note`:** optional one-line note attached to the rating.
+- **`--note-file`:** optional file containing a multi-line note (takes precedence over `--note`).
+- **`--agent`:** agent that owns the skill (default `"default-agent"`).
+- **Side-effects:** appends to audit chain (`agent.skill.operator_rated`) AND sidecar projection at `<workspace>/.nexus/deployed-skills/<agent_id>/<skill_id>/operator-ratings.jsonl`.
+
+### G1 audit-action vocabulary (6 actions)
+
+Per ADR-007 v1.5 and G1-Q8-C, six audit actions form the closed effectiveness-event vocabulary. Future agents that emit skill-lifecycle events MUST use these constants from `shared.skill_telemetry`:
+
+| Action                                     | Emitter                                        | Destination                      | Purpose                               |
+| ------------------------------------------ | ---------------------------------------------- | -------------------------------- | ------------------------------------- |
+| `agent.skill.loaded`                       | Agent runtime (`meta_harness.audit_emit`)      | Sidecar `run-events.jsonl`       | Skill activated at run start          |
+| `agent.skill.contributed`                  | Agent runtime (`meta_harness.audit_emit`)      | Sidecar `run-events.jsonl`       | Skill outcome recorded at run end     |
+| `agent.skill.outcome_correlated`           | A.4 aggregator (`compute_outcome_correlation`) | Audit chain                      | Outcome-axis correlation computed     |
+| `agent.skill.operator_rated`               | CLI `rate-skill` command                       | Audit chain + sidecar projection | Operator feedback recorded            |
+| `meta_harness.skill.effectiveness_updated` | A.4 store (`write_effectiveness_score`)        | Audit chain                      | Composite score changed               |
+| `meta_harness.skill.effectiveness_error`   | G1 error paths (CF #2)                         | Audit chain                      | Any effectiveness computation failure |
+
+The split is load-bearing: raw telemetry (loaded, contributed) goes to sidecar JSONL to avoid unbounded audit-chain growth; decision-level events (outcome_correlated, operator_rated, effectiveness_updated, effectiveness_error) go to the audit chain with full hash-chain linkage.
+
+### Python API surface
+
+**Score computation:**
+
+- **`meta_harness.skill_effectiveness.compute_effectiveness_score(skill_id, agent_id, *, audit_log, workspace_root, tenant_id="default") -> EffectivenessScore`** — composite score from adoption + outcome + feedback axes. Returns `global_score=None, confidence=0.0, reason="insufficient_data"` when no data exists.
+
+**Persistence:**
+
+- **`meta_harness.effectiveness_store.get_effectiveness_score(skill_id, agent_id, *, workspace_root, tenant_id="default") -> EffectivenessScore | None`** — read the last persisted score from the sidecar. Returns `None` when no score has been computed yet.
+- **`meta_harness.effectiveness_store.write_effectiveness_score(score, *, audit_log, workspace_root) -> None`** — atomic write (temp-file + rename) to the sidecar. Emits `meta_harness.skill.effectiveness_updated` to the audit chain only on change (idempotent — same `global_score` + `confidence` → no duplicate event).
+- **`meta_harness.effectiveness_store.list_deployed_skills_with_scores(workspace_root, tenant_id="default") -> list[tuple[str, str, EffectivenessScore | None]]`** — enumerate all deployed skills with their current scores.
+
+**Backwards-compat:**
+
+- **`meta_harness.effectiveness_compat.apply_backwards_compat_reason(score, agent_id, *, audit_log, workspace_root) -> EffectivenessScore`** — upgrades `reason` from `"insufficient_data"` to `"agent_not_emitting_events"` for agents that have never emitted lifecycle events. Zero-confidence scores pass through unchanged for emitting agents.
+
+**Agent-side emission helpers:**
+
+- **`meta_harness.audit_emit.emit_skill_loaded(audit_log, skill_id, agent_id, tenant_id, *, run_id=None) -> Path`** — append `agent.skill.loaded` to the sidecar at run start.
+- **`meta_harness.audit_emit.emit_skill_contributed(audit_log, skill_id, agent_id, tenant_id, *, outcome="success", run_id=None) -> Path`** — append `agent.skill.contributed` to the sidecar at run end. `outcome` must be `"success"`, `"failure"`, or `"partial"`.
+- **`meta_harness.audit_emit.emit_skill_context(skill_id, agent_id, tenant_id, *, run_id=None)`** — context manager that emits `loaded` on enter and `contributed` on exit (outcome defaults to `"success"`; `"failure"` on exception).

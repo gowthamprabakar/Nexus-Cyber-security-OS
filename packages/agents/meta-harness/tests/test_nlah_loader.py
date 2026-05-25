@@ -76,18 +76,18 @@ def test_nlah_examples_dir_present() -> None:
     assert (nlah / "examples").is_dir()
 
 
-def test_nlah_ships_four_examples_in_v0_2() -> None:
+def test_nlah_ships_five_examples_in_v0_2_5() -> None:
     """v0.1 shipped 3 examples (batch-eval / ab-compare / first-run-baseline).
-    v0.2 Task 14 adds a fourth (skill-curation) covering the new
-    Stages 6 + 7 lifecycle. Renamed from ``test_nlah_ships_three_examples``
-    when v0.2 landed."""
+    v0.2 Task 14 added a fourth (skill-curation). v0.2.5 Task 14 adds a
+    fifth (effectiveness-scoring) covering the G1 scoring lifecycle."""
     examples = sorted((default_nlah_dir() / "examples").glob("*.md"))
-    assert len(examples) == 4
+    assert len(examples) == 5
     names = {p.name for p in examples}
     assert any("batch-eval" in n for n in names)
     assert any("ab-compare" in n for n in names)
     assert any("first-run" in n or "baseline" in n for n in names)
     assert any("skill-curation" in n for n in names)
+    assert any("effectiveness-scoring" in n for n in names)
 
 
 # ---------------------------------------------------------------------------

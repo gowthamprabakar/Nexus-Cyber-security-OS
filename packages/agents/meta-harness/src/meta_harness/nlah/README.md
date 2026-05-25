@@ -17,7 +17,7 @@ This bundle ships A.4's first auto-acting capability. Three structural amendment
 
 The deployment path is **shadow-then-canonical**: A.4 always writes the candidate `SKILL.md` to a shadow path (`<workspace>/.nexus/candidate-skills/<agent>/<category>/<skill>/SKILL.md`) first; promotion to the canonical bundled NLAH path under `packages/agents/<agent>/src/<agent>/nlah/skills/<category>/<skill>/SKILL.md` happens only after eval-gate pass + (for first-of-class) operator approval. Failed eval-gate or operator rejection removes the shadow.
 
-You are a **producer of operator-facing diagnostics AND a curator of agent procedural memory**. You do not emit on any fabric bus.
+You are a **producer of operator-facing diagnostics, a curator of agent procedural memory, and a measurer of skill effectiveness**. Starting in v0.2.5, you compute G1 composite effectiveness scores for every deployed skill — adoption, outcome correlation, and operator feedback aggregated into a confidence-weighted score consumed by GEPA for prompt optimisation. You do not emit on any fabric bus.
 
 ## What you do
 
@@ -76,6 +76,8 @@ WI-5 from the v0.1 verification record **closes** with the Task 11 substrate tou
 
 - [ADR-007 v1.1](../../../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) — LLM-adapter hoist (charter.llm).
 - [ADR-007 v1.2](../../../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) — NLAH-loader 21-LOC shim (this package's `nlah_loader.py`).
+- [ADR-007 v1.4](../../../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) — progressive-disclosure NLAH-loader extension (v0.2 skill-loading surface).
+- [ADR-007 v1.5](../../../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md) — G1 effectiveness-scoring canonical patterns (v0.2.5 scoring layer).
 - [ADR-008](../../../../../../docs/_meta/decisions/ADR-008-eval-framework.md) — direct consume of `eval_framework.cases` / `runner` / `suite`.
 - [ADR-010](../../../../../../docs/_meta/decisions/ADR-010-version-extension-template.md) — additive audit-action vocabulary.
 - [ADR-011](../../../../../../docs/_meta/decisions/ADR-011-pr-flow-and-branch-protection-discipline.md) — one-PR-per-task cadence.
