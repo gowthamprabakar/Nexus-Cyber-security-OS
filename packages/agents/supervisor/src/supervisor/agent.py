@@ -271,6 +271,7 @@ def _build_contract(*, task: IncomingTask, match: RoutingMatch) -> DelegationCon
         permitted_tools=match.permitted_tools,
         budget_wall_clock_sec=_DEFAULT_BUDGET_WALL_CLOCK_SEC,
         budget_max_tool_calls=_DEFAULT_BUDGET_MAX_TOOL_CALLS,
+        trigger_source=task.trigger_source.value,
         created_at=datetime.now(UTC),
     )
 

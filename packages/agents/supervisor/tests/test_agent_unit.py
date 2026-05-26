@@ -39,6 +39,7 @@ from pathlib import Path
 
 import pytest
 from supervisor.agent import (
+    _build_contract,
     drain_triggers,
     make_logging_invoker,
 )
@@ -53,6 +54,7 @@ from supervisor.schemas import (
     DelegationContract,
     DelegationStatus,
     IncomingTask,
+    RoutingMatch,
     RoutingRule,
     TriggerSource,
 )
@@ -408,3 +410,84 @@ def test_drain_triggers_combines_extra_with_scheduled_queue(tmp_path: Path) -> N
         extra=[_task(task_id="extra_t1")],
     )
     assert [t.task_id for t in triggers] == ["extra_t1", "queued_t1"]
+
+
+# ---------------------------------------------------------------------------
+# G2 Task 3 — _build_contract trigger_source propagation
+# ---------------------------------------------------------------------------
+
+
+def _match(target: str = "cloud_posture") -> RoutingMatch:
+    return RoutingMatch(
+        rule_id="r1",
+        target_agent=target,
+        permitted_tools=("prowler_scan",),
+    )
+
+
+def test_build_contract_populates_trigger_source_from_operator_cli() -> None:
+    contract = _build_contract(
+        task=IncomingTask(
+            task_id="t1",
+            customer_id="acme",
+            trigger_source=TriggerSource.OPERATOR_CLI,
+            received_at=_NOW,
+        ),
+        match=_match(),
+    )
+    assert contract.trigger_source == "operator_cli"
+
+
+def test_build_contract_populates_trigger_source_from_events_bus() -> None:
+    contract = _build_contract(
+        task=IncomingTask(
+            task_id="t1",
+            customer_id="acme",
+            trigger_source=TriggerSource.EVENTS_BUS,
+            received_at=_NOW,
+        ),
+        match=_match(),
+    )
+    assert contract.trigger_source == "events_bus"
+
+
+def test_build_contract_populates_trigger_source_from_scheduled_queue() -> None:
+    contract = _build_contract(
+        task=IncomingTask(
+            task_id="t1",
+            customer_id="acme",
+            trigger_source=TriggerSource.SCHEDULED_QUEUE,
+            received_at=_NOW,
+        ),
+        match=_match(),
+    )
+    assert contract.trigger_source == "scheduled_queue"
+
+
+def test_build_contract_trigger_source_is_str_not_enum() -> None:
+    contract = _build_contract(
+        task=IncomingTask(
+            task_id="t1",
+            customer_id="acme",
+            trigger_source=TriggerSource.EVENTS_BUS,
+            received_at=_NOW,
+        ),
+        match=_match(),
+    )
+    assert isinstance(contract.trigger_source, str)
+    assert not isinstance(contract.trigger_source, TriggerSource)
+
+
+def test_build_contract_trigger_source_roundtrip_through_delegation_pipeline() -> None:
+    """trigger_source survives the full contract model_dump -> model_validate cycle."""
+    contract = _build_contract(
+        task=IncomingTask(
+            task_id="t1",
+            customer_id="acme",
+            trigger_source=TriggerSource.SCHEDULED_QUEUE,
+            received_at=_NOW,
+        ),
+        match=_match(),
+    )
+    reloaded = DelegationContract.model_validate(contract.model_dump())
+    assert reloaded.trigger_source == "scheduled_queue"
