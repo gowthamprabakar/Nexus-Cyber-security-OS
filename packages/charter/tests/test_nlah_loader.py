@@ -263,3 +263,97 @@ def test_metadata_index_skill_with_no_skills_overlay_is_bundled_source(tmp_path:
     _write_skill(skills_root, "beta/two")
     result = load_skill_metadata_index(tmp_path)
     assert {entry.source for entry in result} == {"bundled"}
+
+
+# ---------------------------------------------------------------------------
+# G2 Task 4 — SkillMetadataEntry effectiveness fields
+# ---------------------------------------------------------------------------
+
+
+def test_skill_metadata_entry_effectiveness_fields_default_to_none() -> None:
+    """Backwards-compat — constructing without effectiveness fields
+    defaults all three to None."""
+    entry = SkillMetadataEntry(
+        skill_id="test/x",
+        name="test-skill",
+        description="A test skill.",
+        version="0.1.0",
+        category="test",
+        target_agent="test-agent",
+        platforms=("nexus",),
+        source="bundled",
+    )
+    assert entry.effectiveness_score is None
+    assert entry.effectiveness_confidence is None
+    assert entry.effectiveness_last_updated is None
+
+
+def test_skill_metadata_entry_accepts_effectiveness_values() -> None:
+    """All three effectiveness fields accept valid values."""
+    entry = SkillMetadataEntry(
+        skill_id="test/x",
+        name="test-skill",
+        description="A test skill.",
+        version="0.1.0",
+        category="test",
+        target_agent="test-agent",
+        platforms=("nexus",),
+        source="bundled",
+        effectiveness_score=0.85,
+        effectiveness_confidence=0.92,
+        effectiveness_last_updated="2026-05-26T12:00:00Z",
+    )
+    assert entry.effectiveness_score == 0.85
+    assert entry.effectiveness_confidence == 0.92
+    assert entry.effectiveness_last_updated == "2026-05-26T12:00:00Z"
+
+
+def test_skill_metadata_entry_boundary_values() -> None:
+    """Effectiveness scores and confidence accept boundary float values."""
+    for val in (0.0, 0.5, 1.0):
+        entry = SkillMetadataEntry(
+            skill_id="test/x",
+            name="t",
+            description="d",
+            version="0.1.0",
+            category="c",
+            target_agent="a",
+            platforms=("nexus",),
+            source="bundled",
+            effectiveness_score=val,
+            effectiveness_confidence=val,
+        )
+        assert entry.effectiveness_score == val
+        assert entry.effectiveness_confidence == val
+
+
+def test_metadata_index_entries_have_none_effectiveness_by_default(tmp_path: Path) -> None:
+    """Integration — existing YAML without effectiveness fields produces
+    entries with None for all three G2 fields."""
+    skills_root = tmp_path / "skills"
+    _write_skill(skills_root, "alpha/one")
+    result = load_skill_metadata_index(tmp_path)
+    assert len(result) == 1
+    entry = result[0]
+    assert entry.effectiveness_score is None
+    assert entry.effectiveness_confidence is None
+    assert entry.effectiveness_last_updated is None
+
+
+def test_skill_metadata_entry_effectiveness_partial_population() -> None:
+    """Each effectiveness field is independently optional — one can be
+    set while others remain None."""
+    entry = SkillMetadataEntry(
+        skill_id="test/x",
+        name="t",
+        description="d",
+        version="0.1.0",
+        category="c",
+        target_agent="a",
+        platforms=("nexus",),
+        source="bundled",
+        effectiveness_score=0.75,
+    )
+    assert entry.effectiveness_score == 0.75
+    assert entry.effectiveness_confidence is None
+    assert entry.effectiveness_last_updated is None
