@@ -172,6 +172,53 @@ def test_delegation_contract_rejects_zero_budget() -> None:
 
 
 # ---------------------------------------------------------------------------
+# G2 Task 3 — DelegationContract.trigger_source
+# ---------------------------------------------------------------------------
+
+
+def test_delegation_contract_trigger_source_defaults_to_none() -> None:
+    contract = DelegationContract(
+        delegation_id="d1",
+        customer_id="acme",
+        target_agent="cloud_posture",
+        task_id="t1",
+        budget_wall_clock_sec=60.0,
+        budget_max_tool_calls=20,
+        created_at=_NOW,
+    )
+    assert contract.trigger_source is None
+
+
+def test_delegation_contract_trigger_source_accepts_string() -> None:
+    contract = DelegationContract(
+        delegation_id="d1",
+        customer_id="acme",
+        target_agent="cloud_posture",
+        task_id="t1",
+        budget_wall_clock_sec=60.0,
+        budget_max_tool_calls=20,
+        created_at=_NOW,
+        trigger_source="events_bus",
+    )
+    assert contract.trigger_source == "events_bus"
+
+
+def test_delegation_contract_trigger_source_roundtrip() -> None:
+    contract = DelegationContract(
+        delegation_id="d1",
+        customer_id="acme",
+        target_agent="cloud_posture",
+        task_id="t1",
+        budget_wall_clock_sec=60.0,
+        budget_max_tool_calls=20,
+        created_at=_NOW,
+        trigger_source="scheduled_queue",
+    )
+    reloaded = DelegationContract.model_validate(contract.model_dump())
+    assert reloaded.trigger_source == "scheduled_queue"
+
+
+# ---------------------------------------------------------------------------
 # DelegationOutcome
 # ---------------------------------------------------------------------------
 

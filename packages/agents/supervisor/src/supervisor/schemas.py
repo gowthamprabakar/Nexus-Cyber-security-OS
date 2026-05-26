@@ -206,6 +206,11 @@ class DelegationContract(BaseModel):
     budget_wall_clock_sec: float = Field(gt=0.0, le=3600.0)
     budget_max_tool_calls: int = Field(ge=1, le=10_000)
     created_at: datetime
+    trigger_source: str | None = None
+    """How the run was triggered. Values: 'events_bus', 'operator_cli',
+    'scheduled_queue', or None (legacy contracts predating G2 Task 3).
+    Populated from IncomingTask.trigger_source.value.
+    """
 
 
 class DelegationStatus(StrEnum):
