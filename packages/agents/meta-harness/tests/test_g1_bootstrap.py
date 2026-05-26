@@ -2,7 +2,7 @@
 
 10 tests:
 
-1.  G1 version is 0.2.1 (``meta_harness.__version__``).
+1.  G1 version is 0.2.2 (``meta_harness.__version__``).
 2.  G1 pyproject version matches ``__version__`` (reads from source file).
 3.  Existing v0.2 modules import cleanly after version bump.
 4.  G1 plan doc exists at the expected path and names key conventions.
@@ -38,13 +38,13 @@ def _iter_source_files() -> list[Path]:
 
 
 def test_g1_version_is_0_2_1() -> None:
-    """Bootstrap gate — ``__version__`` wired to 0.2.1 (G1 cycle)."""
+    """Bootstrap gate — ``__version__`` wired to 0.2.2 (G1 cycle)."""
     import meta_harness
 
     assert hasattr(meta_harness, "__version__")
     assert isinstance(meta_harness.__version__, str)
-    assert meta_harness.__version__ == "0.2.1", (
-        f"Expected 0.2.1 (G1), got {meta_harness.__version__}"
+    assert meta_harness.__version__ == "0.2.2", (
+        f"Expected 0.2.2 (G1), got {meta_harness.__version__}"
     )
 
 
@@ -59,7 +59,7 @@ def test_g1_pyproject_version_matches() -> None:
     assert pyproject_version == meta_harness.__version__, (
         f"pyproject.toml {pyproject_version} != __version__ {meta_harness.__version__}"
     )
-    assert pyproject_version == "0.2.1"
+    assert pyproject_version == "0.2.2"
 
 
 # ---------------------------------------------------------------------------
