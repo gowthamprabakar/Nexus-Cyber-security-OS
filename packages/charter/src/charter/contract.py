@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
@@ -52,6 +52,19 @@ class ExecutionContract(BaseModel):
     persistent_root: NonEmptyStr
     created_at: datetime
     expires_at: datetime
+    trigger_source: str | None = None
+    """How this run was triggered. Values: 'events_bus', 'operator_cli',
+    'scheduled_queue', or None (legacy contracts predating G2 Task 2).
+    Propagated by Supervisor from IncomingTask.trigger_source per G2-Q1
+    Option E (dual-mode dispatch).
+    """
+
+    @field_validator("trigger_source")
+    @classmethod
+    def _validate_trigger_source(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"events_bus", "operator_cli", "scheduled_queue"}:
+            raise ValueError(f"Invalid trigger_source: {v}")
+        return v
 
     @model_validator(mode="after")
     def _check_delegation_id(self) -> ExecutionContract:
