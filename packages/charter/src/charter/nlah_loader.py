@@ -132,6 +132,14 @@ class SkillMetadataEntry:
     target_agent: str
     platforms: tuple[str, ...]
     source: str  # "bundled" (in nlah_dir/skills) or "overlay" (skills_overlay)
+    # G2 Task 4 — effectiveness fields (per G2-Q2 Hermes-pattern selection).
+    # Populated by meta_harness.effectiveness_store in Task 5.
+    effectiveness_score: float | None = None
+    """Composite effectiveness score from G1 (0.0-1.0). None if not yet computed."""
+    effectiveness_confidence: float | None = None
+    """Composite confidence score from G1 (0.0-1.0). None if no data yet."""
+    effectiveness_last_updated: str | None = None
+    """ISO 8601 timestamp of last effectiveness score update. None if never computed."""
 
 
 class SkillLoaderError(ValueError):
