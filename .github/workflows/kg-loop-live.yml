@@ -1,0 +1,104 @@
+name: kg-loop-live
+
+# Runs the KG-loop closure live proof
+# (packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py)
+# against a CI-provisioned Postgres service container, with
+# NEXUS_LIVE_POSTGRES=1 set. The green run on this workflow is the
+# keystone proof of record for the KG read/write loop closing on real
+# infrastructure (Task 6 of the KG-loop-closure plan).
+#
+# Why a separate workflow file (vs. extending ci.yml):
+# - The base ci.yml runs every PR; spinning up Postgres + pgvector for
+#   PRs that don't touch the KG path is wasted CI minutes.
+# - The paths-filter below targets exactly the surfaces whose change
+#   could break the loop: the writer, the agent.py rewire, the live
+#   test itself, this workflow, and the charter substrate (since the
+#   live test runs alembic upgrade head against packages/charter/alembic).
+# - Failure here is a SAFETY-CRITICAL signal — keeping it on its own
+#   job name (kg-loop-live) makes branch-protection rules easy to wire.
+#
+# Local-environment mismatch documented honestly: an operator's first
+# local run blocked on `role "nexus" does not exist` when connecting to
+# the admin DB. The dev compose at docker/docker-compose.dev.yml runs
+# initdb with POSTGRES_USER=nexus, POSTGRES_DB=nexus — which creates
+# nexus as a superuser that CAN reach the default `postgres` admin DB,
+# so the same shape works there. The mismatch is environment-specific
+# (not code-side), but CI removes the per-machine variable by pinning
+# the provisioning shape. The same fact is documented in the Task 8
+# verification record as a found issue.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agents/cloud-posture/src/cloud_posture/tools/kg_writer.py'
+      - 'packages/agents/cloud-posture/src/cloud_posture/agent.py'
+      - 'packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py'
+      - 'packages/charter/alembic/**'
+      - 'packages/charter/src/charter/memory/**'
+      - '.github/workflows/kg-loop-live.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/agents/cloud-posture/src/cloud_posture/tools/kg_writer.py'
+      - 'packages/agents/cloud-posture/src/cloud_posture/agent.py'
+      - 'packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py'
+      - 'packages/charter/alembic/**'
+      - 'packages/charter/src/charter/memory/**'
+      - '.github/workflows/kg-loop-live.yml'
+
+jobs:
+  live-postgres-proof:
+    name: live-postgres-proof
+    runs-on: ubuntu-latest
+
+    # Pin the same image the dev compose uses (pgvector/pgvector:pg16)
+    # so the loop runs against the exact provisioning shape the F.5
+    # baseline migration (CREATE EXTENSION vector + ltree) targets in
+    # local development. POSTGRES_USER=nexus + POSTGRES_PASSWORD=nexus_dev
+    # match the dev compose's credentials so the test's default DSN
+    # (postgresql+asyncpg://nexus:nexus_dev@localhost:5432/...) works
+    # against either environment without per-env overrides.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus_dev
+          POSTGRES_DB: nexus
+        ports:
+          - 5432:5432
+        # pg_isready returns 0 only after Postgres accepts connections;
+        # GitHub Actions waits for `healthy` before starting the job
+        # steps, so the test fixtures never race the server startup.
+        options: >-
+          --health-cmd "pg_isready -U nexus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          # Match the ci.yml pin so workspace editable installs land
+          # the same way they do in the base CI lane.
+          version: '0.11.1'
+
+      - run: uv python install 3.12
+
+      - run: uv sync --all-extras --all-packages
+
+      # The live proof file gates on NEXUS_LIVE_POSTGRES=1. The default
+      # admin URL the test uses (postgresql+asyncpg://nexus:nexus_dev@
+      # localhost:5432/postgres) is reachable because POSTGRES_USER=nexus
+      # is created as a superuser by the initdb step in the service
+      # container above, and the default `postgres` admin DB is always
+      # present. The target DB (nexus_kg_loop_test) is dropped + recreated
+      # by the fresh_database fixture per-test.
+      - name: Run KG-loop live proof
+        env:
+          NEXUS_LIVE_POSTGRES: '1'
+        run: >-
+          uv run pytest -v
+          packages/agents/cloud-posture/tests/integration/test_kg_loop_live_postgres.py
