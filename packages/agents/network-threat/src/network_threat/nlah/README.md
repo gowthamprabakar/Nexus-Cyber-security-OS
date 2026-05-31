@@ -52,3 +52,18 @@ Each detector is **pure**: no I/O, no async, deterministic. The agent driver glu
 - Block private IP ranges (always off-limits autonomously; loopback / link-local / unspecified IPs are filtered from detector inputs).
 - Score DGA based on full FQDN (only the second-level label is evaluated — TLD is irrelevant).
 - Drop high-severity findings even if severity uplift from intel would push past CRITICAL — CRITICAL is the ceiling.
+
+## Skill selection guidance
+
+When you receive your Level 0 skill metadata index at run start, each skill entry now includes G1 effectiveness signals: `effectiveness_score` (0.0-1.0 composite quality), `effectiveness_confidence` (0.0-1.0 signal strength), and `effectiveness_last_updated` (ISO timestamp).
+
+Use these signals as input to your skill selection decision:
+
+- Prefer skills with higher `effectiveness_score × effectiveness_confidence` for the current task
+- New skills (low confidence) may still be the right choice if topically relevant — your judgment matters
+- Skills with `effectiveness_score = None` haven't been measured yet; treat as neutral
+- Skills with `effectiveness_score = 0.0` and high confidence have proven counterproductive — avoid unless task explicitly requires them
+
+The composite (effectiveness × confidence) is a relevance signal, not a hard filter. Combine with task fit, your reasoning, and any operator guidance in the contract.
+
+See `docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md` §v1.5 for the G1 effectiveness-scoring canonical patterns.

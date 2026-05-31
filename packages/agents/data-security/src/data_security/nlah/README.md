@@ -73,3 +73,18 @@ Per PRD §7.1.4 lines 957–966, D.5 enforces a hard privacy contract on classif
 - Cross-tenant queries — every reader call carries the contract's tenant scope.
 - Auto-discover sibling agent workspaces — F.3 correlation requires explicit `--cloud-posture-workspace`.
 - Promote the classifier to a charter substrate — agent-local in v0.1 per ADR-007 3rd-consumer hoist rule.
+
+## Skill selection guidance
+
+When you receive your Level 0 skill metadata index at run start, each skill entry now includes G1 effectiveness signals: `effectiveness_score` (0.0-1.0 composite quality), `effectiveness_confidence` (0.0-1.0 signal strength), and `effectiveness_last_updated` (ISO timestamp).
+
+Use these signals as input to your skill selection decision:
+
+- Prefer skills with higher `effectiveness_score × effectiveness_confidence` for the current task
+- New skills (low confidence) may still be the right choice if topically relevant — your judgment matters
+- Skills with `effectiveness_score = None` haven't been measured yet; treat as neutral
+- Skills with `effectiveness_score = 0.0` and high confidence have proven counterproductive — avoid unless task explicitly requires them
+
+The composite (effectiveness × confidence) is a relevance signal, not a hard filter. Combine with task fit, your reasoning, and any operator guidance in the contract.
+
+See `docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md` §v1.5 for the G1 effectiveness-scoring canonical patterns.
