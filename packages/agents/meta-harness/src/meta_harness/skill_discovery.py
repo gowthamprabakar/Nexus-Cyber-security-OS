@@ -33,15 +33,36 @@ behave exactly as before.
 
 from __future__ import annotations
 
+import logging
+import traceback
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
+from typing import TypedDict
 
+from charter.audit import AuditLog
 from charter.nlah_loader import (
     SkillMetadataEntry,
     load_skill_metadata_index,
 )
+from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
+
+from meta_harness.effectiveness_store import get_effectiveness_score
+
+_logger = logging.getLogger(__name__)
+
+_DEFAULT_TENANT_ID = "default"
+
+
+class _EffectivenessFields(TypedDict):
+    """The three Task 4 ``SkillMetadataEntry`` effectiveness fields, as a
+    mapping ready for ``dataclasses.replace(entry, **fields)``."""
+
+    effectiveness_score: float | None
+    effectiveness_confidence: float | None
+    effectiveness_last_updated: str | None
+
 
 _ENTRY_POINT_GROUP = "nexus_eval_runners"
 _SHADOW_ROOT_NAME = ".nexus"
@@ -105,9 +126,12 @@ def discover_agent_skills(
     agent_id: str,
     *,
     workspace_root: Path | str,
+    audit_log: AuditLog,
     skills_overlay: Path | str | None = None,
+    tenant_id: str = _DEFAULT_TENANT_ID,
 ) -> AgentSkillRegistry:
-    """Build one agent's registry (bundled merged with overlay).
+    """Build one agent's registry (bundled merged with overlay), enriched
+    with G1 effectiveness scores (G2 Task 5).
 
     When ``skills_overlay`` is ``None`` the default per-agent shadow
     path is used; pass it explicitly to override (tests, non-default
@@ -115,6 +139,13 @@ def discover_agent_skills(
 
     A non-existent overlay directory is treated as "no overlay" — the
     registry's ``skills_overlay`` field is ``None`` in that case.
+
+    Each Level 0 entry's ``effectiveness_*`` fields are populated from
+    G1's ``get_effectiveness_score`` (Task 4 schema). Skills with no G1
+    score keep ``None`` values; a G1 read failure is emitted to
+    ``audit_log`` as ``meta_harness.skill.effectiveness_error`` and also
+    falls back to ``None`` values (CF #2 graceful-degradation pattern).
+    ``audit_log`` is required so the failure path always has a sink.
     """
     nlah_dir = default_bundled_nlah_dir(workspace_root, agent_id)
     overlay_path = (
@@ -124,12 +155,94 @@ def discover_agent_skills(
     )
     overlay_active = overlay_path if overlay_path.is_dir() else None
     entries = load_skill_metadata_index(nlah_dir, skills_overlay=overlay_active)
+    # G2 Task 5 — enrich with G1 effectiveness data (no-op when scores absent).
+    workspace = Path(workspace_root)
+    entries = tuple(
+        replace(
+            e,
+            **_enrich_with_effectiveness(
+                e.skill_id,
+                agent_id,
+                audit_log=audit_log,
+                workspace_root=workspace,
+                tenant_id=tenant_id,
+            ),
+        )
+        for e in entries
+    )
     return AgentSkillRegistry(
         agent_id=agent_id,
         nlah_dir=nlah_dir,
         skills_overlay=overlay_active,
         entries=entries,
     )
+
+
+def _enrich_with_effectiveness(
+    skill_id: str,
+    agent_id: str,
+    *,
+    audit_log: AuditLog,
+    workspace_root: Path,
+    tenant_id: str = _DEFAULT_TENANT_ID,
+) -> _EffectivenessFields:
+    """Look up a skill's G1 effectiveness score → Level 0 metadata fields.
+
+    Returns a mapping of the three ``SkillMetadataEntry`` effectiveness
+    fields, suitable for ``dataclasses.replace(entry, **result)``:
+
+    * G1 score present  → populated from ``EffectivenessScore``.
+    * No G1 score        → all three fields ``None`` (backwards-compat:
+      skills predating G1, or agents not emitting effectiveness data).
+    * G1 read failure    → emit ``meta_harness.skill.effectiveness_error``
+      to ``audit_log`` and return all-``None`` fields (CF #2 pattern;
+      effectiveness data must never break skill discovery).
+
+    Read-only G1 consumer — never writes G1 state. ``get_effectiveness_score``
+    already returns ``None`` for absent / unparseable / wrong-tenant
+    sidecars; the ``try`` here guards against *unexpected* read failures
+    (e.g. filesystem errors) so discovery degrades gracefully.
+    """
+    none_fields: _EffectivenessFields = {
+        "effectiveness_score": None,
+        "effectiveness_confidence": None,
+        "effectiveness_last_updated": None,
+    }
+    try:
+        score = get_effectiveness_score(
+            skill_id,
+            agent_id,
+            workspace_root=workspace_root,
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:  # CF #2: never let a G1 read failure break discovery
+        _logger.warning(
+            "G1 effectiveness read failed for skill_id=%s agent_id=%s: %s",
+            skill_id,
+            agent_id,
+            exc,
+        )
+        audit_log.append(
+            ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR,
+            {
+                "skill_id": skill_id,
+                "agent_id": agent_id,
+                "tenant_id": tenant_id,
+                "error_type": "effectiveness_read_failed",
+                "exception_message": str(exc),
+                "stack_trace": traceback.format_exc(),
+            },
+        )
+        return none_fields
+    if score is None:
+        return none_fields
+    return {
+        "effectiveness_score": score.global_score,
+        "effectiveness_confidence": score.confidence,
+        "effectiveness_last_updated": (
+            score.computed_at.isoformat() if score.computed_at else None
+        ),
+    }
 
 
 def _discover_entry_points(
@@ -147,8 +260,10 @@ def _discover_entry_points(
 def discover_all_agent_skills(
     *,
     workspace_root: Path | str,
+    audit_log: AuditLog,
     skills_overlay_root: Path | str | None = None,
     agent_filter: Iterable[str] | None = None,
+    tenant_id: str = _DEFAULT_TENANT_ID,
 ) -> dict[str, AgentSkillRegistry]:
     """Walk every ``nexus_eval_runners`` entry point and build per-agent registries.
 
@@ -161,6 +276,9 @@ def discover_all_agent_skills(
     ``<skills_overlay_root>/<agent_id>``. When ``None``, each agent
     falls back to ``default_shadow_skills_dir`` per the workspace
     convention.
+
+    ``audit_log`` and ``tenant_id`` thread through to
+    ``discover_agent_skills`` for G1 effectiveness enrichment (Task 5).
     """
     eps = _discover_entry_points(agent_filter=agent_filter)
     registries: dict[str, AgentSkillRegistry] = {}
@@ -171,7 +289,9 @@ def discover_all_agent_skills(
         registries[ep.name] = discover_agent_skills(
             ep.name,
             workspace_root=workspace_root,
+            audit_log=audit_log,
             skills_overlay=per_agent_overlay,
+            tenant_id=tenant_id,
         )
     return registries
 
