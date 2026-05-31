@@ -48,3 +48,18 @@ Fatal (OCSF id 6) collapses to Critical on read.
 ## Determinism note for v0.1
 
 The deterministic flow does not call the LLM. The NLAH ships inside the package so the LLM-driven flow (Phase 1b+) has the domain context ready when the agent driver starts threading prompts through. Today the NLAH content is loaded but not consumed.
+
+## Skill selection guidance
+
+When you receive your Level 0 skill metadata index at run start, each skill entry now includes G1 effectiveness signals: `effectiveness_score` (0.0-1.0 composite quality), `effectiveness_confidence` (0.0-1.0 signal strength), and `effectiveness_last_updated` (ISO timestamp).
+
+Use these signals as input to your skill selection decision:
+
+- Prefer skills with higher `effectiveness_score × effectiveness_confidence` for the current task
+- New skills (low confidence) may still be the right choice if topically relevant — your judgment matters
+- Skills with `effectiveness_score = None` haven't been measured yet; treat as neutral
+- Skills with `effectiveness_score = 0.0` and high confidence have proven counterproductive — avoid unless task explicitly requires them
+
+The composite (effectiveness × confidence) is a relevance signal, not a hard filter. Combine with task fit, your reasoning, and any operator guidance in the contract.
+
+See `docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md` §v1.5 for the G1 effectiveness-scoring canonical patterns.
