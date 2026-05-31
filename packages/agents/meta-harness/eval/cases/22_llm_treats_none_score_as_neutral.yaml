@@ -1,0 +1,28 @@
+case_id: 22_llm_treats_none_score_as_neutral
+description: >
+  Skill A has no G1 score yet (effectiveness_score = None → treated as
+  neutral per persona guidance) but is more topically relevant. Skill B has
+  a measured-but-weak signal (score 0.5, confidence 0.4 → composite 0.20)
+  and lower topical fit. The persona rule treats an unmeasured skill as
+  neutral (no penalty), so topical relevance carries A. Exercises Task 5's
+  None-score passthrough.
+fixture:
+  agent_id: investigation
+  tenant_id: default
+  skills:
+    - skill_id: iam-privesc/skill-a
+      effectiveness_score: null
+      effectiveness_confidence: null
+      topical_fit: 1.0
+    - skill_id: iam-privesc/skill-b
+      effectiveness_score: 0.5
+      effectiveness_confidence: 0.4
+      topical_fit: 0.6
+expected:
+  selected_skill_id: iam-privesc/skill-a
+  rationale: neutral_unmeasured_plus_topical_fit
+notes: >
+  A: unmeasured → neutral effectiveness; topical_fit 1.0. B: composite
+  0.5 * 0.4 = 0.20; topical_fit 0.6. Neutral treatment + higher topical fit
+  → A. Verifies skills with effectiveness_score = None are NOT dropped
+  (backwards-compat). Cross-ref: Task 5 enrichment None path, Task 6 persona.

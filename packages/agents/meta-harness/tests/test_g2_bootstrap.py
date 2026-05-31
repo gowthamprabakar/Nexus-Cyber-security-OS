@@ -262,18 +262,21 @@ def test_g2_g1_audit_vocabulary_complete() -> None:
 
 
 # ---------------------------------------------------------------------------
-# G1 eval integrity — 20 cases exist; G1 test file imports cleanly
+# G1 + G2 eval integrity — 25 cases exist; G1/G2 test files import cleanly
 # ---------------------------------------------------------------------------
 
 
 def test_g2_g1_eval_cases_still_load() -> None:
-    """All 20 eval case YAML files exist and the G1 test module imports."""
+    """All 25 eval case YAML files exist (15 v0.2 + 5 G1 + 5 G2) and the
+    G1/G2 test modules import."""
     cases_dir = _SRC_ROOT.parent.parent / "eval" / "cases"
     yaml_files = sorted(cases_dir.glob("*.yaml"))
-    assert len(yaml_files) == 20, (
-        f"Expected 20 eval case YAML files, got {len(yaml_files)}: {[f.name for f in yaml_files]}"
+    assert len(yaml_files) == 25, (
+        f"Expected 25 eval case YAML files, got {len(yaml_files)}: {[f.name for f in yaml_files]}"
     )
-    # G1 test module exists and is syntactically valid Python
-    g1_test_file = _SRC_ROOT.parent.parent / "tests" / "test_g1_eval_cases.py"
-    assert g1_test_file.is_file(), f"G1 eval cases test file missing: {g1_test_file}"
-    compile(g1_test_file.read_text(encoding="utf-8"), str(g1_test_file), "exec")
+    # G1 + G2 test modules exist and are syntactically valid Python.
+    tests_dir = _SRC_ROOT.parent.parent / "tests"
+    for name in ("test_g1_eval_cases.py", "test_g2_eval_cases.py"):
+        test_file = tests_dir / name
+        assert test_file.is_file(), f"eval cases test file missing: {test_file}"
+        compile(test_file.read_text(encoding="utf-8"), str(test_file), "exec")

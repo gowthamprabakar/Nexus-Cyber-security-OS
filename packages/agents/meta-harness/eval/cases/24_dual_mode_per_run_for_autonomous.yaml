@@ -1,0 +1,23 @@
+case_id: 24_dual_mode_per_run_for_autonomous
+description: >
+  An autonomous run (trigger_source = events_bus, propagated by Task 2 onto
+  ExecutionContract and by Task 3 onto DelegationContract) selects its skill
+  set once at run start and does not re-select per turn. The dual-mode
+  classifier maps EVENTS_BUS / SCHEDULED_QUEUE → autonomous → per-run
+  selection cardinality. With a 3-message autonomous run, exactly one
+  selection occurs.
+fixture:
+  trigger_source: events_bus
+  turns: 3
+expected:
+  dispatch_mode: autonomous
+  selection_cardinality: per_run
+  expected_selection_count: 1
+notes: >
+  Reframed (operator-approved): no skill.selected audit event or dual-mode
+  dispatcher exists yet (G2 v0.2 / agent-runtime territory), and Task 7's
+  scope forbids new audit constants or src changes. This case asserts the
+  trigger_source → dispatch-mode classification that a future dispatcher
+  keys on. trigger_source is validated against the real supervisor
+  TriggerSource enum (Task 3) and charter's allowed set (Task 2).
+  Cross-ref: G2-Q1 dual-mode dispatch (Option E).

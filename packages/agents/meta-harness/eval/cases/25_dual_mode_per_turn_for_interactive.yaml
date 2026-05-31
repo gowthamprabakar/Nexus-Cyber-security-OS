@@ -1,0 +1,19 @@
+case_id: 25_dual_mode_per_turn_for_interactive
+description: >
+  An interactive run (trigger_source = operator_cli) re-selects its skill
+  set on each user turn because context shifts per message. The dual-mode
+  classifier maps OPERATOR_CLI → interactive → per-turn selection
+  cardinality. A 3-turn conversation therefore performs 3 selections (one
+  per turn).
+fixture:
+  trigger_source: operator_cli
+  turns: 3
+expected:
+  dispatch_mode: interactive
+  selection_cardinality: per_turn
+  expected_selection_count: 3
+notes: >
+  Reframed (operator-approved) — same rationale as case 24. Asserts the
+  per-turn cardinality an interactive dispatcher would apply: one selection
+  per user turn (turns = 3 → 3 selections). Cross-ref: G2-Q1 dual-mode
+  dispatch (Option E), Task 2/Task 3 trigger_source propagation.

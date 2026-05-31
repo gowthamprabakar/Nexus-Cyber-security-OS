@@ -1,0 +1,28 @@
+case_id: 23_llm_avoids_proven_harmful_skill
+description: >
+  Skill A topically matches the task best but is proven counterproductive
+  (effectiveness_score 0.0 at high confidence 1.0). Skill B is a weaker
+  topical match with a moderate signal (score 0.6, confidence 0.5). The
+  persona rule says avoid a proven-harmful skill (0.0 score, high
+  confidence) unless the task explicitly requires it — so B is selected
+  despite the weaker topical fit.
+fixture:
+  agent_id: investigation
+  tenant_id: default
+  skills:
+    - skill_id: iam-privesc/skill-a
+      effectiveness_score: 0.0
+      effectiveness_confidence: 1.0
+      topical_fit: 1.0
+    - skill_id: iam-privesc/skill-b
+      effectiveness_score: 0.6
+      effectiveness_confidence: 0.5
+      topical_fit: 0.4
+expected:
+  selected_skill_id: iam-privesc/skill-b
+  rationale: avoided_proven_harmful
+notes: >
+  A: score 0.0 at confidence 1.0 ≥ 0.8 high-confidence threshold → excluded
+  as proven-counterproductive. B remains → selected even though topical_fit
+  0.4 < A's 1.0. Cross-ref: Task 6 persona ("avoid unless task explicitly
+  requires"), ADR-007 §v1.5.

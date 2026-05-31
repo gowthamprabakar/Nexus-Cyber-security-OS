@@ -67,12 +67,13 @@ def test_version_prints_package_version(cli: CliRunner) -> None:
 
 
 def test_eval_bundled_cases_pass(cli: CliRunner) -> None:
-    """All 20 YAML cases in the eval dir pass via MetaHarnessEvalRunner
-    (the 5 G1 cases 16-20 pass vacuously — no agents fixture — and are
-    rigorously tested by ``test_g1_eval_cases.py``)."""
+    """All 25 YAML cases in the eval dir pass via MetaHarnessEvalRunner
+    (the 5 G1 cases 16-20 and 5 G2 cases 21-25 pass vacuously — no agents
+    fixture — and are rigorously tested by ``test_g1_eval_cases.py`` /
+    ``test_g2_eval_cases.py``)."""
     result = cli.invoke(main, ["eval"])
     assert result.exit_code == 0, result.output
-    assert "20/20 passed" in result.output
+    assert "25/25 passed" in result.output
 
 
 def test_eval_bad_dir_exits_2(cli: CliRunner, tmp_path: Path) -> None:
