@@ -388,13 +388,13 @@ def test_case_20_gepa_api_returns_correct_shape(tmp_path: Path) -> None:
 
 
 def test_g1_eval_cases_count_is_5() -> None:
-    """v0.2 baseline: 15 cases. G1 adds 5. Total: 20."""
+    """v0.2 baseline: 15 cases. G1 adds 5. G2 (Task 7) adds 5 more."""
     assert len(G1_CASES) == 5, f"expected 5 G1 eval cases, got {len(G1_CASES)}"
 
 
-def test_eval_cases_total_is_20() -> None:
-    """Total eval cases across v0.2 + G1."""
+def test_eval_cases_total_is_25() -> None:
+    """Total eval cases across v0.2 (15) + G1 (5) + G2 (5)."""
     all_cases = sorted(_CASES_DIR.glob("*.yaml"))
-    assert len(all_cases) == 20, (
-        f"expected 20 total eval cases, got {len(all_cases)}: {[f.name for f in all_cases]}"
+    assert len(all_cases) == 25, (
+        f"expected 25 total eval cases, got {len(all_cases)}: {[f.name for f in all_cases]}"
     )

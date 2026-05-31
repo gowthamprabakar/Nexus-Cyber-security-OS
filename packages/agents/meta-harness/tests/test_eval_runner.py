@@ -54,15 +54,28 @@ def test_entry_point_registered() -> None:
 
 
 _G1_CASE_ID_PREFIXES = ("16_", "17_", "18_", "19_", "20_")
+# G2 (Task 7) skill-selection cases are deterministic signal cases, tested
+# in test_g2_eval_cases.py — like G1, they are NOT MetaHarnessEvalRunner-
+# compatible and are excluded from the runner-compatibility guards below.
+_G2_CASE_ID_PREFIXES = ("21_", "22_", "23_", "24_", "25_")
 
 
 def _is_g1_case(case_id: str) -> bool:
     return any(case_id.startswith(p) for p in _G1_CASE_ID_PREFIXES)
 
 
+def _is_g2_case(case_id: str) -> bool:
+    return any(case_id.startswith(p) for p in _G2_CASE_ID_PREFIXES)
+
+
+def _is_deterministic_case(case_id: str) -> bool:
+    """G1 + G2 cases: not runner-compatible; tested in their own modules."""
+    return _is_g1_case(case_id) or _is_g2_case(case_id)
+
+
 def test_all_cases_load_cleanly() -> None:
     cases = load_cases(_CASES_DIR)
-    assert len(cases) == 20  # 15 runner-compatible + 5 G1
+    assert len(cases) == 25  # 15 runner-compatible + 5 G1 + 5 G2
 
 
 def test_case_ids_match_filenames() -> None:
@@ -129,8 +142,9 @@ async def test_individual_case_passes_v0_2(case_filename: str, tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_full_suite_runner_compatible_cases_pass(tmp_path: Path) -> None:
     """End-to-end via run_suite — only runner-compatible cases (01-15).
-    G1 cases (16-20) are tested separately via ``test_g1_eval_cases.py``."""
-    cases = [c for c in load_cases(_CASES_DIR) if not _is_g1_case(c.case_id)]
+    G1 cases (16-20) and G2 cases (21-25) are tested separately via
+    ``test_g1_eval_cases.py`` and ``test_g2_eval_cases.py``."""
+    cases = [c for c in load_cases(_CASES_DIR) if not _is_deterministic_case(c.case_id)]
     assert len(cases) == 15, f"expected 15 runner-compatible cases, got {len(cases)}"
     result = await run_suite(cases, MetaHarnessEvalRunner(), workspace_root=tmp_path)
     passed_count = sum(1 for r in result.cases if r.passed)

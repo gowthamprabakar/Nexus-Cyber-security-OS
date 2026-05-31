@@ -44,12 +44,16 @@ _STUB_DIR = Path(__file__).parent.parent / "eval" / "stub_responses"
 _CASE_FILES = sorted(_CASES_DIR.glob("*.yaml"))
 _CASE_IDS = [load_case_file(p).case_id for p in _CASE_FILES]
 
-# G1 effectiveness-scoring cases (16-20) are validated by
-# ``test_g1_eval_cases.py`` — they do not use MetaHarnessEvalRunner.
+# G1 effectiveness-scoring cases (16-20) and G2 skill-selection cases
+# (21-25) are validated by ``test_g1_eval_cases.py`` /
+# ``test_g2_eval_cases.py`` — they do not use MetaHarnessEvalRunner.
 _RUNNER_CASE_FILES = [
     p
     for p in _CASE_FILES
-    if not any(p.stem.startswith(prefix) for prefix in ("16_", "17_", "18_", "19_", "20_"))
+    if not any(
+        p.stem.startswith(prefix)
+        for prefix in ("16_", "17_", "18_", "19_", "20_", "21_", "22_", "23_", "24_", "25_")
+    )
 ]
 
 

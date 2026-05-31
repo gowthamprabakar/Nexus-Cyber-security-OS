@@ -1,0 +1,30 @@
+case_id: 21_llm_prefers_high_effectiveness_skill
+description: >
+  Two deployed skills are equally compatible with the task. Skill A has a
+  strong G1 effectiveness signal (score 0.9, confidence 0.8 → composite
+  0.72); skill B is weak (score 0.3, confidence 0.8 → composite 0.24).
+  Following the NLAH "Skill selection guidance" persona rule (Task 6), the
+  agent prefers the higher composite (effectiveness × confidence). The G1
+  signals are populated onto Level 0 metadata by Task 5's
+  discover_agent_skills enrichment.
+fixture:
+  agent_id: investigation
+  tenant_id: default
+  skills:
+    - skill_id: iam-privesc/skill-a
+      effectiveness_score: 0.9
+      effectiveness_confidence: 0.8
+      topical_fit: 1.0
+    - skill_id: iam-privesc/skill-b
+      effectiveness_score: 0.3
+      effectiveness_confidence: 0.8
+      topical_fit: 1.0
+expected:
+  selected_skill_id: iam-privesc/skill-a
+  rationale: higher_composite_signal
+notes: >
+  composite_A = 0.9 * 0.8 = 0.72; composite_B = 0.3 * 0.8 = 0.24.
+  Equal topical fit → composite decides → A. Deterministic proxy for the
+  LLM following its persona; no LLM in the eval harness (G2-Q2: the LLM is
+  the selection layer). Cross-ref: Task 5 (skill_discovery enrichment),
+  Task 6 (persona guidance), ADR-007 §v1.5.
