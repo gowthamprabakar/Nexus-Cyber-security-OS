@@ -1,6 +1,6 @@
 [project]
 name = "nexus-meta-harness-agent"
-version = "0.2.2"
+version = "0.2.5"
 description = "Nexus Meta-Harness Agent — cross-agent batch eval, NLAH A/B compare, scorecard delta tracking + autonomous skill creation + progressive-disclosure NLAH (A.4 v0.2 / Phase 1 Wave 0 under ADR-007 v1.4)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
@@ -22,6 +22,10 @@ dev = [
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",
     "types-PyYAML>=6.0.0",
+]
+dspy = [
+    "dspy>=2.5",
+    "gepa",
 ]
 
 [project.scripts]

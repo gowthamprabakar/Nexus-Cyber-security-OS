@@ -40,8 +40,8 @@ def test_g2_version_is_0_2_2() -> None:
 
     assert hasattr(meta_harness, "__version__")
     assert isinstance(meta_harness.__version__, str)
-    assert meta_harness.__version__ == "0.2.2", (
-        f"Expected 0.2.2 (G2), got {meta_harness.__version__}"
+    assert meta_harness.__version__ == "0.2.5", (
+        f"Expected 0.2.5 (live; G2 shipped 0.2.2), got {meta_harness.__version__}"
     )
 
 
@@ -56,7 +56,7 @@ def test_g2_pyproject_version_matches() -> None:
     assert pyproject_version == meta_harness.__version__, (
         f"pyproject.toml {pyproject_version} != __version__ {meta_harness.__version__}"
     )
-    assert pyproject_version == "0.2.2"
+    assert pyproject_version == "0.2.5"
 
 
 # ---------------------------------------------------------------------------

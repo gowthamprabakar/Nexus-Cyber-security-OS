@@ -51,7 +51,7 @@ def test_package_imports() -> None:
     assert isinstance(meta_harness.__version__, str)
     # Phase 1 / Wave 0 — v0.2 ships autonomous skill creation +
     # progressive-disclosure NLAH loader + auto-deploy safety rails.
-    assert meta_harness.__version__ == "0.2.2"
+    assert meta_harness.__version__ == "0.2.5"
 
 
 def test_charter_nlah_loader_import_works() -> None:

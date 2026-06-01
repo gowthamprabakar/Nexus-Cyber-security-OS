@@ -146,3 +146,16 @@ These three architectural deferrals are load-bearing — A.4 v0.2's plan author 
 
 - Plan: [docs/superpowers/plans/2026-05-21-a-4-meta-harness-v0-1.md](../../../docs/superpowers/plans/2026-05-21-a-4-meta-harness-v0-1.md)
 - Verification record (lands in Task 16): `docs/_meta/a-4-meta-harness-v0-1-verification-2026-05-21.md`
+
+## Optional: DSPy + GEPA skill optimization (v0.2.5)
+
+The v0.2.5 skill-optimization layer (DSPy + GEPA) installs via the `[dspy]`
+optional-dependency group — kept optional so substrate and non-A.4 agents do
+not inherit its ~40-package footprint:
+
+```sh
+uv pip install -e packages/agents/meta-harness[dspy]
+```
+
+Without the extra, `import meta_harness` works normally; DSPy-backed
+compilation paths (Tasks 4+) are wired behind lazy imports.
