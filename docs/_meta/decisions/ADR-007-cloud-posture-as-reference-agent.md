@@ -1,7 +1,7 @@
 # ADR-007 — Cloud Posture is the reference NLAH
 
-- **Status:** accepted (v1.5 — amended 2026-05-25 with G1 effectiveness-scoring canonical patterns; see [§v1.5 amendment](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns) · prior v1.4 added progressive-disclosure NLAH loader · prior v1.3 added the always-on agent class · prior v1.2 hoisted the NLAH loader · prior v1.1 hoisted the LLM adapter)
-- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2); 2026-05-12 (v1.3); 2026-05-22 (v1.4); 2026-05-25 (v1.5)
+- **Status:** accepted (v1.6 — amended 2026-05-31 with DSPy programs as the canonical prompt shape; see [§v1.6 amendment](#v16-amendment-2026-05-31---dspy-programs-as-the-canonical-prompt-shape) · prior v1.5 added G1 effectiveness-scoring canonical patterns · prior v1.4 added progressive-disclosure NLAH loader · prior v1.3 added the always-on agent class · prior v1.2 hoisted the NLAH loader · prior v1.1 hoisted the LLM adapter)
+- **Date:** 2026-05-10 (v1.0); 2026-05-11 (v1.1); 2026-05-11 (v1.2); 2026-05-12 (v1.3); 2026-05-22 (v1.4); 2026-05-25 (v1.5); 2026-05-31 (v1.6)
 - **Authors:** AI/Agent Eng, Detection Eng
 - **Stakeholders:** every agent author; PM (capacity planning); compliance (audit-chain consistency across agents)
 
@@ -494,3 +494,47 @@ This split follows the A.4 v0.2 verification record CF #6 pattern: "decision in 
 - **Charter substrate.** No changes to `charter.audit`, `charter.nlah_loader`, or any other charter module. G1 is pure meta-harness — it consumes the audit chain, it doesn't modify it.
 - **Per-agent NLAH shim.** The v1.4 progressive-disclosure loader is unchanged. Skills are loaded the same way; effectiveness scoring is a post-deployment layer on top.
 - **The `_enforce_always_on` hoist.** Still deferred to v1.6. v1.5 is exclusively the G1 effectiveness-scoring canonical patterns.
+
+## v1.6 amendment (2026-05-31) — DSPy programs as the canonical prompt shape
+
+### Trigger
+
+A.4 Meta-Harness **v0.2.5** introduces DSPy + GEPA prompt optimization (per the [DSPy+GEPA strategic doc §4.4](../dspy-gepa-prompt-optimization-2026-05-22.md) and [v0.2.5 brainstorm Q3](../../superpowers/brainstorms/2026-05-30-v0-2-5-skill-optimization-brainstorm.md)). The compilation seam landed as `charter.dspy_compiler` (v0.2.5 Task 2), and **Stage 7 SKILL_CREATE** becomes the first agent surface to run as a DSPy module alongside the legacy single-LLM-call composer. This raises an architectural question every future agent will face: _should hand-written NLAH prompts migrate to DSPy programs?_ This amendment answers it canonically.
+
+### What changed — the canonical principle
+
+**Agent prompts that consume LLMs should migrate, over time, to DSPy Signatures + Modules** — declarative programs the GEPA optimizer can compile against an effectiveness metric (per [§v1.5](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns)), rather than static hand-tuned strings. DSPy programs are the **canonical prompt shape** for new LLM-consuming surfaces going forward.
+
+The principle, stated precisely:
+
+- **New LLM-consuming surfaces** (a new agent stage, a new reasoning step) **should be authored as DSPy Signatures/Modules** when GEPA optimization is wanted for them.
+- **DSPy programs are compiled through `charter.dspy_compiler`** (provider-agnostic per [ADR-006](ADR-006-openai-compatible-provider.md)), with the effectiveness `metric=` from [§v1.5](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns).
+- **Hand-written NLAH prompts remain valid** — they are the bootstrap input to compilation and the graceful-degradation fallback when compilation is unavailable or fails (the Stage-7 legacy path).
+
+### This is a CANONICAL PATTERN reference, NOT a forcing function
+
+Critically — and consistent with v1.1/v1.2's "amend when proven, don't retrofit blindly":
+
+- **v0.1 / Wave 0 agents are NOT required to migrate.** Their hand-written NLAH prompts keep working unchanged. There is no deadline and no breakage.
+- **The pattern is opt-in per agent**, adopted when an agent's prompts are worth optimizing (enough deployed skills / effectiveness signal to make GEPA compilation worthwhile).
+- **Wave 1+ agents adopt DSPy programs as part of their v0.2 task list** — the migration is a line item in each agent's v0.2 plan, not a separate cross-fleet sweep. F.3 Cloud Posture v0.2 (the first Wave 1 agent, and this ADR's reference agent) is the first to carry it.
+
+### Why this is canonical (not just one cycle's choice)
+
+GEPA can only optimize what is expressed as a compilable program. Codifying "DSPy program as the canonical shape" here means future agent authors don't re-litigate prompt architecture per agent — they inherit the decision the same way they inherit the NLAH loader (v1.2) and the effectiveness interface (v1.5). It closes the loop: v1.4 made skills loadable, v1.5 made them measurable, v1.6 makes the prompts that use them **optimizable**.
+
+### What this does NOT change
+
+- **The ten reference-template patterns** and the v1.1–v1.5 amendments are unchanged. DSPy programs are an additional authoring shape, not a replacement for the NLAH loader, the LLM adapter, or the effectiveness interface.
+- **v0.1 agents and the NLAH loader.** The progressive-disclosure loader (v1.4) and per-agent NLAH shim are untouched; DSPy adoption sits on top.
+- **Charter substrate beyond the Task-2 seam.** Only `charter.dspy_compiler` was added (its own SAFETY-CRITICAL PR); no other charter module changed.
+- **The `_enforce_always_on` hoist.** Still deferred (now to a future v1.7 if/when a third consumer arrives) — it was never claimed by v1.5 or this v1.6.
+
+### Cross-references
+
+- [v0.2.5 brainstorm Q3](../../superpowers/brainstorms/2026-05-30-v0-2-5-skill-optimization-brainstorm.md) — Stage 7 parallel-composer resolution (DSPy alongside legacy)
+- [DSPy+GEPA strategic analysis §4.4](../dspy-gepa-prompt-optimization-2026-05-22.md) — "DSPy program as canonical prompt shape" rationale + per-agent migration path
+- [Hermes self-evolution adoption doc](../hermes-self-evolution-adoption-2026-05-23.md) — G1 → G2 → v0.2.5 → Wave 1 sequencing
+- [v0.2.5 plan doc](../../superpowers/plans/2026-05-31-a-4-meta-harness-v0-2-5.md) — Task 3 (this amendment), Task 5 (Stage-7 parallel composer)
+- [`charter.dspy_compiler`](../../../packages/charter/src/charter/dspy_compiler.py) — the compilation seam (v0.2.5 Task 2)
+- [§v1.5 amendment](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns) — the effectiveness metric GEPA optimizes against

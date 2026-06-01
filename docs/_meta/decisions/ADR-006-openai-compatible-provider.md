@@ -1,7 +1,7 @@
 # ADR-006 — One `OpenAICompatibleProvider` subsumes vLLM, Ollama, OpenAI, and most third-party API providers
 
-- **Status:** accepted
-- **Date:** 2026-05-09
+- **Status:** accepted (amended 2026-05-31 — DeepSeek + Anthropic formally listed as supported providers for v0.2.5 skill-optimization compilation; see [§v0.2.5 amendment](#v025-amendment-2026-05-31--deepseek--anthropic-as-supported-compilation-providers))
+- **Date:** 2026-05-09 (v1.0); 2026-05-31 (v0.2.5 amendment)
 - **Authors:** AI/Agent Eng, Architect
 - **Stakeholders:** every agent author; platform / edge engineers; security & compliance
 - **Amends:** [ADR-003 — LLM provider strategy](ADR-003-llm-provider-strategy.md)
@@ -83,3 +83,65 @@ openai-compatible = ["openai>=1.50.0", "tenacity>=9.0.0"]
 - Companion: [ADR-003 LLM provider strategy](ADR-003-llm-provider-strategy.md), [ADR-005 async tool wrapper convention](ADR-005-async-tool-wrapper-convention.md)
 - Sister provider: [`packages/charter/src/charter/llm_anthropic.py`](../../../packages/charter/src/charter/llm_anthropic.py)
 - Risk #1 in [`docs/_meta/system-readiness.md`](../system-readiness.md) — sovereign / air-gap implementability — partially retired by this ADR.
+
+## v0.2.5 amendment (2026-05-31) — DeepSeek + Anthropic as supported compilation providers
+
+### Trigger
+
+A.4 Meta-Harness **v0.2.5** introduces DSPy + GEPA prompt-optimization compilation (the `charter.dspy_compiler` seam). Compilation is LLM-intensive, so the cycle's [brainstorm Q1](../../superpowers/brainstorms/2026-05-30-v0-2-5-skill-optimization-brainstorm.md) locked a two-provider posture: **DeepSeek** for development/test compilation (low cost — ~$15–35/month for 17 agents on a weekly cadence), with **Anthropic** as the strategic **production** target (pending API-key acquisition; a switch-validation compilation cycle on Anthropic gates v0.2.5 closure).
+
+Both providers already work through the existing surface — DeepSeek was named among the OpenAI-compatible services in the original Decision, and `AnthropicProvider` predates this ADR. This amendment **formalizes** them as supported so the v0.2.5 compilation contract is explicit: once listed here, every future cycle may assume DeepSeek-compatibility and Anthropic-compatibility are part of the platform contract.
+
+### DeepSeek — `OpenAICompatibleProvider` configuration
+
+DeepSeek (operator deployment: **DeepSeek V4 Pro** tier) is an OpenAI-compatible endpoint, so it is configured through the existing `OpenAICompatibleProvider` — a **config change, not a code change**:
+
+| Field                                   | Value                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `provider` (`NEXUS_LLM_PROVIDER`)       | `openai-compatible`                                                     |
+| `base_url` (`NEXUS_LLM_BASE_URL`)       | `https://api.deepseek.com/v1`                                           |
+| `model_pin` (`NEXUS_LLM_MODEL_PIN`)     | deployment-pinned, e.g. `deepseek-chat` (V4 Pro) or `deepseek-reasoner` |
+| `provider_id` (`NEXUS_LLM_PROVIDER_ID`) | `deepseek` (labels audit entries)                                       |
+| `model_class` (`NEXUS_LLM_TIER`)        | `workhorse`                                                             |
+| API key                                 | `NEXUS_LLM_API_KEY` (the DeepSeek key)                                  |
+
+```python
+from charter.llm_adapter import LLMConfig, make_provider
+
+provider = make_provider(
+    LLMConfig(
+        provider="openai-compatible",
+        model_pin="deepseek-chat",
+        base_url="https://api.deepseek.com/v1",
+        provider_id="deepseek",
+        api_key=...,  # operator-supplied DeepSeek key
+    )
+)
+```
+
+Key acquisition is the operator's responsibility; the platform contract is only the configuration shape above.
+
+### Anthropic — `AnthropicProvider` configuration (formal)
+
+Anthropic was already used in the agent runtime; it is documented here as the formal **production** target for v0.2.5 compilation:
+
+| Field                               | Value                                                                |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `provider` (`NEXUS_LLM_PROVIDER`)   | `anthropic`                                                          |
+| `model_pin` (`NEXUS_LLM_MODEL_PIN`) | deployment-pinned Claude model                                       |
+| `model_class` (`NEXUS_LLM_TIER`)    | `frontier` (compilation) or `workhorse`                              |
+| API key                             | `NEXUS_LLM_API_KEY` (or the SDK-native `ANTHROPIC_API_KEY` fallback) |
+
+`AnthropicProvider` stays a separate implementation (per the Decision above) — Anthropic's wire format differs from OpenAI's. The `charter.dspy_compiler` seam is **provider-agnostic** (it binds DSPy to whichever `LLMProvider` `make_provider` returns), so switching DeepSeek → Anthropic is a config change, validated once before v0.2.5 closure.
+
+### What this does NOT change
+
+- The single-`OpenAICompatibleProvider` decision is unchanged; DeepSeek adds a row, not a class.
+- No code change in `llm_openai_compat.py` or `llm_anthropic.py` — DeepSeek and Anthropic both work through the existing constructors today.
+- Per-customer / per-tenant model configuration remains **deferred to v0.3+** (blocked on the SET LOCAL tenant-RLS substrate fix), per brainstorm Q6.
+
+### Cross-references
+
+- [v0.2.5 brainstorm Q1](../../superpowers/brainstorms/2026-05-30-v0-2-5-skill-optimization-brainstorm.md) — provider posture (DeepSeek dev / Anthropic prod target)
+- [v0.2.5 plan doc](../../superpowers/plans/2026-05-31-a-4-meta-harness-v0-2-5.md) — Task 3 (this amendment), Task 14 (Anthropic switch-validation closure gate)
+- [`charter.dspy_compiler`](../../../packages/charter/src/charter/dspy_compiler.py) — the provider-agnostic compilation seam (v0.2.5 Task 2)
