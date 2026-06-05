@@ -217,21 +217,70 @@ def test_compile_rejects_none_trainset() -> None:
 
 
 def test_compile_happy_path_stubbed_optimizer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """compile() builds the optimizer and runs its .compile under the charter
-    LM context; optimizer stubbed so no live compilation occurs (Task 4+)."""
-    sentinel = object()
+    """compile() builds the optimizer, runs its .compile under the charter LM
+    context, and binds the LM to the returned program before returning. Optimizer
+    stubbed so no live compilation occurs."""
     seen: dict[str, Any] = {}
+
+    class _CompiledProgram:
+        def set_lm(self, lm: Any) -> None:
+            seen["bound_lm"] = lm
+
+    compiled_program = _CompiledProgram()
 
     class _FakeOptimizer:
         def compile(self, program: Any, *, trainset: Any) -> Any:
             seen["program"] = program
             seen["trainset"] = trainset
-            return sentinel
+            return compiled_program
 
     compiler = DSPyCompiler(_provider("x"), model_pin="m")
     monkeypatch.setattr(compiler, "make_optimizer", lambda **k: _FakeOptimizer())
     program = _StubProgram()
     result = compiler.compile(program, trainset=["ex"], metric=_metric)
-    assert result is sentinel
+    assert result is compiled_program
     assert seen["program"] is program
     assert seen["trainset"] == ["ex"]
+    # The compiled program must have the charter LM bound (drift #3 fix).
+    assert seen["bound_lm"] is compiler.lm
+
+
+def test_compiled_program_is_invocable_without_external_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """drift #3 — a compiled program returned by compile() must be invocable
+    directly, without re-establishing ``dspy.context(lm=...)``. compile() binds
+    the charter LM via ``set_lm`` so a later ``compiled(...)`` does not raise
+    ``ValueError: No LM is loaded``."""
+
+    class _Sig(dspy.Signature):  # type: ignore[misc, name-defined]
+        trace: str = dspy.InputField()
+        skill_md: str = dspy.OutputField()
+
+    class _Program(dspy.Module):  # type: ignore[misc, name-defined]
+        def __init__(self) -> None:
+            super().__init__()
+            self.step = dspy.Predict(_Sig)
+
+        def forward(self, trace: str) -> Any:
+            return self.step(trace=trace)
+
+    program = _Program()
+
+    class _FakeOptimizer:
+        # GEPA-like: returns the (already-built) program without binding an LM.
+        def compile(self, prog: Any, *, trainset: Any) -> Any:
+            return program
+
+    # Plenty of identical canned responses so the fake provider never exhausts
+    # (DSPy may make more than one call per invocation).
+    provider = _provider(*(['{"skill_md": "# Compiled skill"}'] * 20))
+    compiler = DSPyCompiler(provider, model_pin="m")
+    monkeypatch.setattr(compiler, "make_optimizer", lambda **k: _FakeOptimizer())
+
+    compiled = compiler.compile(_StubProgram(), trainset=["ex"], metric=_metric)
+
+    # No global LM configured — reproduces the drift #3 failure condition.
+    dspy.settings.configure(lm=None)
+    out = compiled(trace="did X then Y")  # must NOT raise "No LM is loaded"
+    assert out.skill_md == "# Compiled skill"
