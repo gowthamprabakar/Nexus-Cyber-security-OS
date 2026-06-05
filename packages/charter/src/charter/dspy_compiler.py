@@ -293,7 +293,15 @@ class DSPyCompiler:
             **kwargs,
         )
         with dspy.context(lm=self.lm):
-            return opt.compile(program, trainset=trainset)
+            compiled = opt.compile(program, trainset=trainset)
+        # Bind the charter LM persistently to the compiled program. GEPA's
+        # compile() configures the LM only transiently (via dspy.context), so
+        # without this the returned program has no LM and a later
+        # ``compiled(...)`` raises "No LM is loaded". charter avoids global DSPy
+        # LM state, so the compiled artifact must carry its own LM — this keeps
+        # compile() returning an immediately-invocable program (v0.2.5 drift #3).
+        compiled.set_lm(self.lm)
+        return compiled
 
 
 __all__ = [
