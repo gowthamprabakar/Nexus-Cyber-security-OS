@@ -34,6 +34,7 @@ this adapter later; no real GEPA compilation runs here.
 
 from __future__ import annotations
 
+import importlib
 import traceback
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,27 @@ from meta_harness.skill_feedback import read_operator_ratings
 
 _DEPLOYED_SKILLS_DIRNAME = "deployed-skills"
 _RATINGS_FILENAME = "operator-ratings.jsonl"
+
+
+def _score_with_feedback(score: float, feedback: str) -> Any:
+    """Wrap (score, feedback) in DSPy's GEPA metric-return type (Q5-c mechanism).
+
+    GEPA's ``GEPAFeedbackMetric`` contract is ``Union[float, ScoreWithFeedback]``
+    — a raw ``tuple[float, str]`` crashes DSPy's parallel evaluator
+    (``sum(vals)`` → ``int + tuple``). The canonical carrier is
+    ``dspy.teleprompt.gepa.gepa_utils.ScoreWithFeedback`` (a ``dspy.Prediction``
+    subclass with ``score`` + ``feedback``). That path is semi-internal and GEPA
+    is ``@experimental`` in DSPy 3.x, so if it drifts we fall back to the stable
+    top-level ``dspy.Prediction(score=, feedback=)`` — functionally identical and
+    GEPA-accepted. Imports are gated (``importlib``) per the Task-1 optional-dep
+    guard (no literal ``import dspy``/``from dspy`` in meta_harness src).
+    """
+    try:
+        gepa_utils = importlib.import_module("dspy.teleprompt.gepa.gepa_utils")
+        return gepa_utils.ScoreWithFeedback(score=score, feedback=feedback)
+    except (ImportError, AttributeError):  # pragma: no cover - DSPy path-drift fallback
+        dspy = importlib.import_module("dspy")
+        return dspy.Prediction(score=score, feedback=feedback)
 
 
 class GEPAMetricAdapter:
@@ -124,7 +146,7 @@ class GEPAMetricAdapter:
         prediction: Any = None,
         *args: Any,
         **kwargs: Any,
-    ) -> tuple[float, str] | None:
+    ) -> Any | None:
         """GEPA ``metric=`` callable.
 
         ``example`` must carry a ``skill_id`` attribute (the trainset row's
@@ -134,10 +156,12 @@ class GEPAMetricAdapter:
 
         Returns:
             * ``None`` — skip this example (Q5-a: no score, zero confidence,
-              or a graceful G1 read failure).
-            * ``(modulated_score, reflection)`` — the modulated scalar
-              (Q5-b) plus the reflection string (Q5-c) for GEPA's reflective
-              optimization.
+              or a graceful G1 read failure). With the Task-5 trainset
+              pre-filter this is unreachable in normal operation (defensive).
+            * ``ScoreWithFeedback(score, feedback)`` — the modulated scalar
+              (Q5-b) plus the reflection string (Q5-c), in DSPy's GEPA
+              metric-return type. NOTE: a raw ``tuple`` crashes DSPy's
+              evaluator — see ``_score_with_feedback`` (Q5-c drift correction).
         """
         skill_id = getattr(example, "skill_id", None)
         if not skill_id:
@@ -172,8 +196,9 @@ class GEPAMetricAdapter:
         # Q5-b: MODULATE by score x confidence.
         modulated = score.global_score * score.confidence
 
-        # Q5-c: USE cached operator notes in the reflection string.
-        return modulated, self._build_reflection(skill_id, score)
+        # Q5-c: USE cached operator notes in the reflection string, returned in
+        # DSPy's GEPA metric-return type (ScoreWithFeedback) — not a raw tuple.
+        return _score_with_feedback(modulated, self._build_reflection(skill_id, score))
 
     def _build_reflection(self, skill_id: str, score: EffectivenessScore) -> str:
         """Assemble ``reason + axes breakdown + operator notes`` for GEPA reflection."""
