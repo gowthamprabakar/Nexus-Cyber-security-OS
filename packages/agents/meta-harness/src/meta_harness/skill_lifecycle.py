@@ -41,7 +41,7 @@ summary; the loop continues to the next candidate.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -57,12 +57,14 @@ from meta_harness.audit_emit import (
     emit_skill_eval_gate_completed,
     emit_skill_rejected,
 )
+from meta_harness.dspy_skill_creator import adjudicate_pass_rates
 from meta_harness.eval.batch import CasesRootResolver
 from meta_harness.schemas import (
     DeploymentDecision,
     EvalGateResult,
     Scorecard,
     SkillApprovalMode,
+    SkillCandidate,
     SkillLifecycleSummary,
 )
 from meta_harness.skill_approval import (
@@ -100,6 +102,72 @@ EvalRunnerLoader = Callable[[str], EvalRunner]
 """Maps an ``agent_id`` to its ``EvalRunner`` (production: from the
 ``nexus_eval_runners`` entry-point group; tests: a ``FakeRunner``)."""
 
+DSPyCandidateFactory = Callable[[Scorecard, SkillCandidate], Awaitable[SkillCandidate | None]]
+"""Produces a DSPy-compiled SKILL_CREATE candidate (Task 5 composer →
+materialized ``SkillCandidate``) to adjudicate against the legacy candidate
+(Task 6, brainstorm Q3). **Injected by Task 7's compilation cadence**; when
+``None`` (the default) Stage 7 runs legacy-only — unchanged behaviour, no
+per-trigger compilation. Returning ``None`` means no DSPy candidate this cycle
+(CF #2 → legacy proceeds)."""
+
+
+async def _adjudicate_dspy_candidate(
+    *,
+    legacy_eval_result: EvalGateResult,
+    dspy_candidate: SkillCandidate,
+    legacy_skill_id: str,
+    scorecard: Scorecard,
+    workspace_root: Path,
+    cases_resolver: CasesRootResolver,
+    eval_runner_loader: EvalRunnerLoader,
+    llm_provider: LLMProvider,
+    audit_log: AuditLog,
+) -> tuple[SkillCandidate, EvalGateResult] | None:
+    """Eval-gate the DSPy candidate and pick the winner vs the legacy result (Q3).
+
+    Reuses the legacy candidate's already-computed eval-gate result and runs the
+    gate **only on the DSPy candidate** (the cheaper half of the work). Emits a
+    second ``meta_harness.skill.eval_gate_completed`` for transparency (Q8
+    quality-delta plumbing reads both events). Returns
+    ``(dspy_candidate, dspy_eval_result)`` only when DSPy **strictly wins** on
+    ``candidate_pass_rate``; ``None`` means legacy wins — a tie, a lower DSPy
+    pass-rate, or a DSPy eval-gate failure (CF #2 — legacy proceeds unharmed).
+    """
+    dspy_eval = await _run_eval_gate_safely(
+        candidate=dspy_candidate,
+        scorecard=scorecard,
+        workspace_root=workspace_root,
+        cases_resolver=cases_resolver,
+        eval_runner_loader=eval_runner_loader,
+        llm_provider=llm_provider,
+    )
+    if dspy_eval is None:  # CF #2: DSPy eval-gate failed → legacy proceeds
+        return None
+    emit_skill_eval_gate_completed(audit_log, result=dspy_eval)
+    cache_eval_gate_result(
+        dspy_eval,
+        workspace_root=workspace_root,
+        agent_id=scorecard.agent_id,
+        skill_id=dspy_candidate.skill_id,
+    )
+    _, meta = adjudicate_pass_rates(
+        legacy_eval_result.candidate_pass_rate,
+        dspy_eval.candidate_pass_rate,
+        legacy_skill_id,
+        dspy_candidate.skill_id,
+    )
+    _LOG.info(
+        "SKILL_CREATE adjudication agent_id=%s winner=%s legacy=%.3f dspy=%.3f delta=%.3f",
+        scorecard.agent_id,
+        meta["winner"],
+        meta["legacy_pass_rate"],
+        meta["dspy_pass_rate"],
+        meta["delta"],
+    )
+    if meta["winner"] == "dspy":
+        return dspy_candidate, dspy_eval
+    return None
+
 
 async def run_skill_lifecycle(
     *,
@@ -111,6 +179,7 @@ async def run_skill_lifecycle(
     audit_chain_loader: AuditChainLoader | None = None,
     llm_provider: LLMProvider | None = None,
     eval_runner_loader: EvalRunnerLoader | None = None,
+    dspy_candidate_factory: DSPyCandidateFactory | None = None,
 ) -> SkillLifecycleSummary:
     """Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE.
 
@@ -181,6 +250,28 @@ async def run_skill_lifecycle(
             agent_id=scorecard.agent_id,
             skill_id=candidate.skill_id,
         )
+
+        # Task 6 — Stage 7 parallel adjudication (brainstorm Q3). When a DSPy
+        # candidate factory is injected (Task 7 cadence), produce the DSPy
+        # candidate, eval-gate it, and if it strictly beats the legacy
+        # candidate's pass-rate, the DSPy candidate + its eval result win and
+        # proceed to deploy. Default (no factory) → legacy-only, unchanged.
+        if dspy_candidate_factory is not None:
+            dspy_candidate = await dspy_candidate_factory(scorecard, candidate)
+            if dspy_candidate is not None:
+                won = await _adjudicate_dspy_candidate(
+                    legacy_eval_result=eval_result,
+                    dspy_candidate=dspy_candidate,
+                    legacy_skill_id=candidate.skill_id,
+                    scorecard=scorecard,
+                    workspace_root=workspace_root,
+                    cases_resolver=cases_resolver,
+                    eval_runner_loader=eval_runner_loader,
+                    llm_provider=llm_provider,
+                    audit_log=audit_log,
+                )
+                if won is not None:
+                    candidate, eval_result = won  # DSPy candidate is the winner
 
         if not eval_result.passed:
             decision = reject_candidate(

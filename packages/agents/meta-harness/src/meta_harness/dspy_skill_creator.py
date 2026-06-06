@@ -187,22 +187,50 @@ def create_compiled_composer(
 
 @dataclass(frozen=True)
 class ParallelSkillResult:
-    """Outcome of one parallel SKILL_CREATE (legacy + DSPy)."""
+    """Outcome of one parallel SKILL_CREATE (legacy + DSPy).
 
-    chosen: str  # "legacy" or "dspy"
+    Carries both candidate outputs; the **winner is decided by the orchestrator**
+    (``skill_lifecycle``), which eval-gates the DSPy candidate and calls
+    ``adjudicate_pass_rates`` (Task 6) — the leaf does not eval-gate or import the
+    eval-gate (leaf-module discipline).
+    """
+
     legacy_skill_md: str
     dspy_skill_md: str | None
     dspy_error: str | None  # populated when the DSPy path failed (CF #2)
 
 
-def _adjudicate(legacy_skill_md: str, dspy_skill_md: str | None) -> str:
-    """STUB adjudication — **Task 6** replaces this with eval-gate scoring.
+def adjudicate_pass_rates(
+    legacy_pass_rate: float,
+    dspy_pass_rate: float,
+    legacy_skill_md: str,
+    dspy_skill_md: str,
+) -> tuple[str, dict[str, Any]]:
+    """Pure pass-rate comparator (Task 6, brainstorm Q3 winner-selection).
 
-    v0.2.5 Task 5 keeps the legacy candidate as the winner (no behavior change to
-    deployment). Task 6 scores both via the skill-eval-gate and persists the
-    higher-scoring output (Q3).
+    The DSPy candidate wins only if it **strictly beats** the legacy candidate's
+    eval-gate ``candidate_pass_rate``; a tie goes to legacy (Q3 safety default —
+    DSPy must demonstrably beat the baseline path to be persisted).
+
+    Pure function — the orchestrator supplies both pass-rates (from the legacy
+    candidate's existing eval-gate result + a fresh eval-gate run on the DSPy
+    candidate). No eval-gate calls here, so the leaf imports no eval-gate.
+
+    Returns ``(winning_skill_md, metadata)`` where metadata carries both
+    pass-rates, the winner identifier, and the delta (for Q8 quality-delta
+    plumbing read by Task 12).
     """
-    return "legacy"
+    delta = dspy_pass_rate - legacy_pass_rate
+    if dspy_pass_rate > legacy_pass_rate:
+        winner, winning_skill_md = "dspy", dspy_skill_md
+    else:
+        winner, winning_skill_md = "legacy", legacy_skill_md
+    return winning_skill_md, {
+        "winner": winner,
+        "legacy_pass_rate": legacy_pass_rate,
+        "dspy_pass_rate": dspy_pass_rate,
+        "delta": delta,
+    }
 
 
 def run_parallel_skill_create(
@@ -262,9 +290,9 @@ def run_parallel_skill_create(
             },
         )
 
-    chosen = _adjudicate(legacy_skill_md, dspy_skill_md)
+    # Winner-selection is the orchestrator's job (it has the eval-gate + legacy
+    # eval result); the leaf returns both candidates for adjudication.
     return ParallelSkillResult(
-        chosen=chosen,
         legacy_skill_md=legacy_skill_md,
         dspy_skill_md=dspy_skill_md,
         dspy_error=dspy_error,
@@ -274,6 +302,7 @@ def run_parallel_skill_create(
 __all__ = [
     "ParallelSkillResult",
     "TrainsetBuildResult",
+    "adjudicate_pass_rates",
     "build_compilation_trainset",
     "create_compiled_composer",
     "run_parallel_skill_create",

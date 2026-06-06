@@ -200,7 +200,6 @@ def test_parallel_dspy_failure_falls_back_to_legacy(
         trainset=[],
     )
     assert isinstance(result, ParallelSkillResult)
-    assert result.chosen == "legacy"
     assert result.dspy_skill_md is None
     assert "compilation exploded" in (result.dspy_error or "")
     assert "meta_harness.skill.effectiveness_error" in _audit_actions(audit)
@@ -209,7 +208,7 @@ def test_parallel_dspy_failure_falls_back_to_legacy(
 def test_parallel_dspy_success_records_both(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Both candidates captured; stub adjudication keeps legacy (Task 6 flips it)."""
+    """Both candidates captured; winner-selection is the orchestrator's job (Task 6)."""
 
     class _Compiled:
         def __call__(self, *, trace: str, agent_id: str) -> Any:
@@ -228,7 +227,7 @@ def test_parallel_dspy_success_records_both(
     )
     assert result.dspy_skill_md == "# DSPy skill"
     assert result.legacy_skill_md == "# Legacy skill"
-    assert result.chosen == "legacy"  # stub adjudication (Task 6 implements winner-selection)
+    assert result.dspy_error is None
 
 
 def test_parallel_empty_dspy_output_is_treated_as_failure(
@@ -251,12 +250,32 @@ def test_parallel_empty_dspy_output_is_treated_as_failure(
     )
     assert result.dspy_skill_md is None or result.dspy_skill_md == ""
     assert result.dspy_error is not None
-    assert result.chosen == "legacy"
 
 
-def test_adjudicate_stub_returns_legacy() -> None:
-    assert mod._adjudicate("legacy", "dspy") == "legacy"
-    assert mod._adjudicate("legacy", None) == "legacy"
+# --------------------------------------------------------------------------- adjudication (Task 6)
+
+
+def test_adjudicate_dspy_wins_when_strictly_higher() -> None:
+    winning, meta = mod.adjudicate_pass_rates(0.80, 0.90, "# Legacy", "# DSPy")
+    assert winning == "# DSPy"
+    assert meta["winner"] == "dspy"
+    assert meta["delta"] == pytest.approx(0.10)
+    assert meta["legacy_pass_rate"] == 0.80 and meta["dspy_pass_rate"] == 0.90
+
+
+def test_adjudicate_legacy_wins_when_higher() -> None:
+    winning, meta = mod.adjudicate_pass_rates(0.90, 0.70, "# Legacy", "# DSPy")
+    assert winning == "# Legacy"
+    assert meta["winner"] == "legacy"
+    assert meta["delta"] == pytest.approx(-0.20)
+
+
+def test_adjudicate_tie_goes_to_legacy() -> None:
+    """Q3 safety default — DSPy must strictly beat legacy to win."""
+    winning, meta = mod.adjudicate_pass_rates(0.80, 0.80, "# Legacy", "# DSPy")
+    assert winning == "# Legacy"
+    assert meta["winner"] == "legacy"
+    assert meta["delta"] == pytest.approx(0.0)
 
 
 def test_agent_id_propagates_to_dspy_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
