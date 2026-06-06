@@ -174,7 +174,9 @@ def test_returns_none_when_zero_confidence(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_returns_tuple_for_valid_score(tmp_path: Path) -> None:
+def test_returns_score_with_feedback_for_valid_score(tmp_path: Path) -> None:
+    """Q5-c: GEPA metric returns ScoreWithFeedback (score + feedback), NOT a raw
+    tuple (which crashes DSPy's evaluator)."""
     _write_effectiveness_sidecar(
         tmp_path, "investigation", "iam/role-chain", global_score=0.8, confidence=0.5
     )
@@ -183,9 +185,10 @@ def test_returns_tuple_for_valid_score(tmp_path: Path) -> None:
     )
     result = adapter(_example("iam/role-chain"))
     assert result is not None
-    scalar, reflection = result
-    assert isinstance(scalar, float)
-    assert isinstance(reflection, str)
+    assert isinstance(result.score, float)
+    assert isinstance(result.feedback, str)
+    # Must NOT be a bare tuple (the Q5-c crash shape).
+    assert not isinstance(result, tuple)
 
 
 def test_modulation_is_score_times_confidence(tmp_path: Path) -> None:
@@ -195,7 +198,7 @@ def test_modulation_is_score_times_confidence(tmp_path: Path) -> None:
     adapter = GEPAMetricAdapter(
         "investigation", workspace_root=tmp_path, audit_log=_audit(tmp_path)
     )
-    scalar, _ = adapter(_example("iam/role-chain"))  # type: ignore[misc]
+    scalar = adapter(_example("iam/role-chain")).score
     assert scalar == pytest.approx(0.8 * 0.5)
 
 
@@ -211,7 +214,7 @@ def test_reflection_includes_axes_breakdown(tmp_path: Path) -> None:
     adapter = GEPAMetricAdapter(
         "investigation", workspace_root=tmp_path, audit_log=_audit(tmp_path)
     )
-    _, reflection = adapter(_example("iam/role-chain"))  # type: ignore[misc]
+    reflection = adapter(_example("iam/role-chain")).feedback
     assert "axes:" in reflection
     assert "adoption=" in reflection and "outcome=" in reflection and "feedback=" in reflection
 
@@ -233,7 +236,7 @@ def test_reflection_includes_reason_when_present(
     adapter = GEPAMetricAdapter(
         "investigation", workspace_root=tmp_path, audit_log=_audit(tmp_path)
     )
-    _, reflection = adapter(_example("iam/x"))  # type: ignore[misc]
+    reflection = adapter(_example("iam/x")).feedback
     assert "reason=operator_marked_archived" in reflection
 
 
@@ -247,7 +250,7 @@ def test_reflection_includes_operator_note(tmp_path: Path) -> None:
     adapter = GEPAMetricAdapter(
         "investigation", workspace_root=tmp_path, audit_log=_audit(tmp_path)
     )
-    _, reflection = adapter(_example("iam/role-chain"))  # type: ignore[misc]
+    reflection = adapter(_example("iam/role-chain")).feedback
     assert "operator: sharpened the role-chain head heuristic" in reflection
 
 
@@ -276,7 +279,7 @@ def test_operator_notes_primed_at_construction_not_per_call(tmp_path: Path) -> N
         / "iam/role-chain"
         / "operator-ratings.jsonl"
     ).unlink()
-    _, reflection = adapter(_example("iam/role-chain"))  # type: ignore[misc]
+    reflection = adapter(_example("iam/role-chain")).feedback
     assert "operator: cached note" in reflection
 
 
@@ -332,7 +335,7 @@ def test_tenant_scoping_preserved(tmp_path: Path) -> None:
     )
     result = acme_adapter(_example("iam/scoped"))
     assert result is not None
-    assert result[0] == pytest.approx(0.4)
+    assert result.score == pytest.approx(0.4)
 
 
 # ---------------------------------------------------------------------------
@@ -360,4 +363,4 @@ def test_dspy_example_shape_compatibility(tmp_path: Path) -> None:
     example = dspy.Example(skill_id="iam/role-chain", task="follow the chain").with_inputs("task")
     result = adapter(example, dspy.Prediction(answer="..."))
     assert result is not None
-    assert result[0] == pytest.approx(0.3)
+    assert result.score == pytest.approx(0.3)
