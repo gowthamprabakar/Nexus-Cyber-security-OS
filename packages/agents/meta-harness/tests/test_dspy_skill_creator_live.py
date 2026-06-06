@@ -123,8 +123,12 @@ def test_live_deepseek_compile_round_trip(tmp_path: Path) -> None:
     skill_md = prediction.skill_md
     assert isinstance(skill_md, str) and skill_md.strip(), "compiled program produced no skill_md"
 
-    # #4 cost visibility — token usage from the DSPy LM history.
-    lm = compiled.extract.lm or dspy.settings.lm
+    # #4 cost visibility — token usage from the compiled program's leaf-Predict LM.
+    # Traverse via named_predictors() (DSPy's public module-traversal API);
+    # compiled.extract is a ChainOfThought wrapping a Predict, so the LM lives on
+    # the leaf predictor, not on `extract` itself (drift #4 — test-only).
+    predictors = list(compiled.named_predictors())
+    lm = predictors[0][1].lm if predictors else dspy.settings.lm
     history = getattr(lm, "history", []) or []
     total_tokens = sum(
         (h.get("usage") or {}).get("total_tokens", 0) for h in history if isinstance(h, dict)
