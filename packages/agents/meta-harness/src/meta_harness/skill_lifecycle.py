@@ -80,11 +80,12 @@ from meta_harness.skill_eval_gate import (
     cache_eval_gate_result,
     run_skill_eval_gate,
 )
+from meta_harness.skill_format import write_skill_md
 from meta_harness.skill_registry import (
     load_skill_class_registry,
     save_skill_class_registry,
 )
-from meta_harness.skill_triggers import detect_skill_trigger
+from meta_harness.skill_triggers import SkillTrigger, detect_skill_trigger
 from meta_harness.skill_writer import write_skill_candidate
 
 _LOG = logging.getLogger(__name__)
@@ -102,7 +103,9 @@ EvalRunnerLoader = Callable[[str], EvalRunner]
 """Maps an ``agent_id`` to its ``EvalRunner`` (production: from the
 ``nexus_eval_runners`` entry-point group; tests: a ``FakeRunner``)."""
 
-DSPyCandidateFactory = Callable[[Scorecard, SkillCandidate], Awaitable[SkillCandidate | None]]
+DSPyCandidateFactory = Callable[
+    [Scorecard, SkillCandidate, SkillTrigger], Awaitable[SkillCandidate | None]
+]
 """Produces a DSPy-compiled SKILL_CREATE candidate (Task 5 composer →
 materialized ``SkillCandidate``) to adjudicate against the legacy candidate
 (Task 6, brainstorm Q3). **Injected by Task 7's compilation cadence**; when
@@ -111,11 +114,22 @@ per-trigger compilation. Returning ``None`` means no DSPy candidate this cycle
 (CF #2 → legacy proceeds)."""
 
 
+def _restore_legacy_skill_md(legacy_candidate: SkillCandidate) -> None:
+    """R1 (Task 7b) — rewrite the legacy ``SKILL.md`` to the canonical shadow path.
+
+    The Task-7b factory writes the DSPy candidate to the legacy candidate's
+    canonical path (overwriting it) so the eval-gate measures DSPy cleanly. When
+    legacy ultimately wins (or the DSPy eval-gate fails), that overwrite must be
+    undone so the canonical path holds the winner's content.
+    """
+    write_skill_md(legacy_candidate.skill, Path(legacy_candidate.shadow_path))
+
+
 async def _adjudicate_dspy_candidate(
     *,
     legacy_eval_result: EvalGateResult,
+    legacy_candidate: SkillCandidate,
     dspy_candidate: SkillCandidate,
-    legacy_skill_id: str,
     scorecard: Scorecard,
     workspace_root: Path,
     cases_resolver: CasesRootResolver,
@@ -132,6 +146,10 @@ async def _adjudicate_dspy_candidate(
     ``(dspy_candidate, dspy_eval_result)`` only when DSPy **strictly wins** on
     ``candidate_pass_rate``; ``None`` means legacy wins — a tie, a lower DSPy
     pass-rate, or a DSPy eval-gate failure (CF #2 — legacy proceeds unharmed).
+
+    R1 (Task 7b): the factory wrote the DSPy ``SKILL.md`` over the legacy
+    candidate's canonical path, so every legacy-proceeds path restores the legacy
+    ``SKILL.md`` before returning ``None``.
     """
     dspy_eval = await _run_eval_gate_safely(
         candidate=dspy_candidate,
@@ -141,7 +159,8 @@ async def _adjudicate_dspy_candidate(
         eval_runner_loader=eval_runner_loader,
         llm_provider=llm_provider,
     )
-    if dspy_eval is None:  # CF #2: DSPy eval-gate failed → legacy proceeds
+    if dspy_eval is None:  # CF #2: DSPy eval-gate failed → restore legacy, proceed
+        _restore_legacy_skill_md(legacy_candidate)
         return None
     emit_skill_eval_gate_completed(audit_log, result=dspy_eval)
     cache_eval_gate_result(
@@ -153,7 +172,7 @@ async def _adjudicate_dspy_candidate(
     _, meta = adjudicate_pass_rates(
         legacy_eval_result.candidate_pass_rate,
         dspy_eval.candidate_pass_rate,
-        legacy_skill_id,
+        legacy_candidate.skill_id,
         dspy_candidate.skill_id,
     )
     _LOG.info(
@@ -165,7 +184,8 @@ async def _adjudicate_dspy_candidate(
         meta["delta"],
     )
     if meta["winner"] == "dspy":
-        return dspy_candidate, dspy_eval
+        return dspy_candidate, dspy_eval  # DSPy SKILL.md already at canonical path
+    _restore_legacy_skill_md(legacy_candidate)  # legacy wins → undo factory overwrite
     return None
 
 
@@ -257,12 +277,12 @@ async def run_skill_lifecycle(
         # candidate's pass-rate, the DSPy candidate + its eval result win and
         # proceed to deploy. Default (no factory) → legacy-only, unchanged.
         if dspy_candidate_factory is not None:
-            dspy_candidate = await dspy_candidate_factory(scorecard, candidate)
+            dspy_candidate = await dspy_candidate_factory(scorecard, candidate, trigger)
             if dspy_candidate is not None:
                 won = await _adjudicate_dspy_candidate(
                     legacy_eval_result=eval_result,
+                    legacy_candidate=candidate,
                     dspy_candidate=dspy_candidate,
-                    legacy_skill_id=candidate.skill_id,
                     scorecard=scorecard,
                     workspace_root=workspace_root,
                     cases_resolver=cases_resolver,
