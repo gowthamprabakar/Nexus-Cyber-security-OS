@@ -13,9 +13,14 @@ eval-gate / adjudication / CF #2 / restore paths are covered offline
 (``test_compilation_factory.py`` + ``test_task6_adjudication.py``), and Task 5's
 ``test_dspy_skill_creator_live.py`` covers compile-depth + token cost.
 
+The GEPA budget is capped to a smoke-test size (``max_metric_calls=10``, matching
+Task 5) so the run is **~5-7 min**, not the ~5 h a full ``auto="medium"`` cycle
+would take (drift #8). The cap is applied test-only by injecting the bounded
+budget into ``create_compiled_composer``; production budget is unchanged.
+
 Operator run:
 
-    NEXUS_LIVE_DSPY=1 NEXUS_DSPY_PRODUCTION=1 \
+    NEXUS_LIVE_DSPY=1 \
       NEXUS_LLM_API_KEY=<deepseek-key> \
       uv run pytest packages/agents/meta-harness/tests/test_full_pipeline_live.py -v -s
 """
@@ -44,8 +49,12 @@ pytest.importorskip("dspy")
 from charter.audit import AuditLog  # noqa: E402
 from charter.llm import LLMProvider  # noqa: E402
 from charter.llm_adapter import LLMConfig, make_provider  # noqa: E402
+from meta_harness import compilation_factory as cf  # noqa: E402
 from meta_harness.compilation_cadence import CompilationCadenceController  # noqa: E402
 from meta_harness.compilation_factory import make_dspy_candidate_factory  # noqa: E402
+from meta_harness.dspy_skill_creator import (  # noqa: E402
+    create_compiled_composer as _real_create_compiled_composer,
+)
 from meta_harness.schemas import SkillCandidate  # noqa: E402
 from meta_harness.skill_format import parse_skill_md_content  # noqa: E402
 from meta_harness.skill_triggers import SkillTrigger  # noqa: E402
@@ -128,8 +137,21 @@ def _legacy_candidate(workspace: Path) -> SkillCandidate:
 
 
 @pytest.mark.asyncio
-async def test_live_full_pipeline(tmp_path: Path) -> None:
+async def test_live_full_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Cadence (manual) → lock → DeepSeek compile → materialise → candidate."""
+
+    # Drift #8: the factory (production code) compiles with GEPA's default
+    # budget (auto="medium" approx 695 metric calls approx ~5 h). For a smoke test we cap
+    # it to Task 5's pattern (auto=None, max_metric_calls=10 -> ~5-7 min) by
+    # injecting the bounded budget into create_compiled_composer — test-only; the
+    # production budget is unchanged.
+    def _capped_composer(*args: Any, **kwargs: Any) -> Any:
+        kwargs["auto"] = None
+        kwargs["max_metric_calls"] = 10
+        return _real_create_compiled_composer(*args, **kwargs)
+
+    monkeypatch.setattr(cf, "create_compiled_composer", _capped_composer)
+
     _seed_score(tmp_path)  # scored skill so the trainset is non-empty
     legacy = _legacy_candidate(tmp_path)
     trigger = SkillTrigger(
@@ -157,6 +179,10 @@ async def test_live_full_pipeline(tmp_path: Path) -> None:
     result: Any = await factory(scorecard, legacy, trigger)
     duration = time.monotonic() - started
 
+    # With the bounded budget the smoke run completes and yields a candidate.
+    # (The CF #2 no-result paths — cadence-no / lock-busy / empty-trainset /
+    # compile-error / interruption — are valid pipeline behaviours, covered by
+    # the offline tests in test_compilation_factory.py.)
     assert result is not None, "factory returned None — cadence/lock/compile did not complete"
     assert result.skill_id == _SKILL_ID
     written = Path(legacy.shadow_path).read_text(encoding="utf-8")
