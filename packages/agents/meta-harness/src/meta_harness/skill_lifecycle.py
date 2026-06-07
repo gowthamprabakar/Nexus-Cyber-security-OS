@@ -41,6 +41,7 @@ summary; the loop continues to the next candidate.
 from __future__ import annotations
 
 import logging
+import traceback
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +51,7 @@ from charter.audit import AuditLog
 from charter.llm import LLMProvider
 from eval_framework.cases import load_cases
 from eval_framework.runner import EvalRunner
+from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
 
 from meta_harness.audit_emit import (
     emit_skill_candidate_emitted,
@@ -158,6 +160,7 @@ async def _adjudicate_dspy_candidate(
         cases_resolver=cases_resolver,
         eval_runner_loader=eval_runner_loader,
         llm_provider=llm_provider,
+        audit_log=audit_log,
     )
     if dspy_eval is None:  # CF #2: DSPy eval-gate failed → restore legacy, proceed
         _restore_legacy_skill_md(legacy_candidate)
@@ -246,6 +249,7 @@ async def run_skill_lifecycle(
             trigger=trigger,
             workspace_root=workspace_root,
             llm_provider=llm_provider,
+            audit_log=audit_log,
         )
         if candidate is None:
             continue
@@ -259,6 +263,7 @@ async def run_skill_lifecycle(
             cases_resolver=cases_resolver,
             eval_runner_loader=eval_runner_loader,
             llm_provider=llm_provider,
+            audit_log=audit_log,
         )
         if eval_result is None:
             continue
@@ -369,12 +374,47 @@ def _failure_reason(eval_result: EvalGateResult) -> str:
     return "eval-gate FAIL: unspecified"
 
 
+def _emit_cf2_error(
+    audit_log: AuditLog,
+    *,
+    agent_id: str,
+    stage: str,
+    exc: Exception,
+    tenant_id: str = "default",
+) -> None:
+    """CF #2 audit emit (Task 9) — surface a degradation as a proper audit-chain
+    event (``meta_harness.skill.effectiveness_error``), never a silent swallow.
+
+    Matches the payload shape Task 7b's ``compilation_factory`` uses so every
+    graceful-degradation path across the lifecycle is audit-visible and
+    distinguishable by ``stage``. Reuses the existing audit constant (Q7).
+    """
+    audit_log.append(
+        ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR,
+        {
+            "agent_id": agent_id,
+            "tenant_id": tenant_id,
+            "error_type": f"{stage}_failed",
+            "exception_message": str(exc),
+            "stack_trace": traceback.format_exc(),
+            "stage": stage,
+            "fallback": "legacy_path",
+        },
+    )
+
+
 async def _write_candidate_safely(
     *,
     trigger: Any,
     workspace_root: Path,
     llm_provider: LLMProvider,
+    audit_log: AuditLog,
 ) -> Any:
+    """Compose a SKILL_CREATE candidate with CF #2 graceful-degradation.
+
+    On failure: emits ``effectiveness_error`` to the audit chain, logs a warning,
+    and returns ``None`` (the caller drops this candidate and continues).
+    """
     audit_log_path = str(workspace_root / ".nexus" / _LIFECYCLE_AUDIT_FILENAME)
     try:
         return await write_skill_candidate(
@@ -384,7 +424,13 @@ async def _write_candidate_safely(
             llm_provider=llm_provider,
             emitted_at=datetime.now(UTC),
         )
-    except Exception as exc:
+    except Exception as exc:  # CF #2: emit + log + drop, never break the run
+        _emit_cf2_error(
+            audit_log,
+            agent_id=getattr(trigger, "agent_id", "unknown"),
+            stage="write_skill_candidate",
+            exc=exc,
+        )
         _LOG.warning(
             "SKILL_CREATE write_skill_candidate failed for trigger=%s: %s",
             trigger,
@@ -401,7 +447,15 @@ async def _run_eval_gate_safely(
     cases_resolver: CasesRootResolver,
     eval_runner_loader: EvalRunnerLoader,
     llm_provider: LLMProvider,
+    audit_log: AuditLog,
 ) -> EvalGateResult | None:
+    """Run the Option-B eval gate with CF #2 graceful-degradation.
+
+    Both failure modes — an unevaluable gate (``SkillEvalGateError``, e.g. no
+    cases) and an unexpected error — emit ``effectiveness_error`` (distinguished
+    by ``stage``), log a warning, and return ``None`` rather than silently
+    swallowing. The caller treats ``None`` as "no gate result this candidate".
+    """
     try:
         cases = load_cases(cases_resolver(scorecard.agent_id))
         runner = eval_runner_loader(scorecard.agent_id)
@@ -412,14 +466,18 @@ async def _run_eval_gate_safely(
             runner=runner,
             llm_provider=llm_provider,
         )
-    except SkillEvalGateError as exc:
+    except SkillEvalGateError as exc:  # CF #2: unevaluable gate (e.g. no cases)
+        _emit_cf2_error(
+            audit_log, agent_id=scorecard.agent_id, stage="eval_gate_unevaluable", exc=exc
+        )
         _LOG.warning(
             "SKILL_CREATE eval-gate skipped for skill_id=%s: %s",
             candidate.skill_id,
             exc,
         )
         return None
-    except Exception as exc:
+    except Exception as exc:  # CF #2: unexpected eval-gate failure
+        _emit_cf2_error(audit_log, agent_id=scorecard.agent_id, stage="eval_gate", exc=exc)
         _LOG.warning(
             "SKILL_CREATE eval-gate errored for skill_id=%s: %s",
             candidate.skill_id,
