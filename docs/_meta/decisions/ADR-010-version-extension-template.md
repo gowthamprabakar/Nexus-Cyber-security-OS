@@ -4,6 +4,7 @@
 - **Date:** 2026-05-17
 - **Authors:** AI/Agent Eng
 - **Stakeholders:** every agent author shipping a within-agent version extension; reviewers of vN+1 PRs; compliance (audit-chain consistency across versions of the same agent)
+- **Amended 2026-06-08:** F.3 Cloud Posture v0.2 (live AWS boto3 + current-account autodiscovery) pinned as a version-extension instance under this template — the reference agent's own first extension. Bootstrapped via the F.3 v0.2 plan's Milestone 1, Task 1; see References.
 
 ## Context
 
@@ -148,4 +149,5 @@ In each of those cases the change is a major-version replan, not a version exten
 - **A.1 v0.1 → v0.1.1 plan + record**: [`2026-05-17-a-1-earned-autonomy-pipeline.md`](../../superpowers/plans/2026-05-17-a-1-earned-autonomy-pipeline.md) + [`a1-v0-1-1-verification-2026-05-17.md`](../a1-v0-1-1-verification-2026-05-17.md)
 - **A.1 v0.1 implementation record (companion target)**: [`a1-verification-2026-05-16.md`](../a1-verification-2026-05-16.md)
 - **ADR-007 (reference NLAH)**: [`ADR-007-cloud-posture-as-reference-agent.md`](ADR-007-cloud-posture-as-reference-agent.md) — what this ADR extends. ADR-007 covers initial-version agents; ADR-010 covers subsequent versions of the same agent.
+- **F.3 Cloud Posture v0.1 → v0.2 plan** (pinned 2026-06-08; the reference agent's first version-extension under this template — live AWS boto3 + current-account autodiscovery, single-tenant): [`2026-06-07-f-3-cloud-posture-v0-2.md`](../../superpowers/plans/2026-06-07-f-3-cloud-posture-v0-2.md). In flight at pin time (Task 1 bootstrap).
 - **Forthcoming F.7 plan**: F.7 v0.1 will be the first plan written under this ADR. ADR-010's success criterion is that F.7's plan-doc shape requires no special-case carve-outs.
