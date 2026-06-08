@@ -83,7 +83,18 @@ def eval_cmd(cases_dir: Path) -> None:
     default="us-east-1",
     help="AWS region to scan.",
 )
-def run_cmd(contract_path: Path, aws_account_id: str, aws_region: str) -> None:
+@click.option(
+    "--aws-profile",
+    default=None,
+    help="Named AWS profile to use. Omit to use the boto3 default credential "
+    "chain (env vars / shared config / IAM role) — the v0.1 behavior.",
+)
+def run_cmd(
+    contract_path: Path,
+    aws_account_id: str,
+    aws_region: str,
+    aws_profile: str | None,
+) -> None:
     """Run the Cloud Posture Agent against an ExecutionContract YAML.
 
     LLM and the Postgres `SemanticStore` are not wired through here; the
@@ -97,6 +108,7 @@ def run_cmd(contract_path: Path, aws_account_id: str, aws_region: str) -> None:
             semantic_store=None,
             aws_account_id=aws_account_id,
             aws_region=aws_region,
+            aws_profile=aws_profile,
         )
     )
     click.echo(f"agent: {report.agent} (v{report.agent_version})")
