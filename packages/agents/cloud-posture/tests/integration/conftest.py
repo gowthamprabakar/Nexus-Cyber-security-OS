@@ -66,3 +66,27 @@ def aws_env(monkeypatch: pytest.MonkeyPatch, localstack_endpoint: str) -> Iterat
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     monkeypatch.setenv("AWS_ENDPOINT_URL", localstack_endpoint)
     yield
+
+
+# ---------------------------------------------------------------------------
+# NEXUS_LIVE_AWS lane (v0.2 Task 6) — a DISTINCT gate from NEXUS_LIVE_LOCALSTACK
+# above. Both lanes coexist without interference (Task 8 verifies). This lane
+# runs the real-AWS integration tests (Task 7); it is skipped unless the env is
+# set AND AWS is reachable (probed via STS get_caller_identity — Task 3's
+# mechanism — through the Task-2 CredentialResolver seam).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def aws_live_account() -> str:
+    """The current AWS account id for the live lane. Skips (with copy-paste
+    setup instructions) when `NEXUS_LIVE_AWS` is unset or AWS is unreachable.
+    Task 7's real-AWS tests consume this fixture; the 10 offline eval cases never
+    do. Gating logic lives in `cloud_posture.live_lane` (importable + tested)."""
+    from cloud_posture.credentials import CredentialResolver
+    from cloud_posture.live_lane import aws_skip_reason
+
+    reason = aws_skip_reason()
+    if reason is not None:
+        pytest.skip(reason)
+    return str(CredentialResolver().client("sts").get_caller_identity()["Account"])
