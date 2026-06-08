@@ -45,6 +45,7 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from cloud_posture import __version__ as agent_version
+from cloud_posture.credentials import CredentialResolver
 from cloud_posture.schemas import (
     AffectedResource,
     CloudPostureFinding,
@@ -280,6 +281,7 @@ async def run(
     semantic_store: SemanticStore | None = None,
     aws_account_id: str = DEFAULT_AWS_ACCOUNT_ID,
     aws_region: str = DEFAULT_AWS_REGION,
+    aws_profile: str | None = None,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -302,12 +304,16 @@ async def run(
         scan_started = datetime.now(UTC)
         workspace = ctx.workspace_mgr.workspace
 
-        # 1. Prowler scan
+        # 1. Prowler scan — credentials resolved via the v0.2 seam (Q1-A / Q2):
+        # the boto3 default chain unless an explicit --aws-profile was given.
+        # (Task 4 threads the resolved session + region through the SDK tools.)
+        credential_resolver = CredentialResolver(profile=aws_profile)
         prowler_result = await ctx.call_tool(
             "prowler_scan",
             account_id=aws_account_id,
             region=aws_region,
             output_dir=workspace / "prowler_out",
+            profile=credential_resolver.profile,
         )
 
         # 2. IAM enrichment in parallel — both calls are independent and read-only.
