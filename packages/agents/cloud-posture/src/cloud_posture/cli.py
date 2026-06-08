@@ -75,8 +75,9 @@ def eval_cmd(cases_dir: Path) -> None:
 )
 @click.option(
     "--aws-account-id",
-    default="111122223333",
-    help="AWS account ID to scan. Defaults to the placeholder used in dev.",
+    default=None,
+    help="AWS account ID to scan. Omit to auto-discover the current account via "
+    "STS get_caller_identity (current-account only; cross-account is v0.3).",
 )
 @click.option(
     "--aws-region",
@@ -91,7 +92,7 @@ def eval_cmd(cases_dir: Path) -> None:
 )
 def run_cmd(
     contract_path: Path,
-    aws_account_id: str,
+    aws_account_id: str | None,
     aws_region: str,
     aws_profile: str | None,
 ) -> None:
@@ -109,6 +110,7 @@ def run_cmd(
             aws_account_id=aws_account_id,
             aws_region=aws_region,
             aws_profile=aws_profile,
+            discover_account=aws_account_id is None,
         )
     )
     click.echo(f"agent: {report.agent} (v{report.agent_version})")

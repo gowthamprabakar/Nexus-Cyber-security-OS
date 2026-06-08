@@ -325,3 +325,24 @@ async def test_run_admin_policy_finding_is_critical(
         if f["finding_info"]["uid"].startswith("CSPM-AWS-IAM-002-")
     )
     assert admin["severity_id"] == 5  # Critical
+
+
+@pytest.mark.asyncio
+async def test_run_discovers_account_when_flag_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v0.2 Task 3 — discover_account=True threads the STS-discovered current
+    account id into the findings (the no-MFA IAM finding for "bob" carries it)."""
+    import cloud_posture.agent as agent_mod
+
+    contract = _contract(tmp_path)
+    _patch_tools(monkeypatch)
+    monkeypatch.setattr(
+        agent_mod.aws_account_discovery,
+        "discover_account_id",
+        AsyncMock(return_value="555555555555"),
+    )
+
+    report = await run(contract=contract, semantic_store=None, discover_account=True)
+
+    assert "555555555555" in json.dumps(report.findings)
