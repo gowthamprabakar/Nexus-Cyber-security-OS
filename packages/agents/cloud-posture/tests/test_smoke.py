@@ -4,4 +4,4 @@ import cloud_posture
 
 
 def test_cloud_posture_imports() -> None:
-    assert cloud_posture.__version__ == "0.1.0"
+    assert cloud_posture.__version__ == "0.2.0"

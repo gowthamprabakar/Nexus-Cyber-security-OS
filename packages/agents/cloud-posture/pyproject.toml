@@ -1,7 +1,7 @@
 [project]
 name = "nexus-cloud-posture"
-version = "0.1.0"
-description = "Nexus Cloud Posture Agent — CSPM detection across AWS via Prowler + boto3"
+version = "0.2.0"
+description = "Nexus Cloud Posture Agent — CSPM detection across AWS via Prowler + boto3 (v0.2: live AWS)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
 dependencies = [
