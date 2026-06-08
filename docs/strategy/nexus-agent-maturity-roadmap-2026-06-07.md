@@ -20,6 +20,24 @@
 
 ---
 
+## Section 1.5 — Sequencing discipline (operator-locked, amended 2026-06-08)
+
+The **detection-maturity arc takes absolute priority.** All 17 agents reach **Level 3** before any architectural or net-new work begins. The following work is explicitly **parked until all 17 agents reach Level 3**, **EXCEPT Wazuh enrichment which has its own trigger** (a design-partner compliance pitch):
+
+- **ADR-013** — cross-agent correlation + diagnostician reasoning
+- **Hermes agents**
+- **Net-new agents** (AppSec, AI-SPM)
+- **Surface Track UI**
+- **v2.0 Security Graph** component build (additionally gated on ADR-013 locking)
+
+**Wazuh compliance enrichment has a separate trigger** (design-partner compliance pitch, _not_ the detection arc) — see [`docs/_meta/backlog/2026-06-08-wazuh-compliance-enrichment.md`](../_meta/backlog/2026-06-08-wazuh-compliance-enrichment.md).
+
+See [`docs/_meta/backlog/2026-06-08-parked-architectural-work.md`](../_meta/backlog/2026-06-08-parked-architectural-work.md) for the **full parked list with explicit triggers and sources**.
+
+**Operating rule:** anything parked but not in the detection arc is captured in the backlog with a named trigger + source — not held in memory. So a future session sees the whole landscape and does not lose framing.
+
+---
+
 ## Section 2 — Strategic framework (operator-locked)
 
 ### Per-agent maturity levels
