@@ -54,7 +54,7 @@ from cloud_posture.schemas import (
     build_finding,
 )
 from cloud_posture.summarizer import render_summary
-from cloud_posture.tools import aws_iam, aws_s3, prowler
+from cloud_posture.tools import aws_account_discovery, aws_iam, aws_s3, prowler
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 
 NLAH_VERSION = "0.1.0"
@@ -279,9 +279,10 @@ async def run(
     *,
     llm_provider: LLMProvider | None = None,  # plumbed; not called in v0.1
     semantic_store: SemanticStore | None = None,
-    aws_account_id: str = DEFAULT_AWS_ACCOUNT_ID,
+    aws_account_id: str | None = None,
     aws_region: str = DEFAULT_AWS_REGION,
     aws_profile: str | None = None,
+    discover_account: bool = False,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -296,6 +297,16 @@ async def run(
     """
     del llm_provider  # reserved for future iterations
 
+    # Credentials + account resolution (v0.2 Tasks 2 + 3). `discover_account`
+    # asks STS for the current account id (Q4: current-account only); an
+    # explicit `aws_account_id` wins; otherwise fall back to the dev default so
+    # the offline eval suite stays byte-identical.
+    credential_resolver = CredentialResolver(profile=aws_profile)
+    if discover_account:
+        aws_account_id = await aws_account_discovery.discover_account_id(credential_resolver)
+    elif aws_account_id is None:
+        aws_account_id = DEFAULT_AWS_ACCOUNT_ID
+
     registry = build_registry(semantic_store, contract.customer_id)
     model_pin = "deterministic"  # no LLM calls in this flow
     correlation_id = new_correlation_id()
@@ -304,10 +315,8 @@ async def run(
         scan_started = datetime.now(UTC)
         workspace = ctx.workspace_mgr.workspace
 
-        # 1. Prowler scan — credentials resolved via the v0.2 seam (Q1-A / Q2):
-        # the boto3 default chain unless an explicit --aws-profile was given.
-        # (Task 4 threads the resolved session + region through the SDK tools.)
-        credential_resolver = CredentialResolver(profile=aws_profile)
+        # 1. Prowler scan — credentials resolved above via the v0.2 seam (Q1-A /
+        # Q2). (Task 4 threads the resolved session + region through the SDK tools.)
         prowler_result = await ctx.call_tool(
             "prowler_scan",
             account_id=aws_account_id,
