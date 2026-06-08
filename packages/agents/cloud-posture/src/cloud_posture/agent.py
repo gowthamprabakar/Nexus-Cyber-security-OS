@@ -39,6 +39,7 @@ from typing import Any
 
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
+from charter.exceptions import BudgetExhausted
 from charter.llm import LLMProvider
 from charter.memory import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
@@ -136,6 +137,22 @@ def _sanitize_context(s: str) -> str:
     s = _CONTEXT_RE.sub("-", s)
     s = re.sub(r"-+", "-", s).strip("-_")
     return (s or "unknown")[:60]
+
+
+def _sanitize_scan_error(exc: Exception) -> str:
+    """A secret-free, traceback-free one-liner for a failed region scan (Task 5).
+
+    Surfaces the exception type and — for a botocore ClientError — the
+    structured AWS error code (e.g. "Throttling", "AccessDenied"). It never
+    returns the full exception message, ARNs, request ids, or any credential
+    material, so degraded-region markers can be safely written to summary.md.
+    """
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code")
+        if code:
+            return f"{type(exc).__name__}: {code}"
+    return type(exc).__name__
 
 
 def _rule_id_for(check_id: str) -> str:
@@ -331,17 +348,25 @@ async def run(
         # 1. Prowler scan — once per scoped region (Q3). Credentials resolved
         # above via the v0.2 seam (Q1-A / Q2). Findings are aggregated across
         # regions; the per-call return value is authoritative (output_dir is a
-        # scratch path).
+        # scratch path). v0.2 Task 5: a single region failing degrades that
+        # region (recorded + surfaced in summary.md) instead of failing the
+        # whole scan. A BudgetExhausted is a hard stop and is NOT degraded.
         prowler_raw: list[dict[str, Any]] = []
+        degraded_regions: list[dict[str, str]] = []
         for region in scan_regions:
-            region_result = await ctx.call_tool(
-                "prowler_scan",
-                account_id=aws_account_id,
-                region=region,
-                output_dir=workspace / "prowler_out",
-                profile=credential_resolver.profile,
-            )
-            prowler_raw.extend(region_result.raw_findings)
+            try:
+                region_result = await ctx.call_tool(
+                    "prowler_scan",
+                    account_id=aws_account_id,
+                    region=region,
+                    output_dir=workspace / "prowler_out",
+                    profile=credential_resolver.profile,
+                )
+                prowler_raw.extend(region_result.raw_findings)
+            except BudgetExhausted:
+                raise  # budget is a hard stop, not a per-region degradation
+            except Exception as exc:
+                degraded_regions.append({"region": region, "error": _sanitize_scan_error(exc)})
 
         # 2. IAM enrichment in parallel — IAM is a global service, so it is
         # called ONCE regardless of how many regions were scanned.
@@ -403,7 +428,7 @@ async def run(
         )
         ctx.write_output(
             "summary.md",
-            render_summary(report).encode("utf-8"),
+            render_summary(report, degraded_regions=degraded_regions).encode("utf-8"),
         )
 
         ctx.assert_complete()

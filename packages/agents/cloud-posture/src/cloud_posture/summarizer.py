@@ -26,7 +26,18 @@ _SEVERITY_ORDER: tuple[Severity, ...] = (
 )
 
 
-def render_summary(report: FindingsReport) -> str:
+def render_summary(
+    report: FindingsReport,
+    *,
+    degraded_regions: list[dict[str, str]] | None = None,
+) -> str:
+    """Render the report as markdown.
+
+    `degraded_regions` (v0.2 Task 5) is an optional list of
+    `{"region", "error"}` entries for regions that failed to scan; when present
+    a "Degraded regions" section is appended. When absent/empty the output is
+    byte-identical to v0.1 — the offline eval never degrades.
+    """
     lines: list[str] = [
         _HEADER,
         "",
@@ -46,6 +57,7 @@ def render_summary(report: FindingsReport) -> str:
             "",
             "No findings detected in this scan window.",
         ]
+        _append_degraded(lines, degraded_regions)
         return "\n".join(lines)
 
     counts = report.count_by_severity()
@@ -70,7 +82,27 @@ def render_summary(report: FindingsReport) -> str:
             lines.append(f"- `{f.finding_id}` — {f.title}  \n  Affected: {arns}")
         lines.append("")
 
+    _append_degraded(lines, degraded_regions)
     return "\n".join(lines)
+
+
+def _append_degraded(lines: list[str], degraded_regions: list[dict[str, str]] | None) -> None:
+    """Append a 'Degraded regions' section when any region failed to scan.
+
+    No-op when there are no degraded regions — keeps the v0.1 output (and the
+    offline eval) byte-identical.
+    """
+    if not degraded_regions:
+        return
+    lines += [
+        "",
+        "## Degraded regions",
+        "",
+        "These regions failed to scan and were skipped; the findings above exclude them.",
+        "",
+    ]
+    for entry in degraded_regions:
+        lines.append(f"- ⚠️ `{entry['region']}` — {entry['error']}")
 
 
 def _arn_of(ocsf_resource: dict[str, object]) -> str:
