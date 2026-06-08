@@ -16,10 +16,9 @@ three stores by hand. Responsibilities:
   chained audit entries.
 - **Tenant-scoped sessions.** `session(tenant_id=...)` is an async
   context manager that yields an `AsyncSession`. On Postgres it
-  issues `SET LOCAL app.tenant_id = '<tid>'` inside the same
-  transaction so the RLS policies from Task 7 fire. On aiosqlite
-  it skips the SET LOCAL silently — the variable isn't recognised
-  there.
+  issues `set_config('app.tenant_id', '<tid>', true)` inside the
+  same transaction so the RLS policies from Task 7 fire. On aiosqlite
+  it skips the call silently — the GUC isn't recognised there.
 
 The facade keeps the session-variable management and the embedder
 inside one object; agent code stays terse:
@@ -83,17 +82,20 @@ class MemoryService:
     async def session(self, *, tenant_id: str) -> AsyncIterator[AsyncSession]:
         """Yield an `AsyncSession` with `app.tenant_id` set.
 
-        On Postgres the `SET LOCAL` populates the session variable
-        the RLS policies (Task 7) read. The setting is scoped to the
-        transaction, so closing the session unbinds it automatically.
+        On Postgres `set_config('app.tenant_id', <tid>, true)` populates the
+        transaction-local GUC the RLS policies read. `set_config(..., is_local=true)`
+        is the parameter-safe equivalent of `SET LOCAL` — Postgres rejects bind
+        placeholders on `SET LOCAL` (the `$1` syntax error), but accepts them on
+        `set_config`. It is transaction-scoped, so closing the session unbinds it
+        automatically.
 
-        On non-Postgres dialects the SET LOCAL is silently skipped.
+        On non-Postgres dialects the call is silently skipped.
         """
         async with self._session_factory.begin() as session:
             dialect = session.bind.dialect.name if session.bind else ""
             if dialect == "postgresql":
                 await session.execute(
-                    text("SET LOCAL app.tenant_id = :tid").bindparams(tid=tenant_id)
+                    text("SELECT set_config('app.tenant_id', :tid, true)").bindparams(tid=tenant_id)
                 )
             yield session
 
