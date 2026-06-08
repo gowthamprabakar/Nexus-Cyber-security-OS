@@ -90,11 +90,19 @@ def eval_cmd(cases_dir: Path) -> None:
     help="Named AWS profile to use. Omit to use the boto3 default credential "
     "chain (env vars / shared config / IAM role) — the v0.1 behavior.",
 )
+@click.option(
+    "--regions",
+    "regions",
+    default=None,
+    help="Comma-separated regions to scan (e.g. us-east-1,eu-west-1). Omit to "
+    "scan all available regions. IAM (global) is always scanned once.",
+)
 def run_cmd(
     contract_path: Path,
     aws_account_id: str | None,
     aws_region: str,
     aws_profile: str | None,
+    regions: str | None,
 ) -> None:
     """Run the Cloud Posture Agent against an ExecutionContract YAML.
 
@@ -103,6 +111,7 @@ def run_cmd(
     skipped (use the agent library API directly for KG-enabled runs).
     """
     contract = load_contract(contract_path)
+    region_list = [r.strip() for r in regions.split(",") if r.strip()] if regions else None
     report = asyncio.run(
         agent_run(
             contract=contract,
@@ -111,6 +120,8 @@ def run_cmd(
             aws_region=aws_region,
             aws_profile=aws_profile,
             discover_account=aws_account_id is None,
+            regions=region_list,
+            discover_all_regions=regions is None,
         )
     )
     click.echo(f"agent: {report.agent} (v{report.agent_version})")

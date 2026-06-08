@@ -283,6 +283,8 @@ async def run(
     aws_region: str = DEFAULT_AWS_REGION,
     aws_profile: str | None = None,
     discover_account: bool = False,
+    regions: list[str] | None = None,
+    discover_all_regions: bool = False,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -307,6 +309,17 @@ async def run(
     elif aws_account_id is None:
         aws_account_id = DEFAULT_AWS_ACCOUNT_ID
 
+    # Region scoping (v0.2 Task 4, Q3). An explicit `regions` list wins;
+    # `discover_all_regions` → every available region (consumes Task 3); else
+    # scope to the single `aws_region` (preserves the offline eval's
+    # single-region, byte-identical behavior).
+    if regions is not None:
+        scan_regions = list(regions)
+    elif discover_all_regions:
+        scan_regions = await aws_account_discovery.discover_regions(credential_resolver)
+    else:
+        scan_regions = [aws_region]
+
     registry = build_registry(semantic_store, contract.customer_id)
     model_pin = "deterministic"  # no LLM calls in this flow
     correlation_id = new_correlation_id()
@@ -315,17 +328,23 @@ async def run(
         scan_started = datetime.now(UTC)
         workspace = ctx.workspace_mgr.workspace
 
-        # 1. Prowler scan — credentials resolved above via the v0.2 seam (Q1-A /
-        # Q2). (Task 4 threads the resolved session + region through the SDK tools.)
-        prowler_result = await ctx.call_tool(
-            "prowler_scan",
-            account_id=aws_account_id,
-            region=aws_region,
-            output_dir=workspace / "prowler_out",
-            profile=credential_resolver.profile,
-        )
+        # 1. Prowler scan — once per scoped region (Q3). Credentials resolved
+        # above via the v0.2 seam (Q1-A / Q2). Findings are aggregated across
+        # regions; the per-call return value is authoritative (output_dir is a
+        # scratch path).
+        prowler_raw: list[dict[str, Any]] = []
+        for region in scan_regions:
+            region_result = await ctx.call_tool(
+                "prowler_scan",
+                account_id=aws_account_id,
+                region=region,
+                output_dir=workspace / "prowler_out",
+                profile=credential_resolver.profile,
+            )
+            prowler_raw.extend(region_result.raw_findings)
 
-        # 2. IAM enrichment in parallel — both calls are independent and read-only.
+        # 2. IAM enrichment in parallel — IAM is a global service, so it is
+        # called ONCE regardless of how many regions were scanned.
         async with asyncio.TaskGroup() as tg:
             users_task = tg.create_task(ctx.call_tool("aws_iam_list_users_without_mfa"))
             policies_task = tg.create_task(ctx.call_tool("aws_iam_list_admin_policies"))
@@ -334,7 +353,7 @@ async def run(
 
         # 3. Build findings
         findings: list[CloudPostureFinding] = []
-        for raw in prowler_result.raw_findings:
+        for raw in prowler_raw:
             f = _finding_from_prowler(raw, contract=contract, model_pin=model_pin)
             if f is not None:
                 findings.append(f)
