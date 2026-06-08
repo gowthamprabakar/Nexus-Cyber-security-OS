@@ -2,7 +2,7 @@
 
 This runbook validates the Cloud Posture Agent against a **real AWS dev account** before any customer-facing release. **Do not run against production accounts.**
 
-The runbook only exercises the deterministic v0.1 flow (Prowler + IAM enrichment + OCSF emission + audit chain). LLM-driven enrichment and Neo4j knowledge-graph persistence require the library API and are not part of this smoke; they are covered separately when those subsystems land.
+**v0.2 (Level 2 — live AWS).** The runbook exercises the deterministic live-AWS flow: credential resolution (boto3 default chain or `--aws-profile`), current-account autodiscovery (STS `get_caller_identity`), region scoping (`--regions`, default = all available), Prowler + IAM enrichment per region, OCSF 2003 emission, the hash-chained audit log, and **partial-scan degradation** (a failed region is recorded, not fatal). Still single-tenant; LLM enrichment and Postgres `SemanticStore` persistence require the library API and are out of scope here. Cross-account / Organizations is deferred to v0.3.
 
 ## Goal
 
@@ -103,21 +103,32 @@ Expected: prints `OK`. If validation fails, fix the YAML before proceeding.
 
 ### 4. Run the agent
 
-Pull the AWS account ID into the invocation:
+**v0.2 invocation (recommended).** Omit `--aws-account-id` to **auto-discover** the current account (STS `get_caller_identity`); pass `--aws-profile` for credentials; omit `--regions` to scan **all available regions**, or pass a comma-separated subset:
+
+```bash
+uv run cloud-posture run \
+    --contract /tmp/smoke-contract.yaml \
+    --aws-profile nexus-dev \
+    --regions us-east-1,eu-west-1
+```
+
+Or pin the account + a single region explicitly (the v0.1-compatible form):
 
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --profile nexus-dev --query Account --output text)
-
 AWS_PROFILE=nexus-dev uv run cloud-posture run \
     --contract /tmp/smoke-contract.yaml \
     --aws-account-id "$ACCOUNT_ID" \
-    --aws-region us-east-1
+    --aws-profile nexus-dev \
+    --regions us-east-1
 ```
+
+> **Budget note (v0.2):** Prowler costs ~200 cloud-API calls **per region**. The sample contract's `cloud_api_calls: 1000` covers ~4 regions; **size it up** (or narrow `--regions`) for an all-regions scan, or the run will stop on `BudgetExhausted`.
 
 Expected output (numbers will vary by account state):
 
 ```
-agent: cloud_posture (v0.1.0)
+agent: cloud_posture (v0.2.0)
 customer: cust_dev_smoke
 run_id: 01J7M3X9Z1K8RPVQNH2T8SMKZ1
 findings: 12
@@ -145,6 +156,19 @@ Expected:
 - `summary.md` opens with `# Cloud Posture Scan` and lists per-severity counts.
 - Every finding has `class_uid: 2003` (OCSF Compliance Finding) and a `nexus_envelope` with the expected `tenant_id`.
 - `charter audit verify` reports the chain is **valid**.
+
+**Reading degraded-scan markers (v0.2).** If a region failed to scan (throttling, an invalid region, a per-region permission/connectivity issue), `summary.md` carries a **`## Degraded regions`** section listing each failed region with a **secret-free, traceback-free** reason (e.g. `⚠️ us-bogus-1 — ClientError: Throttling`). The other regions' findings are still emitted — a degraded region is **not** a run failure. Treat an _unexpected_ degraded region as a credential / permission / connectivity issue to investigate, not a hard fail.
+
+### 5b. (Optional) Run the gated live-AWS integration tests
+
+The v0.2 integration tests run the agent end-to-end against the same account and assert the OCSF 2003 shape + audit-chain validity + degraded behavior. They **skip** unless enabled:
+
+```bash
+AWS_PROFILE=nexus-dev NEXUS_LIVE_AWS=1 uv run pytest \
+    packages/agents/cloud-posture/tests/integration/test_agent_aws_live.py -v
+```
+
+Expected: the suite passes — or skips cleanly with a copy-paste setup message if `NEXUS_LIVE_AWS` is unset or AWS is unreachable.
 
 ### 6. Review CloudTrail for unintended writes
 
@@ -188,7 +212,7 @@ rm -rf /tmp/nexus-smoke /tmp/prowler-smoke /tmp/smoke-contract.yaml
 
 - LLM-driven enrichment or narration (deferred to the Synthesis Agent in [Track D](../../../../docs/superpowers/plans/2026-05-08-build-roadmap.md)).
 - Postgres `SemanticStore` knowledge-graph persistence (requires `semantic_store` argument to `cloud_posture.agent.run`; see the library API). The legacy Neo4j writer at `cloud_posture/tools/neo4j_kg.py` is preserved DORMANT against the Phase-2 swap per the KG-loop-closure plan + ADR-009 amendment (2026-05-18).
-- Multi-region / multi-account scans (Phase 1b).
+- **Cross-account / multi-account** scans (STS `AssumeRole`, Organizations, Control Tower) — deferred to **v0.3**. _Multi-**region** is supported in v0.2 via `--regions`._
 - Tier-2 / Tier-1 remediation (Track A).
 - Production-grade rate-limit / blast-radius checks (the smoke is single-shot; production deployments add Cloud Custodian gating).
 
