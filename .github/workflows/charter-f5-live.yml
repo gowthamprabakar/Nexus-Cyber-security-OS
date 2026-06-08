@@ -1,0 +1,49 @@
+name: charter-f5-live
+
+# Real-Postgres verification lane for charter.memory — the keystone the standard
+# `ci.yml` skips (it provisions no database, so the live suite always SKIPs).
+# This is the source-of-truth lane for charter substrate work touching the
+# memory engines / RLS / migrations.
+#
+# Manual-trigger only for now: the live suite cannot reach green until the
+# tracked multi-bug substrate cycle lands (LTREE attribute-error, pgvector
+# cosine_distance, RLS FORCE + non-superuser role). Wiring it to PRs/main
+# belongs in the same change that makes it pass. Run it on demand with:
+#
+#   gh workflow run charter-f5-live.yml --ref <branch>
+#
+# Expected once the substrate cycle lands: 6 passed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  charter-live-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16 # pg16 + `vector`; charter alembic also CREATE EXTENSION ltree
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus_dev
+          POSTGRES_DB: nexus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.11.1' # matched to ci.yml + local dev tooling
+      - run: uv python install 3.12
+      # `uv sync` activates the root dev group, which now declares psycopg2-binary
+      # (required by the alembic sync env the live test drives).
+      - run: uv sync --all-extras --all-packages
+      - name: Charter real-Postgres keystone (expect 6 passed once the substrate cycle lands)
+        env:
+          NEXUS_LIVE_POSTGRES: '1'
+        run: uv run pytest packages/charter/tests/integration/test_memory_live_postgres.py -v

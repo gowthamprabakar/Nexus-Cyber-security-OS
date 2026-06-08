@@ -48,6 +48,11 @@ dev = [
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",
     "types-PyYAML>=6.0.0",
+    # psycopg2 powers the alembic *sync* env that charter's live-Postgres
+    # integration test drives (it swaps the DSN +asyncpg -> +psycopg2). It was
+    # previously undeclared, so a clean `uv sync` couldn't run that lane. Lives
+    # at root (not packages/charter) so it doesn't trip the WI-1 substrate seal.
+    "psycopg2-binary>=2.9.9",
 ]
 
 [tool.ruff]
