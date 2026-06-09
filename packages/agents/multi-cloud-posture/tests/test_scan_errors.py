@@ -7,6 +7,7 @@ from azure.core.exceptions import (
     HttpResponseError,
     ServiceRequestError,
 )
+from google.api_core import exceptions as gcp_exc
 from multi_cloud_posture.scan_errors import degraded_marker, sanitize_scan_error
 from multi_cloud_posture.summarizer import _append_degraded
 
@@ -87,3 +88,34 @@ def test_append_degraded_renders_section() -> None:
     assert "## Degraded regions" in text
     assert "⚠️ `eastus` — HttpResponseError: 429" in text
     assert "⚠️ `westus` — ClientAuthenticationError" in text
+
+
+# ---------------------------- GCP (google-api-core) -----------------------
+
+
+def test_sanitize_gcp_permission_denied_403() -> None:
+    # .code is an HTTPStatus IntEnum; normalize to a plain int in the output.
+    out = sanitize_scan_error(gcp_exc.PermissionDenied("denied"))
+    assert out == "PermissionDenied: 403"
+
+
+def test_sanitize_gcp_throttle_429() -> None:
+    assert sanitize_scan_error(gcp_exc.TooManyRequests("slow down")) == "TooManyRequests: 429"
+    assert sanitize_scan_error(gcp_exc.ResourceExhausted("quota")) == "ResourceExhausted: 429"
+
+
+def test_sanitize_gcp_service_unavailable_503() -> None:
+    assert sanitize_scan_error(gcp_exc.ServiceUnavailable("down")) == "ServiceUnavailable: 503"
+
+
+def test_sanitize_gcp_retry_error_is_type_name() -> None:
+    # RetryError carries no int .code → type name only.
+    assert sanitize_scan_error(gcp_exc.RetryError("gave up", cause=None)) == "RetryError"
+
+
+def test_sanitize_gcp_leaks_no_secret() -> None:
+    err = gcp_exc.PermissionDenied("user secret-token@corp at https://compute.googleapis.com/p")
+    out = sanitize_scan_error(err)
+    assert out == "PermissionDenied: 403"
+    assert "secret-token" not in out
+    assert "googleapis.com" not in out
