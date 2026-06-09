@@ -6,7 +6,8 @@
 2.  G2 pyproject version matches ``__version__`` (reads from source file).
 3.  Existing v0.2 + G1 modules import cleanly after version bump.
 4.  G2 plan doc exists at the expected path and names key conventions.
-5.  **WI-1 / substrate seal** — ``git diff --stat packages/charter/ packages/shared/`` empty.
+5.  **WI-1 / substrate seal** — ``git diff --stat packages/shared/`` empty (charter/ arm
+    lifted for the approved ADR-016 tool-proxy cycle; see the test's scope note).
 6.  **Safety gate 1 (novelty)** — ``compute_tool_sequence_hash`` deterministic.
 7.  **Safety gate 2 (trust-boundary)** — ``_FORBIDDEN_SUBSCRIPTIONS`` still holds.
 8.  **Safety gate 3 (eval-gate)** — ``run_skill_eval_gate`` importable; no ``--force`` in CLI.
@@ -126,11 +127,19 @@ def test_g2_plan_doc_exists_and_names_scope() -> None:
 
 
 def test_g2_wi1_substrate_sealed_bootstrap() -> None:
-    """WI-1 — bootstrap must not touch charter/ or shared/ substrate.
+    """WI-1 — G2 work must not touch the ``packages/shared/`` substrate.
 
     G2 Task 2 is the single planned SAFETY-CRITICAL substrate touch
     (trigger_source on ExecutionContract). At bootstrap, zero substrate
     changes are expected.
+
+    Scope note (NLAH Full Backfill cycle, 2026-06-09): ``packages/charter/`` is
+    under an approved, cross-cutting substrate modification — the tool-proxy hard
+    boundary (ADR-016, Milestone 1). That change is governed by its own guards
+    (``charter/tests/test_tool_proxy.py`` + ``test_tool_import_guard.py``), not by
+    this G2 bootstrap seal. The charter arm of this seal is therefore lifted for
+    the duration of that cycle; the ``packages/shared/`` arm remains in force (the
+    NLAH cycle's scope rules forbid touching shared/, and it does not).
     """
     import shutil
     import subprocess
@@ -145,14 +154,14 @@ def test_g2_wi1_substrate_sealed_bootstrap() -> None:
         cwd=_REPO_ROOT,
     )
     result = subprocess.run(  # noqa: S603
-        [git, "diff", "--stat", "origin/main", "--", "packages/charter/", "packages/shared/"],
+        [git, "diff", "--stat", "origin/main", "--", "packages/shared/"],
         capture_output=True,
         text=True,
         cwd=_REPO_ROOT,
     )
     assert result.returncode == 0
     diff_output = result.stdout.strip()
-    assert not diff_output, f"WI-1 violation — bootstrap must not touch substrate.\n{diff_output}"
+    assert not diff_output, f"WI-1 violation — must not touch shared/ substrate.\n{diff_output}"
 
 
 # ---------------------------------------------------------------------------
