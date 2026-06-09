@@ -28,3 +28,17 @@ def azure_live_subscription() -> str:
     if reason is not None:
         pytest.skip(reason)
     return asyncio.run(discover_subscription_id(AzureCredentialResolver()))
+
+
+@pytest.fixture(scope="session")
+def gcp_live_project() -> str:
+    """Current GCP project id for the live lane. Skips when ``NEXUS_LIVE_GCP`` is
+    unset or GCP is unreachable (Task 14). Independent of the Azure lane."""
+    from multi_cloud_posture.credentials_gcp import GcpCredentialResolver
+    from multi_cloud_posture.live_lane_gcp import gcp_skip_reason
+    from multi_cloud_posture.tools.gcp_discovery import discover_project_id
+
+    reason = gcp_skip_reason()
+    if reason is not None:
+        pytest.skip(reason)
+    return asyncio.run(discover_project_id(GcpCredentialResolver()))
