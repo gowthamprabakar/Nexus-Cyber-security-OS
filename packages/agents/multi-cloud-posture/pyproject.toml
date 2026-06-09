@@ -1,6 +1,6 @@
 [project]
 name = "nexus-multi-cloud-posture-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Nexus Multi-Cloud Posture Agent — Azure + GCP CSPM (D.5 / Agent #8 under ADR-007)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
