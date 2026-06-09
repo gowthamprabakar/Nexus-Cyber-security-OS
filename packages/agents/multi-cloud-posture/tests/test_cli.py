@@ -150,6 +150,35 @@ def test_run_accepts_customer_domain_flag(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_run_default_azure_credential_source_echoed(tmp_path: Path) -> None:
+    """v0.2: `--azure-credential-source` defaults to the chain and is echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
+    assert result.exit_code == 0, result.output
+    assert "azure credential source: chain (DefaultAzureCredential)" in result.output
+
+
+def test_run_explicit_azure_credential_source(tmp_path: Path) -> None:
+    """An explicit `--azure-credential-source` is accepted + echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--azure-credential-source", "cli"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "azure credential source: cli" in result.output
+
+
+def test_run_rejects_unknown_azure_credential_source(tmp_path: Path) -> None:
+    """click.Choice rejects an unknown source (non-zero exit)."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--azure-credential-source", "bogus"],
+    )
+    assert result.exit_code != 0
+
+
 def test_run_prints_severity_breakdown(tmp_path: Path) -> None:
     contract = _contract_yaml(tmp_path)
     result = CliRunner().invoke(main, ["run", "--contract", str(contract)])

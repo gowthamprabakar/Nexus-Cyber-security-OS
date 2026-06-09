@@ -28,6 +28,10 @@ from eval_framework.suite import run_suite
 
 from multi_cloud_posture import __version__
 from multi_cloud_posture.agent import run as agent_run
+from multi_cloud_posture.credentials_azure import (
+    AZURE_CREDENTIAL_SOURCES,
+    AzureCredentialResolver,
+)
 from multi_cloud_posture.eval_runner import MultiCloudPostureEvalRunner
 
 
@@ -112,6 +116,17 @@ def eval_cmd(cases_dir: Path) -> None:
         "(repeatable). E.g. --customer-domain example.com --customer-domain corp.example.com"
     ),
 )
+@click.option(
+    "--azure-credential-source",
+    "azure_credential_source",
+    type=click.Choice(AZURE_CREDENTIAL_SOURCES),
+    default="chain",
+    show_default=True,
+    help=(
+        "Azure credential source (v0.2): chain (DefaultAzureCredential) | "
+        "environment | managed-identity | cli. Consumed by live Azure tasks."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     azure_findings_feed: Path | None,
@@ -119,9 +134,18 @@ def run_cmd(
     gcp_findings_feed: Path | None,
     gcp_iam_feed: Path | None,
     customer_domains: tuple[str, ...],
+    azure_credential_source: str,
 ) -> None:
     """Run the Multi-Cloud Posture Agent against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
+
+    # Resolve (and validate) the Azure credential source seam. Live Azure tasks
+    # (Task 3+) consume the resolver; offline mode does not exercise it.
+    azure_source = None if azure_credential_source == "chain" else azure_credential_source
+    azure_resolver = AzureCredentialResolver(source=azure_source)
+    click.echo(
+        f"azure credential source: {azure_resolver.source or 'chain (DefaultAzureCredential)'}"
+    )
 
     if not (azure_findings_feed or azure_activity_feed or gcp_findings_feed or gcp_iam_feed):
         click.echo(
