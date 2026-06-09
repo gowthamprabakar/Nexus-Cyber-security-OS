@@ -6,6 +6,8 @@ from charter.exceptions import (
     BudgetExhausted,
     CharterViolation,
     ContractInvalid,
+    DirectInvocationBlocked,
+    ToolForbidden,
     ToolNotPermitted,
 )
 from charter.tools import ToolRegistry
@@ -18,7 +20,9 @@ __all__ = [
     "Charter",
     "CharterViolation",
     "ContractInvalid",
+    "DirectInvocationBlocked",
     "ExecutionContract",
+    "ToolForbidden",
     "ToolNotPermitted",
     "ToolRegistry",
     "VerificationResult",

@@ -46,6 +46,10 @@ class ExecutionContract(BaseModel):
     required_outputs: list[NonEmptyStr] = Field(min_length=1)
     budget: BudgetSpec
     permitted_tools: list[NonEmptyStr] = Field(min_length=1)
+    forbidden_tools: list[NonEmptyStr] = Field(default_factory=list)
+    """Explicitly-denied tools (ADR-016 Mechanism 3). Defense-in-depth + auditable
+    intent only — the load-bearing control is the permitted_tools allowlist enforced
+    by the tool proxy. Must not overlap with permitted_tools."""
     completion_condition: NonEmptyStr
     escalation_rules: list[EscalationRule] = Field(default_factory=list)
     workspace: NonEmptyStr
@@ -72,6 +76,9 @@ class ExecutionContract(BaseModel):
             raise ValueError("delegation_id must be a valid ULID (26-char Crockford base32)")
         if self.expires_at <= self.created_at:
             raise ValueError("expires_at must be after created_at")
+        overlap = sorted(set(self.permitted_tools) & set(self.forbidden_tools))
+        if overlap:
+            raise ValueError(f"forbidden_tools must not overlap permitted_tools: {overlap}")
         return self
 
 

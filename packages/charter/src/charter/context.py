@@ -10,6 +10,7 @@ from typing import Any
 from charter.audit import AuditLog
 from charter.budget import BudgetEnvelope
 from charter.contract import ExecutionContract
+from charter.exceptions import ToolForbidden
 from charter.tools import ToolRegistry
 from charter.workspace import WorkspaceManager
 
@@ -86,9 +87,15 @@ class Charter:
                 self._cv_token = None
 
     def call_tool(self, name: str, *, llm_calls: int = 0, tokens: int = 0, **kwargs: Any) -> Any:
-        """Run a tool through the charter — whitelist + budget + audit."""
+        """Run a tool through the charter — forbidden + whitelist + budget + audit."""
         if self.audit is None:
             raise RuntimeError("call_tool called outside of Charter context manager")
+        # Defense-in-depth: explicit denial is checked before anything is spent.
+        # The contract validator guarantees forbidden ∩ permitted = ∅, so a
+        # forbidden tool would also fail the permitted check inside tools.call;
+        # this makes the explicit-denial hit legible (ADR-016 Mechanism 3).
+        if name in self.contract.forbidden_tools:
+            raise ToolForbidden(tool=name, forbidden=list(self.contract.forbidden_tools))
         self.budget.check_wall_clock()
         cloud_calls = self.tools.cloud_calls(name) if name in self.tools.known_tools() else 0
         self.budget.consume(llm_calls=llm_calls, tokens=tokens, cloud_api_calls=cloud_calls)
