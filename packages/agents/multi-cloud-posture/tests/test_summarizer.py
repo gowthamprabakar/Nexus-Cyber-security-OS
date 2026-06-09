@@ -260,9 +260,9 @@ def test_severity_sections_ordered_critical_first() -> None:
 
 def test_finding_lines_include_cloud_and_source() -> None:
     md = render_summary(_build_report(scc=[_scc()]))
-    # `Cloud: gcp; Source: cspm_gcp_scc`
+    # v0.2 Task 12: the per-finding Source is the customer-visible provenance label.
     assert "Cloud: gcp" in md
-    assert "Source: cspm_gcp_scc" in md
+    assert "Source: Google Security Command Center" in md
 
 
 def test_finding_lines_truncate_long_resource_ids() -> None:

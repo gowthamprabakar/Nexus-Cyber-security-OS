@@ -42,6 +42,7 @@ from multi_cloud_posture.schemas import (
     CSPMFindingType,
     Severity,
     build_finding,
+    provenance_label,
     source_token,
 )
 from multi_cloud_posture.tools.gcp_iam import GcpIamFinding
@@ -137,6 +138,7 @@ def _from_scc(
             "scc_external_uri": record.external_uri,
             "source_finding_name": record.finding_name,
             "source_finding_type": CSPMFindingType.GCP_SCC.value,
+            "provenance": provenance_label(CSPMFindingType.GCP_SCC),
             "unmapped": record.unmapped,
         },
     )
@@ -185,6 +187,7 @@ def _from_iam(
             "asset_type": record.asset_type,
             "reason": record.reason,
             "source_finding_type": CSPMFindingType.GCP_IAM.value,
+            "provenance": provenance_label(CSPMFindingType.GCP_IAM),
             "unmapped": record.unmapped,
         },
     )

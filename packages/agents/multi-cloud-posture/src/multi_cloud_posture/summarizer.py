@@ -30,6 +30,7 @@ from multi_cloud_posture.schemas import (
     FindingsReport,
     Severity,
     cloud_provider_for,
+    provenance_label,
 )
 
 _HEADER = "# Multi-Cloud Posture Scan"
@@ -194,7 +195,9 @@ def _cloud_and_source(f: CloudPostureFinding) -> tuple[str, str]:
     source_str = str(ev.get("source_finding_type", ""))
     try:
         ft = CSPMFindingType(source_str)
-        return cloud_provider_for(ft).value, source_str
+        # Customer-visible provenance (Task 12 / WI-D2): "Microsoft Defender" /
+        # "Google Security Command Center" (passthrough) vs "Nexus-native".
+        return cloud_provider_for(ft).value, provenance_label(ft)
     except ValueError:
         return "unknown", source_str or "unknown"
 
