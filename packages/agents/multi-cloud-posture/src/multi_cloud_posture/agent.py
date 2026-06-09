@@ -92,6 +92,7 @@ async def run(
     gcp_findings_feed: Path | str | None = None,
     gcp_iam_feed: Path | str | None = None,
     customer_domain_allowlist: tuple[str, ...] = (),
+    azure_subscription_id: str | None = None,
 ) -> FindingsReport:
     """Run the Multi-Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -103,6 +104,9 @@ async def run(
         gcp_findings_feed: Optional GCP SCC findings JSON path. Skipped if None.
         gcp_iam_feed: Optional GCP Cloud Asset Inventory IAM JSON path. Skipped if None.
         customer_domain_allowlist: Internal-domain allowlist for the GCP IAM analyser.
+        azure_subscription_id: Single Azure subscription (Q6); discovered via
+            `tools.azure_discovery` when None. Reserved — consumed when the live
+            Azure readers land; the offline flow does not scan a subscription.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -110,6 +114,7 @@ async def run(
         log at `audit.jsonl`.
     """
     del llm_provider  # reserved for future iterations
+    del azure_subscription_id  # reserved for live Azure scanning (consumed later in M2/M4)
 
     registry = build_registry()
     model_pin = "deterministic"
