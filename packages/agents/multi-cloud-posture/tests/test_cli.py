@@ -179,6 +179,25 @@ def test_run_rejects_unknown_azure_credential_source(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_run_default_azure_regions_echoed(tmp_path: Path) -> None:
+    """v0.2: `--azure-regions` defaults to all-discovered and is echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
+    assert result.exit_code == 0, result.output
+    assert "azure regions: all discovered" in result.output
+
+
+def test_run_explicit_azure_regions(tmp_path: Path) -> None:
+    """An explicit `--azure-regions` CSV is parsed + echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--azure-regions", "eastus, westus ,eastus"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "azure regions: eastus,westus" in result.output  # trimmed + de-duped
+
+
 def test_run_prints_severity_breakdown(tmp_path: Path) -> None:
     contract = _contract_yaml(tmp_path)
     result = CliRunner().invoke(main, ["run", "--contract", str(contract)])

@@ -93,6 +93,7 @@ async def run(
     gcp_iam_feed: Path | str | None = None,
     customer_domain_allowlist: tuple[str, ...] = (),
     azure_subscription_id: str | None = None,
+    azure_regions: list[str] | None = None,
 ) -> FindingsReport:
     """Run the Multi-Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -107,6 +108,9 @@ async def run(
         azure_subscription_id: Single Azure subscription (Q6); discovered via
             `tools.azure_discovery` when None. Reserved — consumed when the live
             Azure readers land; the offline flow does not scan a subscription.
+        azure_regions: Explicit Azure regions (precedence via
+            `region_scope.resolve_scan_regions`); all discovered when None.
+            Reserved — consumed by the live Azure readers.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -115,6 +119,7 @@ async def run(
     """
     del llm_provider  # reserved for future iterations
     del azure_subscription_id  # reserved for live Azure scanning (consumed later in M2/M4)
+    del azure_regions  # reserved for live Azure scanning (precedence via region_scope)
 
     registry = build_registry()
     model_pin = "deterministic"
