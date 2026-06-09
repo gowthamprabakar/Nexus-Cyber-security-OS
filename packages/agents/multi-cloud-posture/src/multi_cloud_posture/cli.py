@@ -32,6 +32,10 @@ from multi_cloud_posture.credentials_azure import (
     AZURE_CREDENTIAL_SOURCES,
     AzureCredentialResolver,
 )
+from multi_cloud_posture.credentials_gcp import (
+    GCP_CREDENTIAL_SOURCES,
+    GcpCredentialResolver,
+)
 from multi_cloud_posture.eval_runner import MultiCloudPostureEvalRunner
 from multi_cloud_posture.region_scope import parse_regions_csv
 
@@ -137,6 +141,17 @@ def eval_cmd(cases_dir: Path) -> None:
         "for the subscription. Consumed by live Azure tasks."
     ),
 )
+@click.option(
+    "--gcp-credential-source",
+    "gcp_credential_source",
+    type=click.Choice(GCP_CREDENTIAL_SOURCES),
+    default="adc",
+    show_default=True,
+    help=(
+        "GCP credential source (v0.2): adc (Application Default Credentials) | "
+        "service-account | workload-identity. Consumed by live GCP tasks."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     azure_findings_feed: Path | None,
@@ -146,6 +161,7 @@ def run_cmd(
     customer_domains: tuple[str, ...],
     azure_credential_source: str,
     azure_regions_raw: str | None,
+    gcp_credential_source: str,
 ) -> None:
     """Run the Multi-Cloud Posture Agent against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
@@ -159,6 +175,12 @@ def run_cmd(
     )
     azure_regions = parse_regions_csv(azure_regions_raw)
     click.echo(f"azure regions: {','.join(azure_regions) if azure_regions else 'all discovered'}")
+
+    # Resolve (and validate) the GCP credential source seam. Live GCP tasks
+    # (Task 7+) consume the resolver; offline mode does not exercise it.
+    gcp_source = None if gcp_credential_source == "adc" else gcp_credential_source
+    gcp_resolver = GcpCredentialResolver(source=gcp_source)
+    click.echo(f"gcp credential source: {gcp_resolver.source or 'adc (Application Default)'}")
 
     if not (azure_findings_feed or azure_activity_feed or gcp_findings_feed or gcp_iam_feed):
         click.echo(

@@ -198,6 +198,25 @@ def test_run_explicit_azure_regions(tmp_path: Path) -> None:
     assert "azure regions: eastus,westus" in result.output  # trimmed + de-duped
 
 
+def test_run_default_gcp_credential_source_echoed(tmp_path: Path) -> None:
+    """v0.2: `--gcp-credential-source` defaults to ADC and is echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
+    assert result.exit_code == 0, result.output
+    assert "gcp credential source: adc (Application Default)" in result.output
+
+
+def test_run_explicit_gcp_credential_source(tmp_path: Path) -> None:
+    """An explicit `--gcp-credential-source` is accepted + echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--gcp-credential-source", "service-account"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "gcp credential source: service-account" in result.output
+
+
 def test_run_prints_severity_breakdown(tmp_path: Path) -> None:
     contract = _contract_yaml(tmp_path)
     result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
