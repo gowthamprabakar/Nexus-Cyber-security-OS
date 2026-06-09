@@ -33,6 +33,7 @@ from multi_cloud_posture.credentials_azure import (
     AzureCredentialResolver,
 )
 from multi_cloud_posture.eval_runner import MultiCloudPostureEvalRunner
+from multi_cloud_posture.region_scope import parse_regions_csv
 
 
 @click.group()
@@ -127,6 +128,15 @@ def eval_cmd(cases_dir: Path) -> None:
         "environment | managed-identity | cli. Consumed by live Azure tasks."
     ),
 )
+@click.option(
+    "--azure-regions",
+    "azure_regions_raw",
+    default=None,
+    help=(
+        "Comma-separated Azure regions to scan (v0.2). Default: all discovered "
+        "for the subscription. Consumed by live Azure tasks."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     azure_findings_feed: Path | None,
@@ -135,6 +145,7 @@ def run_cmd(
     gcp_iam_feed: Path | None,
     customer_domains: tuple[str, ...],
     azure_credential_source: str,
+    azure_regions_raw: str | None,
 ) -> None:
     """Run the Multi-Cloud Posture Agent against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
@@ -146,6 +157,8 @@ def run_cmd(
     click.echo(
         f"azure credential source: {azure_resolver.source or 'chain (DefaultAzureCredential)'}"
     )
+    azure_regions = parse_regions_csv(azure_regions_raw)
+    click.echo(f"azure regions: {','.join(azure_regions) if azure_regions else 'all discovered'}")
 
     if not (azure_findings_feed or azure_activity_feed or gcp_findings_feed or gcp_iam_feed):
         click.echo(
@@ -161,6 +174,7 @@ def run_cmd(
             gcp_findings_feed=gcp_findings_feed,
             gcp_iam_feed=gcp_iam_feed,
             customer_domain_allowlist=customer_domains,
+            azure_regions=azure_regions,
         )
     )
 
