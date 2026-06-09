@@ -62,6 +62,7 @@ class CSPMFindingType(StrEnum):
 
     AZURE_DEFENDER = "cspm_azure_defender"
     AZURE_ACTIVITY = "cspm_azure_activity"
+    AZURE_NATIVE = "cspm_azure_native"  # v0.2 Task 10 — Nexus-native CIS-Azure rules
     GCP_SCC = "cspm_gcp_scc"
     GCP_IAM = "cspm_gcp_iam"
 
@@ -72,6 +73,7 @@ class CSPMFindingType(StrEnum):
 _FT_PROVIDER: dict[CSPMFindingType, CloudProvider] = {
     CSPMFindingType.AZURE_DEFENDER: CloudProvider.AZURE,
     CSPMFindingType.AZURE_ACTIVITY: CloudProvider.AZURE,
+    CSPMFindingType.AZURE_NATIVE: CloudProvider.AZURE,
     CSPMFindingType.GCP_SCC: CloudProvider.GCP,
     CSPMFindingType.GCP_IAM: CloudProvider.GCP,
 }
@@ -79,6 +81,7 @@ _FT_PROVIDER: dict[CSPMFindingType, CloudProvider] = {
 _FT_SOURCE_TOKEN: dict[CSPMFindingType, str] = {
     CSPMFindingType.AZURE_DEFENDER: "DEFENDER",
     CSPMFindingType.AZURE_ACTIVITY: "ACTIVITY",
+    CSPMFindingType.AZURE_NATIVE: "NATIVE",
     CSPMFindingType.GCP_SCC: "SCC",
     CSPMFindingType.GCP_IAM: "IAM",
 }

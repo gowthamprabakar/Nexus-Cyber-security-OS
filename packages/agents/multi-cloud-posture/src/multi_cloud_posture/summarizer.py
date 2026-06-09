@@ -45,6 +45,7 @@ _SEVERITY_ORDER: tuple[Severity, ...] = (
 _SOURCE_ORDER: tuple[CSPMFindingType, ...] = (
     CSPMFindingType.AZURE_DEFENDER,
     CSPMFindingType.AZURE_ACTIVITY,
+    CSPMFindingType.AZURE_NATIVE,
     CSPMFindingType.GCP_SCC,
     CSPMFindingType.GCP_IAM,
 )
