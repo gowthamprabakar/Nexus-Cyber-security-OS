@@ -4,6 +4,22 @@ Multi-Cloud Posture Agent — **third Phase-1b agent**; **eighth under [ADR-007]
 
 > **Agent-ID note (2026-05-20).** Prior README copy self-claimed the ID "D.5"; that identifier is reserved for the operator's Data Security agent (DSPM) per the 2026-05-20 remaining-agents sketch §0. This package is referenced by its package name (`multi-cloud-posture`) throughout the codebase going forward.
 
+**Status: v0.2 (Level 2 — live Azure + GCP, single-subscription / single-project).** v0.2 matures the agent from offline JSON passthrough to **live SDKs + native rule engines**, an [ADR-010](../../../docs/_meta/decisions/ADR-010-version-extension-template.md) version-extension. See the [v0.2 plan](../../../docs/superpowers/plans/2026-06-09-d-5-multi-cloud-posture-v0-2.md).
+
+## v0.2 (Level 2) — what's new
+
+Per-cloud (single subscription / single project — Q6), no charter touch (D.5 is the 2nd consumer of F.3's seams; the charter hoist fires at D.2):
+
+- **Credential resolvers** — Azure `DefaultAzureCredential` chain ([`credentials_azure.py`](src/multi_cloud_posture/credentials_azure.py), `--azure-credential-source`) and GCP ADC ([`credentials_gcp.py`](src/multi_cloud_posture/credentials_gcp.py), `--gcp-credential-source`). Secret-free seams.
+- **Subscription / project + region discovery** — current-scope only ([`tools/azure_discovery.py`](src/multi_cloud_posture/tools/azure_discovery.py), [`tools/gcp_discovery.py`](src/multi_cloud_posture/tools/gcp_discovery.py)).
+- **Region scoping** — `--azure-regions` / `--gcp-regions` (default = all discovered), one shared precedence helper ([`region_scope.py`](src/multi_cloud_posture/region_scope.py)).
+- **Native rule engines** — **~8 CIS-Azure** ([`rules_azure/`](src/multi_cloud_posture/rules_azure/)) + **~10 CIS-GCP** ([`rules_gcp/`](src/multi_cloud_posture/rules_gcp/)) rules (plus the existing ~5 IAM-binding rules) emitting `class_uid 2003` tagged **`Source: Nexus-native`**. This closes Azure's zero-native-rule gap (Nexus _detects_, vs the Defender passthrough).
+- **Provenance tagging** — every finding plainly distinguishes **Microsoft Defender** / **Google Security Command Center** (passthrough) from **Nexus-native** ([`provenance_label`](src/multi_cloud_posture/schemas.py)).
+- **Partial-scan degradation** — a failed region degrades (secret-free marker in `report.md`), not the whole run ([`scan_errors.py`](src/multi_cloud_posture/scan_errors.py)).
+- **Gated live-eval lanes** — `NEXUS_LIVE_AZURE=1` / `NEXUS_LIVE_GCP=1` (independent), with read-only integration tests.
+
+**Deferred to v0.3:** multi-subscription / multi-project / organization scope (Q6) · the full CIS-Azure + CIS-GCP rule libraries (Q4) · removal of the Defender + SCC passthrough (Q7 / WI-D7).
+
 ## What it does
 
 Four-feed offline forensic analysis. Given an `ExecutionContract` requesting a multi-cloud posture scan, multi-cloud-posture runs a **five-stage pipeline**:
@@ -52,9 +68,14 @@ uv run multi-cloud-posture run \
     --gcp-iam-feed /tmp/gcp-iam-policies.json \
     --customer-domain example.com \
     --customer-domain corp.example.com
+
+# v0.2 live credential / region options (consumed by the live readers):
+uv run multi-cloud-posture run --contract path/to/contract.yaml \
+    --azure-credential-source chain --azure-regions eastus,westus \
+    --gcp-credential-source adc --gcp-regions us-central1,us-west1
 ```
 
-See [`runbooks/multicloud_scan.md`](runbooks/multicloud_scan.md) for the full operator workflow (staging the four feeds · interpreting the three artifacts · severity escalation rules · routing findings to D.7 Investigation + F.6 Audit · troubleshooting).
+Per-cloud live runbooks: [`runbooks/azure_dev_subscription_smoke.md`](runbooks/azure_dev_subscription_smoke.md) · [`runbooks/gcp_dev_project_smoke.md`](runbooks/gcp_dev_project_smoke.md). Offline workflow: [`runbooks/multicloud_scan.md`](runbooks/multicloud_scan.md).
 
 ## Architecture
 
@@ -95,9 +116,15 @@ Four async readers ([`tools/`](src/multi_cloud_posture/tools/)) and two pure-fun
 
 ```bash
 uv run pytest packages/agents/multi-cloud-posture -q
+
+# v0.2 gated live integration tests (read-only; opt in, independent lanes):
+NEXUS_LIVE_AZURE=1 uv run pytest \
+    packages/agents/multi-cloud-posture/tests/integration/test_agent_azure_live.py
+NEXUS_LIVE_GCP=1 uv run pytest \
+    packages/agents/multi-cloud-posture/tests/integration/test_agent_gcp_live.py
 ```
 
-204 tests; mypy strict clean. **10/10 eval acceptance gate** via the eval-framework entry-point:
+344 tests (v0.2); mypy strict clean. **10/10 eval acceptance gate** via the eval-framework entry-point:
 
 ```bash
 uv run eval-framework run --runner multi_cloud_posture \
