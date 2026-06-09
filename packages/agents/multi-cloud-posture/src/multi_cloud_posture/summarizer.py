@@ -50,7 +50,11 @@ _SOURCE_ORDER: tuple[CSPMFindingType, ...] = (
 )
 
 
-def render_summary(report: FindingsReport) -> str:
+def render_summary(
+    report: FindingsReport,
+    *,
+    degraded_regions: list[dict[str, str]] | None = None,
+) -> str:
     lines: list[str] = [
         _HEADER,
         "",
@@ -70,6 +74,7 @@ def render_summary(report: FindingsReport) -> str:
             "",
             "No multi-cloud posture findings in this scan window.",
         ]
+        _append_degraded(lines, degraded_regions)
         return "\n".join(lines)
 
     findings = [CloudPostureFinding(raw) for raw in report.findings]
@@ -137,10 +142,23 @@ def render_summary(report: FindingsReport) -> str:
             )
         lines.append("")
 
+    _append_degraded(lines, degraded_regions)
     return "\n".join(lines)
 
 
 # ---------------------------- helpers ------------------------------------
+
+
+def _append_degraded(lines: list[str], degraded_regions: list[dict[str, str]] | None) -> None:
+    """Append a 'Degraded regions' section — only when non-empty, so the summary
+    stays byte-identical to v0.1 when no region degraded (Task 5)."""
+    if not degraded_regions:
+        return
+    lines.append("## Degraded regions")
+    lines.append("")
+    for d in degraded_regions:
+        lines.append(f"- ⚠️ `{d['region']}` — {d['error']}")
+    lines.append("")
 
 
 def _count_by_source(report: FindingsReport) -> dict[str, int]:
