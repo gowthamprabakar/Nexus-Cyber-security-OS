@@ -152,6 +152,15 @@ def eval_cmd(cases_dir: Path) -> None:
         "service-account | workload-identity. Consumed by live GCP tasks."
     ),
 )
+@click.option(
+    "--gcp-regions",
+    "gcp_regions_raw",
+    default=None,
+    help=(
+        "Comma-separated GCP regions to scan (v0.2). Default: all discovered "
+        "for the project. Consumed by live GCP tasks."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     azure_findings_feed: Path | None,
@@ -162,6 +171,7 @@ def run_cmd(
     azure_credential_source: str,
     azure_regions_raw: str | None,
     gcp_credential_source: str,
+    gcp_regions_raw: str | None,
 ) -> None:
     """Run the Multi-Cloud Posture Agent against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
@@ -181,6 +191,8 @@ def run_cmd(
     gcp_source = None if gcp_credential_source == "adc" else gcp_credential_source
     gcp_resolver = GcpCredentialResolver(source=gcp_source)
     click.echo(f"gcp credential source: {gcp_resolver.source or 'adc (Application Default)'}")
+    gcp_regions = parse_regions_csv(gcp_regions_raw)
+    click.echo(f"gcp regions: {','.join(gcp_regions) if gcp_regions else 'all discovered'}")
 
     if not (azure_findings_feed or azure_activity_feed or gcp_findings_feed or gcp_iam_feed):
         click.echo(
@@ -197,6 +209,7 @@ def run_cmd(
             gcp_iam_feed=gcp_iam_feed,
             customer_domain_allowlist=customer_domains,
             azure_regions=azure_regions,
+            gcp_regions=gcp_regions,
         )
     )
 
