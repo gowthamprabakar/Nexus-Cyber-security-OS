@@ -95,6 +95,7 @@ async def run(
     azure_subscription_id: str | None = None,
     azure_regions: list[str] | None = None,
     gcp_project_id: str | None = None,
+    gcp_regions: list[str] | None = None,
 ) -> FindingsReport:
     """Run the Multi-Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -115,6 +116,9 @@ async def run(
         gcp_project_id: Single GCP project (Q6); discovered via
             `tools.gcp_discovery` when None. Reserved — consumed by the live GCP
             readers; the offline flow does not scan a project.
+        gcp_regions: Explicit GCP regions (precedence via
+            `region_scope.resolve_scan_regions`); all discovered when None.
+            Reserved — consumed by the live GCP readers.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -125,6 +129,7 @@ async def run(
     del azure_subscription_id  # reserved for live Azure scanning (consumed later in M2/M4)
     del azure_regions  # reserved for live Azure scanning (precedence via region_scope)
     del gcp_project_id  # reserved for live GCP scanning (consumed later in M3/M4)
+    del gcp_regions  # reserved for live GCP scanning (precedence via region_scope)
 
     registry = build_registry()
     model_pin = "deterministic"

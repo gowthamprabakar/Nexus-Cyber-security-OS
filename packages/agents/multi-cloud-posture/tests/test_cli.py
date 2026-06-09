@@ -217,6 +217,25 @@ def test_run_explicit_gcp_credential_source(tmp_path: Path) -> None:
     assert "gcp credential source: service-account" in result.output
 
 
+def test_run_default_gcp_regions_echoed(tmp_path: Path) -> None:
+    """v0.2: `--gcp-regions` defaults to all-discovered and is echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
+    assert result.exit_code == 0, result.output
+    assert "gcp regions: all discovered" in result.output
+
+
+def test_run_explicit_gcp_regions(tmp_path: Path) -> None:
+    """An explicit `--gcp-regions` CSV is parsed + echoed."""
+    contract = _contract_yaml(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["run", "--contract", str(contract), "--gcp-regions", "us-central1, us-west1 ,us-central1"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "gcp regions: us-central1,us-west1" in result.output
+
+
 def test_run_prints_severity_breakdown(tmp_path: Path) -> None:
     contract = _contract_yaml(tmp_path)
     result = CliRunner().invoke(main, ["run", "--contract", str(contract)])
