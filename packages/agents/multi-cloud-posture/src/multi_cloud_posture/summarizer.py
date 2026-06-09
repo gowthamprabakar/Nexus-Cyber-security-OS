@@ -48,6 +48,7 @@ _SOURCE_ORDER: tuple[CSPMFindingType, ...] = (
     CSPMFindingType.AZURE_NATIVE,
     CSPMFindingType.GCP_SCC,
     CSPMFindingType.GCP_IAM,
+    CSPMFindingType.GCP_NATIVE,
 )
 
 
