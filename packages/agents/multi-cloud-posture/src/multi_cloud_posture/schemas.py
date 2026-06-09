@@ -100,6 +100,26 @@ def source_token(finding_type: CSPMFindingType) -> str:
     return _FT_SOURCE_TOKEN[finding_type]
 
 
+# Customer-visible provenance label (v0.2 Task 12 / Q7 / WI-D2): plainly
+# distinguishes Nexus-native detection from third-party passthrough.
+# WI-D7: the Defender / SCC passthrough sources are slated for removal in v0.3.
+_PROVENANCE_LABEL: dict[CSPMFindingType, str] = {
+    CSPMFindingType.AZURE_DEFENDER: "Microsoft Defender",
+    CSPMFindingType.AZURE_ACTIVITY: "Azure Activity Log",
+    CSPMFindingType.AZURE_NATIVE: "Nexus-native",
+    CSPMFindingType.GCP_SCC: "Google Security Command Center",
+    CSPMFindingType.GCP_IAM: "Nexus-native",
+    CSPMFindingType.GCP_NATIVE: "Nexus-native",
+}
+
+
+def provenance_label(finding_type: CSPMFindingType) -> str:
+    """Customer-visible provenance for a source: e.g. ``"Microsoft Defender"``
+    (passthrough) vs ``"Nexus-native"`` (Nexus detected it). Surfaced plainly in
+    `report.md` and carried in each finding's evidence (`provenance`)."""
+    return _PROVENANCE_LABEL[finding_type]
+
+
 def short_resource_token(resource_id: str) -> str:
     """Extract a finding-id-safe token from an Azure/GCP resource ID.
 
@@ -129,6 +149,7 @@ __all__ = [
     "Severity",
     "build_finding",
     "cloud_provider_for",
+    "provenance_label",
     "severity_from_id",
     "severity_to_id",
     "short_resource_token",

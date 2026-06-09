@@ -50,6 +50,7 @@ from multi_cloud_posture.schemas import (
     CSPMFindingType,
     Severity,
     build_finding,
+    provenance_label,
     source_token,
 )
 from multi_cloud_posture.tools.azure_activity import AzureActivityRecord
@@ -144,6 +145,7 @@ def _from_defender(
             "assessment_type": record.assessment_type,
             "source_record_id": record.record_id,
             "source_finding_type": CSPMFindingType.AZURE_DEFENDER.value,
+            "provenance": provenance_label(CSPMFindingType.AZURE_DEFENDER),
             "unmapped": record.unmapped,
         },
     )
@@ -204,6 +206,7 @@ def _from_activity(
             "resource_group": record.resource_group,
             "source_record_id": record.record_id,
             "source_finding_type": CSPMFindingType.AZURE_ACTIVITY.value,
+            "provenance": provenance_label(CSPMFindingType.AZURE_ACTIVITY),
             "unmapped": record.unmapped,
         },
     )
