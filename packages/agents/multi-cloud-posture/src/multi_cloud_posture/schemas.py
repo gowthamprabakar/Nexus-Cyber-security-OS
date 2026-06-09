@@ -65,6 +65,7 @@ class CSPMFindingType(StrEnum):
     AZURE_NATIVE = "cspm_azure_native"  # v0.2 Task 10 — Nexus-native CIS-Azure rules
     GCP_SCC = "cspm_gcp_scc"
     GCP_IAM = "cspm_gcp_iam"
+    GCP_NATIVE = "cspm_gcp_native"  # v0.2 Task 11 — Nexus-native CIS-GCP rules
 
 
 # Maps the discriminator to the short token used in finding_id construction.
@@ -76,6 +77,7 @@ _FT_PROVIDER: dict[CSPMFindingType, CloudProvider] = {
     CSPMFindingType.AZURE_NATIVE: CloudProvider.AZURE,
     CSPMFindingType.GCP_SCC: CloudProvider.GCP,
     CSPMFindingType.GCP_IAM: CloudProvider.GCP,
+    CSPMFindingType.GCP_NATIVE: CloudProvider.GCP,
 }
 
 _FT_SOURCE_TOKEN: dict[CSPMFindingType, str] = {
@@ -84,6 +86,7 @@ _FT_SOURCE_TOKEN: dict[CSPMFindingType, str] = {
     CSPMFindingType.AZURE_NATIVE: "NATIVE",
     CSPMFindingType.GCP_SCC: "SCC",
     CSPMFindingType.GCP_IAM: "IAM",
+    CSPMFindingType.GCP_NATIVE: "NATIVE",
 }
 
 
