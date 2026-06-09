@@ -20,8 +20,17 @@ Live SDK calls (`azure-mgmt-security`, `azure-mgmt-monitor`,
 `google-cloud-securitycenter`, `google-cloud-asset`) are deferred to
 Phase 1c. v0.1 reads operator-pinned filesystem snapshots — mirrors
 F.3 (LocalStack) + D.4 (filesystem-only) patterns.
+
+v0.2 (Level 2 — live Azure + GCP). Per the v0.2 plan
+(docs/superpowers/plans/2026-06-09-d-5-multi-cloud-posture-v0-2.md), an ADR-010
+version-extension: live Azure + GCP SDKs, single-subscription / single-project
+credential resolution + discovery + region scoping, native rule engines (Azure
+from zero, GCP expanded), and Defender/SCC provenance tagging — additive only,
+with the OCSF 2003 wire shape + offline eval cases byte-stable. D.5 imports the
+cloud-agnostic seams directly from `cloud_posture` (2nd consumer; no charter
+hoist — that fires at D.2 per ADR-007).
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
