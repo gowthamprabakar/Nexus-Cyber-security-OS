@@ -13,4 +13,9 @@ scheduler) defers to Phase 1c.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# D.3 Runtime Threat v0.2 (Cycle 6 — first Group A real-time-class agent) — Level 1 →
+# Level 2: live Falco + Tracee real-time event subscription, MITRE ATT&CK technique
+# mapping with confidence, passive behavioral baseline, read-only forensic snapshot
+# action (no kill/quarantine — A.1 Remediation cycle), Investigation handoff flag.
+# ADR-010 version-extension bump. OCSF emission stays class_uid 2004 (verified, WI-R5).
+__version__ = "0.2.0"
