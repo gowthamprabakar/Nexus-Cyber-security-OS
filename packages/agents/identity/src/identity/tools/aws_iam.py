@@ -1,21 +1,26 @@
-"""AWS IAM async listing wrapper. Returns users + roles + groups + attachments.
+"""AWS IAM async listing wrapper. Returns users + roles + groups + policies + attachments.
 
 Per ADR-005, boto3 (sync) goes through `asyncio.to_thread` so the agent
 driver's TaskGroup can fan out concurrently. The single entry point
 `aws_iam_list_identities` returns a frozen `IdentityListing` capturing
 the principal universe for one AWS account / region.
 
-The downstream resolver (D.2 Task 6) consumes this output to flatten
-managed + inline policies into effective grants.
+v0.2 Task 6 adds the **policies** dimension: the account's customer-managed
+(`Scope='Local'`) policies enumerated as first-class `IamPolicy` objects with
+their default-version documents, alongside the principal attachments. The
+document-level effective-grant flattening + simulator are the Q7 v0.3 residual;
+v0.2 enumerates the policy universe so later tasks can consume it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from urllib.parse import unquote
 
 from identity.credentials import CredentialResolver
 
@@ -63,10 +68,23 @@ class IamGroup:
 
 
 @dataclass(frozen=True, slots=True)
+class IamPolicy:
+    """A customer-managed (account-local) IAM policy + its default-version document."""
+
+    arn: str
+    name: str
+    policy_id: str  # ANPAxxx
+    default_version_id: str
+    document: dict[str, Any]
+    attachment_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class IdentityListing:
     users: tuple[IamUser, ...]
     roles: tuple[IamRole, ...]
     groups: tuple[IamGroup, ...]
+    policies: tuple[IamPolicy, ...] = field(default_factory=tuple)
 
 
 async def aws_iam_list_identities(
@@ -104,8 +122,49 @@ def _list_identities_sync(profile: str | None, region: str) -> IdentityListing:
     users = _list_users(iam)
     roles = _list_roles(iam)
     groups = _list_groups(iam)
+    policies = _list_policies(iam)
 
-    return IdentityListing(users=tuple(users), roles=tuple(roles), groups=tuple(groups))
+    return IdentityListing(
+        users=tuple(users),
+        roles=tuple(roles),
+        groups=tuple(groups),
+        policies=tuple(policies),
+    )
+
+
+def _list_policies(iam: Any) -> list[IamPolicy]:
+    """Enumerate the account's customer-managed policies (`Scope='Local'`, paginated)
+    with their default-version documents. AWS-managed policies are out of scope
+    (single-account, Q6); their ARNs still surface via principal attachments."""
+    policies: list[IamPolicy] = []
+    for page in iam.get_paginator("list_policies").paginate(Scope="Local"):
+        for p in page.get("Policies", []):
+            arn = str(p["Arn"])
+            version_id = str(p["DefaultVersionId"])
+            document = _get_policy_document(iam, arn, version_id)
+            policies.append(
+                IamPolicy(
+                    arn=arn,
+                    name=str(p["PolicyName"]),
+                    policy_id=str(p["PolicyId"]),
+                    default_version_id=version_id,
+                    document=document,
+                    attachment_count=int(p.get("AttachmentCount") or 0),
+                )
+            )
+    return policies
+
+
+def _get_policy_document(iam: Any, policy_arn: str, version_id: str) -> dict[str, Any]:
+    """Fetch a managed policy's version document. boto3 may return it URL-encoded
+    (a str) or already decoded (a dict, e.g. under moto); handle both."""
+    raw = iam.get_policy_version(PolicyArn=policy_arn, VersionId=version_id)["PolicyVersion"][
+        "Document"
+    ]
+    if isinstance(raw, str):
+        decoded = json.loads(unquote(raw))
+        return dict(decoded) if isinstance(decoded, dict) else {}
+    return dict(raw) if isinstance(raw, dict) else {}
 
 
 def _list_users(iam: Any) -> list[IamUser]:
