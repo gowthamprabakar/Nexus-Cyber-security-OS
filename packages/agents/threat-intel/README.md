@@ -4,6 +4,25 @@ Threat Intel Agent — **D.8**; **second of the 7 unbuilt agents** shipped under
 
 > **v0.1 shipped 2026-05-21.** 16 tasks, PRs #73-#88 merged. 249 tests passing. 10/10 eval cases pass. Q6 CC-BY-4.0 attribution verified at unit, render, and CLI layers. See [`docs/_meta/d-8-threat-intel-v0-1-verification-2026-05-21.md`](../../../docs/_meta/d-8-threat-intel-v0-1-verification-2026-05-21.md) for the closure record.
 
+> **v0.2 — Level 1 → Level 2 (Continuous Ingestion).** 22 tasks. Adds **continuous-mode
+> ingestion** (`continuous.py` — bounded-queue backpressure + graceful shutdown), **live
+> STIX 2.1 / TAXII 2.1** (`stix_taxii.py`) + **HTTP polling fallback** (`http_poller.py`),
+> and **5 live feeds** alongside the v0.1 offline readers (WI-T5 keeps the offline path +
+> 10 eval cases byte-identical): live **NVD**, **CISA KEV**, **MITRE ATT&CK** (TAXII),
+> **abuse.ch** (URLhaus / ThreatFox / MalwareBazaar), **AlienVault OTX**. Plus
+> **industry + tech-stack profiles** (`customer/`), a **briefing** skeleton + template
+> (`briefing/`), and **basic threat-actor matching** (`correlators/threat_actor.py`).
+> Per-feed setup: [`runbooks/`](runbooks/). Per-feed coverage (no aggregate, WI-T1) +
+> the closure record live under `docs/_meta/d-8-threat-intel-v0-2-*`.
+>
+> **Honest scope (WI-T3).** The live readers + continuous framework are built and
+> end-to-end tested through normalization (offline every push + a gated
+> `NEXUS_LIVE_THREAT_INTEL=1` live lane, WI-T4); wiring them into the agent's
+> **continuous correlation→OCSF run loop is v0.3** — the offline `run()` remains the
+> OCSF 2004 emitting path. Industry-grade feeds (Wiz Cloud Threat Landscape, Unit42),
+> full industry-driven correlation, full briefing content, and full threat-actor
+> attribution are also v0.3.
+
 ## Scope (v0.1)
 
 **3 public, no-auth feeds** (offline-mode JSON snapshots staged by the operator):
