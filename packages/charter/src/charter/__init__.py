@@ -2,6 +2,7 @@
 
 from charter.context import Charter, current_charter
 from charter.contract import ExecutionContract, load_contract
+from charter.degradation import degraded_marker, sanitize_scan_error
 from charter.exceptions import (
     BudgetExhausted,
     CharterViolation,
@@ -27,6 +28,8 @@ __all__ = [
     "ToolRegistry",
     "VerificationResult",
     "current_charter",
+    "degraded_marker",
     "load_contract",
+    "sanitize_scan_error",
     "verify_audit_log",
 ]

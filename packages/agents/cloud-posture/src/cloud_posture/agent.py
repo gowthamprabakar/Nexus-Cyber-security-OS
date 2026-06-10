@@ -39,6 +39,7 @@ from typing import Any
 
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
+from charter.degradation import degraded_marker
 from charter.exceptions import BudgetExhausted
 from charter.llm import LLMProvider
 from charter.memory import SemanticStore
@@ -137,22 +138,6 @@ def _sanitize_context(s: str) -> str:
     s = _CONTEXT_RE.sub("-", s)
     s = re.sub(r"-+", "-", s).strip("-_")
     return (s or "unknown")[:60]
-
-
-def _sanitize_scan_error(exc: Exception) -> str:
-    """A secret-free, traceback-free one-liner for a failed region scan (Task 5).
-
-    Surfaces the exception type and — for a botocore ClientError — the
-    structured AWS error code (e.g. "Throttling", "AccessDenied"). It never
-    returns the full exception message, ARNs, request ids, or any credential
-    material, so degraded-region markers can be safely written to summary.md.
-    """
-    response = getattr(exc, "response", None)
-    if isinstance(response, dict):
-        code = response.get("Error", {}).get("Code")
-        if code:
-            return f"{type(exc).__name__}: {code}"
-    return type(exc).__name__
 
 
 def _rule_id_for(check_id: str) -> str:
@@ -366,7 +351,7 @@ async def run(
             except BudgetExhausted:
                 raise  # budget is a hard stop, not a per-region degradation
             except Exception as exc:
-                degraded_regions.append({"region": region, "error": _sanitize_scan_error(exc)})
+                degraded_regions.append(degraded_marker("region", region, exc))
 
         # 2. IAM enrichment in parallel — IAM is a global service, so it is
         # called ONCE regardless of how many regions were scanned.
