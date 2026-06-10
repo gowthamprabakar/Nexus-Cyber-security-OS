@@ -77,6 +77,7 @@ from threat_intel.summarizer import render_summary
 from threat_intel.tools.cisa_kev import KevEntry, read_cisa_kev
 from threat_intel.tools.kev_live import read_cisa_kev_live
 from threat_intel.tools.mitre_attack import TechniqueRecord, read_mitre_attack
+from threat_intel.tools.mitre_live import read_mitre_attack_live
 from threat_intel.tools.nvd_feed import NvdCveRecord, read_nvd_feed
 from threat_intel.tools.nvd_live import read_nvd_live
 
@@ -104,6 +105,7 @@ def build_registry() -> ToolRegistry:
     # v0.2 live continuous-mode readers (one cloud call per poll; gated via ctx.call_tool).
     reg.register("read_nvd_live", read_nvd_live, version="0.2.0", cloud_calls=1)
     reg.register("read_cisa_kev_live", read_cisa_kev_live, version="0.2.0", cloud_calls=1)
+    reg.register("read_mitre_attack_live", read_mitre_attack_live, version="0.2.0", cloud_calls=1)
     return reg
 
 
