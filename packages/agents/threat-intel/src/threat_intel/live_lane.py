@@ -75,3 +75,45 @@ def threat_intel_live_skip_reason(
     return live_skip_reason(
         THREAT_INTEL_LIVE_ENV, "threat-intel feeds", THREAT_INTEL_LIVE_SETUP, probe
     )
+
+
+# ---------------------------------------------------------------------------
+# Industry-vertical lane (Task 16) — a STUB establishing the lane shape for v0.3.
+# The industry-grade feeds (Wiz Cloud Threat Landscape, Unit42) land in v0.3 per Q2;
+# at v0.2 this lane always skips with a v0.3 note even when enabled.
+# ---------------------------------------------------------------------------
+
+THREAT_INTEL_INDUSTRY_LIVE_ENV = "NEXUS_LIVE_THREAT_INTEL_INDUSTRY"
+
+#: Industry-grade feeds deferred to v0.3 (Q2) — placeholders that fix the lane shape.
+INDUSTRY_FEEDS_V0_3: tuple[str, ...] = ("wiz-cloud-threat-landscape", "unit42")
+
+THREAT_INTEL_INDUSTRY_LIVE_SETUP = (
+    "set NEXUS_LIVE_THREAT_INTEL_INDUSTRY=1 once the industry-grade feeds land — Wiz "
+    "Cloud Threat Landscape + Unit42 are v0.3 (Q2). This lane is a v0.2 stub: it fixes "
+    "the env-gate + reachability shape so v0.3 only has to wire the feed clients."
+)
+
+
+def nexus_live_threat_intel_industry_enabled() -> bool:
+    """True iff the industry-vertical lane is enabled (`NEXUS_LIVE_THREAT_INTEL_INDUSTRY=1`)."""
+    return nexus_live_enabled(THREAT_INTEL_INDUSTRY_LIVE_ENV)
+
+
+def industry_feeds_reachable() -> tuple[bool, str]:
+    """v0.2 stub: there are no industry feeds yet, so this always reports unreachable
+    with a v0.3 reason — the lane never runs until v0.3 wires Wiz Landscape + Unit42."""
+    return False, "industry-feeds-are-v0.3"
+
+
+def threat_intel_industry_live_skip_reason(
+    probe: Callable[[], tuple[bool, str]] = industry_feeds_reachable,
+) -> str | None:
+    """Always returns a `pytest.skip` message at v0.2 — when disabled, the setup note;
+    when enabled, the 'industry feeds are v0.3' reason (the stub probe is unreachable)."""
+    return live_skip_reason(
+        THREAT_INTEL_INDUSTRY_LIVE_ENV,
+        "industry-vertical feeds",
+        THREAT_INTEL_INDUSTRY_LIVE_SETUP,
+        probe,
+    )
