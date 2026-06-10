@@ -74,6 +74,7 @@ from threat_intel.schemas import (
 )
 from threat_intel.scorer import score_findings
 from threat_intel.summarizer import render_summary
+from threat_intel.tools.abuse_ch import read_malwarebazaar, read_threatfox, read_urlhaus
 from threat_intel.tools.cisa_kev import KevEntry, read_cisa_kev
 from threat_intel.tools.kev_live import read_cisa_kev_live
 from threat_intel.tools.mitre_attack import TechniqueRecord, read_mitre_attack
@@ -106,6 +107,9 @@ def build_registry() -> ToolRegistry:
     reg.register("read_nvd_live", read_nvd_live, version="0.2.0", cloud_calls=1)
     reg.register("read_cisa_kev_live", read_cisa_kev_live, version="0.2.0", cloud_calls=1)
     reg.register("read_mitre_attack_live", read_mitre_attack_live, version="0.2.0", cloud_calls=1)
+    reg.register("read_urlhaus", read_urlhaus, version="0.2.0", cloud_calls=1)
+    reg.register("read_threatfox", read_threatfox, version="0.2.0", cloud_calls=1)
+    reg.register("read_malwarebazaar", read_malwarebazaar, version="0.2.0", cloud_calls=1)
     return reg
 
 
