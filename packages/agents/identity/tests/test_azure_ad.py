@@ -14,6 +14,7 @@ from identity.tools.azure_ad import (
     AzureAdGroup,
     AzureAdListing,
     AzureAdListingError,
+    AzureAdServicePrincipal,
     AzureAdUser,
     azure_ad_list_identities,
 )
@@ -55,6 +56,22 @@ def _seed() -> _FakeGraphReader:
                 {"id": "g1", "displayName": "Admins", "securityEnabled": True},
                 {"id": "g2", "displayName": "All Staff", "securityEnabled": False},
             ],
+            "servicePrincipals": [
+                {
+                    "id": "sp1",
+                    "appId": "app-1",
+                    "displayName": "CI Deployer",
+                    "servicePrincipalType": "Application",
+                    "accountEnabled": True,
+                },
+                {
+                    "id": "sp2",
+                    "appId": "app-2",
+                    "displayName": "vm-mi",
+                    "servicePrincipalType": "ManagedIdentity",
+                    "accountEnabled": True,
+                },
+            ],
         }
     )
 
@@ -94,6 +111,37 @@ async def test_requests_the_right_select_fields() -> None:
     calls = dict(reader.calls)
     assert calls["users"] == "id,userPrincipalName,displayName,accountEnabled"
     assert calls["groups"] == "id,displayName,securityEnabled"
+    assert calls["servicePrincipals"] == "id,appId,displayName,servicePrincipalType,accountEnabled"
+
+
+@pytest.mark.asyncio
+async def test_lists_service_principals() -> None:
+    listing = await azure_ad_list_identities(graph=_seed())
+    assert {sp.display_name for sp in listing.service_principals} == {"CI Deployer", "vm-mi"}
+    assert {sp.app_id for sp in listing.service_principals} == {"app-1", "app-2"}
+
+
+@pytest.mark.asyncio
+async def test_managed_identities_filter() -> None:
+    listing = await azure_ad_list_identities(graph=_seed())
+    mis = listing.managed_identities
+    assert len(mis) == 1
+    assert mis[0] == AzureAdServicePrincipal(
+        id="sp2",
+        app_id="app-2",
+        display_name="vm-mi",
+        sp_type="ManagedIdentity",
+        account_enabled=True,
+    )
+    # Application SPs are not managed identities.
+    assert all(sp.sp_type == "ManagedIdentity" for sp in mis)
+
+
+@pytest.mark.asyncio
+async def test_no_service_principals_yields_empty() -> None:
+    listing = await azure_ad_list_identities(graph=_FakeGraphReader({"users": [], "groups": []}))
+    assert listing.service_principals == ()
+    assert listing.managed_identities == ()
 
 
 @pytest.mark.asyncio
