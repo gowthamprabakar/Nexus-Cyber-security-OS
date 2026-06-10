@@ -18,6 +18,7 @@ from typing import Any
 import boto3
 import pytest
 from identity import credentials as credentials_mod
+from identity.tools import aws_iam as aws_iam_mod
 from identity.tools.aws_iam import (
     IamGroup,
     IamListingError,
@@ -227,6 +228,60 @@ async def test_policies_paginate_across_many() -> None:
         listing = await aws_iam_list_identities()
 
     assert {p.name for p in listing.policies} == {f"pol{i:03d}" for i in range(15)}
+
+
+# ---------------------- partial-scan degradation (Task 8) ----------------
+
+
+@pytest.mark.asyncio
+async def test_degrades_single_principal_on_subcall_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One user whose sub-enumeration fails is degraded; the others still list."""
+    real = aws_iam_mod._list_user_groups
+
+    def flaky(iam: Any, user_name: str) -> list[str]:
+        if user_name == "bob":
+            raise RuntimeError("boom arn:aws:iam::123:user/bob request-id=secret")
+        return real(iam, user_name)
+
+    monkeypatch.setattr(aws_iam_mod, "_list_user_groups", flaky)
+    with mock_aws():
+        _seed_account(boto3.client("iam"))
+        listing = await aws_iam_list_identities()
+
+    assert {u.name for u in listing.users} == {"alice"}  # bob degraded, scan continued
+    marker = next(d for d in listing.degraded if d.get("user") == "bob")
+    # Pattern-E secret-safety: the marker carries the type name only, no message.
+    assert marker["error"] == "RuntimeError"
+    assert "secret" not in marker["error"] and "arn:aws" not in marker["error"]
+
+
+@pytest.mark.asyncio
+async def test_degrades_section_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A whole-section failure degrades that section; other sections still scan."""
+
+    def boom(iam: Any, degraded: list[dict[str, str]]) -> list[Any]:
+        raise RuntimeError("AccessDenied")
+
+    monkeypatch.setattr(aws_iam_mod, "_list_roles", boom)
+    with mock_aws():
+        _seed_account(boto3.client("iam"))
+        listing = await aws_iam_list_identities()
+
+    assert listing.roles == ()  # roles section degraded
+    assert {u.name for u in listing.users} == {"alice", "bob"}  # users still scanned
+    assert {g.name for g in listing.groups} == {"admins"}
+    assert any(d.get("section") == "roles" for d in listing.degraded)
+
+
+@pytest.mark.asyncio
+async def test_clean_scan_has_no_degraded_markers() -> None:
+    with mock_aws():
+        _seed_account(boto3.client("iam"))
+        listing = await aws_iam_list_identities()
+
+    assert listing.degraded == ()
 
 
 # ---------------------------- error paths --------------------------------
