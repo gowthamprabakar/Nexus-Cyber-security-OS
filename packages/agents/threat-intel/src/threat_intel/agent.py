@@ -81,6 +81,7 @@ from threat_intel.tools.mitre_attack import TechniqueRecord, read_mitre_attack
 from threat_intel.tools.mitre_live import read_mitre_attack_live
 from threat_intel.tools.nvd_feed import NvdCveRecord, read_nvd_feed
 from threat_intel.tools.nvd_live import read_nvd_live
+from threat_intel.tools.otx import read_otx
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -110,6 +111,7 @@ def build_registry() -> ToolRegistry:
     reg.register("read_urlhaus", read_urlhaus, version="0.2.0", cloud_calls=1)
     reg.register("read_threatfox", read_threatfox, version="0.2.0", cloud_calls=1)
     reg.register("read_malwarebazaar", read_malwarebazaar, version="0.2.0", cloud_calls=1)
+    reg.register("read_otx", read_otx, version="0.2.0", cloud_calls=1)
     return reg
 
 
