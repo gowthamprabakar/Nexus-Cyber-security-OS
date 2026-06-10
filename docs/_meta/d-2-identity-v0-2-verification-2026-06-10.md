@@ -64,7 +64,11 @@ milestones, **0 failed** at every step.
   NLAH already grade A (backfill #328).
 - **OCSF 2004 byte-identical (WI-I5):** the offline eval stayed byte-identical every task; the
   new `federation` finding type rides the separate `federation_to_findings` path.
-- **WI-I4 (HARD):** the live end-to-end pipeline runs on every push (moto) + gated live (#359).
+- **WI-I4 (HARD) — partial:** the live end-to-end pipeline runs on every push (moto) + gated
+  live for AWS (`test_agent_aws_e2e.py`, #359). Azure has equivalent coverage via
+  `test_azure_ad.py` + `test_live_lane_azure.py` + `test_lane_coexistence.py` but **not at
+  `tests/integration/` level** — integration-level Azure e2e is documented in §5 (honest
+  findings) as a v0.3 carry-forward.
 - **WI-I7:** the largest cross-agent sweep — all OCSF 2004 emitters + all charter-hoist
   consumers green after the hoist ([Task 20](d-2-identity-v0-2-cross-agent-sweep-2026-06-10.md)).
 - **Substrate seal:** RED only for Tasks 2–4 (the intentional hoists); EMPTY for all of 5–24.
@@ -82,6 +86,14 @@ milestones, **0 failed** at every step.
   are captured for the v0.3 statement-level pass but not yet consumed.
 - **Azure OIDC is tenant-level only** — per-app workload identity federation
   (`federatedIdentityCredentials`, e.g. GitHub → managed identity) is v0.3 (WI-I6).
+- **Azure integration e2e file not shipped at `tests/integration/` level.** The Task 18 directive
+  named two integration files (`test_agent_aws_iam_live.py` + `test_agent_azure_ad_live.py`).
+  Only AWS was shipped at directory level; Azure has comprehensive coverage at the unit + lane
+  level (`test_azure_ad.py`, `test_credentials_azure.py`, `test_live_lane_azure.py`,
+  `test_lane_coexistence.py`) but not in `tests/integration/`. Given Azure's narrower v0.2 scope
+  (per Q3: Conditional Access + PIM → v0.3), the equivalent surface is covered, but the literal
+  WI-I4 file-level requirement is **partial, not full**. Integration-level Azure e2e is a v0.3
+  carry-forward alongside Conditional Access + PIM scope expansion.
 
 ## §6. Watch-items carry-forward (to the next cycle)
 
@@ -92,6 +104,8 @@ milestones, **0 failed** at every step.
   consumer appears (triggers in the [WI-I8 doc](f-3-hoist-completion-2026-06-10.md)).
 - **GCP IAM CIEM (Q4)**, **Conditional Access + PIM (Q3)**, **deep federation chains (Q5)**,
   **multi-account/tenant (Q6)** — all v0.3.
+- **Azure integration e2e at `tests/integration/` level** — pair with Conditional Access + PIM
+  (Q3) v0.3 scope work. Add `test_agent_azure_e2e.py` mirroring the AWS integration e2e shape.
 
 ## §7. Out of scope (deferred to v0.3, locked)
 
