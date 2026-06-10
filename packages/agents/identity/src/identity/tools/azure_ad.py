@@ -124,6 +124,17 @@ async def azure_ad_list_identities(
     )
 
 
+def build_graph_reader(
+    *, credential_source: str | None = None, timeout_sec: float = 60.0
+) -> GraphReader:
+    """The production httpx-backed `GraphReader`, authenticated via the
+    `AzureCredentialResolver`. Other Azure-AD tools (e.g. federation detection)
+    reuse this instead of re-deriving the reader."""
+    return _HttpGraphReader.from_resolver(
+        AzureCredentialResolver(source=credential_source), timeout_sec=timeout_sec
+    )
+
+
 async def _read_section(
     reader: GraphReader, resource: str, select: str, degraded: list[dict[str, str]]
 ) -> list[dict[str, Any]]:
