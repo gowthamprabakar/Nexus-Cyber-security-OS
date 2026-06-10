@@ -12,9 +12,12 @@ import boto3
 import pytest
 from identity.tools.federation import (
     AzureFederatedDomain,
+    AzureOidcProvider,
     FederationError,
+    detect_aws_oidc_providers,
     detect_aws_saml_providers,
     detect_azure_federated_domains,
+    detect_azure_oidc_providers,
 )
 from moto import mock_aws
 
@@ -109,3 +112,81 @@ async def test_azure_federation_error_is_wrapped() -> None:
 
     with pytest.raises(FederationError):
         await detect_azure_federated_domains(graph=_Boom())
+
+
+# ---------------------------- AWS OIDC providers --------------------------
+
+
+@pytest.mark.asyncio
+async def test_detects_aws_oidc_providers() -> None:
+    with mock_aws():
+        iam = boto3.client("iam", region_name="us-east-1")
+        iam.create_open_id_connect_provider(
+            Url="https://token.actions.githubusercontent.com",
+            ClientIDList=["sts.amazonaws.com"],
+            ThumbprintList=["a" * 40],
+        )
+        providers = await detect_aws_oidc_providers()
+
+    assert len(providers) == 1
+    gh = providers[0]
+    assert gh.url == "token.actions.githubusercontent.com"
+    assert gh.client_ids == ("sts.amazonaws.com",)
+    assert ":oidc-provider/" in gh.arn
+
+
+@pytest.mark.asyncio
+async def test_no_aws_oidc_providers() -> None:
+    with mock_aws():
+        assert await detect_aws_oidc_providers() == ()
+
+
+# -------------------------- Azure OIDC providers --------------------------
+
+
+class _OidcReader:
+    def __init__(self, items: list[dict[str, Any]]) -> None:
+        self._items = items
+
+    async def get_all(self, resource: str, *, select: str | None = None) -> list[dict[str, Any]]:
+        assert resource == "identity/identityProviders"
+        return self._items
+
+
+@pytest.mark.asyncio
+async def test_detects_only_oidc_identity_providers() -> None:
+    reader = _OidcReader(
+        [
+            {
+                "id": "Okta-OIDC",
+                "displayName": "Okta",
+                "@odata.type": "#microsoft.graph.openIdConnectIdentityProvider",
+            },
+            {
+                "id": "Google",
+                "displayName": "Google",
+                "@odata.type": "#microsoft.graph.socialIdentityProvider",
+            },
+        ]
+    )
+    providers = await detect_azure_oidc_providers(graph=reader)
+
+    assert providers == (
+        AzureOidcProvider(
+            id="Okta-OIDC",
+            display_name="Okta",
+            odata_type="#microsoft.graph.openIdConnectIdentityProvider",
+        ),
+    )  # the social (non-OIDC) provider is excluded
+
+
+@pytest.mark.asyncio
+async def test_azure_oidc_error_is_wrapped() -> None:
+    class _Boom:
+        async def get_all(
+            self, resource: str, *, select: str | None = None
+        ) -> list[dict[str, Any]]:
+            raise RuntimeError("Graph 403")
+
+    with pytest.raises(FederationError):
+        await detect_azure_oidc_providers(graph=_Boom())

@@ -39,6 +39,25 @@ class AwsSamlProvider:
 
 
 @dataclass(frozen=True, slots=True)
+class AwsOidcProvider:
+    """An IAM OIDC identity provider — an OIDC trust (e.g. GitHub Actions →
+    ``token.actions.githubusercontent.com``) allowing token-federated role assumption."""
+
+    arn: str
+    url: str
+    client_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AzureOidcProvider:
+    """An Azure AD tenant OIDC identity provider (external-identity OIDC IdP)."""
+
+    id: str
+    display_name: str
+    odata_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class AzureFederatedDomain:
     """An Azure AD domain whose authentication is federated to an external IdP
     (SAML / WS-Fed)."""
@@ -108,4 +127,69 @@ async def detect_azure_federated_domains(
         )
         for d in domains
         if str(d.get("authenticationType", "")).lower() == AZURE_FEDERATED_AUTH_TYPE.lower()
+    )
+
+
+async def detect_aws_oidc_providers(
+    *,
+    profile: str | None = None,
+    region: str = "us-east-1",
+    timeout_sec: float = 60.0,
+) -> tuple[AwsOidcProvider, ...]:
+    """Enumerate the account's IAM OIDC identity providers (the OIDC IdPs it trusts,
+    e.g. GitHub Actions / EKS / external workloads)."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_aws_oidc_sync, profile, region), timeout=timeout_sec
+        )
+    except TimeoutError as exc:
+        raise FederationError(f"detect_aws_oidc_providers timed out after {timeout_sec}s") from exc
+    except Exception as exc:  # boto3 / botocore
+        raise FederationError(f"detect_aws_oidc_providers failed: {exc}") from exc
+
+
+def _aws_oidc_sync(profile: str | None, region: str) -> tuple[AwsOidcProvider, ...]:
+    iam = CredentialResolver(profile=profile, region=region).client("iam")
+    providers: list[AwsOidcProvider] = []
+    for p in iam.list_open_id_connect_providers().get("OpenIDConnectProviderList", []):
+        arn = str(p["Arn"])
+        detail = iam.get_open_id_connect_provider(OpenIDConnectProviderArn=arn)
+        providers.append(
+            AwsOidcProvider(
+                arn=arn,
+                url=str(detail.get("Url", "")),
+                client_ids=tuple(str(c) for c in detail.get("ClientIDList", [])),
+            )
+        )
+    return tuple(providers)
+
+
+async def detect_azure_oidc_providers(
+    *,
+    graph: GraphReader | None = None,
+    credential_source: str | None = None,
+    timeout_sec: float = 60.0,
+) -> tuple[AzureOidcProvider, ...]:
+    """Enumerate the tenant's OIDC identity providers (external-identity OIDC IdPs).
+
+    Basic (Q5 B): the tenant-level OIDC IdP trusts. Per-app **workload identity
+    federation** (`federatedIdentityCredentials`, e.g. GitHub → managed identity) is
+    deeper and defers to v0.3 (WI-I6). `graph` is injectable for testing.
+    """
+    reader = graph or build_graph_reader(
+        credential_source=credential_source, timeout_sec=timeout_sec
+    )
+    try:
+        providers = await reader.get_all("identity/identityProviders")
+    except Exception as exc:
+        raise FederationError(f"detect_azure_oidc_providers failed: {exc}") from exc
+
+    return tuple(
+        AzureOidcProvider(
+            id=str(p.get("id", "")),
+            display_name=str(p.get("displayName", "")),
+            odata_type=str(p.get("@odata.type", "")),
+        )
+        for p in providers
+        if "openidconnect" in str(p.get("@odata.type", "")).lower()
     )
