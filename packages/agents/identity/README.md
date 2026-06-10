@@ -1,15 +1,28 @@
 # `nexus-identity`
 
-Identity Agent — agent **#3 of 18** for Nexus Cyber OS. CIEM (Cloud Infrastructure Entitlement Management) for AWS. **Second consumer of [ADR-007 v1.1](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (the `charter.llm_adapter` hoist), twice-validating the post-amendment canon.
+Identity Agent — agent **#3 of 18** for Nexus Cyber OS. **Multi-cloud CIEM** (Cloud
+Infrastructure Entitlement Management) — **v0.2 = Level 2**: live AWS IAM + live Azure
+AD / Entra + basic SAML/OIDC federation forensics. **The canonical 3rd consumer of the
+ADR-007 charter hoist** — this is the cycle where Patterns A (`CredentialResolver`),
+D (live-eval lane gating) and E (partial-scan degradation) were hoisted into
+[`nexus-charter`](../../charter/) and adopted here.
 
 ## What it does
 
-Maps AWS principals (IAM users, roles, groups) to their effective permissions and emits OCSF v1.3 Detection Findings (`class_uid 2004`) across four detection types:
+Maps cloud principals to their effective permissions and emits OCSF v1.3 Detection
+Findings (`class_uid 2004`). **Per-cloud coverage is measured separately, never
+aggregated** (WI-I1).
+
+**AWS IAM** (live via the hoisted `CredentialResolver`): users / roles / groups +
+customer-managed policies + Access Analyzer. **Azure AD / Entra** (live via Microsoft
+Graph): users + groups + service principals + managed identities. Five detection types:
 
 - **OVERPRIVILEGE** — admin-equivalent grants (`*:*`, `iam:*`, service-wide wildcards).
 - **DORMANT** — users / roles whose `last_used_at` is older than the threshold (default 90 days).
 - **EXTERNAL_ACCESS** — cross-account or public access surfaced by AWS Access Analyzer.
-- **MFA_GAP** — admin-capable IAM users without MFA enforced (signal supplied by the caller; cloud-posture's helpers feed it in Phase 1c).
+- **MFA_GAP** — admin-capable IAM users without MFA enforced (signal supplied by the caller).
+- **FEDERATION** — external-IdP SAML/OIDC trust relationships (IAM SAML/OIDC providers;
+  Azure AD federated domains + tenant OIDC IdPs). Basic detection (Q5); deep chains → v0.3.
 
 Every action runs through the [runtime charter](../../charter/) — execution contract, per-dimension budget envelope, tool whitelist, audit chain — so the agent cannot exceed its sanctioned scope.
 
@@ -25,14 +38,23 @@ uv run eval-framework run \
     --cases packages/agents/identity/eval/cases \
     --output /tmp/identity_suite
 
-# 3. Run against a live AWS account (see runbooks/scan_aws_account.md)
+# 3. Run against a live AWS account (see runbooks/aws_iam_live_scan.md)
 uv run identity-agent run \
     --contract path/to/contract.yaml \
-    --profile prod-readonly \
+    --profile dev-readonly \
     --analyzer-arn arn:aws:access-analyzer:us-east-1:111111111111:analyzer/nexus \
     --mfa-user alice --mfa-user bob \
     --dormant-threshold-days 90
+
+# 4. Gated live end-to-end lanes (read-only; skip cleanly when unset)
+AWS_PROFILE=dev NEXUS_LIVE_IDENTITY_AWS=1 \
+    uv run pytest packages/agents/identity/tests/integration/test_agent_aws_e2e.py -v
+NEXUS_LIVE_IDENTITY_AZURE=1 \
+    uv run pytest packages/agents/identity/tests/integration -k azure -v
 ```
+
+See the per-cloud runbooks: [`runbooks/aws_iam_live_scan.md`](runbooks/aws_iam_live_scan.md)
+and [`runbooks/azure_ad_live_scan.md`](runbooks/azure_ad_live_scan.md).
 
 ## Inputs
 
@@ -150,13 +172,23 @@ D.2 is the **second consumer of the post-amendment canon**. Per-task verdicts:
 
 **Follow-up flagged by D.2:** the NLAH loader (Task 9) is now materially identical across three agents — cloud-posture, vulnerability, identity. Hoist candidate for `charter.nlah_loader`. Surfaced in D.2 Task 16's verification record so it lands as ADR-007 v1.2 (or as a non-amendment refactor) before D.3.
 
-## Phase 1 caps (deferred)
+## v0.2 deferred scope (→ v0.3, per ADR-017)
 
-- **IAM `Condition` evaluation** — the resolver flattens decisions; condition keys are evidence only.
-- **SCPs (Service Control Policies)** — single-account scope in v0.1.
-- **Inline-policy admin detection** — v0.1 derives admin grants from attached managed policies. Inline policies require the simulator path (Phase 2).
-- **Permission-boundary subtraction in v0.1 driver** — the simulator wrapper handles boundaries (it's tested), but the v0.1 driver doesn't invoke per-principal simulation.
-- **Azure AD / Microsoft Entra, GCP IAM, SaaS IdPs** — Phase 2 multi-cloud / Phase 1c SSPM territory.
+What v0.2 (Level 2) deliberately does **not** do — stated plainly so the boundary is
+explicit:
+
+- **GCP IAM CIEM** (Q4) — AWS + Azure only at v0.2.
+- **Effective-permissions simulator + used-vs-granted** (Q7) — the IAM
+  `SimulatePrincipalPolicy` wrapper exists and is tested, but per-principal simulation
+  is the L3 residual. v0.2 admin detection is managed-policy-ARN-based.
+- **Inline-policy admin detection** — v0.2 enumerates inline policy _names_ + the
+  account's customer-managed policy _documents_; statement-level admin detection over
+  them pairs with the simulator (v0.3).
+- **Azure Conditional Access + PIM** (Q3); per-app workload identity federation
+  (`federatedIdentityCredentials`) — tenant-level OIDC IdPs only at v0.2 (WI-I6).
+- **Deep cross-cloud federation chains** (Okta → AWS → assume-role paths, Q5).
+- **Multi-account / multi-tenant** (Q6) — single AWS account / single Azure tenant.
+- **IAM `Condition` evaluation / SCPs / permission-boundary subtraction** in the driver.
 
 ## License
 
@@ -168,4 +200,5 @@ BSL 1.1 — agent-specific code per [ADR-001](../../../docs/_meta/decisions/ADR-
 - [Cloud Posture Agent](../cloud-posture/) — the F.3 reference template.
 - [Vulnerability Agent](../vulnerability/) — the D.1 second-template validation.
 - [`charter.llm_adapter`](../../charter/src/charter/llm_adapter.py) — shared LLM adapter (no per-agent `llm.py`).
-- Runbook: [scan_aws_account.md](runbooks/scan_aws_account.md).
+- [D.2 v0.2 plan](../../../docs/superpowers/plans/2026-06-10-d-2-identity-v0-2.md) — the multi-cloud + charter-hoist cycle.
+- Runbooks: [aws_iam_live_scan.md](runbooks/aws_iam_live_scan.md) · [azure_ad_live_scan.md](runbooks/azure_ad_live_scan.md).
