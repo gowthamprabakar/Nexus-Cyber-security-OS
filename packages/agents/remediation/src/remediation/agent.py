@@ -45,7 +45,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from charter import Charter, ToolRegistry
+from charter import Charter, ToolNotPermitted, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from cloud_posture.schemas import AffectedResource
@@ -220,7 +220,7 @@ async def run(
         )
 
         # ---- Stage 1: INGEST ----
-        all_findings = await read_findings(path=findings_path)
+        all_findings = await ctx.call_tool("read_findings", path=findings_path)
         auditor.findings_ingested(count=len(all_findings), source_path=str(findings_path))
 
         # ---- Stage 2: AUTHZ ----
@@ -328,6 +328,7 @@ async def run(
 
         for artifact in artifacts:
             outcome, description = await _process_artifact(
+                ctx=ctx,
                 artifact=artifact,
                 effective_mode=effective_modes[artifact.correlation_id],
                 auth=auth,
@@ -392,6 +393,7 @@ async def run(
 
 async def _process_artifact(
     *,
+    ctx: Charter,
     artifact: RemediationArtifact,
     effective_mode: RemediationMode,
     auth: Authorization,
@@ -436,8 +438,9 @@ async def _process_artifact(
         )
 
     try:
-        dry_run = await apply_patch(
-            artifact,
+        dry_run = await ctx.call_tool(
+            "apply_patch",
+            artifact=artifact,
             dry_run=True,
             kubeconfig=kubeconfig,
             fetch_state=False,
@@ -473,9 +476,17 @@ async def _process_artifact(
         )
 
     # ---- Stage 5: EXECUTE ----
+    # C-1 hard gate: the live-mutation call routes through the charter so
+    # permitted_tools, budget, and the charter audit chain all bind it. The
+    # explicit pre-execute re-check is defense-in-depth — ctx.call_tool enforces
+    # the whitelist itself, but stating it at the mutation boundary makes the
+    # invariant impossible to miss for anyone editing this path (ADR-016).
+    if "apply_patch" not in ctx.contract.permitted_tools:
+        raise ToolNotPermitted(tool="apply_patch", permitted=list(ctx.contract.permitted_tools))
     try:
-        execute = await apply_patch(
-            artifact,
+        execute = await ctx.call_tool(
+            "apply_patch",
+            artifact=artifact,
             dry_run=False,
             kubeconfig=kubeconfig,
             fetch_state=True,

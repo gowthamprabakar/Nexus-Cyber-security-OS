@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from charter import BudgetExhausted, DirectInvocationBlocked, ToolForbidden, ToolNotPermitted
 from charter.contract import BudgetSpec, ExecutionContract
 from k8s_posture.tools.manifests import ManifestFinding
 from remediation import agent as agent_mod
@@ -547,6 +548,189 @@ async def test_findings_json_matches_report_total(
     payload = json.loads((tmp_path / "ws" / "findings.json").read_text())
     # `total` is a property on RemediationReport — not serialised; check the list.
     assert len(payload["findings"]) == report.total == 2
+
+
+# ---------------------------- C-1: charter-gated mutation -----------------
+# ADR-016 / audit #316 C-1: the live-mutation tool (apply_patch) must be
+# dispatched through the charter (permitted_tools + budget + audit), never
+# called directly. These tests prove the hard boundary at the mutation edge.
+
+
+def _gated_contract(
+    tmp_path: Path,
+    *,
+    permitted: list[str],
+    forbidden: tuple[str, ...] = (),
+    cloud_api_calls: int = 20,
+) -> ExecutionContract:
+    return ExecutionContract(
+        schema_version="0.1",
+        delegation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+        source_agent="supervisor",
+        target_agent="remediation",
+        customer_id="cust_test",
+        task="A.1 gate test",
+        required_outputs=["findings.json", "report.md"],
+        budget=BudgetSpec(
+            llm_calls=1,
+            tokens=1,
+            wall_clock_sec=60.0,
+            cloud_api_calls=cloud_api_calls,
+            mb_written=10,
+        ),
+        permitted_tools=permitted,
+        forbidden_tools=list(forbidden),
+        completion_condition="findings.json AND report.md exist",
+        escalation_rules=[],
+        workspace=str(tmp_path / "ws"),
+        persistent_root=str(tmp_path / "persistent"),
+        created_at=NOW,
+        expires_at=NOW + timedelta(hours=1),
+    )
+
+
+def _execute_auth() -> Authorization:
+    return Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value],
+    )
+
+
+def _audit_lines(contract: ExecutionContract) -> list[dict[str, Any]]:
+    path = Path(contract.workspace) / "audit.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_apply_patch_proxy_blocks_direct_invocation() -> None:
+    """The registry-held apply_patch cannot run outside a charter dispatch."""
+    reg = build_registry()
+    proxy = reg._tools["apply_patch"].proxy
+    with pytest.raises(DirectInvocationBlocked) as exc:
+        proxy(artifact=None, dry_run=False)
+    assert exc.value.tool == "apply_patch"
+
+
+@pytest.mark.asyncio
+async def test_execute_routes_apply_patch_through_charter_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """EXECUTE-mode mutation emits charter tool_call events for both apply_patch
+    calls (dry-run + execute) and for the read_findings ingest."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    _patch_detector(monkeypatch, detector_output=())
+    contract = _contract(tmp_path)
+    await run(
+        contract,
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        authorization=_execute_auth(),
+    )
+    tool_calls = [e for e in _audit_lines(contract) if e.get("action") == "tool_call"]
+    tools_called = [e["payload"]["tool"] for e in tool_calls]
+    assert tools_called.count("apply_patch") == 2  # dry-run + execute, both gated
+    assert "read_findings" in tools_called
+
+
+@pytest.mark.asyncio
+async def test_execute_pipeline_auditor_still_records(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Defense-in-depth: the domain PipelineAuditor chain still records the
+    execute stage alongside the new charter tool_call events."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    _patch_detector(monkeypatch, detector_output=())
+    contract = _contract(tmp_path)
+    await run(
+        contract,
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        authorization=_execute_auth(),
+    )
+    actions = {e.get("action") for e in _audit_lines(contract)}
+    assert "tool_call" in actions  # charter gate
+    assert any("execute" in a for a in actions if isinstance(a, str))  # pipeline chain
+
+
+@pytest.mark.asyncio
+async def test_execute_consumes_cloud_budget_and_can_exhaust(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Routing through the charter means apply_patch now spends cloud_api_calls
+    budget — proven by exhausting a 1-call budget on the 2nd (execute) call."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    _patch_detector(monkeypatch, detector_output=())
+    contract = _gated_contract(
+        tmp_path, permitted=["read_findings", "apply_patch"], cloud_api_calls=1
+    )
+    with pytest.raises(BudgetExhausted) as exc:
+        await run(
+            contract,
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            authorization=_execute_auth(),
+        )
+    assert exc.value.dimension == "cloud_api_calls"
+
+
+@pytest.mark.asyncio
+async def test_execute_refused_when_apply_patch_not_permitted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """If apply_patch is not in permitted_tools, the mutation is blocked by the
+    charter whitelist (raised at the first gated apply_patch call)."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    contract = _gated_contract(tmp_path, permitted=["read_findings"])
+    with pytest.raises(ToolNotPermitted) as exc:
+        await run(
+            contract,
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            authorization=_execute_auth(),
+        )
+    assert exc.value.tool == "apply_patch"
+
+
+@pytest.mark.asyncio
+async def test_execute_refused_when_apply_patch_forbidden(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """forbidden_tools explicitly denies apply_patch — checked first in call_tool."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    contract = _gated_contract(tmp_path, permitted=["read_findings"], forbidden=("apply_patch",))
+    with pytest.raises(ToolForbidden) as exc:
+        await run(
+            contract,
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            authorization=_execute_auth(),
+        )
+    assert exc.value.tool == "apply_patch"
+
+
+@pytest.mark.asyncio
+async def test_dry_run_routes_apply_patch_through_charter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """DRY-RUN mode also dispatches apply_patch through the gate (one tool_call)."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    contract = _contract(tmp_path)
+    await run(
+        contract,
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.DRY_RUN,
+        authorization=Authorization(
+            mode_dry_run_authorized=True,
+            authorized_actions=[RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value],
+        ),
+    )
+    tool_calls = [e for e in _audit_lines(contract) if e.get("action") == "tool_call"]
+    assert [e["payload"]["tool"] for e in tool_calls].count("apply_patch") == 1
 
 
 _ = Sequence  # silence unused-import linter (Sequence is used by _patch_executor typing)
