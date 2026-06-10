@@ -2,6 +2,32 @@
 
 Network Threat Agent — agent **#6 of 18** for Nexus Cyber OS. **Second Phase-1b agent** and the **seventh under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / **D.4**). Mirrors D.3's three-feed pattern, applied to the network domain instead of the workload domain.
 
+> **v0.2 — Level 1 → Level 2 (Real-Time Event Streams).** 22 tasks. The **second Group A
+> real-time-class** agent (inherits the D.3 precedent). Adds **live Suricata + Zeek
+> real-time subscription** (push, socket/Broker — `tools/suricata_realtime.py` +
+> `tools/zeek_realtime.py`) **alongside** the heartbeat readers (Q1); live normalization +
+> Suricata rule packs; **live AWS VPC Flow Logs** via CloudWatch + the charter
+> CredentialResolver (`tools/vpc_flow_realtime_aws.py`, Q3 — AWS only, Azure/GCP v0.3);
+> flow aggregation + connection-rate anomaly + static-intel uplift; **cross-sensor
+> correlation** (Suricata × Zeek by 4-tuple); DGA + DNS-pattern (tunneling / suspicious-TLD
+> / DNS-beaconing) refinement; and a **TTL-bounded, auto-expiring IP-block** action
+> (`actions/`, Q4 — **no permanent / private-range / BGP changes**, those are the A.1
+> Remediation cycle) + an Investigation handoff flag (Q6). Three gated live lanes
+> (`NEXUS_LIVE_NETWORK_SURICATA/ZEEK/VPC_AWS`, WI-N4 e2e). Per-sensor setup:
+> [`runbooks/`](runbooks/); per-sensor coverage (no aggregate, WI-N1) + the closure record
+> under `docs/_meta/d-4-network-threat-v0-2-*`.
+>
+> **Safety invariant (Q4/WI-N8/WI-N10).** `actions/temporary_ip_block.assert_block_authorized`
+> is a hard code-level guard: an emitted block MUST be `temporary_ip_block`, carry a TTL of
+> 1–3600s (never permanent), and target a **public** IP (never private/loopback/link-local).
+> Auto-expiry is exercised end-to-end (WI-N11); a removal failure escalates.
+>
+> **Honest scope (WI-N3).** The real-time readers + framework are built and end-to-end
+> tested through **emission** (OCSF 2004); wiring them into the agent's **continuous run
+> loop is v0.3** — the offline `run()` remains the OCSF-emitting path (WI-N5 byte-identical).
+> Azure/GCP VPC flow, real-time preempt, behavioral models, permanent blocks (via A.1), and
+> microsegmentation recommendations are all v0.3+.
+
 ## What it does
 
 Three-feed offline forensic analysis. Given an `ExecutionContract` requesting a network-threat scan over a pinned time window, D.4 runs a **six-stage pipeline**:
