@@ -31,4 +31,7 @@ roadmap (D.8 v0.2 through v0.5+).
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# D.8 Threat Intel v0.2 (single comprehensive directive cycle) — Level 1 → Level 2:
+# continuous ingestion + live STIX/TAXII feeds + industry/tech-stack profiles +
+# briefing skeleton + basic threat-actor matching. ADR-010 version-extension bump.
+__version__ = "0.2.0"
