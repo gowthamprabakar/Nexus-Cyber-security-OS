@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from shared.fabric.envelope import NexusEnvelope
 
@@ -39,6 +40,12 @@ from identity.schemas import (
 )
 from identity.tools.aws_access_analyzer import AccessAnalyzerFinding
 from identity.tools.aws_iam import IdentityListing
+from identity.tools.federation import (
+    AwsOidcProvider,
+    AwsSamlProvider,
+    AzureFederatedDomain,
+    AzureOidcProvider,
+)
 from identity.tools.permission_paths import EffectiveGrant, grants_by_principal
 
 DEFAULT_DORMANT_THRESHOLD_DAYS = 90
@@ -345,7 +352,167 @@ def _safe_context(value: str) -> str:
     return cleaned
 
 
+def federation_to_findings(
+    *,
+    envelope: NexusEnvelope,
+    aws_saml: Sequence[AwsSamlProvider] = (),
+    aws_oidc: Sequence[AwsOidcProvider] = (),
+    azure_federated_domains: Sequence[AzureFederatedDomain] = (),
+    azure_oidc: Sequence[AzureOidcProvider] = (),
+    detected_at: datetime | None = None,
+) -> list[IdentityFinding]:
+    """Map detected federation trusts (SAML + OIDC, AWS + Azure) to OCSF 2004
+    Detection Findings — one LOW informational finding per trust relationship.
+
+    Kept separate from `normalize_to_findings` so the AWS-IAM offline eval is
+    unaffected (WI-I5); the agent end-to-end pipeline (Task 18) composes both. Per
+    WI-I1 every finding stays cloud-scoped — never an aggregate count.
+    """
+    when = detected_at or datetime.now(UTC)
+    findings: list[IdentityFinding] = []
+    counter = 1
+
+    for sp in aws_saml:
+        findings.append(
+            _federation_finding(
+                short=short_principal_id(sp.arn),
+                counter=counter,
+                context="saml_aws",
+                title=f"SAML federation trust: {sp.name}",
+                description=f"The AWS account trusts SAML identity provider {sp.name} ({sp.arn}).",
+                principal=AffectedPrincipal(
+                    principal_type="FederatedIdP",
+                    principal_name=sp.name,
+                    arn=sp.arn,
+                    account_id=_extract_account_id(sp.arn) or "unknown",
+                ),
+                evidence={"protocol": "saml", "cloud": "aws", "provider_arn": sp.arn},
+                envelope=envelope,
+                when=when,
+            )
+        )
+        counter += 1
+
+    for op in aws_oidc:
+        findings.append(
+            _federation_finding(
+                short=short_principal_id(op.arn),
+                counter=counter,
+                context="oidc_aws",
+                title=f"OIDC federation trust: {op.url}",
+                description=(
+                    f"The AWS account trusts OIDC identity provider {op.url} "
+                    f"(client IDs: {', '.join(op.client_ids) or 'none'})."
+                ),
+                principal=AffectedPrincipal(
+                    principal_type="FederatedIdP",
+                    principal_name=op.url or op.arn,
+                    arn=op.arn,
+                    account_id=_extract_account_id(op.arn) or "unknown",
+                ),
+                evidence={
+                    "protocol": "oidc",
+                    "cloud": "aws",
+                    "url": op.url,
+                    "client_ids": list(op.client_ids),
+                },
+                envelope=envelope,
+                when=when,
+            )
+        )
+        counter += 1
+
+    for fd in azure_federated_domains:
+        synth = f"azuread:federated-domain/{fd.domain}"
+        findings.append(
+            _federation_finding(
+                short=short_principal_id(synth),
+                counter=counter,
+                context="saml_azure",
+                title=f"Azure AD federated domain: {fd.domain}",
+                description=(
+                    f"The Azure AD tenant federates domain {fd.domain} to an external "
+                    f"IdP (authenticationType={fd.authentication_type})."
+                ),
+                principal=AffectedPrincipal(
+                    principal_type="FederatedIdP",
+                    principal_name=fd.domain,
+                    arn=synth,
+                    account_id="azuread",
+                ),
+                evidence={
+                    "protocol": "saml",
+                    "cloud": "azure",
+                    "domain": fd.domain,
+                    "authentication_type": fd.authentication_type,
+                    "is_verified": fd.is_verified,
+                },
+                envelope=envelope,
+                when=when,
+            )
+        )
+        counter += 1
+
+    for oi in azure_oidc:
+        synth = f"azuread:oidc-idp/{oi.id}"
+        findings.append(
+            _federation_finding(
+                short=short_principal_id(synth),
+                counter=counter,
+                context="oidc_azure",
+                title=f"Azure AD OIDC identity provider: {oi.display_name or oi.id}",
+                description=(
+                    f"The Azure AD tenant trusts OIDC identity provider "
+                    f"{oi.display_name or oi.id} ({oi.odata_type})."
+                ),
+                principal=AffectedPrincipal(
+                    principal_type="FederatedIdP",
+                    principal_name=oi.display_name or oi.id,
+                    arn=synth,
+                    account_id="azuread",
+                ),
+                evidence={
+                    "protocol": "oidc",
+                    "cloud": "azure",
+                    "id": oi.id,
+                    "odata_type": oi.odata_type,
+                },
+                envelope=envelope,
+                when=when,
+            )
+        )
+        counter += 1
+
+    return findings
+
+
+def _federation_finding(
+    *,
+    short: str,
+    counter: int,
+    context: str,
+    title: str,
+    description: str,
+    principal: AffectedPrincipal,
+    evidence: dict[str, Any],
+    envelope: NexusEnvelope,
+    when: datetime,
+) -> IdentityFinding:
+    return build_finding(
+        finding_id=f"IDENT-FED-{short}-{counter:03d}-{context}",
+        finding_type=FindingType.FEDERATION,
+        severity=Severity.LOW,
+        title=title,
+        description=description,
+        affected_principals=[principal],
+        evidence=evidence,
+        detected_at=when,
+        envelope=envelope,
+    )
+
+
 __all__ = [
     "DEFAULT_DORMANT_THRESHOLD_DAYS",
+    "federation_to_findings",
     "normalize_to_findings",
 ]

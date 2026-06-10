@@ -73,13 +73,14 @@ def test_severity_from_id_rejects_unknown() -> None:
 # ---------------------------- FindingType enum ---------------------------
 
 
-def test_finding_type_has_five_buckets() -> None:
+def test_finding_type_buckets() -> None:
     assert {ft.value for ft in FindingType} == {
         "overprivilege",
         "dormant",
         "external_access",
         "mfa_gap",
         "admin_path",
+        "federation",  # v0.2 Task 15
     }
 
 

@@ -51,7 +51,7 @@ from shared.fabric.envelope import NexusEnvelope, unwrap_ocsf, wrap_ocsf
 CVE_NA = "CVE-NA"
 
 FINDING_ID_RE = re.compile(
-    r"^IDENT-(OVERPRIV|DORMANT|EXTERNAL|MFA|ADMIN)-[A-Z0-9]+-\d{3}-[a-z0-9_-]+$"
+    r"^IDENT-(OVERPRIV|DORMANT|EXTERNAL|MFA|ADMIN|FED)-[A-Z0-9]+-\d{3}-[a-z0-9_-]+$"
 )
 
 # OCSF v1.3 constants
@@ -103,6 +103,7 @@ class FindingType(StrEnum):
     EXTERNAL_ACCESS = "external_access"
     MFA_GAP = "mfa_gap"
     ADMIN_PATH = "admin_path"
+    FEDERATION = "federation"
 
 
 # Map FindingType to the short token used inside finding_id (matches FINDING_ID_RE).
@@ -112,6 +113,7 @@ _FT_TOKEN: dict[FindingType, str] = {
     FindingType.EXTERNAL_ACCESS: "EXTERNAL",
     FindingType.MFA_GAP: "MFA",
     FindingType.ADMIN_PATH: "ADMIN",
+    FindingType.FEDERATION: "FED",
 }
 
 
