@@ -1997,7 +1997,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "nexus-network-threat-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/agents/network-threat" }
 dependencies = [
     { name = "click" },
