@@ -8,7 +8,7 @@ def test_package_imports() -> None:
 
     assert hasattr(network_threat, "__version__")
     assert isinstance(network_threat.__version__, str)
-    assert network_threat.__version__ == "0.1.0"
+    assert network_threat.__version__ == "0.2.0"
 
 
 def test_charter_llm_adapter_import_works() -> None:

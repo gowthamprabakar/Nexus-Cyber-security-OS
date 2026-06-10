@@ -25,4 +25,9 @@ Track-A WAF substrate).
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# D.4 Network Threat v0.2 (Cycle 7 — Group A real-time-class consumer #2, inherits the
+# D.3 precedent) — Level 1 -> Level 2: live Suricata + Zeek real-time subscription + live
+# AWS VPC flow logs, cross-sensor correlation, DGA/beacon refinement, and a TTL-bounded
+# auto-expiring IP-block action (Q4 safety invariant; no permanent/private-range blocks).
+# ADR-010 version-extension bump. OCSF emission stays class_uid 2004 (verified, WI-N5).
+__version__ = "0.2.0"
