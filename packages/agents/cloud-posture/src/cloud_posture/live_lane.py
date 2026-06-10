@@ -13,7 +13,7 @@ candidate for the third consumer (D.5 / D.2 v0.2).
 
 from __future__ import annotations
 
-import os
+from charter.live_lane import live_skip_reason, nexus_live_enabled
 
 from cloud_posture.credentials import CredentialResolver
 
@@ -27,7 +27,7 @@ AWS_LIVE_SETUP = (
 
 def nexus_live_aws_enabled() -> bool:
     """True iff the live-AWS lane is enabled (`NEXUS_LIVE_AWS=1`)."""
-    return os.environ.get("NEXUS_LIVE_AWS") == "1"
+    return nexus_live_enabled("NEXUS_LIVE_AWS")
 
 
 def aws_reachable() -> tuple[bool, str]:
@@ -44,9 +44,4 @@ def aws_reachable() -> tuple[bool, str]:
 def aws_skip_reason() -> str | None:
     """`None` when the lane is enabled AND reachable; otherwise the
     `pytest.skip` message with copy-paste setup instructions."""
-    if not nexus_live_aws_enabled():
-        return AWS_LIVE_SETUP
-    ok, reason = aws_reachable()
-    if not ok:
-        return f"NEXUS_LIVE_AWS=1 set but AWS is unreachable ({reason}). {AWS_LIVE_SETUP}"
-    return None
+    return live_skip_reason("NEXUS_LIVE_AWS", "AWS", AWS_LIVE_SETUP, aws_reachable)
