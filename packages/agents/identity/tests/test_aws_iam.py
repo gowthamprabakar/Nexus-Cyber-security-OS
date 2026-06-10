@@ -17,7 +17,7 @@ from typing import Any
 
 import boto3
 import pytest
-from identity.tools import aws_iam as aws_iam_mod
+from identity import credentials as credentials_mod
 from identity.tools.aws_iam import (
     IamGroup,
     IamListingError,
@@ -281,7 +281,7 @@ def _patch_session(monkeypatch: pytest.MonkeyPatch, fake: _FakeIamClient) -> Non
     def _factory(**kwargs: Any) -> _FakeSession:
         return _FakeSession(fake, **kwargs)
 
-    monkeypatch.setattr(aws_iam_mod.boto3, "Session", _factory)
+    monkeypatch.setattr(credentials_mod.boto3, "Session", _factory)
 
 
 PRINCIPAL = "arn:aws:iam::123456789012:user/alice"

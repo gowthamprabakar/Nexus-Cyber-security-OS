@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-import boto3
+from identity.credentials import CredentialResolver
 
 # IAM SimulatePrincipalPolicy accepts at most 50 ActionNames per request.
 _SIMULATE_BATCH_SIZE = 50
@@ -99,12 +99,7 @@ async def aws_iam_list_identities(
 
 
 def _list_identities_sync(profile: str | None, region: str) -> IdentityListing:
-    session = (
-        boto3.Session(profile_name=profile, region_name=region)
-        if profile
-        else boto3.Session(region_name=region)
-    )
-    iam = session.client("iam")
+    iam = CredentialResolver(profile=profile, region=region).client("iam")
 
     users = _list_users(iam)
     roles = _list_roles(iam)
@@ -300,12 +295,7 @@ def _simulate_principal_policy_sync(
     profile: str | None,
     region: str,
 ) -> tuple[SimulationDecision, ...]:
-    session = (
-        boto3.Session(profile_name=profile, region_name=region)
-        if profile
-        else boto3.Session(region_name=region)
-    )
-    iam = session.client("iam")
+    iam = CredentialResolver(profile=profile, region=region).client("iam")
 
     decisions: list[SimulationDecision] = []
     for batch_start in range(0, len(actions), _SIMULATE_BATCH_SIZE):
