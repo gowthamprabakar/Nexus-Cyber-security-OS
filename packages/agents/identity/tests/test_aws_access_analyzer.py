@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from identity.tools import aws_access_analyzer as aa_mod
+from identity import credentials as credentials_mod
 from identity.tools.aws_access_analyzer import (
     AccessAnalyzerError,
     AccessAnalyzerFinding,
@@ -48,7 +48,7 @@ def _patch_session(monkeypatch: pytest.MonkeyPatch, fake: _FakeAAClient) -> None
     def factory(**kwargs: Any) -> _FakeSession:
         return _FakeSession(fake, **kwargs)
 
-    monkeypatch.setattr(aa_mod.boto3, "Session", factory)
+    monkeypatch.setattr(credentials_mod.boto3, "Session", factory)
 
 
 def _finding(

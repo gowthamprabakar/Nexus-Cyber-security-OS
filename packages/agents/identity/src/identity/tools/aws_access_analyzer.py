@@ -5,8 +5,10 @@ that AWS Access Analyzer detects on resources within an account/org.
 
 Per ADR-005 (boto3 → asyncio.to_thread). The analyzer ARN is required
 because Access Analyzer is per-region and per-organization-or-account;
-callers thread the right one in. moto does not currently implement
-Access Analyzer, so tests stub `boto3.Session` directly.
+callers thread the right one in. v0.2 Task 7: the accessanalyzer client is
+resolved through the hoisted charter `CredentialResolver` (via
+`identity.credentials`), so AWS access goes through one seam. moto does not
+currently implement Access Analyzer, so tests stub the resolver's `boto3.Session`.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-import boto3
+from identity.credentials import CredentialResolver
 
 
 class AccessAnalyzerError(RuntimeError):
@@ -96,12 +98,7 @@ def _list_findings_sync(
     region: str,
     statuses: tuple[str, ...],
 ) -> tuple[AccessAnalyzerFinding, ...]:
-    session = (
-        boto3.Session(profile_name=profile, region_name=region)
-        if profile
-        else boto3.Session(region_name=region)
-    )
-    client = session.client("accessanalyzer")
+    client = CredentialResolver(profile=profile, region=region).client("accessanalyzer")
 
     findings: list[AccessAnalyzerFinding] = []
     next_token: str | None = None
