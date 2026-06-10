@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from urllib.parse import unquote
+
+from charter.degradation import degraded_marker
 
 from identity.credentials import CredentialResolver
 
@@ -85,6 +87,9 @@ class IdentityListing:
     roles: tuple[IamRole, ...]
     groups: tuple[IamGroup, ...]
     policies: tuple[IamPolicy, ...] = field(default_factory=tuple)
+    #: Pattern-E partial-scan markers ({"<unit>": name, "error": <sanitized>}) for
+    #: any principal/section/policy that failed to enumerate; the scan continues.
+    degraded: tuple[dict[str, str], ...] = field(default_factory=tuple)
 
 
 async def aws_iam_list_identities(
@@ -119,39 +124,62 @@ async def aws_iam_list_identities(
 def _list_identities_sync(profile: str | None, region: str) -> IdentityListing:
     iam = CredentialResolver(profile=profile, region=region).client("iam")
 
-    users = _list_users(iam)
-    roles = _list_roles(iam)
-    groups = _list_groups(iam)
-    policies = _list_policies(iam)
+    degraded: list[dict[str, str]] = []
+    users = _list_section("users", _list_users, iam, degraded)
+    roles = _list_section("roles", _list_roles, iam, degraded)
+    groups = _list_section("groups", _list_groups, iam, degraded)
+    policies = _list_section("policies", _list_policies, iam, degraded)
 
     return IdentityListing(
         users=tuple(users),
         roles=tuple(roles),
         groups=tuple(groups),
         policies=tuple(policies),
+        degraded=tuple(degraded),
     )
 
 
-def _list_policies(iam: Any) -> list[IamPolicy]:
+def _list_section(
+    name: str,
+    fn: Callable[[Any, list[dict[str, str]]], list[Any]],
+    iam: Any,
+    degraded: list[dict[str, str]],
+) -> list[Any]:
+    """Run one section's enumeration; a section-level failure (e.g. the paginator
+    is denied) is recorded as a Pattern-E degraded marker and the scan continues
+    with the other sections instead of failing the whole run. A total/credential
+    failure surfaces earlier (at client construction) and still raises."""
+    try:
+        return fn(iam, degraded)
+    except Exception as exc:
+        degraded.append(degraded_marker("section", name, exc))
+        return []
+
+
+def _list_policies(iam: Any, degraded: list[dict[str, str]]) -> list[IamPolicy]:
     """Enumerate the account's customer-managed policies (`Scope='Local'`, paginated)
     with their default-version documents. AWS-managed policies are out of scope
-    (single-account, Q6); their ARNs still surface via principal attachments."""
+    (single-account, Q6); their ARNs still surface via principal attachments. A
+    single policy whose document fetch fails degrades that policy (Pattern E)."""
     policies: list[IamPolicy] = []
     for page in iam.get_paginator("list_policies").paginate(Scope="Local"):
         for p in page.get("Policies", []):
             arn = str(p["Arn"])
-            version_id = str(p["DefaultVersionId"])
-            document = _get_policy_document(iam, arn, version_id)
-            policies.append(
-                IamPolicy(
-                    arn=arn,
-                    name=str(p["PolicyName"]),
-                    policy_id=str(p["PolicyId"]),
-                    default_version_id=version_id,
-                    document=document,
-                    attachment_count=int(p.get("AttachmentCount") or 0),
+            try:
+                version_id = str(p["DefaultVersionId"])
+                document = _get_policy_document(iam, arn, version_id)
+                policies.append(
+                    IamPolicy(
+                        arn=arn,
+                        name=str(p["PolicyName"]),
+                        policy_id=str(p["PolicyId"]),
+                        default_version_id=version_id,
+                        document=document,
+                        attachment_count=int(p.get("AttachmentCount") or 0),
+                    )
                 )
-            )
+            except Exception as exc:
+                degraded.append(degraded_marker("policy", arn, exc))
     return policies
 
 
@@ -167,85 +195,94 @@ def _get_policy_document(iam: Any, policy_arn: str, version_id: str) -> dict[str
     return dict(raw) if isinstance(raw, dict) else {}
 
 
-def _list_users(iam: Any) -> list[IamUser]:
+def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
     users: list[IamUser] = []
     for page in iam.get_paginator("list_users").paginate():
         for u in page.get("Users", []):
             name = str(u["UserName"])
-            attached = _list_attached_policy_arns(
-                iam, "list_attached_user_policies", "UserName", name
-            )
-            inline = _list_inline_policy_names(iam, "list_user_policies", "UserName", name)
-            groups = _list_user_groups(iam, name)
-            users.append(
-                IamUser(
-                    arn=str(u["Arn"]),
-                    name=name,
-                    user_id=str(u["UserId"]),
-                    create_date=u["CreateDate"],
-                    last_used_at=(
-                        u.get("PasswordLastUsed")
-                        if isinstance(u.get("PasswordLastUsed"), datetime)
-                        else None
-                    ),
-                    attached_policy_arns=tuple(attached),
-                    inline_policy_names=tuple(inline),
-                    group_memberships=tuple(groups),
+            try:
+                attached = _list_attached_policy_arns(
+                    iam, "list_attached_user_policies", "UserName", name
                 )
-            )
+                inline = _list_inline_policy_names(iam, "list_user_policies", "UserName", name)
+                groups = _list_user_groups(iam, name)
+                users.append(
+                    IamUser(
+                        arn=str(u["Arn"]),
+                        name=name,
+                        user_id=str(u["UserId"]),
+                        create_date=u["CreateDate"],
+                        last_used_at=(
+                            u.get("PasswordLastUsed")
+                            if isinstance(u.get("PasswordLastUsed"), datetime)
+                            else None
+                        ),
+                        attached_policy_arns=tuple(attached),
+                        inline_policy_names=tuple(inline),
+                        group_memberships=tuple(groups),
+                    )
+                )
+            except Exception as exc:
+                degraded.append(degraded_marker("user", name, exc))
     return users
 
 
-def _list_roles(iam: Any) -> list[IamRole]:
+def _list_roles(iam: Any, degraded: list[dict[str, str]]) -> list[IamRole]:
     roles: list[IamRole] = []
     for page in iam.get_paginator("list_roles").paginate():
         for r in page.get("Roles", []):
             name = str(r["RoleName"])
-            attached = _list_attached_policy_arns(
-                iam, "list_attached_role_policies", "RoleName", name
-            )
-            inline = _list_inline_policy_names(iam, "list_role_policies", "RoleName", name)
-            last_used = r.get("RoleLastUsed", {}).get("LastUsedDate")
-            roles.append(
-                IamRole(
-                    arn=str(r["Arn"]),
-                    name=name,
-                    role_id=str(r["RoleId"]),
-                    create_date=r["CreateDate"],
-                    last_used_at=last_used if isinstance(last_used, datetime) else None,
-                    assume_role_policy_document=dict(r.get("AssumeRolePolicyDocument") or {}),
-                    attached_policy_arns=tuple(attached),
-                    inline_policy_names=tuple(inline),
+            try:
+                attached = _list_attached_policy_arns(
+                    iam, "list_attached_role_policies", "RoleName", name
                 )
-            )
+                inline = _list_inline_policy_names(iam, "list_role_policies", "RoleName", name)
+                last_used = r.get("RoleLastUsed", {}).get("LastUsedDate")
+                roles.append(
+                    IamRole(
+                        arn=str(r["Arn"]),
+                        name=name,
+                        role_id=str(r["RoleId"]),
+                        create_date=r["CreateDate"],
+                        last_used_at=last_used if isinstance(last_used, datetime) else None,
+                        assume_role_policy_document=dict(r.get("AssumeRolePolicyDocument") or {}),
+                        attached_policy_arns=tuple(attached),
+                        inline_policy_names=tuple(inline),
+                    )
+                )
+            except Exception as exc:
+                degraded.append(degraded_marker("role", name, exc))
     return roles
 
 
-def _list_groups(iam: Any) -> list[IamGroup]:
+def _list_groups(iam: Any, degraded: list[dict[str, str]]) -> list[IamGroup]:
     groups: list[IamGroup] = []
     for page in iam.get_paginator("list_groups").paginate():
         for g in page.get("Groups", []):
             name = str(g["GroupName"])
-            members = [
-                str(u["UserName"])
-                for sub in iam.get_paginator("get_group").paginate(GroupName=name)
-                for u in sub.get("Users", [])
-            ]
-            attached = _list_attached_policy_arns(
-                iam, "list_attached_group_policies", "GroupName", name
-            )
-            inline = _list_inline_policy_names(iam, "list_group_policies", "GroupName", name)
-            groups.append(
-                IamGroup(
-                    arn=str(g["Arn"]),
-                    name=name,
-                    group_id=str(g["GroupId"]),
-                    create_date=g["CreateDate"],
-                    member_user_names=tuple(members),
-                    attached_policy_arns=tuple(attached),
-                    inline_policy_names=tuple(inline),
+            try:
+                members = [
+                    str(u["UserName"])
+                    for sub in iam.get_paginator("get_group").paginate(GroupName=name)
+                    for u in sub.get("Users", [])
+                ]
+                attached = _list_attached_policy_arns(
+                    iam, "list_attached_group_policies", "GroupName", name
                 )
-            )
+                inline = _list_inline_policy_names(iam, "list_group_policies", "GroupName", name)
+                groups.append(
+                    IamGroup(
+                        arn=str(g["Arn"]),
+                        name=name,
+                        group_id=str(g["GroupId"]),
+                        create_date=g["CreateDate"],
+                        member_user_names=tuple(members),
+                        attached_policy_arns=tuple(attached),
+                        inline_policy_names=tuple(inline),
+                    )
+                )
+            except Exception as exc:
+                degraded.append(degraded_marker("group", name, exc))
     return groups
 
 
