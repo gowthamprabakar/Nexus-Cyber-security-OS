@@ -2,6 +2,26 @@
 
 Runtime Threat Agent — agent **#4 of 18** for Nexus Cyber OS. CWPP (Cloud Workload Protection Platform) — consumes runtime alerts from Falco / Tracee / OSQuery and emits OCSF v1.3 Detection Findings. **First agent built end-to-end against [ADR-007 v1.2](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (post-NLAH-loader-hoist).
 
+> **v0.2 — Level 1 → Level 2 (Real-Time Event Streams).** 22 tasks. The first **Group A
+> real-time-class** agent. Adds **live Falco + Tracee real-time event subscription**
+> (push, gRPC/pipe — `tools/falco_realtime.py` + `tools/tracee_realtime.py`, bounded-queue
+> backpressure + graceful shutdown) **alongside** the v0.1 heartbeat readers (Q1); live
+> normalization + process/container/k8s + syscall enrichment; **cross-sensor correlation**
+> (Falco × Tracee by container+pid); **MITRE ATT&CK** technique mapping with heuristic
+> confidence (`mitre/`); **passive behavioral baseline** observation + persistence
+> (`baseline/`, Q5); a **read-only forensic snapshot** action (`actions/`, Q4 — **no
+> kill/quarantine**, that is the A.1 Remediation cycle) + write-once artifact store; and an
+> **Investigation handoff** flag (`handoff.py`, Q6 — D.3 does not auto-escalate). Two
+> gated live lanes (`NEXUS_LIVE_RUNTIME_FALCO/TRACEE`, WI-R4 e2e). Per-sensor setup:
+> [`runbooks/`](runbooks/); per-sensor coverage (no aggregate, WI-R1) + the closure record
+> under `docs/_meta/d-3-runtime-threat-v0-2-*`.
+>
+> **Honest scope (WI-R3).** The real-time readers + framework are built and end-to-end
+> tested through **emission** (OCSF 2004 with technique block); wiring them into the
+> agent's **continuous run loop is v0.3** — the offline `run()` remains the OCSF-emitting
+> path (WI-R5 byte-identical). Tetragon, active drift detection, full MITRE automation,
+> real-time preempt of the heartbeat, and Tier-1 kill/quarantine (via A.1) are all v0.3+.
+
 ## What it does
 
 Reads runtime alert streams produced by eBPF-based sensors (Falco, Tracee) and on-host query engines (OSQuery), normalizes them across the three native severity scales into OCSF v1.3 Detection Findings (`class_uid 2004`), and emits the same wire format every other Track-D agent emits. Five detection families: PROCESS / FILE / NETWORK / SYSCALL / OSQUERY.
