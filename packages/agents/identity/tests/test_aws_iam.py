@@ -186,6 +186,49 @@ async def test_pagination_across_many_users() -> None:
     assert {u.name for u in listing.users} == {f"user{i:03d}" for i in range(25)}
 
 
+# ---------------------------- policies (Task 6) --------------------------
+
+
+@pytest.mark.asyncio
+async def test_lists_customer_managed_policies_with_documents() -> None:
+    with mock_aws():
+        _seed_account(boto3.client("iam"))
+        listing = await aws_iam_list_identities()
+
+    assert {p.name for p in listing.policies} == {
+        "TestAdministratorAccess",
+        "TestIAMFullAccess",
+        "TestAWSLambdaBasicExecutionRole",
+    }
+    admin = next(p for p in listing.policies if p.name == "TestAdministratorAccess")
+    assert admin.arn.startswith("arn:aws:iam::")
+    assert admin.policy_id  # ANPA...
+    assert admin.default_version_id
+    assert admin.document["Statement"][0]["Action"] == "*"
+
+
+@pytest.mark.asyncio
+async def test_empty_account_has_no_customer_managed_policies() -> None:
+    with mock_aws():
+        listing = await aws_iam_list_identities()
+
+    assert listing.policies == ()
+
+
+@pytest.mark.asyncio
+async def test_policies_paginate_across_many() -> None:
+    with mock_aws():
+        iam = boto3.client("iam")
+        for i in range(15):
+            iam.create_policy(
+                PolicyName=f"pol{i:03d}",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"*"}]}',
+            )
+        listing = await aws_iam_list_identities()
+
+    assert {p.name for p in listing.policies} == {f"pol{i:03d}" for i in range(15)}
+
+
 # ---------------------------- error paths --------------------------------
 
 
