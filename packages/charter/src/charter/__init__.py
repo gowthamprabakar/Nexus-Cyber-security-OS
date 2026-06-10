@@ -2,6 +2,7 @@
 
 from charter.context import Charter, current_charter
 from charter.contract import ExecutionContract, load_contract
+from charter.credentials import CredentialResolver
 from charter.degradation import degraded_marker, sanitize_scan_error
 from charter.exceptions import (
     BudgetExhausted,
@@ -22,6 +23,7 @@ __all__ = [
     "Charter",
     "CharterViolation",
     "ContractInvalid",
+    "CredentialResolver",
     "DirectInvocationBlocked",
     "ExecutionContract",
     "ToolForbidden",
