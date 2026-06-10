@@ -151,13 +151,49 @@ async def test_empty_directory() -> None:
     assert listing.groups == ()
 
 
+class _PartialReader:
+    """Succeeds for users + groups but fails the servicePrincipals collection."""
+
+    def __init__(self, data: dict[str, list[dict[str, Any]]]) -> None:
+        self._data = data
+
+    async def get_all(self, resource: str, *, select: str | None = None) -> list[dict[str, Any]]:
+        if resource == "servicePrincipals":
+            raise RuntimeError("Authorization_RequestDenied tenant=secret")
+        return self._data.get(resource, [])
+
+
 @pytest.mark.asyncio
-async def test_graph_error_is_wrapped_secret_free() -> None:
+async def test_total_failure_raises_when_all_sections_degrade() -> None:
+    # Every Graph collection fails (e.g. a bad credential) → total failure raises.
     with pytest.raises(AzureAdListingError) as exc:
         await azure_ad_list_identities(graph=_BoomReader())
-    # the wrapper message names the failure but the test asserts it is raised as
-    # the typed error (the secret-bearing detail rides in __cause__, not the type).
     assert isinstance(exc.value, AzureAdListingError)
+
+
+@pytest.mark.asyncio
+async def test_partial_failure_degrades_section_and_continues() -> None:
+    seed = _seed()
+    reader = _PartialReader({"users": seed._data["users"], "groups": seed._data["groups"]})
+    listing = await azure_ad_list_identities(graph=reader)
+
+    # users + groups still enumerated; SPs degraded, scan continued.
+    assert {u.user_principal_name for u in listing.users} == {
+        "alice@contoso.com",
+        "bob@contoso.com",
+    }
+    assert {g.display_name for g in listing.groups} == {"Admins", "All Staff"}
+    assert listing.service_principals == ()
+    marker = next(d for d in listing.degraded if d.get("section") == "servicePrincipals")
+    # Pattern-E secret-safety: the marker carries the type name only.
+    assert marker["error"] == "RuntimeError"
+    assert "secret" not in marker["error"] and "tenant" not in marker["error"]
+
+
+@pytest.mark.asyncio
+async def test_clean_scan_has_no_degraded_markers() -> None:
+    listing = await azure_ad_list_identities(graph=_seed())
+    assert listing.degraded == ()
 
 
 @pytest.mark.asyncio

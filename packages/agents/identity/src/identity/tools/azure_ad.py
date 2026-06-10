@@ -17,6 +17,8 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from charter.degradation import degraded_marker
+
 from identity.credentials_azure import AzureCredentialResolver
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
@@ -58,6 +60,9 @@ class AzureAdListing:
     users: tuple[AzureAdUser, ...]
     groups: tuple[AzureAdGroup, ...]
     service_principals: tuple[AzureAdServicePrincipal, ...] = field(default_factory=tuple)
+    #: Pattern-E partial-scan markers ({"section": name, "error": <sanitized>}) for
+    #: any Graph collection that failed; the other collections still enumerate.
+    degraded: tuple[dict[str, str], ...] = field(default_factory=tuple)
 
     @property
     def managed_identities(self) -> tuple[AzureAdServicePrincipal, ...]:
@@ -91,25 +96,44 @@ async def azure_ad_list_identities(
     reader = graph or _HttpGraphReader.from_resolver(
         AzureCredentialResolver(source=credential_source), timeout_sec=timeout_sec
     )
-    try:
-        users_raw = await reader.get_all(
-            "users", select="id,userPrincipalName,displayName,accountEnabled"
+    degraded: list[dict[str, str]] = []
+    users_raw = await _read_section(
+        reader, "users", "id,userPrincipalName,displayName,accountEnabled", degraded
+    )
+    groups_raw = await _read_section(reader, "groups", "id,displayName,securityEnabled", degraded)
+    sps_raw = await _read_section(
+        reader,
+        "servicePrincipals",
+        "id,appId,displayName,servicePrincipalType,accountEnabled",
+        degraded,
+    )
+
+    # A single denied/failed collection degrades that section (Pattern E) and the
+    # scan continues. If EVERY section failed, that is a total failure (e.g. a bad
+    # credential) — raise instead of returning an empty "all-degraded" listing.
+    if degraded and not (users_raw or groups_raw or sps_raw):
+        raise AzureAdListingError(
+            f"azure_ad_list_identities failed: all {len(degraded)} Graph collections degraded"
         )
-        groups_raw = await reader.get_all("groups", select="id,displayName,securityEnabled")
-        sps_raw = await reader.get_all(
-            "servicePrincipals",
-            select="id,appId,displayName,servicePrincipalType,accountEnabled",
-        )
-    except AzureAdListingError:
-        raise
-    except Exception as exc:  # transport / SDK / credential
-        raise AzureAdListingError(f"azure_ad_list_identities failed: {exc}") from exc
 
     return AzureAdListing(
         users=tuple(_parse_user(u) for u in users_raw),
         groups=tuple(_parse_group(g) for g in groups_raw),
         service_principals=tuple(_parse_service_principal(s) for s in sps_raw),
+        degraded=tuple(degraded),
     )
+
+
+async def _read_section(
+    reader: GraphReader, resource: str, select: str, degraded: list[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """Read one Graph collection; on failure record a secret-free Pattern-E marker
+    and return [] so the other collections still enumerate."""
+    try:
+        return await reader.get_all(resource, select=select)
+    except Exception as exc:
+        degraded.append(degraded_marker("section", resource, exc))
+        return []
 
 
 def _parse_user(u: dict[str, Any]) -> AzureAdUser:
