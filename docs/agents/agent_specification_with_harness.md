@@ -1,4 +1,5 @@
 # HARNESS-ENGINEERED AGENT SPECIFICATION
+
 ## Each Agent Specced With Full Five-Layer Treatment
 
 This is the operational specification for every agent in the platform. Each agent is defined across five dimensions of harness engineering:
@@ -13,43 +14,106 @@ Plus the original spec dimensions: domain, hire test, detection scope, preventio
 
 This specification is what you build from. The runtime charter and architecture documents follow this.
 
+> **⚠️ READ FIRST — As-built reconciliation (2026-06-10).** This document was authored
+> before implementation and describes the _intended_ harness. The fleet diverged from it
+> in several load-bearing ways (surfaced by the [NLAH framework audit](../_meta/nlah-framework-audit-2026-06-09.md)).
+> The section **[§0 As-Built Convention vs Original Spec](#section-0--as-built-convention-vs-original-spec)**
+> below is the **authoritative** mapping of what this spec says → what the platform actually
+> does. Where the per-agent sections that follow conflict with §0, **§0 wins**. The objective,
+> enforceable compliance bar is [ADR-007 v1.7](../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md).
+
 ---
 
 ## OVERVIEW — THE FOURTEEN AGENTS WITH HARNESS PRINCIPLES
 
-| # | Agent | Type | Phase | Patterns Used |
-|---|---|---|---|---|
-| 0 | Supervisor | Lightweight router | 1 | Routing |
-| 1 | Cloud Posture | Specialist | 1 | Chaining, Eval-Optimizer |
-| 2 | Vulnerability | Specialist | 1 | Chaining, Parallelization |
-| 3 | Identity | Specialist | 1 | Chaining, Eval-Optimizer |
-| 4 | Runtime Threat | Specialist | 2 | Routing, Eval-Optimizer |
-| 5 | Data Security | Specialist | 2 | Chaining, Parallelization |
-| 6 | Network Threat | Specialist | 2 | Routing, Eval-Optimizer |
-| 7 | Compliance | Specialist | 1 (basic) | Parallelization |
-| 8 | Investigation | Specialist | 1 | Orchestrator-Workers, Chaining |
-| 9 | Threat Intel | Specialist | 1 | Parallelization |
-| 10 | Remediation | Specialist | 1 (Tier 3) | Chaining, Eval-Optimizer |
-| 11 | Curiosity | Support | 2 | Parallelization |
-| 12 | Synthesis | Support | 1 | Orchestrator-Workers |
-| 13 | Meta-Harness | Support | 2 | Eval-Optimizer |
-| 14 | Audit | Support | 1 | Chaining |
+| #   | Agent          | Type               | Phase      | Patterns Used                  |
+| --- | -------------- | ------------------ | ---------- | ------------------------------ |
+| 0   | Supervisor     | Lightweight router | 1          | Routing                        |
+| 1   | Cloud Posture  | Specialist         | 1          | Chaining, Eval-Optimizer       |
+| 2   | Vulnerability  | Specialist         | 1          | Chaining, Parallelization      |
+| 3   | Identity       | Specialist         | 1          | Chaining, Eval-Optimizer       |
+| 4   | Runtime Threat | Specialist         | 2          | Routing, Eval-Optimizer        |
+| 5   | Data Security  | Specialist         | 2          | Chaining, Parallelization      |
+| 6   | Network Threat | Specialist         | 2          | Routing, Eval-Optimizer        |
+| 7   | Compliance     | Specialist         | 1 (basic)  | Parallelization                |
+| 8   | Investigation  | Specialist         | 1          | Orchestrator-Workers, Chaining |
+| 9   | Threat Intel   | Specialist         | 1          | Parallelization                |
+| 10  | Remediation    | Specialist         | 1 (Tier 3) | Chaining, Eval-Optimizer       |
+| 11  | Curiosity      | Support            | 2          | Parallelization                |
+| 12  | Synthesis      | Support            | 1          | Orchestrator-Workers           |
+| 13  | Meta-Harness   | Support            | 2          | Eval-Optimizer                 |
+| 14  | Audit          | Support            | 1          | Chaining                       |
 
 Note: Memory Curator from prior spec is replaced by **Meta-Harness Agent** which subsumes its function plus self-evolution. Synthesis Agent added per harness principles to keep Supervisor lightweight.
+
+---
+
+## SECTION 0 — As-Built Convention vs Original Spec
+
+This section reconciles the five-layer spec (written pre-implementation) to what the platform
+actually ships, per the [NLAH framework audit (#316)](../_meta/nlah-framework-audit-2026-06-09.md)
+and the [NLAH Full Backfill cycle](../_meta/decisions/ADR-016-tool-proxy-hard-boundary.md). It is the
+authoritative source where the rest of this document disagrees. Each row is tagged **AS-BUILT**
+(the implemented convention — build to this), **ASPIRATIONAL** (intended, not yet implemented —
+do not assume it exists), or **CORRECTED** (the spec was wrong/imprecise; the right shape is given).
+
+### Layer 1 — Three-layer description / NLAH
+
+| Spec says                                                                                                                                                                                                    | Reality                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tag           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| A single `nlah.md` per agent with literal `ROLE:` / `EXPERTISE:` / `DECISION HEURISTICS (H1,H2…)` / `STAGES (Stage 1…)` / `FAILURE TAXONOMY (F1…)` / `CONTRACTS YOU REQUIRE` / `WHAT YOU NEVER DO` sections. | A **`nlah/` directory** — `README.md` + `tools.md` + `examples/` — loaded by `charter.nlah_loader.load_system_prompt`. The literal ALLCAPS single-file structure is used by **no agent**, including the reference.                                                                                                                                                                                                                                                                          | **CORRECTED** |
+| (n/a)                                                                                                                                                                                                        | The canonical Layer-1 standard is **Hybrid** (operator decision, this cycle): keep the `nlah/` container, but the README must **cover the semantic content** of every spec section under clear headers (role/mission, expertise, decision heuristics, numbered stages, failure taxonomy, required contracts, never-do, self-evolution thresholds, pattern declaration). Codified as the objective rubric in [ADR-007 v1.7](../_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md). | **AS-BUILT**  |
+
+### Layer 2 — Execution contract
+
+| Spec says                                                                                        | Reality                                                                                                                                                                                                                                                                                                            | Tag           |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| Budget fields `max_llm_calls` / `max_tokens` / `max_wall_clock_seconds` / `max_cloud_api_calls`. | `ExecutionContract.budget` is a `BudgetSpec` with `llm_calls` / `tokens` / `wall_clock_sec` / `cloud_api_calls` / `mb_written`. Functionally equivalent; names differ.                                                                                                                                             | **CORRECTED** |
+| `forbidden_tools` per agent.                                                                     | **Now exists** on `ExecutionContract` (added by [ADR-016](../_meta/decisions/ADR-016-tool-proxy-hard-boundary.md)) with a no-overlap-with-`permitted_tools` validator — but it is **defense-in-depth documentation only**; the load-bearing control is the `permitted_tools` allowlist enforced by the tool proxy. | **AS-BUILT**  |
+| `permitted_tools` whitelists what an agent may call.                                             | Enforced as a **hard boundary** (ADR-016): registered tools run only via `ctx.call_tool` (the registry proxy raises `DirectInvocationBlocked` otherwise); a CI guard (`test_tool_import_guard.py`) blocks re-introduction. Pre-cycle it was opt-in/advisory.                                                       | **AS-BUILT**  |
+
+### Layer 3 — File-backed state schema
+
+| Spec says                                                                                                                                                  | Reality                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Tag              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Each invocation writes `task.yaml`, `scan_outputs/…`, `findings/…`, `reasoning_trace.md`, `output.yaml` to `/workspaces/<customer>/<delegation>/<agent>/`. | **No agent writes `task.yaml` / `reasoning_trace.md` / `output.yaml`.** The charter creates the workspace (`WorkspaceManager`), writes a hash-chained **`audit.jsonl`**, and agents write their **required outputs** via `ctx.write_output(...)` (e.g. `findings.json`, `summary.md`). The workspace _path_ is whatever the contract's `workspace` field says (the canonical `/workspaces/...` convention lives in contract authoring, not agent code). | **CORRECTED**    |
+| `reasoning_trace.md` (raw) is the substrate Meta-Harness reads for self-evolution.                                                                         | **Does not exist.** Meta-Harness operates on **eval-suite scorecards** (`BatchEvalRunner` → `agent_scorecard` entities), not raw traces. Raw-trace persistence is a documented **v0.3** follow-up (`meta_harness/compilation_factory.py`).                                                                                                                                                                                                              | **ASPIRATIONAL** |
+
+### Layer 4 — Self-evolution criteria
+
+| Spec says                                                                                | Reality                                                                                                                                                                                                                                                                                  | Tag                                          |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Each agent documents numeric trigger thresholds (e.g. "FP rate > 15% over rolling 500"). | At audit time only 2/17 agents had any self-evolution section and none had numeric thresholds. **M3 of this cycle backfills documented thresholds into every NLAH** (required by ADR-007 v1.7). Meta-Harness can _act_ on them via scorecards today; the trace-driven optimizer is v0.3. | **ASPIRATIONAL → being made AS-BUILT in M3** |
+
+### Layer 5 — Pattern usage declaration
+
+| Spec says                                     | Reality                                                                                                                                                                                                                                                                                                 | Tag                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Each agent declares its canonical pattern(s). | Patterns are **implemented** (chaining, `asyncio.TaskGroup` parallelization, routing, orchestrator-workers, evaluator-optimizer) but were **not declared** in most NLAHs. M3 adds a formal pattern-declaration block to every NLAH (ADR-007 v1.7). No agent over-claims a pattern it doesn't implement. | **ASPIRATIONAL → being made AS-BUILT in M3** |
+
+### ADR-007 amendment status (v1.1–v1.7)
+
+v1.1 (LLM-adapter hoist) and v1.2 (NLAH-loader hoist) are honored fleet-wide. v1.3 (always-on class)
+is implemented by Audit (F.6). v1.4–v1.6 (progressive-disclosure skills, effectiveness scoring,
+DSPy programs) are v0.2+ surfaces. **v1.7** (this cycle) is the universal compliance checklist that
+makes the Hybrid Layer-1 standard + the hard tool boundary the enforceable bar for every agent.
 
 ---
 
 ## AGENT 0 — SUPERVISOR AGENT
 
 ### Domain
+
 Routing only. Lightweight delegation to specialists. Per harness principles, supervisor delegates ~90% of compute to child agents.
 
 ### Hire test
+
 Senior SOC dispatcher — knows which analyst handles which finding type, knows when to fan-out, doesn't do the analysis themselves.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Heartbeat scheduler (Kubernetes CronJob or systemd timer)
 - Distributed lock service (Redis or etcd) for per-customer concurrency control
 - Message queue for delegation (NATS or Redis Streams)
@@ -58,12 +122,14 @@ Senior SOC dispatcher — knows which analyst handles which finding type, knows 
 
 **Runtime charter participation:**
 Supervisor is the only agent that triggers from heartbeat. It is also the only agent allowed to:
+
 - Spawn parallel specialist invocations
 - Update shared customer context memory
 - Authorize Tier 1 actions (after specialist drafts them)
 - Hand off to Synthesis Agent for customer-facing output
 
 Subject to charter rules:
+
 - Maximum delegation depth: 2 (supervisor → specialist → at most one child)
 - Must record every delegation in audit log before specialist begins work
 - Cannot itself call detection or remediation tools
@@ -154,6 +220,7 @@ contract:
 ### Self-evolution criteria
 
 Supervisor harness rewrite triggered when:
+
 - Routing accuracy < 90% over rolling 1000 heartbeats (wrong specialist chosen)
 - Average delegation depth > 1.5 (over-delegation indicating routing logic error)
 - Specialist failure rate > 5% (suggests routing too-complex tasks to underpowered specialists)
@@ -182,6 +249,7 @@ Forbidden: Orchestrator-Workers (delegated to specialists), Eval-Optimizer (dele
 **Total: 9 tools. Deliberately minimal.**
 
 ### Coverage and Wiz mapping
+
 N/A — supervisor has no Wiz analog. Pure orchestration layer.
 
 ---
@@ -189,14 +257,17 @@ N/A — supervisor has no Wiz analog. Pure orchestration layer.
 ## AGENT 1 — CLOUD POSTURE AGENT
 
 ### Domain
+
 Cloud Security Posture Management. Misconfigurations across AWS/Azure/GCP/K8s.
 
 ### Hire test
+
 Cloud security analyst. Reviews configurations, knows CIS benchmarks, identifies attack surface.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Prowler binary + Python wrapper
 - Steampipe runtime + cloud plugins (AWS, Azure, GCP)
 - Cloud Custodian (read-only mode for this agent)
@@ -205,6 +276,7 @@ Cloud security analyst. Reviews configurations, knows CIS benchmarks, identifies
 - ScoutSuite as backup scanner
 
 **Runtime charter participation:**
+
 - Subject to budget contracts on every invocation
 - Reads from shared customer context (asset inventory, exceptions)
 - Writes only to its own private workspace and posture findings store
@@ -336,6 +408,7 @@ contract:
 ### Self-evolution criteria
 
 Triggers harness rewrite via Meta-Harness Agent:
+
 - False positive rate > 15% over rolling 500 findings
 - Customer marks finding as "not applicable" repeatedly for similar patterns
 - Severity assessment disputed by Compliance Agent in cross-check
@@ -343,6 +416,7 @@ Triggers harness rewrite via Meta-Harness Agent:
 - Confidence scores cluster < 0.7 (suggests model uncertain about domain)
 
 Self-evolution mechanism:
+
 1. Meta-Harness Agent reads `reasoning_trace.md` from failed invocations (raw, not summary)
 2. Identifies patterns in failure (e.g., "agent consistently misses business context for K8s findings")
 3. Proposes refinement to `cloud_posture/nlah.md` (e.g., "add explicit K8s asset criticality lookup")
@@ -353,13 +427,16 @@ Self-evolution mechanism:
 ### Pattern usage declaration
 
 **Primary patterns:**
+
 - **Prompt chaining** — Stage 1 (scan) → Stage 2 (enrich) → Stage 3 (assess) → Stage 4 (recommend)
 - **Evaluator-optimizer loop** — Self-evolution via Meta-Harness reading traces
 
 **Secondary patterns:**
+
 - **Routing** — When multi-domain finding, route enrichment to peer specialist
 
 **Not used:**
+
 - Parallelization (sequential nature of stages)
 - Orchestrator-workers (this agent IS a worker, not an orchestrator)
 
@@ -369,26 +446,29 @@ Self-evolution mechanism:
 
 ### Coverage progression
 
-| Phase | Coverage | Detection Rules | Cloud Coverage |
-|---|---|---|---|
-| 1 | 25% Wiz CSPM | 250 patterns | AWS only |
-| 2 | 50% | 450 patterns | AWS + Azure |
-| 3 | 65% | 800 patterns | AWS + Azure + GCP |
-| 4 | 85% | 1300 patterns | + K8s deep, OCI/Alibaba targeted |
+| Phase | Coverage     | Detection Rules | Cloud Coverage                   |
+| ----- | ------------ | --------------- | -------------------------------- |
+| 1     | 25% Wiz CSPM | 250 patterns    | AWS only                         |
+| 2     | 50%          | 450 patterns    | AWS + Azure                      |
+| 3     | 65%          | 800 patterns    | AWS + Azure + GCP                |
+| 4     | 85%          | 1300 patterns   | + K8s deep, OCI/Alibaba targeted |
 
 ---
 
 ## AGENT 2 — VULNERABILITY AGENT
 
 ### Domain
+
 CVE management across workloads, IaC scanning, secrets in code, supply chain.
 
 ### Hire test
+
 Vulnerability manager / SCA engineer.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Trivy binary + Python wrapper
 - Grype as backup
 - Syft for SBOM generation
@@ -398,6 +478,7 @@ Vulnerability manager / SCA engineer.
 - GitHub Advisory Database client
 
 **Runtime charter participation:**
+
 - Same charter rules as Cloud Posture
 - Special permission: can write to vulnerability_findings store directly (high-volume, low-risk writes)
 - Inherits parallelization primitive — can scan multiple targets concurrently within budget
@@ -546,10 +627,12 @@ Self-evolution: Meta-Harness rewrites stage prioritization in NLAH, adjusts para
 ### Pattern usage declaration
 
 **Primary patterns:**
+
 - **Prompt chaining** — 8 sequential stages
 - **Parallelization** — Stage 2 scans multiple targets concurrently
 
 **Secondary:**
+
 - **Evaluator-optimizer** — self-evolution
 
 ### Tools
@@ -558,24 +641,27 @@ Self-evolution: Meta-Harness rewrites stage prioritization in NLAH, adjusts para
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | 80% | Strongest specialist Day 1 |
-| 4 | 95% | + SideScanning equivalent for snapshot scanning |
+| Phase | Coverage | Notes                                           |
+| ----- | -------- | ----------------------------------------------- |
+| 1     | 80%      | Strongest specialist Day 1                      |
+| 4     | 95%      | + SideScanning equivalent for snapshot scanning |
 
 ---
 
 ## AGENT 3 — IDENTITY AGENT
 
 ### Domain
+
 CIEM, effective permissions, identity attack chains.
 
 ### Hire test
+
 IAM engineer / privileged access management specialist.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - PMapper for AWS privilege escalation analysis
 - Cloudsplaining for AWS policy danger analysis
 - AWS IAM Access Analyzer client
@@ -585,6 +671,7 @@ IAM engineer / privileged access management specialist.
 - Custom permission simulator
 
 **Runtime charter participation:**
+
 - Standard charter rules
 - Special permission: can request real-time CloudTrail queries (higher rate limit budget)
 - Inherits identity-anomaly detection primitive
@@ -726,25 +813,28 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | 70% | AWS-strong, Azure/GCP basic |
-| 3 | 80% | Multi-cloud parity |
-| 4 | 90% | Advanced behavioral analytics |
+| Phase | Coverage | Notes                         |
+| ----- | -------- | ----------------------------- |
+| 1     | 70%      | AWS-strong, Azure/GCP basic   |
+| 3     | 80%      | Multi-cloud parity            |
+| 4     | 90%      | Advanced behavioral analytics |
 
 ---
 
 ## AGENT 4 — RUNTIME THREAT AGENT
 
 ### Domain
+
 Real-time runtime detection. eBPF-based monitoring, container threats, kernel events.
 
 ### Hire test
+
 Threat hunter / runtime security engineer.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Falco runtime + custom rule packs
 - Tracee as backup
 - Tetragon for advanced kernel telemetry
@@ -753,6 +843,7 @@ Threat hunter / runtime security engineer.
 - eBPF program loader
 
 **Runtime charter participation:**
+
 - Special charter privilege: real-time event stream (not heartbeat-driven for active threats)
 - Can interrupt heartbeat cycle for critical threats (preempt budget)
 - Inherits process-tree analysis primitive
@@ -920,11 +1011,11 @@ Self-evolution especially important here — runtime detection rules need contin
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 2 | 70% | Falco-based, basic rules |
-| 3 | 90% | + Tetragon, custom rules, behavioral analytics |
-| 4 | 95% | Mature with self-evolution |
+| Phase | Coverage | Notes                                          |
+| ----- | -------- | ---------------------------------------------- |
+| 2     | 70%      | Falco-based, basic rules                       |
+| 3     | 90%      | + Tetragon, custom rules, behavioral analytics |
+| 4     | 95%      | Mature with self-evolution                     |
 
 ---
 
@@ -933,14 +1024,17 @@ Self-evolution especially important here — runtime detection rules need contin
 (Phase 2 onward)
 
 ### Domain
+
 DSPM, data classification, data flow, sensitive data exposure.
 
 ### Hire test
+
 Data protection officer / privacy engineer.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Microsoft Presidio for PII classification (open source ML)
 - AWS Macie API client (Phase 2)
 - Microsoft Purview API client (Phase 2)
@@ -949,6 +1043,7 @@ Data protection officer / privacy engineer.
 - Custom regex engine for custom classifiers
 
 **Runtime charter participation:**
+
 - Standard charter rules
 - Special: data scanning has specific privacy contract — never log actual sensitive data, only classifications
 - Inherits sampling primitive (don't scan entire datasets, statistical sampling)
@@ -1078,11 +1173,11 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 2 | 50% | Cloud-native DLP integration |
-| 3 | 75% | + Lineage analysis |
-| 4 | 85% | + AI training data, custom classifiers mature |
+| Phase | Coverage | Notes                                         |
+| ----- | -------- | --------------------------------------------- |
+| 2     | 50%      | Cloud-native DLP integration                  |
+| 3     | 75%      | + Lineage analysis                            |
+| 4     | 85%      | + AI training data, custom classifiers mature |
 
 ---
 
@@ -1091,14 +1186,17 @@ contract:
 (Phase 2 onward)
 
 ### Domain
+
 Network IDS, traffic analysis, network-layer threats.
 
 ### Hire test
+
 Network security analyst.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Suricata (rule-based IDS)
 - Zeek (network analysis framework)
 - VPC Flow Logs API clients (AWS, Azure, GCP)
@@ -1106,6 +1204,7 @@ Network security analyst.
 - DGA detection model
 
 **Runtime charter participation:**
+
 - Real-time event stream like Runtime Threat Agent
 - Tier 1 action capability for IP blocking (with auto-expiry)
 - Inherits network policy generation primitive
@@ -1231,25 +1330,28 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 2 | 50% | Suricata + cloud-native flow logs |
-| 3 | 75% | + Zeek deep analysis, DGA models |
-| 4 | 85% | + Microsegmentation recommendations |
+| Phase | Coverage | Notes                               |
+| ----- | -------- | ----------------------------------- |
+| 2     | 50%      | Suricata + cloud-native flow logs   |
+| 3     | 75%      | + Zeek deep analysis, DGA models    |
+| 4     | 85%      | + Microsegmentation recommendations |
 
 ---
 
 ## AGENT 7 — COMPLIANCE AGENT
 
 ### Domain
+
 Framework mapping, audit evidence, control coverage reporting.
 
 ### Hire test
+
 GRC analyst / compliance auditor.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Compliance framework knowledge base (in graph)
 - Prowler compliance modules
 - OpenSCAP for traditional compliance
@@ -1257,6 +1359,7 @@ GRC analyst / compliance auditor.
 - PDF generation engine for reports
 
 **Runtime charter participation:**
+
 - Standard rules
 - Special: can request evidence from any other specialist
 - Inherits report generation primitive
@@ -1382,25 +1485,28 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | 60% | Basic frameworks via Prowler |
-| 2 | 85% | Most major frameworks |
-| 4 | 95% | + 10 vertical-specific (HITRUST, NERC-CIP, etc) |
+| Phase | Coverage | Notes                                           |
+| ----- | -------- | ----------------------------------------------- |
+| 1     | 60%      | Basic frameworks via Prowler                    |
+| 2     | 85%      | Most major frameworks                           |
+| 4     | 95%      | + 10 vertical-specific (HITRUST, NERC-CIP, etc) |
 
 ---
 
 ## AGENT 8 — INVESTIGATION AGENT
 
 ### Domain
+
 Deep-dive incident investigation, root cause analysis, evidence collection. **This agent uses orchestrator-workers pattern — it spawns sub-investigations.**
 
 ### Hire test
+
 DFIR analyst / incident responder.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Timeline reconstruction engine
 - Cross-source query engine (Elasticsearch/OpenSearch on aggregated logs)
 - IOC extraction tools
@@ -1409,6 +1515,7 @@ DFIR analyst / incident responder.
 - Memory dump analysis tools
 
 **Runtime charter participation:**
+
 - Special: can spawn sub-agents for investigation tasks (only Investigation and Supervisor can)
 - Extended budget caps (investigations are long-running)
 - Inherits forensic capture primitive
@@ -1574,25 +1681,28 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | 50% | Basic timeline + IOC extraction |
-| 2 | 70% | + Sub-agent orchestration |
-| 3 | 85% | Mature DFIR capability |
+| Phase | Coverage | Notes                           |
+| ----- | -------- | ------------------------------- |
+| 1     | 50%      | Basic timeline + IOC extraction |
+| 2     | 70%      | + Sub-agent orchestration       |
+| 3     | 85%      | Mature DFIR capability          |
 
 ---
 
 ## AGENT 9 — THREAT INTEL AGENT
 
 ### Domain
+
 External threat intelligence ingestion and correlation.
 
 ### Hire test
+
 CTI analyst.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - STIX 2.1 parser
 - TAXII feed clients
 - MITRE ATT&CK / ATLAS sync engines
@@ -1603,6 +1713,7 @@ CTI analyst.
 - AlienVault OTX client
 
 **Runtime charter participation:**
+
 - Background ingestion runs continuously (not heartbeat)
 - Standard charter for queries from other agents
 - Inherits feed-merge primitive
@@ -1745,24 +1856,27 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | 70% | Basic feed ingestion (5-7 feeds) |
-| 2 | 90% | + Industry-specific feeds, automated correlation |
+| Phase | Coverage | Notes                                            |
+| ----- | -------- | ------------------------------------------------ |
+| 1     | 70%      | Basic feed ingestion (5-7 feeds)                 |
+| 2     | 90%      | + Industry-specific feeds, automated correlation |
 
 ---
 
 ## AGENT 10 — REMEDIATION AGENT
 
 ### Domain
+
 Action drafting and execution. The "hands" of the platform.
 
 ### Hire test
+
 Security automation engineer / SOAR specialist.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Cloud Custodian execution engine
 - Terraform CLI + state management
 - CloudFormation API client
@@ -1772,6 +1886,7 @@ Security automation engineer / SOAR specialist.
 - Rollback orchestrator
 
 **Runtime charter participation:**
+
 - Special: only agent allowed to execute actions on customer infrastructure
 - Strict charter rules:
   - Every action requires explicit authorization tier match
@@ -1946,32 +2061,36 @@ contract:
 
 ### Coverage progression
 
-| Phase | Coverage | Notes |
-|---|---|---|
-| 1 | Tier 3 only | Recommendations only |
-| 2 | + Tier 2 | Approval-gated |
-| 3 | + narrow Tier 1 | 2-3 action classes autonomous |
-| 4 | Mature Tier 1 | 10+ action classes, insurance partnerships |
+| Phase | Coverage        | Notes                                      |
+| ----- | --------------- | ------------------------------------------ |
+| 1     | Tier 3 only     | Recommendations only                       |
+| 2     | + Tier 2        | Approval-gated                             |
+| 3     | + narrow Tier 1 | 2-3 action classes autonomous              |
+| 4     | Mature Tier 1   | 10+ action classes, insurance partnerships |
 
 ---
 
 ## AGENT 11 — CURIOSITY AGENT (Phase 2+)
 
 ### Domain
+
 Proactive hypothesis generation. Doesn't wait for findings.
 
 ### Hire test
+
 Threat hunter — the "finds things nobody asked about" specialist.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Behavioral sampling engine
 - Statistical drift detection
 - Threat intel correlation engine
 - Hypothesis tracking database
 
 **Runtime charter participation:**
+
 - Runs on slower cycle (every 6 hours, not 60 seconds)
 - Cannot take actions — only generates hypotheses for other agents
 - Inherits sampling primitive
@@ -2068,6 +2187,7 @@ contract:
 - **Evaluator-optimizer** — heavy self-evolution required
 
 ### Coverage
+
 New capability not in Wiz. Differentiator.
 
 ---
@@ -2075,19 +2195,23 @@ New capability not in Wiz. Differentiator.
 ## AGENT 12 — SYNTHESIS AGENT (NEW — Phase 1)
 
 ### Domain
+
 Integrates outputs from multiple specialists into customer-facing summaries. Per harness principles, this offloads synthesis from Supervisor (which should remain lightweight).
 
 ### Hire test
+
 Senior security analyst who writes executive summaries.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - LLM service (uses Claude Sonnet for synthesis)
 - Multi-source aggregation
 - Customer communication preferences
 
 **Runtime charter participation:**
+
 - Pure reasoning agent — no detection or action tools
 - Reads from multiple specialist workspaces
 - Outputs to customer-facing channels via supervisor
@@ -2190,20 +2314,24 @@ contract:
 ## AGENT 13 — META-HARNESS AGENT (Phase 2+)
 
 ### Domain
+
 Reads raw execution traces, proposes harness rewrites, runs against eval suites. The self-evolution engine.
 
 ### Hire test
+
 ML engineer + senior agent designer.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Trace analysis engine
 - Eval framework with curated test sets per agent
 - Harness diff generator
 - Signed deployment pipeline
 
 **Runtime charter participation:**
+
 - Special privileges: can read all agents' raw traces (audit-logged)
 - Can propose new NLAH versions
 - Cannot deploy without human approval (initial Phase 2-3) or auto-deploy with strict criteria (Phase 4+)
@@ -2324,6 +2452,7 @@ contract:
 - **Prompt chaining** — within optimization run
 
 ### Coverage
+
 New capability not in Wiz. Critical for self-improvement.
 
 ---
@@ -2331,20 +2460,24 @@ New capability not in Wiz. Critical for self-improvement.
 ## AGENT 14 — AUDIT AGENT
 
 ### Domain
+
 Compliance evidence, audit log integrity, regulatory reporting for the platform itself.
 
 ### Hire test
+
 Internal auditor.
 
 ### Three-layer description
 
 **Backend infrastructure:**
+
 - Append-only audit log database
 - Hash chain for log integrity
 - Evidence package generator
 - Compliance reporting engine
 
 **Runtime charter participation:**
+
 - Receives audit events from every other agent (mandatory)
 - Cannot modify or delete audit records
 - Inherits integrity verification primitive
@@ -2394,8 +2527,7 @@ contract:
   target_agent: audit
   task:
     type: record_action | generate_evidence | verify_integrity | generate_compliance_report
-    scope:
-      <varies by task>
+    scope: <varies by task>
   required_outputs:
     record_action:
       audit_id: <UUID>
@@ -2445,6 +2577,7 @@ contract:
 ### Communication primitives (charter-enforced)
 
 All inter-agent communication flows through the supervisor except:
+
 - Investigation Agent spawning sub-investigation agents (allowed by charter)
 - Meta-Harness reading any agent's traces (read-only privilege)
 - Audit Agent receiving events from all agents (write-only from agents to audit)
@@ -2456,6 +2589,7 @@ Every agent invocation gets a workspace at `/workspaces/<customer_id>/<delegatio
 ### Reasoning trace requirements
 
 Every agent MUST write a `reasoning_trace.md` containing:
+
 - Initial task understanding
 - Decisions made and why
 - Tool calls in order
@@ -2466,12 +2600,12 @@ This is critical for Meta-Harness self-evolution — summarized traces drop opti
 
 ### Memory access patterns
 
-| Memory Type | Read | Write |
-|---|---|---|
-| Customer context | All agents | Supervisor only |
-| Agent private memory | Agent itself + Meta-Harness (read-only) | Agent itself |
-| Knowledge graph | All agents (read-only) | Memory Curator workflow only |
-| Audit log | Audit Agent + read-only by all | Append-only by all |
+| Memory Type          | Read                                    | Write                        |
+| -------------------- | --------------------------------------- | ---------------------------- |
+| Customer context     | All agents                              | Supervisor only              |
+| Agent private memory | Agent itself + Meta-Harness (read-only) | Agent itself                 |
+| Knowledge graph      | All agents (read-only)                  | Memory Curator workflow only |
+| Audit log            | Audit Agent + read-only by all          | Append-only by all           |
 
 ---
 
@@ -2485,6 +2619,7 @@ Each agent has an eval suite at `/persistent/global/meta_harness/eval_suites/<ag
 - Replay-from-production cases (anonymized)
 
 Eval suite expansion:
+
 - Phase 1: 50 cases per agent
 - Phase 2: 100 cases per agent
 - Phase 3: 150 cases per agent
