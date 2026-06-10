@@ -101,13 +101,19 @@ class _SubInvestigationOutputs:
 
 
 def build_registry() -> ToolRegistry:
-    """Compose the tool universe D.7 sees."""
+    """Compose the tool universe D.7 sees.
+
+    Only the three state-reading tools are charter-registered (and thus
+    dispatched via ctx.call_tool): audit_trail_query (audit store),
+    find_related_findings (sibling-workspace filesystem), memory_neighbors_walk
+    (semantic store). `extract_iocs` and `map_to_mitre` are PURE transforms over
+    in-memory evidence (no I/O, no external state), so per ADR-016 they are not
+    tools — the workers call them directly. (C-3 fix.)
+    """
     reg = ToolRegistry()
     reg.register("audit_trail_query", audit_trail_query, version="0.1.0", cloud_calls=0)
     reg.register("memory_neighbors_walk", memory_neighbors_walk, version="0.1.0", cloud_calls=0)
     reg.register("find_related_findings", find_related_findings, version="0.1.0", cloud_calls=0)
-    reg.register("extract_iocs", extract_iocs, version="0.1.0", cloud_calls=0)
-    reg.register("map_to_mitre", map_to_mitre, version="0.1.0", cloud_calls=0)
     return reg
 
 
@@ -174,6 +180,7 @@ async def run(
             # Stage 2 — SPAWN (4 parallel sub-investigations)
             current_stage = "spawn"
             sub_outputs = await _stage_spawn(
+                ctx=ctx,
                 scope=scope,
                 audit_store=audit_store,
                 semantic_store=semantic_store,
@@ -225,6 +232,10 @@ async def run(
                 containment_plan=containment_plan,
                 llm_used=llm_provider is not None,
             )
+
+            # C-3 fix: assert the contract's required_outputs were all written
+            # before the run is allowed to complete (was missing).
+            ctx.assert_complete()
 
             # F.7 v0.2: emit `investigation.completed` at Stage-6 success.
             if bus is not None and ctx.audit is not None:
@@ -285,17 +296,24 @@ def _stage_scope(
 
 async def _stage_spawn(
     *,
+    ctx: Charter,
     scope: _InvestigationScope,
     audit_store: AuditStore,
     semantic_store: SemanticStore,
 ) -> _SubInvestigationOutputs:
-    """Run the 4 sub-investigations in parallel under the orchestrator."""
+    """Run the 4 sub-investigations in parallel under the orchestrator.
+
+    Worker tool calls are dispatched through the parent charter (ctx.call_tool)
+    so the whitelist, budget, and audit chain bind them even from inside the
+    orchestrator-workers fan-out (C-3 fix). The concurrent dispatches are each
+    gated independently (the proxy's re-entrancy flag is contextvar-scoped)."""
     orch = SubAgentOrchestrator(parent_agent_id="investigation")
 
     async def _worker(scope_dict: dict[str, Any]) -> dict[str, Any]:
         kind = str(scope_dict["kind"])
         if kind == "timeline":
-            events = await audit_trail_query(
+            events = await ctx.call_tool(
+                "audit_trail_query",
                 audit_store=audit_store,
                 tenant_id=scope.tenant_id,
                 since=scope.since,
@@ -304,8 +322,10 @@ async def _stage_spawn(
             return {"audit_events": tuple(events)}
         if kind == "ioc_pivot":
             # IOC extraction needs evidence — runs on collected findings.
-            findings = await find_related_findings(sibling_workspaces=scope.sibling_workspaces)
-            iocs = extract_iocs([rf.payload for rf in findings])
+            findings = await ctx.call_tool(
+                "find_related_findings", sibling_workspaces=scope.sibling_workspaces
+            )
+            iocs = extract_iocs([rf.payload for rf in findings])  # pure transform
             return {"related_findings": tuple(findings), "iocs": tuple(iocs)}
         if kind == "asset_enum":
             # v0.1 — semantic graph walk is a no-op when no seed entity
@@ -314,7 +334,8 @@ async def _stage_spawn(
             seed = scope_dict.get("seed_entity_id")
             if not seed:
                 return {"entities": ()}
-            entities = await memory_neighbors_walk(
+            entities = await ctx.call_tool(
+                "memory_neighbors_walk",
                 semantic_store=semantic_store,
                 tenant_id=scope.tenant_id,
                 entity_id=str(seed),
@@ -322,8 +343,10 @@ async def _stage_spawn(
             )
             return {"entities": tuple(entities)}
         if kind == "attribution":
-            findings = await find_related_findings(sibling_workspaces=scope.sibling_workspaces)
-            techniques = map_to_mitre([rf.payload for rf in findings])
+            findings = await ctx.call_tool(
+                "find_related_findings", sibling_workspaces=scope.sibling_workspaces
+            )
+            techniques = map_to_mitre([rf.payload for rf in findings])  # pure transform
             return {"mitre_techniques": tuple(techniques)}
         return {}
 
