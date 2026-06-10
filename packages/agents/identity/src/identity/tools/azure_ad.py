@@ -14,13 +14,15 @@ measured on its own, never aggregated with AWS.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from identity.credentials_azure import AzureCredentialResolver
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
+#: servicePrincipalType for a managed identity (the SP class attackers abuse most).
+MANAGED_IDENTITY_SP_TYPE = "ManagedIdentity"
 
 
 class AzureAdListingError(RuntimeError):
@@ -43,9 +45,25 @@ class AzureAdGroup:
 
 
 @dataclass(frozen=True, slots=True)
+class AzureAdServicePrincipal:
+    id: str
+    app_id: str
+    display_name: str
+    sp_type: str  # servicePrincipalType: Application / ManagedIdentity / Legacy / SocialIdp
+    account_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AzureAdListing:
     users: tuple[AzureAdUser, ...]
     groups: tuple[AzureAdGroup, ...]
+    service_principals: tuple[AzureAdServicePrincipal, ...] = field(default_factory=tuple)
+
+    @property
+    def managed_identities(self) -> tuple[AzureAdServicePrincipal, ...]:
+        """The subset of service principals that are managed identities
+        (`servicePrincipalType == 'ManagedIdentity'`)."""
+        return tuple(sp for sp in self.service_principals if sp.sp_type == MANAGED_IDENTITY_SP_TYPE)
 
 
 class GraphReader(Protocol):
@@ -78,6 +96,10 @@ async def azure_ad_list_identities(
             "users", select="id,userPrincipalName,displayName,accountEnabled"
         )
         groups_raw = await reader.get_all("groups", select="id,displayName,securityEnabled")
+        sps_raw = await reader.get_all(
+            "servicePrincipals",
+            select="id,appId,displayName,servicePrincipalType,accountEnabled",
+        )
     except AzureAdListingError:
         raise
     except Exception as exc:  # transport / SDK / credential
@@ -86,6 +108,7 @@ async def azure_ad_list_identities(
     return AzureAdListing(
         users=tuple(_parse_user(u) for u in users_raw),
         groups=tuple(_parse_group(g) for g in groups_raw),
+        service_principals=tuple(_parse_service_principal(s) for s in sps_raw),
     )
 
 
@@ -103,6 +126,16 @@ def _parse_group(g: dict[str, Any]) -> AzureAdGroup:
         id=str(g.get("id", "")),
         display_name=str(g.get("displayName", "")),
         security_enabled=bool(g.get("securityEnabled", False)),
+    )
+
+
+def _parse_service_principal(s: dict[str, Any]) -> AzureAdServicePrincipal:
+    return AzureAdServicePrincipal(
+        id=str(s.get("id", "")),
+        app_id=str(s.get("appId", "")),
+        display_name=str(s.get("displayName", "")),
+        sp_type=str(s.get("servicePrincipalType", "")),
+        account_enabled=bool(s.get("accountEnabled", False)),
     )
 
 
