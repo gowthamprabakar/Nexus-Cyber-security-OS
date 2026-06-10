@@ -768,3 +768,81 @@ async def test_run_emit_failed_carries_stage_and_exception_class(
     assert failed_event["event_type"] == "failed"
     assert failed_event["stage"] == "synthesize"
     assert failed_event["error_class"] == "ValueError"
+
+
+# ---------------------------- C-3: charter-gated workers ------------------
+# ADR-016 / audit #316 C-3: the worker tools that read external state
+# (audit store / sibling filesystem / semantic store) dispatch through the
+# parent charter; extract_iocs + map_to_mitre are pure and are NOT tools.
+
+
+def test_registry_registers_only_stateful_tools() -> None:
+    from investigation.agent import build_registry
+
+    tools = set(build_registry().known_tools())
+    assert tools == {"audit_trail_query", "find_related_findings", "memory_neighbors_walk"}
+    # Pure transforms must not be registered (ADR-016 tool-vs-helper boundary).
+    assert "extract_iocs" not in tools
+    assert "map_to_mitre" not in tools
+
+
+def test_stateful_tool_proxies_block_direct_invocation() -> None:
+    from charter import DirectInvocationBlocked
+    from investigation.agent import build_registry
+
+    reg = build_registry()
+    for name in ("audit_trail_query", "find_related_findings", "memory_neighbors_walk"):
+        with pytest.raises(DirectInvocationBlocked) as exc:
+            reg._tools[name].proxy(sibling_workspaces=())
+        assert exc.value.tool == name
+
+
+@pytest.mark.asyncio
+async def test_worker_tool_calls_routed_through_charter_audit(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+) -> None:
+    """The timeline + IOC/attribution workers' tool calls appear as charter
+    tool_call audit events (proof they routed through ctx.call_tool)."""
+    await audit_store.ingest(tenant_id=_TENANT_A, events=(_audit_event(seed=1),))
+    contract = _contract(tmp_path)
+    await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(),
+        since=None,
+        until=None,
+    )
+    lines = [
+        json.loads(x)
+        for x in (Path(contract.workspace) / "audit.jsonl").read_text().splitlines()
+        if x.strip()
+    ]
+    tools_called = {e["payload"]["tool"] for e in lines if e.get("action") == "tool_call"}
+    assert "audit_trail_query" in tools_called
+    assert "find_related_findings" in tools_called
+
+
+@pytest.mark.asyncio
+async def test_assert_complete_wired_raises_on_missing_output(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+) -> None:
+    """assert_complete() is now wired: a required output the agent never writes
+    makes the run fail rather than silently 'complete'."""
+    contract = _contract(tmp_path)
+    contract.required_outputs.append("never_written.json")
+    with pytest.raises(RuntimeError, match=r"never_written\.json"):
+        await investigation_run(
+            contract,
+            llm_provider=None,
+            audit_store=audit_store,
+            semantic_store=semantic_store,
+            sibling_workspaces=(),
+            since=None,
+            until=None,
+        )

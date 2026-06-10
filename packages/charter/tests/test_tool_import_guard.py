@@ -33,8 +33,10 @@ _REPO = Path(__file__).resolve().parents[3]
 _AGENTS = _REPO / "packages" / "agents"
 _DRIVER_MODULES = ("agent.py", "normalizer.py")
 
-# Removed by: investigation -> Task 5. (remediation migrated in Task 3.)
-PENDING_MIGRATION = {"investigation"}
+# Empty: all known registered-tool bypasses migrated (remediation -> Task 3,
+# investigation -> Task 5). The set remains as the mechanism for any future
+# staged migration.
+PENDING_MIGRATION: set[str] = set()
 
 # By-design exemptions (NOT debt): the audit agent (F.6) is the always-on class
 # (ADR-007 v1.3) and reads the audit log directly, intentionally outside the
