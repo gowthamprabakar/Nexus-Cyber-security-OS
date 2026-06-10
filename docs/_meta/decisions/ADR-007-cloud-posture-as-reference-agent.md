@@ -538,3 +538,105 @@ GEPA can only optimize what is expressed as a compilable program. Codifying "DSP
 - [v0.2.5 plan doc](../../superpowers/plans/2026-05-31-a-4-meta-harness-v0-2-5.md) — Task 3 (this amendment), Task 5 (Stage-7 parallel composer)
 - [`charter.dspy_compiler`](../../../packages/charter/src/charter/dspy_compiler.py) — the compilation seam (v0.2.5 Task 2)
 - [§v1.5 amendment](#v15-amendment-2026-05-25---g1-effectiveness-scoring-canonical-patterns) — the effectiveness metric GEPA optimizes against
+
+---
+
+## v1.7 amendment (2026-06-10) — universal compliance checklist (objective rubric)
+
+### Trigger
+
+The [NLAH framework audit (#316)](../nlah-framework-audit-2026-06-09.md) found that the five-layer
+standard lived as _documented intent_, not enforced reality: the literal Layer-1 structure was used
+by no agent, Layer-3 file artifacts by none, Layer-4 thresholds by 2/17, and `permitted_tools` was an
+opt-in convention three agents bypassed. The operator opened the **NLAH Full Backfill cycle** to make
+the standard structural. Milestone 1 ([ADR-016](ADR-016-tool-proxy-hard-boundary.md)) made the tool
+boundary hard; Milestone 2 reconciles the spec ([§0 of the agent spec](../../agents/agent_specification_with_harness.md#section-0--as-built-convention-vs-original-spec))
+and codifies — here — the **objective compliance bar every agent is graded against** in M3/M4.
+
+This amendment supersedes the ad-hoc per-agent grading of the audit with a single, repeatable rubric.
+(The long-deferred `_enforce_always_on` hoist mentioned in v1.6 is **not** this amendment; it remains
+deferred to a later version if/when a third always-on consumer arrives.)
+
+### The compliance checklist
+
+An agent is **compliant (grade A)** when every applicable item below holds. Each item is objective —
+present/absent or pass/fail — so two reviewers reach the same grade. Items tagged _(role-scoped)_ are
+N/A for the by-design deviators (see "Deviation profiles").
+
+**Layer 1 — NLAH (`nlah/` directory; the Hybrid standard).** The `nlah/README.md` need not use the
+literal ALLCAPS section names, but it MUST cover, under clear headers, the semantic content of all of:
+
+1. Backend infrastructure — the tools/SDKs/binaries the agent depends on.
+2. Charter participation — privileges, budget posture, what audit writes occur, inter-agent rules.
+3. Role / mission statement.
+4. Expertise — the domain knowledge the agent encodes.
+5. Decision heuristics — the numbered rules the agent reasons by (H1, H2, …).
+6. Stages — the numbered pipeline (Stage 1 → N), matching the code.
+7. Failure taxonomy — enumerated failure modes + handling (F1, F2, …).
+8. Contracts you require — preconditions/inputs the agent depends on.
+9. What you never do — the explicit constraint/guardrail list.
+10. **Self-evolution criteria with numeric thresholds** (Layer 4) — e.g. "FP rate > 15% over rolling 500".
+11. **Pattern declaration** (Layer 5) — the canonical pattern(s) the agent uses.
+12. `nlah/tools.md` is **accurate** — every charter-registered tool listed and labelled gated; no
+    false "routes through the charter" claims; pure helpers and unwired/reserved tools marked as such.
+13. `nlah/examples/` contains ≥1 worked example.
+
+**Layer 2 — Execution contract & tool calling.**
+
+14. `run()` consumes an `ExecutionContract`; budget is honored (raises `BudgetExhausted` on overrun
+    unless the agent is the always-on class, v1.3). _(role-scoped: supervisor constructs contracts;
+    meta-harness operates above them.)_
+15. The agent runs inside `with Charter(contract, tools=registry) as ctx:`. _(role-scoped)_
+16. **Every registered tool is invoked only via `ctx.call_tool(...)`** — never called directly. This is
+    enforced structurally by the tool proxy ([ADR-016](ADR-016-tool-proxy-hard-boundary.md)) and the
+    CI guard `packages/charter/tests/test_tool_import_guard.py`. Pure helpers (no I/O, no external
+    state) are **not** registered and may be called directly.
+17. `ctx.assert_complete()` is called before the run returns, so missing required outputs fail the run.
+18. `forbidden_tools`, when used, does not overlap `permitted_tools` (validator-enforced).
+
+**Layer 3 — workspace state (as-built).**
+
+19. Outputs are written via `ctx.write_output(...)`; the charter's `audit.jsonl` is the trace of record.
+    (The spec's `task.yaml`/`reasoning_trace.md`/`output.yaml` are **not** required — see spec §0;
+    raw-trace persistence is a v0.3 item.)
+
+**Layers 4–5 — pattern fidelity & tests.**
+
+20. The declared pattern (item 11) matches the implemented control flow; no agent over-claims.
+21. An eval suite exists with documented expectations; the agent is registered under
+    `nexus_eval_runners`; cross-agent OCSF wire-shape regressions stay green.
+
+### Deviation profiles (compliant-by-role)
+
+Three agents are A-compliant under a reduced item set, each with a one-paragraph deviation note in its
+own NLAH (authored in M3):
+
+- **Supervisor (#0)** — router/dispatcher. **Constructs** delegation contracts rather than receiving
+  one; no `ToolRegistry`; no charter-gated tools. Items 14–18 are N/A; items 1–13, 20–21 apply.
+- **Meta-Harness (A.4)** — self-evolution orchestrator. Operates on eval scorecards, imports internal
+  functions directly (not charter-gated tools), emits scorecards/reports not OCSF findings. Items
+  14–19 are role-scoped; it IS the Layer-4 engine.
+- **Audit (F.6)** — always-on class (v1.3). Its registered read tools are invoked directly **by
+  design** (intentionally outside the budget gate); this is the single standing `BY_DESIGN_EXEMPT`
+  entry in the CI guard. Item 16 is satisfied by that documented exemption.
+
+### Grading
+
+Grade per the audit's scale — A (all applicable items) · B (one minor gap) · C (partial) · D (missing
+a layer) · F (a hard-boundary violation, i.e. item 16). **M3 brings every agent to A** against this
+list; **M4** re-runs it as the compliance certification. The reference agent (cloud-posture) is the
+worked example of an A.
+
+### What this does NOT change
+
+- The ten reference-template patterns and the v1.1–v1.6 amendments stand. v1.7 is the _acceptance
+  rubric_ over them, not a new capability.
+- The hard tool boundary is owned by ADR-016; v1.7 references it as item 16, it does not redefine it.
+- The always-on `_enforce_always_on` hoist remains deferred.
+
+### Cross-references
+
+- [NLAH framework audit (#316)](../nlah-framework-audit-2026-06-09.md) — the gaps this rubric closes
+- [ADR-016](ADR-016-tool-proxy-hard-boundary.md) — the hard tool boundary (item 16)
+- [Agent spec §0](../../agents/agent_specification_with_harness.md#section-0--as-built-convention-vs-original-spec) — as-built reconciliation this rubric assumes
+- ADR-017 (v0.2 cycle quality gate) — applies this checklist as a per-cycle gate so the standard cannot drift again
