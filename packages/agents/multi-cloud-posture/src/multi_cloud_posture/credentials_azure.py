@@ -17,11 +17,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from charter.credentials import CredentialResolver
+
 # Accepted `--azure-credential-source` values; `None`/"chain" = DefaultAzureCredential.
 AZURE_CREDENTIAL_SOURCES = ("chain", "environment", "managed-identity", "cli")
 
 
-class AzureCredentialResolver:
+class AzureCredentialResolver(CredentialResolver):
     """Resolves an azure-identity credential for a Multi-Cloud Posture run.
 
     No source → `DefaultAzureCredential` (the chain), which is the recommended

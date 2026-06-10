@@ -20,9 +20,10 @@ from __future__ import annotations
 from typing import Any
 
 import boto3
+from charter.credentials import CredentialResolver as _CredentialResolverContract
 
 
-class CredentialResolver:
+class CredentialResolver(_CredentialResolverContract):
     """Resolves a boto3 Session for a Cloud Posture run.
 
     No profile → ``boto3.Session()`` (the default credential chain), which

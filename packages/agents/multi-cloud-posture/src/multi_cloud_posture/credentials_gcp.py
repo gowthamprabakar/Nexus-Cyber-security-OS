@@ -16,13 +16,15 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from charter.credentials import CredentialResolver
+
 # Accepted `--gcp-credential-source` values. "adc" (the default) and
 # "workload-identity" both flow through `google.auth.default()`;
 # "service-account" loads an explicit key file.
 GCP_CREDENTIAL_SOURCES = ("adc", "service-account", "workload-identity")
 
 
-class GcpCredentialResolver:
+class GcpCredentialResolver(CredentialResolver):
     """Resolves a google-auth credential (+ default project) for a run.
 
     No source → ADC (`google.auth.default()`), the recommended default. The
