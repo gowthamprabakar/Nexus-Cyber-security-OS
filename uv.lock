@@ -1672,6 +1672,7 @@ name = "nexus-data-security-agent"
 version = "0.2.0"
 source = { editable = "packages/agents/data-security" }
 dependencies = [
+    { name = "boto3" },
     { name = "click" },
     { name = "nexus-charter" },
     { name = "nexus-cloud-posture" },
@@ -1693,6 +1694,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.35.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
