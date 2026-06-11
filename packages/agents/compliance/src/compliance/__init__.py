@@ -34,4 +34,11 @@ the 2026-05-20 version-roadmap (D.6 v0.2 through v0.5+).
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# compliance v0.2 (Cycle 9 — genuine D.6; Group D posture-class consumer #2, inherits the
+# k8s-posture Cycle 8 pattern) — Level 1 -> Level 2 INFRASTRUCTURE: full CIS family wiring
+# (CIS-AWS/Azure/GCP/K8s), PASS attestation alongside FAIL, multi-emitter consumption
+# (F.3 + D.5 + k8s-posture), continuous-monitoring infrastructure (scheduler + delta), and
+# audit-ready evidence bundles. Per Path 1: continuous mode is INFRASTRUCTURE here; wiring
+# it into agent.run() is the Phase C consolidated retrofit (NOT a v0.3 carry-forward).
+# OCSF emission stays class_uid 2003 Compliance Finding (verified, WI-C5). ADR-010 bump.
+__version__ = "0.2.0"
