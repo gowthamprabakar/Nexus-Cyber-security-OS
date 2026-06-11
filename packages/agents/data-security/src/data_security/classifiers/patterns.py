@@ -112,6 +112,18 @@ _ICD10_RE = re.compile(r"\b[A-TV-Z]\d{2}\.\d{1,4}\b")
 _NPI_RE = re.compile(
     r"(?:\bNPI\b|national provider id(?:entifier)?)[\s:#-]*(\d{10})", re.IGNORECASE
 )
+# --- v0.2 Task 9: PCI expansion (beyond PAN-with-Luhn). Context-required / sentinel-based. ---
+# CVV / CVC: a verification-code context word, then 3-4 digits.
+_CVV_RE = re.compile(
+    r"(?:cvv2?|cvc2?|card verification(?: value)?)[\s:#-]*\d{3,4}\b", re.IGNORECASE
+)
+# Card expiration: an expiry context word, then MM/YY or MM/YYYY.
+_CARD_EXP_RE = re.compile(
+    r"(?:exp(?:iry|iration)?(?: date)?|valid thru)[\s:#-]*(?:0[1-9]|1[0-2])/\d{2,4}\b",
+    re.IGNORECASE,
+)
+# Track 1 / Track 2 magnetic-stripe data — distinctive %B…^ / ;…= sentinels.
+_TRACK_DATA_RE = re.compile(r"%B\d{12,19}\^|;\d{12,19}=")
 
 
 def _luhn_valid(digits: str) -> bool:
@@ -184,6 +196,13 @@ def classify(text: str) -> ClassifierLabel:
         return ClassifierLabel.NPI
     if _ICD10_RE.search(text):
         return ClassifierLabel.ICD10_CODE
+    # v0.2 Task 9 — PCI expansion, appended after PHI so prior matches stay byte-identical.
+    if _TRACK_DATA_RE.search(text):
+        return ClassifierLabel.TRACK_DATA
+    if _CVV_RE.search(text):
+        return ClassifierLabel.CVV
+    if _CARD_EXP_RE.search(text):
+        return ClassifierLabel.CARD_EXPIRATION
     return ClassifierLabel.NONE
 
 
