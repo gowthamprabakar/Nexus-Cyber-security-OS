@@ -1,0 +1,172 @@
+# CIS Google Cloud Platform Foundation Benchmark v2.0 — D.6 control library.
+#
+# Q6 compliance: PARAPHRASED operator-facing summaries written in-house
+# from public CIS reference metadata. No verbatim CIS text reproduced.
+#
+# v0.2 wiring reality (honest, operator-confirmed 2026-06-11): a control
+# wires ONLY to a source rule D.5 multi-cloud-posture ACTUALLY emits. D.5
+# emits 10 stable CIS-GCP rule ids (MCSPM-GCP-STORAGE-001/002, SQL-001/002,
+# GCE-001/002, FIREWALL-001/002, KMS-001, BIGQUERY-001). Controls without a
+# matching D.5 rule carry `source_mappings: []` (NOT fabricated). Matching is
+# EXACT on (source_agent, source_rule_id). test_cis_gcp_wiring.py guards drift.
+
+framework: cis_gcp_v2
+version: '2.0.0'
+
+controls:
+  # 1.x — Identity and Access Management
+  - control_id: '1.4'
+    name: Avoid user-managed keys on service accounts
+    level: level_1
+    applicability: [gcp_iam]
+    required: true
+    description: >-
+      User-managed service-account keys are long-lived secrets that are
+      easily leaked. Prefer short-lived credentials.
+    source_mappings: []
+
+  - control_id: '1.10'
+    name: Rotate KMS crypto keys within 90 days
+    level: level_1
+    applicability: [gcp_kms]
+    required: true
+    description: >-
+      A key that is never rotated widens the window an exposed key can
+      be abused. Configure scheduled rotation.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-KMS-001
+
+  # 2.x — Logging and Monitoring
+  - control_id: '2.2'
+    name: Ensure sinks are configured for all log entries
+    level: level_1
+    applicability: [gcp_logging]
+    required: true
+    description: >-
+      Without an export sink, log retention is bounded by default
+      buckets and incident reconstruction suffers.
+    source_mappings: []
+
+  # 3.x — Networking
+  - control_id: '3.6'
+    name: Restrict SSH (22) from 0.0.0.0/0 on firewalls
+    level: level_1
+    applicability: [gcp_network]
+    required: true
+    description: >-
+      A firewall rule permitting 22 from anywhere exposes SSH to the
+      internet. Scope to bastion / named ranges.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-FIREWALL-001
+
+  - control_id: '3.7'
+    name: Restrict RDP (3389) from 0.0.0.0/0 on firewalls
+    level: level_1
+    applicability: [gcp_network]
+    required: true
+    description: >-
+      A firewall rule permitting 3389 from anywhere exposes remote
+      desktop to the internet. Scope to named ranges.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-FIREWALL-002
+
+  # 4.x — Virtual Machines
+  - control_id: '4.1'
+    name: Avoid the default service account with Editor on instances
+    level: level_1
+    applicability: [gcp_compute]
+    required: true
+    description: >-
+      An instance running as the default SA with project Editor grants
+      broad blast radius if the VM is compromised.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-GCE-002
+
+  - control_id: '4.9'
+    name: Avoid public IPs on compute instances
+    level: level_2
+    applicability: [gcp_compute]
+    required: false
+    description: >-
+      A compute instance with a public IP and permissive firewall is
+      directly reachable from the internet.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-GCE-001
+
+  # 5.x — Storage
+  - control_id: '5.1'
+    name: Ensure Cloud Storage buckets are not publicly accessible
+    level: level_1
+    applicability: [gcp_storage]
+    required: true
+    description: >-
+      allUsers / allAuthenticatedUsers on a bucket exposes its objects
+      to the internet.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-STORAGE-001
+
+  - control_id: '5.2'
+    name: Enable uniform bucket-level access
+    level: level_1
+    applicability: [gcp_storage]
+    required: true
+    description: >-
+      Uniform bucket-level access disables per-object ACLs so IAM is the
+      single, reviewable access surface.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-STORAGE-002
+
+  # 6.x — Databases (Cloud SQL)
+  - control_id: '6.4'
+    name: Avoid public IPs on Cloud SQL instances
+    level: level_1
+    applicability: [gcp_sql]
+    required: true
+    description: >-
+      A Cloud SQL instance with a public IP should instead be reached
+      via private IP / the auth proxy.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-SQL-001
+
+  - control_id: '6.5'
+    name: Require SSL on Cloud SQL connections
+    level: level_1
+    applicability: [gcp_sql]
+    required: true
+    description: >-
+      Without enforced SSL, database traffic may traverse the network
+      in plaintext.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-SQL-002
+
+  # 7.x — BigQuery
+  - control_id: '7.1'
+    name: Ensure BigQuery datasets are not publicly accessible
+    level: level_1
+    applicability: [gcp_bigquery]
+    required: true
+    description: >-
+      allUsers / allAuthenticatedUsers on a dataset exposes analytics
+      data to the internet.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-GCP-BIGQUERY-001
+
+  - control_id: '7.3'
+    name: Encrypt BigQuery datasets with CMEK
+    level: level_2
+    applicability: [gcp_bigquery]
+    required: false
+    description: >-
+      Customer-managed encryption keys give explicit control over key
+      lifecycle for sensitive datasets.
+    source_mappings: []
