@@ -1,0 +1,182 @@
+# CIS Microsoft Azure Foundations Benchmark v2.0 — D.6 control library.
+#
+# Q6 compliance: PARAPHRASED operator-facing summaries written in-house
+# from public CIS reference metadata (control id + level + applicability).
+# No verbatim CIS Securesuite text is reproduced.
+#
+# v0.2 wiring reality (honest, operator-confirmed 2026-06-11): a control
+# wires ONLY to a source rule D.5 multi-cloud-posture ACTUALLY emits. D.5
+# emits 8 stable CIS-Azure rule ids (MCSPM-AZURE-STORAGE-001/002,
+# KEYVAULT-001/002, NSG-001/002, SQL-001, APPSERVICE-001). Controls without
+# a matching D.5 rule carry `source_mappings: []` (NOT fabricated). Matching
+# is EXACT on (source_agent, source_rule_id). test_cis_azure_wiring.py guards
+# against drift.
+
+framework: cis_azure_v2
+version: '2.0.0'
+
+controls:
+  # 1.x — Identity and Access Management
+  - control_id: '1.1'
+    name: Require MFA for privileged Entra ID accounts
+    level: level_1
+    applicability: [azure_entra_id]
+    required: true
+    description: >-
+      Administrative roles must present a second factor so a single
+      leaked credential cannot grant tenant-wide control.
+    source_mappings: []
+
+  - control_id: '1.2'
+    name: Require MFA for all non-privileged users
+    level: level_1
+    applicability: [azure_entra_id]
+    required: true
+    description: >-
+      Extend second-factor enforcement to every interactive user, not
+      only administrators.
+    source_mappings: []
+
+  # 2.x — Microsoft Defender for Cloud
+  - control_id: '2.1.1'
+    name: Enable Defender for Cloud on key resource types
+    level: level_2
+    applicability: [azure_defender]
+    required: false
+    description: >-
+      Defender plans provide the posture + workload signal the rest of
+      this benchmark assumes is present.
+    source_mappings: []
+
+  # 3.x — Storage Accounts
+  - control_id: '3.1'
+    name: Require secure transfer (HTTPS) on storage accounts
+    level: level_1
+    applicability: [azure_storage]
+    required: true
+    description: >-
+      Disabling 'secure transfer required' permits plaintext access to
+      blob + file endpoints. Enforce HTTPS-only.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-STORAGE-002
+
+  - control_id: '3.7'
+    name: Disable public network access on storage accounts
+    level: level_1
+    applicability: [azure_storage]
+    required: true
+    description: >-
+      Storage reachable from all networks widens the blast radius of a
+      leaked key. Restrict to selected networks / private endpoints.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-STORAGE-001
+
+  # 4.x — Database Services
+  - control_id: '4.1.1'
+    name: Disable public network access on SQL servers
+    level: level_1
+    applicability: [azure_sql]
+    required: true
+    description: >-
+      A SQL server reachable from the public internet should instead be
+      fronted by private endpoints + firewall rules.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-SQL-001
+
+  # 5.x — Logging and Monitoring
+  - control_id: '5.1.1'
+    name: Retain the Activity Log for a sufficient period
+    level: level_1
+    applicability: [azure_monitor]
+    required: true
+    description: >-
+      Short retention defeats incident reconstruction. Keep the
+      subscription Activity Log for the audit window.
+    source_mappings: []
+
+  # 6.x — Networking
+  - control_id: '6.1'
+    name: Restrict RDP (3389) from the internet on NSGs
+    level: level_1
+    applicability: [azure_network]
+    required: true
+    description: >-
+      An NSG rule permitting 3389 from any source exposes remote desktop
+      to the internet. Scope to bastion / named sources.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-NSG-002
+
+  - control_id: '6.2'
+    name: Restrict SSH (22) from the internet on NSGs
+    level: level_1
+    applicability: [azure_network]
+    required: true
+    description: >-
+      An NSG rule permitting 22 from any source exposes SSH to the
+      internet. Scope to bastion / named sources.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-NSG-001
+
+  # 7.x — Virtual Machines
+  - control_id: '7.2'
+    name: Encrypt VM OS + data disks
+    level: level_1
+    applicability: [azure_compute]
+    required: true
+    description: >-
+      Unencrypted managed disks expose data at rest if a snapshot or
+      disk is exfiltrated.
+    source_mappings: []
+
+  # 8.x — Key Vault
+  - control_id: '8.4'
+    name: Enable soft-delete on Key Vaults
+    level: level_1
+    applicability: [azure_keyvault]
+    required: true
+    description: >-
+      Without soft-delete an accidental or malicious vault/secret
+      deletion is unrecoverable.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-KEYVAULT-001
+
+  - control_id: '8.5'
+    name: Enable purge protection on Key Vaults
+    level: level_2
+    applicability: [azure_keyvault]
+    required: false
+    description: >-
+      Purge protection blocks permanent deletion during the soft-delete
+      window, defeating destroy-then-purge attacks.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-KEYVAULT-002
+
+  # 9.x — App Service
+  - control_id: '9.2'
+    name: Enforce HTTPS-only on App Service
+    level: level_1
+    applicability: [azure_appservice]
+    required: true
+    description: >-
+      App Service reachable over plain HTTP permits credential + session
+      interception. Set HTTPS-only.
+    source_mappings:
+      - source_agent: multi_cloud_posture
+        source_rule_id: MCSPM-AZURE-APPSERVICE-001
+
+  - control_id: '9.3'
+    name: Require a current TLS minimum version on App Service
+    level: level_1
+    applicability: [azure_appservice]
+    required: true
+    description: >-
+      Legacy TLS versions carry known weaknesses. Pin the minimum to a
+      currently-supported version.
+    source_mappings: []
