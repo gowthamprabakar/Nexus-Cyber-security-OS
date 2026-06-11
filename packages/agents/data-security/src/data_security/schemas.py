@@ -102,6 +102,10 @@ class ClassifierLabel(StrEnum):
     MEDICAL_RECORD_NUMBER = "medical_record_number"
     ICD10_CODE = "icd10_code"
     NPI = "npi"
+    # v0.2 Task 9 — PCI expansion (beyond PAN-with-Luhn); appended (byte-identical eval).
+    CVV = "cvv"
+    CARD_EXPIRATION = "card_expiration"
+    TRACK_DATA = "track_data"
     NONE = "none"
 
 
