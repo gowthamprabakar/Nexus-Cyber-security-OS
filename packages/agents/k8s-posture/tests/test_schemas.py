@@ -71,6 +71,9 @@ def test_k8s_finding_type_values() -> None:
     assert K8sFindingType.CIS.value == "cspm_k8s_cis"
     assert K8sFindingType.POLARIS.value == "cspm_k8s_polaris"
     assert K8sFindingType.MANIFEST.value == "cspm_k8s_manifest"
+    # v0.2 live-only finding types (additive).
+    assert K8sFindingType.RUNTIME.value == "cspm_k8s_runtime"
+    assert K8sFindingType.RBAC.value == "cspm_k8s_rbac"
 
 
 @pytest.mark.parametrize(
@@ -79,6 +82,8 @@ def test_k8s_finding_type_values() -> None:
         (K8sFindingType.CIS, "CIS"),
         (K8sFindingType.POLARIS, "POLARIS"),
         (K8sFindingType.MANIFEST, "MANIFEST"),
+        (K8sFindingType.RUNTIME, "RUNTIME"),
+        (K8sFindingType.RBAC, "RBAC"),
     ],
 )
 def test_source_token_maps_correctly(ft: K8sFindingType, expected_token: str) -> None:
