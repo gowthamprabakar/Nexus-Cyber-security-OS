@@ -14,4 +14,12 @@ first member of the always-on class.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# audit v0.2 (Cycle 11 — F.6, the institutional-integrity agent; the always-on class with the
+# single BY_DESIGN_EXEMPT tool-proxy deviation, ADR-007 v1.3 — PRESERVED, no new exemptions
+# WI-F10). Level 1 -> Level 2 INFRASTRUCTURE: cross-agent audit aggregation (10 closed-cycle
+# agents), a Merkle indexing layer, tamper detection + alerts (NEVER auto-repair, WI-F2), a
+# broad typed query filter, compliance-evidence integration, and code-level read-only +
+# cross-tenant invariants. Per Path 1: continuous mode is INFRASTRUCTURE here; agent.run()
+# wiring is the Phase C consolidated retrofit. OCSF stays class_uid 6003 API Activity (the
+# first 6003 emitter; chain hashes in the unmapped slot, byte-identical WI-F5). ADR-010 bump.
+__version__ = "0.2.0"
