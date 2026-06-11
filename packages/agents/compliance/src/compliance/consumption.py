@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from compliance.rollup import FrameworkRollup, roll_up_framework
 from compliance.tools.cis_aws_benchmark import CisControl
 
 
@@ -59,3 +60,23 @@ def source_evaluation(
     failing = extract_failing_rule_ids(report) & mapped
     evaluated = mapped if agent_ran(report) else set()
     return evaluated, failing
+
+
+def evaluate_framework(
+    framework: str,
+    report: dict[str, Any],
+    controls: Sequence[CisControl],
+    *,
+    source_agent: str,
+) -> FrameworkRollup:
+    """End-to-end: consume one source agent's report + roll the framework up to a
+    PASS/FAIL/not-evaluated summary (ties Task 8 roll-up to Task 9 consumption)."""
+    evaluated, failing = source_evaluation(report, controls, source_agent=source_agent)
+    pairs: list[tuple[str, list[str]]] = [
+        (
+            c.control_id,
+            [m.source_rule_id for m in c.source_mappings if m.source_agent == source_agent],
+        )
+        for c in controls
+    ]
+    return roll_up_framework(framework, pairs, evaluated=evaluated, failing=failing)
