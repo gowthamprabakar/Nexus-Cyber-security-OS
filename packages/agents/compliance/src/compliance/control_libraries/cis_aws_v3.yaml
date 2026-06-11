@@ -24,6 +24,16 @@
 #
 # v0.2+ frameworks (SOC2 / PCI / HIPAA / NIST) land alongside this
 # file under the same schema.
+#
+# v0.2 wiring reality (honest, operator-confirmed 2026-06-11): a control
+# is wired ONLY to a source rule a sibling agent ACTUALLY emits. F.3
+# cloud-posture emits 7 stable CIS-mappable AWS rule ids (IAM-001/002,
+# S3-001/002, KMS-001, RDS-001, EC2-001) + a hash-bucketed Prowler
+# passthrough; data-security adds a few S3 rules. So ~14 of 43 controls
+# wire to real emitter rules; the rest carry `source_mappings: []`
+# because no sibling agent emits a matching rule yet (NOT fabricated —
+# broader coverage tracks the emitters' rule catalogs, see the per-
+# framework coverage doc). test_cis_aws_wiring.py guards against drift.
 
 framework: cis_aws_v3
 version: '3.0.0'
@@ -515,7 +525,9 @@ controls:
       The default SG is implicitly attached to fresh ENIs. Empty
       its rules so newly-created resources start network-isolated
       until explicitly opened.
-    source_mappings: []
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-EC2-001
 
   - control_id: '5.4'
     name: Restrict route tables to known peer VPCs
@@ -536,4 +548,6 @@ controls:
       Internet-wide ICMP reachability supports reconnaissance and
       provides little operational value. Restrict to named
       monitoring sources.
-    source_mappings: []
+    source_mappings:
+      - source_agent: cloud_posture
+        source_rule_id: CSPM-AWS-EC2-001
