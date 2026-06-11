@@ -114,7 +114,7 @@ def test_cli_help_lists_three_subcommands() -> None:
 def test_cli_version_flag() -> None:
     result = CliRunner().invoke(main, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.2.0" in result.output
 
 
 # ---------------------------- eval ------------------------------------
