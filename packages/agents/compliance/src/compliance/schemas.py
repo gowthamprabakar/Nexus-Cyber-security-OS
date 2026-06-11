@@ -93,6 +93,11 @@ class ComplianceFramework(StrEnum):
     """
 
     CIS_AWS_V3 = "cis_aws_v3"
+    # v0.2 §Q2 — the rest of the CIS family (additive; the offline run()/eval emits only
+    # CIS_AWS_V3, so byte-identity holds, WI-C5).
+    CIS_AZURE_V2 = "cis_azure_v2"
+    CIS_GCP_V2 = "cis_gcp_v2"
+    CIS_K8S_V18 = "cis_k8s_v18"
 
 
 class ControlLevel(StrEnum):
@@ -112,6 +117,9 @@ class ControlLevel(StrEnum):
 
 _FRAMEWORK_TOKEN: dict[ComplianceFramework, str] = {
     ComplianceFramework.CIS_AWS_V3: "CIS_AWS_V3",
+    ComplianceFramework.CIS_AZURE_V2: "CIS_AZURE_V2",
+    ComplianceFramework.CIS_GCP_V2: "CIS_GCP_V2",
+    ComplianceFramework.CIS_K8S_V18: "CIS_K8S_V18",
 }
 
 

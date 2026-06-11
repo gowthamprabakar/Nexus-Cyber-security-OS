@@ -129,12 +129,19 @@ def test_finding_id_regex_rejects_short_sequence() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_framework_enum_only_carries_cis_aws_v3_in_v0_1() -> None:
-    assert {f.value for f in ComplianceFramework} == {"cis_aws_v3"}
+def test_framework_enum_carries_full_cis_family_in_v0_2() -> None:
+    # v0.2 §Q2: the full CIS family (additive vs v0.1's CIS_AWS_V3-only).
+    assert {f.value for f in ComplianceFramework} == {
+        "cis_aws_v3",
+        "cis_azure_v2",
+        "cis_gcp_v2",
+        "cis_k8s_v18",
+    }
 
 
 def test_compliance_type_token_for_cis_aws_v3() -> None:
     assert compliance_type_token(ComplianceFramework.CIS_AWS_V3) == "CIS_AWS_V3"
+    assert compliance_type_token(ComplianceFramework.CIS_K8S_V18) == "CIS_K8S_V18"
 
 
 def test_compliance_finding_type_builds_stable_discriminator() -> None:
