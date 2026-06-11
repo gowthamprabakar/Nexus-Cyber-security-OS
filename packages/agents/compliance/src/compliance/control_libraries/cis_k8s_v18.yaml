@@ -1,0 +1,206 @@
+# CIS Kubernetes Benchmark v1.8 — D.6 control library.
+#
+# Q6 compliance: PARAPHRASED operator-facing summaries written in-house
+# from public CIS reference metadata. No verbatim CIS text reproduced.
+#
+# v0.2 wiring reality (honest, operator-confirmed 2026-06-11): a control
+# wires ONLY to a source rule k8s-posture ACTUALLY emits. k8s-posture's
+# kube-bench findings carry rule_id == the CIS control id, so each control
+# wires to its own id via source_agent k8s_posture. A few controls ALSO map
+# to k8s-posture's fixed runtime / RBAC rule ids (privileged-container,
+# run-as-root, cluster-admin-binding) — the multi-source pattern. Matching is
+# EXACT on (source_agent, source_rule_id). test_cis_k8s_wiring.py guards drift.
+# Control set = k8s-posture's CIS_K8S_V18 catalog (Cycle 8).
+
+framework: cis_k8s_v18
+version: '1.8.0'
+
+controls:
+  # 1.x — Control Plane Components
+  - control_id: '1.2.1'
+    name: Disable anonymous-auth on the API server
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      Anonymous API requests should be rejected so every call is
+      attributable to an authenticated identity.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '1.2.1'
+
+  - control_id: '1.2.5'
+    name: Set the kubelet certificate authority on the API server
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      Verifying the kubelet's serving certificate prevents the API
+      server from trusting an impostor node.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '1.2.5'
+
+  - control_id: '1.2.16'
+    name: Disable profiling on the API server
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      Profiling endpoints expose detailed runtime information useful to
+      an attacker; disable unless actively needed.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '1.2.16'
+
+  - control_id: '1.3.2'
+    name: Disable profiling on the controller manager
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      As with the API server, controller-manager profiling should be
+      off unless actively needed.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '1.3.2'
+
+  - control_id: '1.4.1'
+    name: Disable profiling on the scheduler
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      Scheduler profiling should be off unless actively needed.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '1.4.1'
+
+  # 2.x — etcd
+  - control_id: '2.1'
+    name: Configure TLS cert + key for etcd
+    level: level_1
+    applicability: [k8s_etcd]
+    required: true
+    description: >-
+      etcd holds all cluster state; its peer + client traffic must be
+      TLS-protected.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '2.1'
+
+  - control_id: '2.2'
+    name: Enable client-cert auth for etcd
+    level: level_1
+    applicability: [k8s_etcd]
+    required: true
+    description: >-
+      etcd should require client certificates so only authorised
+      components read or mutate cluster state.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '2.2'
+
+  # 3.x — Control Plane Configuration
+  - control_id: '3.2.1'
+    name: Create a minimal audit policy
+    level: level_1
+    applicability: [k8s_control_plane]
+    required: true
+    description: >-
+      Without an audit policy, control-plane actions are not recorded
+      for incident reconstruction.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '3.2.1'
+
+  # 4.x — Worker Nodes
+  - control_id: '4.2.1'
+    name: Disable anonymous-auth on the kubelet
+    level: level_1
+    applicability: [k8s_worker]
+    required: true
+    description: >-
+      Anonymous kubelet API requests should be rejected.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '4.2.1'
+
+  - control_id: '4.2.6'
+    name: Enable make-iptables-util-chains on the kubelet
+    level: level_1
+    applicability: [k8s_worker]
+    required: true
+    description: >-
+      Letting the kubelet manage iptables util chains keeps node
+      network rules consistent with pod intent.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '4.2.6'
+
+  # 5.x — Policies
+  - control_id: '5.1.1'
+    name: Restrict use of the cluster-admin role
+    level: level_1
+    applicability: [k8s_rbac]
+    required: true
+    description: >-
+      cluster-admin grants unrestricted control; bind it only where
+      genuinely required, never to default service accounts.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '5.1.1'
+      - source_agent: k8s_posture
+        source_rule_id: cluster-admin-binding
+
+  - control_id: '5.1.5'
+    name: Avoid active use of default service accounts
+    level: level_1
+    applicability: [k8s_rbac]
+    required: true
+    description: >-
+      Workloads should run as purpose-scoped service accounts, not the
+      namespace default.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '5.1.5'
+
+  - control_id: '5.2.2'
+    name: Minimize admission of privileged containers
+    level: level_2
+    applicability: [k8s_workload]
+    required: false
+    description: >-
+      Privileged containers escape most isolation; restrict their
+      admission to vetted workloads.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '5.2.2'
+      - source_agent: k8s_posture
+        source_rule_id: privileged-container
+
+  - control_id: '5.2.6'
+    name: Minimize admission of root containers
+    level: level_2
+    applicability: [k8s_workload]
+    required: false
+    description: >-
+      Containers running as UID 0 widen the blast radius of an escape;
+      prefer non-root images + runAsNonRoot.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '5.2.6'
+      - source_agent: k8s_posture
+        source_rule_id: run-as-root
+
+  - control_id: '5.3.2'
+    name: Define Network Policies for all namespaces
+    level: level_2
+    applicability: [k8s_network]
+    required: false
+    description: >-
+      Without a Network Policy, pods accept traffic from anywhere in
+      the cluster by default.
+    source_mappings:
+      - source_agent: k8s_posture
+        source_rule_id: '5.3.2'
