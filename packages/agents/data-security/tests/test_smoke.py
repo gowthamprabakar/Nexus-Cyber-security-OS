@@ -25,7 +25,7 @@ def test_package_imports() -> None:
 
     assert hasattr(data_security, "__version__")
     assert isinstance(data_security.__version__, str)
-    assert data_security.__version__ == "0.1.0"
+    assert data_security.__version__ == "0.2.0"
 
 
 def test_charter_llm_adapter_import_works() -> None:

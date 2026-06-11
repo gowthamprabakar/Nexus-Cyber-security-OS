@@ -35,4 +35,12 @@ through v0.5+).
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# data-security v0.2 (Cycle 10 — DSPM; the 5th OCSF 2003 emitter) — Level 1 -> Level 2
+# INFRASTRUCTURE: live multi-cloud data discovery (S3 + Azure Blob + GCS, sample-based,
+# Q4), expanded PII/PHI/PCI classification (Q2), privacy-framework mapping (GDPR/PCI-DSS/
+# HIPAA, Q6), data-residency tracking (Nexus's moat, WI-S10), D.2 IAM consumption (Q5), and
+# continuous-monitoring infrastructure. Per Path 1: continuous mode is INFRASTRUCTURE here;
+# wiring it into agent.run() is the Phase C consolidated retrofit (NOT a v0.3 carry-forward).
+# Privacy invariants are code-level (assert_privacy_contract, privacy hash, residency
+# boundary). OCSF emission stays class_uid 2003 Compliance Finding (verified, WI-S5). ADR-010.
+__version__ = "0.2.0"
