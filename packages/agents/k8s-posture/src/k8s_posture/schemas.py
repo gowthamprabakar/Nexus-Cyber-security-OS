@@ -56,12 +56,18 @@ class K8sFindingType(StrEnum):
     CIS = "cspm_k8s_cis"
     POLARIS = "cspm_k8s_polaris"
     MANIFEST = "cspm_k8s_manifest"
+    # v0.2 live-only finding types (kubelet runtime posture + RBAC analysis). Additive —
+    # the offline run()/eval emits only CIS/POLARIS/MANIFEST, so byte-identity holds (WI-K5).
+    RUNTIME = "cspm_k8s_runtime"
+    RBAC = "cspm_k8s_rbac"
 
 
 _FT_SOURCE_TOKEN: dict[K8sFindingType, str] = {
     K8sFindingType.CIS: "CIS",
     K8sFindingType.POLARIS: "POLARIS",
     K8sFindingType.MANIFEST: "MANIFEST",
+    K8sFindingType.RUNTIME: "RUNTIME",
+    K8sFindingType.RBAC: "RBAC",
 }
 
 
