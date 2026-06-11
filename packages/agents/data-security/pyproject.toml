@@ -1,6 +1,6 @@
 [project]
 name = "nexus-data-security-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Nexus Data Security Agent — AWS S3 DSPM (D.5 / Agent #11 under ADR-007)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
