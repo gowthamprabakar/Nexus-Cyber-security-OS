@@ -214,6 +214,85 @@ class ComplianceFinding:
         return dict(self._payload)
 
 
+# OCSF Compliance Finding status_id for a passing control (compliance-local; the OCSF
+# standard pairs this with the imported FAILED status_id = 2). v0.2 Task 6 — PASS attestation.
+OCSF_COMPLIANCE_PASSED_STATUS_ID = 1
+
+
+class MissingPositiveEvidenceError(ValueError):
+    """A PASS attestation lacked positive evidence (WI-C6 / pause-trigger #13)."""
+
+
+def build_pass_finding(
+    *,
+    finding_id: str,
+    framework: ComplianceFramework,
+    control_id: str,
+    title: str,
+    description: str,
+    affected: list[AffectedResource],
+    detected_at: datetime,
+    envelope: NexusEnvelope,
+    attestation: dict[str, Any],
+) -> ComplianceFinding:
+    """Build an OCSF 2003 Compliance Finding attesting a control **PASSED** (status_id 1).
+
+    Mirrors `build_finding`'s wire shape but sets `compliance.status = "Passed"` and an
+    INFO severity. Per **WI-C6 / pause-trigger #13** a PASS MUST carry **positive
+    evidence** — ``attestation`` must be a non-empty dict (the proof the control holds, not
+    merely the absence of a FAIL); an empty attestation raises."""
+    if not COMPLIANCE_FINDING_ID_RE.match(finding_id):
+        raise ValueError(
+            f"finding_id must match {COMPLIANCE_FINDING_ID_RE.pattern} (got {finding_id!r})"
+        )
+    if not affected:
+        raise ValueError("affected resources list must not be empty")
+    if not attestation:
+        raise MissingPositiveEvidenceError(
+            f"PASS finding {finding_id!r} must include positive evidence (WI-C6)"
+        )
+
+    timestamp_ms = int(detected_at.timestamp() * 1000)
+    rule_id = f"{framework.value}:{control_id}"
+    payload: dict[str, Any] = {
+        "category_uid": OCSF_CATEGORY_UID,
+        "category_name": OCSF_CATEGORY_NAME,
+        "class_uid": OCSF_CLASS_UID,
+        "class_name": OCSF_CLASS_NAME,
+        "activity_id": OCSF_ACTIVITY_CREATE,
+        "activity_name": "Create",
+        "type_uid": OCSF_CLASS_UID * 100 + OCSF_ACTIVITY_CREATE,
+        "type_name": f"{OCSF_CLASS_NAME}: Create",
+        "severity_id": severity_to_id(Severity.INFO),
+        "severity": Severity.INFO.value.capitalize(),
+        "time": timestamp_ms,
+        "time_dt": detected_at.isoformat(),
+        "status_id": OCSF_STATUS_NEW,
+        "status": "New",
+        "metadata": {
+            "version": OCSF_VERSION,
+            "product": {"name": "Nexus Compliance", "vendor_name": "Nexus Cyber OS"},
+        },
+        "finding_info": {
+            "uid": finding_id,
+            "title": title,
+            "desc": description,
+            "first_seen_time": timestamp_ms,
+            "last_seen_time": timestamp_ms,
+            "types": [compliance_finding_type(framework, control_id)],
+        },
+        "compliance": {
+            "control": rule_id,
+            "status": "Passed",
+            "status_id": OCSF_COMPLIANCE_PASSED_STATUS_ID,
+        },
+        "resources": [r.to_ocsf() for r in affected],
+        "evidences": [attestation],
+    }
+    wrapped = wrap_ocsf(payload, envelope)
+    return ComplianceFinding(wrapped)
+
+
 def build_finding(
     *,
     finding_id: str,
