@@ -1855,7 +1855,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "nexus-k8s-posture-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/agents/k8s-posture" }
 dependencies = [
     { name = "click" },
