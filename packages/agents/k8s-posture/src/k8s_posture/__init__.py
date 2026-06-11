@@ -30,4 +30,9 @@ v0.1 reads operator-pinned filesystem snapshots — mirrors F.3
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# D.6 K8s Posture v0.2 (Cycle 8 — first Group D posture-class agent; Compliance Cycle 9
+# inherits the pattern) — Level 1 -> Level 2: live kube-bench + Polaris + kubelet API
+# against running clusters (kubeconfig-based, cloud-agnostic), CIS K8s v1.8 expansion,
+# basic RBAC analysis, single-cluster-per-scan isolation. ADR-010 version-extension bump.
+# OCSF emission stays class_uid 2003 Compliance Finding (verified, WI-K5).
+__version__ = "0.2.0"
