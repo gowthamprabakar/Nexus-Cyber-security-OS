@@ -100,6 +100,20 @@ _GENERIC_API_TOKEN_RE = re.compile(
 )
 
 
+# --- v0.2 Task 8: PHI (HIPAA-aligned). Context-required / distinctive so they only fire on
+# genuine PHI, keeping prior classify() matches byte-identical (WI-S5). ---
+# Medical record number: an MRN context word, then a 6-12 alphanumeric id.
+_MRN_RE = re.compile(
+    r"(?:\bMRN\b|medical record (?:number|no|#))[\s:#-]*[A-Z0-9]{6,12}", re.IGNORECASE
+)
+# ICD-10 diagnostic code in the distinctive dotted form (letter + 2 digits + .dddd).
+_ICD10_RE = re.compile(r"\b[A-TV-Z]\d{2}\.\d{1,4}\b")
+# NPI: an NPI context word, then a 10-digit number (Luhn-validated below).
+_NPI_RE = re.compile(
+    r"(?:\bNPI\b|national provider id(?:entifier)?)[\s:#-]*(\d{10})", re.IGNORECASE
+)
+
+
 def _luhn_valid(digits: str) -> bool:
     """Return True iff ``digits`` (digit-only string) passes the Luhn check.
 
@@ -116,6 +130,12 @@ def _luhn_valid(digits: str) -> bool:
                 n -= 9
         total += n
     return total % 10 == 0
+
+
+def _npi_valid(npi: str) -> bool:
+    """NPI check-digit: a valid 10-digit NPI passes Luhn when prefixed by the '80840' issuer
+    code (the HIPAA NPI check-digit scheme)."""
+    return _luhn_valid("80840" + npi)
 
 
 def classify(text: str) -> ClassifierLabel:
@@ -156,6 +176,14 @@ def classify(text: str) -> ClassifierLabel:
         return ClassifierLabel.PHONE
     if _GENERIC_API_TOKEN_RE.search(text):
         return ClassifierLabel.GENERIC_API_TOKEN
+    # v0.2 Task 8 — PHI, appended after the v0.1 precedence so prior matches are unchanged.
+    if _MRN_RE.search(text):
+        return ClassifierLabel.MEDICAL_RECORD_NUMBER
+    npi_match = _NPI_RE.search(text)
+    if npi_match and _npi_valid(npi_match.group(1)):
+        return ClassifierLabel.NPI
+    if _ICD10_RE.search(text):
+        return ClassifierLabel.ICD10_CODE
     return ClassifierLabel.NONE
 
 

@@ -142,13 +142,19 @@ def test_data_security_finding_type_wire_strings_are_stable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_classifier_label_has_7_plus_none() -> None:
-    """7 PII / sensitive-data labels + NONE sentinel."""
+def test_classifier_label_has_10_plus_none() -> None:
+    """v0.2: 7 v0.1 PII labels + 3 PHI labels (Task 8) + NONE sentinel."""
     members = set(ClassifierLabel)
-    assert len(members) == 8
+    assert len(members) == 11
     assert ClassifierLabel.NONE in members
     sensitive = members - {ClassifierLabel.NONE}
-    assert len(sensitive) == 7
+    assert len(sensitive) == 10
+    # The v0.2 PHI additions.
+    assert {
+        ClassifierLabel.MEDICAL_RECORD_NUMBER,
+        ClassifierLabel.ICD10_CODE,
+        ClassifierLabel.NPI,
+    } <= sensitive
 
 
 def test_classifier_label_covers_v0_1_target_categories() -> None:
