@@ -97,6 +97,11 @@ class ClassifierLabel(StrEnum):
     EMAIL = "email"
     PHONE = "phone"
     GENERIC_API_TOKEN = "generic_api_token"  # noqa: S105  # enum label, not a credential
+    # v0.2 Task 8 — PHI (HIPAA-aligned); Task 9 — PCI expansion. Appended so the classify()
+    # precedence keeps prior matches (and the offline eval) byte-identical (WI-S5).
+    MEDICAL_RECORD_NUMBER = "medical_record_number"
+    ICD10_CODE = "icd10_code"
+    NPI = "npi"
     NONE = "none"
 
 
