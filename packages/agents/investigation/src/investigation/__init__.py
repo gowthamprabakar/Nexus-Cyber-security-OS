@@ -20,4 +20,16 @@ caps and the allowlist for which agents are permitted to spawn at all
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# investigation v0.2 (Cycle 14 — D.7, the 2nd LLM-heavy agent; the structured-LLM
+# Orchestrator-Workers deviator: FULL Charter context + ToolRegistry (5 worker tools via
+# ctx.call_tool) + LLM via charter.llm_adapter; sole OCSF 2005 Incident Finding emitter).
+# Level 1 -> Level 2 INFRASTRUCTURE: live evidence collection across the 13 closed-cycle agents
+# (Q2), DeepSeek primary + Anthropic fallback (Q3, inherits D.13 Q5), continuous-investigation
+# infrastructure, and SIX code-level invariants. INHERITED from D.13 (the LLM-agent template):
+# assert_categorical_only + assert_bounded_retry + assert_findings_cited (extended to
+# evidence_refs). NEW (the Orchestrator-Workers template): assert_worker_bounded (depth<=3,
+# parallel<=5 H5), assert_evidence_chain (every hypothesis cites resolved evidence H2), and
+# assert_no_speculation (hypothesis grounded in evidence H1). Sub-agent allowlist stays
+# {"investigation"} (WI-I15); D.7 is ADVISORY (WI-I14). Per Path 1: continuous mode is
+# INFRASTRUCTURE here; production-loop wiring is the Phase C consolidated retrofit. ADR-010 bump.
+__version__ = "0.2.0"
