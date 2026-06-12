@@ -4,7 +4,7 @@ Investigation Agent — agent **#8 of 18** for Nexus Cyber OS. **First Phase-1b 
 
 ## What it does
 
-Forensic incident correlation. Given an `ExecutionContract` requesting an investigation, D.7 runs a **six-stage pipeline** under the Orchestrator-Workers pattern (depth ≤ 3, parallel ≤ 5):
+Forensic incident correlation. Given an `ExecutionContract` requesting an investigation, D.7 runs a **six-stage pipeline** under the Orchestrator-Workers pattern (depth ≤ 3, parallel ≤ 5 — enforced by `assert_worker_bounded`):
 
 ```
 SCOPE → SPAWN → SYNTHESIZE → VALIDATE → PLAN → HANDOFF
@@ -119,7 +119,7 @@ The OCSF v1.3 Incident Finding (`class_uid 2005`) was **plan-corrected** at Task
 uv run pytest packages/agents/investigation -q
 ```
 
-172 tests, **94% coverage** on `investigation/*`. Uncovered branches are the eval-runner's LLM-stub null-response paths and a few defensive guards on the IOC extractor (exercised by integration cases). Substrate integration is exercised through `MemoryService` + `AuditStore` factories the CLI bootstraps per invocation.
+**v0.2** — 405+ investigation tests pass. v0.2 adds: live fleet-evidence collection across the **13 source agents** (D.7 is the sole OCSF 2005 emitter — it consumes 2002/2003/2004/6003 and produces the single 2005 incident); resilient LLM synthesis (DeepSeek → Anthropic → deterministic fallback) via `charter.llm_adapter`; **six code-level invariants** (3 inherited from the D.13 LLM-agent template + 3 NEW Orchestrator-Workers invariants — see [`runbooks/invariants_reference.md`](runbooks/invariants_reference.md)); and continuous-monitoring **infrastructure** (scheduler + heartbeat/continuous coexistence, NOT yet wired into `run()` — Phase C). The substrate seal stayed **empty** for all 24 tasks (no charter/shared edits). **Honest scope (WI-I3):** v0.2 is breadth — multi-source consumption + the invariant set + live-LLM proof — not new depth in hypothesis reasoning. Substrate integration is exercised through `MemoryService` + `AuditStore` factories the CLI bootstraps per invocation.
 
 ## License
 
