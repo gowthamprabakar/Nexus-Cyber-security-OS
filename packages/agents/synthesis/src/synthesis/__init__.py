@@ -49,4 +49,15 @@ per the 2026-05-20 version-roadmap (D.13 v0.2 through v0.5+).
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# synthesis v0.2 (Cycle 13 — D.13, the FIRST LLM-heavy agent; the empty-registry LLM-first
+# deviator: charter context + EMPTY ToolRegistry, LLM exclusively via charter.llm_adapter — no
+# charter-gated tools, WI-Y9). Level 1 -> Level 2 INFRASTRUCTURE: OCSF 2004 Detection Finding
+# emission (markdown narrative in the unmapped slot, markdown artifacts preserved alongside,
+# Q1/WI-Y12), source scope 3 -> 12 (all closed-cycle agents, Q3), DeepSeek primary + Anthropic
+# fallback (Q5), a live-LLM eval lane alongside the byte-identical stub harness (Q6/WI-Y5), and
+# continuous-synthesis infrastructure. THREE new code-level invariants establishing the
+# LLM-agent template (inherited by D.7/D.12/A.4): assert_categorical_only (WI-Y8/Q4 — no
+# plaintext PII in narrative), assert_bounded_retry (WI-Y10/H5 — max 1 retry), and
+# assert_findings_cited (WI-Y13 — the hallucination guard). Per Path 1: continuous mode is
+# INFRASTRUCTURE here; production-loop wiring is the Phase C consolidated retrofit. ADR-010 bump.
+__version__ = "0.2.0"
