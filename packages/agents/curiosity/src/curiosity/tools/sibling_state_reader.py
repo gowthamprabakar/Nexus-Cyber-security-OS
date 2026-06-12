@@ -44,6 +44,8 @@ from dataclasses import dataclass, field
 
 from charter.memory.semantic import SemanticStore
 
+from curiosity.tools.source_agents import per_source_finding_counts
+
 _LOG = logging.getLogger(__name__)
 
 _SENTINEL_NO_FINDINGS = -1
@@ -66,6 +68,8 @@ class SiblingState:
     regions: tuple[RegionState, ...] = field(default_factory=tuple)
     total_assets: int = 0
     total_findings_30d: int = 0
+    #: Per-source finding-aggregate counts (Q2/WI-X1 — per-source, never a fleet total).
+    per_source_findings: dict[str, int] = field(default_factory=dict)
 
     @property
     def any_data_present(self) -> bool:
@@ -150,10 +154,13 @@ async def read_sibling_state(
             )
         )
 
+    per_source = per_source_finding_counts(row.properties for row in finding_agg_rows)
+
     return SiblingState(
         regions=tuple(regions),
         total_assets=total_assets,
         total_findings_30d=total_findings_30d,
+        per_source_findings=per_source,
     )
 
 
