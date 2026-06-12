@@ -42,7 +42,7 @@ def test_package_imports() -> None:
     import supervisor
 
     assert hasattr(supervisor, "__version__")
-    assert supervisor.__version__ == "0.1.0"
+    assert supervisor.__version__ == "0.2.0"
 
 
 def test_charter_nlah_loader_import_works() -> None:

@@ -62,4 +62,16 @@ all deferred per the 2026-05-21 plan doc (Supervisor v0.2 / v0.3
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# supervisor v0.2 (Cycle 12 — Agent #0, the platform orchestrator; the lightweight
+# router/dispatcher class with a BY-DESIGN deviation from the specialist profile, ADR-007 —
+# PRESERVED, no Charter wrap / no ToolRegistry / no OCSF emission, WI-O11). Level 1 -> Level 2
+# INFRASTRUCTURE: live dispatch to the 11 closed-cycle agents, per-agent concurrency, bounded
+# transient/permanent/timeout failure classification + retry (max 1, H4), an additive F.6
+# audit vocabulary (4 -> 8 entries, existing 4 byte-identical WI-O5), a SQLite/WAL scheduled
+# queue, and event-driven + heartbeat coexistence. Two new code-level invariants:
+# assert_no_peer_to_peer (WI-O8/H2) + assert_signed_contract (WI-O9). The
+# _FORBIDDEN_SUBSCRIPTIONS fence (never subscribe to claims.>, WI-O10) is preserved. Per Path 1:
+# continuous orchestration is INFRASTRUCTURE here; the production-loop wiring is the Phase C
+# consolidated retrofit. NO OCSF emission (emits F.6 audit + supervisor_report.md + escalation
+# files). ADR-010 bump.
+__version__ = "0.2.0"

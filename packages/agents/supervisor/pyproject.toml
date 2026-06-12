@@ -1,6 +1,6 @@
 [project]
 name = "nexus-supervisor-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Nexus Supervisor Agent — declarative router + parallel dispatcher + heartbeat orchestrator (#0 / Agent #17 under ADR-007)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
