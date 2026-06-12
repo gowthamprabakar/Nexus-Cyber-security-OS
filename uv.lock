@@ -1813,7 +1813,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "nexus-investigation-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/agents/investigation" }
 dependencies = [
     { name = "click" },

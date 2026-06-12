@@ -1,6 +1,6 @@
 [project]
 name = "nexus-investigation-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Nexus Investigation Agent — cross-agent incident correlation (D.7 / Agent #8, Orchestrator-Workers)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }

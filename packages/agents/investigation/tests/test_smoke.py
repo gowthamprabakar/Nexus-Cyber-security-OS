@@ -8,7 +8,7 @@ def test_package_imports() -> None:
 
     assert hasattr(investigation, "__version__")
     assert isinstance(investigation.__version__, str)
-    assert investigation.__version__ == "0.1.0"
+    assert investigation.__version__ == "0.2.0"
 
 
 def test_charter_llm_adapter_import_works() -> None:
