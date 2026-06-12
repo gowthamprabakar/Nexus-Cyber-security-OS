@@ -64,6 +64,7 @@ from curiosity.hypothesizer import (
     hypothesize,
 )
 from curiosity.kg_writer import upsert_hypotheses
+from curiosity.ocsf.emission import render_curiosity_findings_json
 from curiosity.reviewer import RETRY_HINT_Q6, review
 from curiosity.schemas import (
     CuriosityClaim,
@@ -189,6 +190,11 @@ async def run(
         ctx.write_output(
             "probe_directives.json",
             _render_probe_directives_json(report).encode("utf-8"),
+        )
+        # v0.2 Q1: OCSF 2004 emission — additive alongside claims.> + markdown (WI-X5/X6).
+        ctx.write_output(
+            "curiosity_findings.json",
+            render_curiosity_findings_json(report).encode("utf-8"),
         )
         ctx.assert_complete()
 
