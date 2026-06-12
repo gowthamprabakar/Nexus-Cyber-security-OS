@@ -59,6 +59,7 @@ from synthesis.narrator import (
     SynthesisDraft,
     narrate,
 )
+from synthesis.ocsf.emission import SYNTHESIS_FINDING_OUTPUT, build_synthesis_finding_json
 from synthesis.reviewer import RETRY_HINT_Q6, review
 from synthesis.schemas import (
     ContextBundle,
@@ -190,6 +191,9 @@ async def run(
         exec_summary_md = _render_executive_summary_md(report)
         ctx.write_output("narrative.md", narrative_md.encode("utf-8"))
         ctx.write_output("executive_summary.md", exec_summary_md.encode("utf-8"))
+        # v0.2 Task 4 (Q1): additive OCSF 2004 emission alongside the markdown artifacts.
+        # The markdown above is unchanged, so the 10 stub eval cases stay byte-identical (WI-Y5).
+        ctx.write_output(SYNTHESIS_FINDING_OUTPUT, build_synthesis_finding_json(report))
 
         await upsert_synthesis_report(
             semantic_store=semantic_store,
