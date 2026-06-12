@@ -48,6 +48,14 @@ ACTION_DELEGATION_DISPATCHED = "supervisor.delegation.dispatched"
 ACTION_DELEGATION_COMPLETED = "supervisor.delegation.completed"
 ACTION_ESCALATION_RAISED = "supervisor.escalation.raised"
 
+# v0.2 Task 9 — 4 ADDITIVE vocabulary entries (Q4 / WI-O5). The 4 existing entries above stay
+# byte-identical; these are appended and never modify the existing schema. Emission wiring
+# lands in Task 10.
+ACTION_PARALLEL_BATCH_STARTED = "supervisor.delegation.parallel_batch_started"
+ACTION_DELEGATION_RETRIED = "supervisor.delegation.retried"
+ACTION_SEMAPHORE_WAIT = "supervisor.delegation.semaphore_wait"
+ACTION_QUEUE_DRAINED = "supervisor.queue.drained"
+
 
 def emit_heartbeat_started(
     audit_log: AuditLog,
@@ -132,9 +140,9 @@ def _count_triggers_by_source(triggers: Sequence[IncomingTask]) -> dict[str, int
     return dict(counts)
 
 
-# All 4 vocabulary entries — surfaced so tests + ADR docs can
-# reference the canonical set in one place.
-SUPERVISOR_AUDIT_ACTIONS: frozenset[str] = frozenset(
+# The original v0.1 vocabulary (4) — surfaced separately so tests can assert it stays
+# byte-identical under the v0.2 extension (WI-O5).
+SUPERVISOR_AUDIT_ACTIONS_V0_1: frozenset[str] = frozenset(
     {
         ACTION_HEARTBEAT_STARTED,
         ACTION_DELEGATION_DISPATCHED,
@@ -143,13 +151,34 @@ SUPERVISOR_AUDIT_ACTIONS: frozenset[str] = frozenset(
     }
 )
 
+# The 4 ADDITIVE v0.2 entries (Q4).
+SUPERVISOR_AUDIT_ACTIONS_V0_2: frozenset[str] = frozenset(
+    {
+        ACTION_PARALLEL_BATCH_STARTED,
+        ACTION_DELEGATION_RETRIED,
+        ACTION_SEMAPHORE_WAIT,
+        ACTION_QUEUE_DRAINED,
+    }
+)
+
+# The full canonical set (8) — the v0.1 set plus the v0.2 additions.
+SUPERVISOR_AUDIT_ACTIONS: frozenset[str] = (
+    SUPERVISOR_AUDIT_ACTIONS_V0_1 | SUPERVISOR_AUDIT_ACTIONS_V0_2
+)
+
 
 __all__ = [
     "ACTION_DELEGATION_COMPLETED",
     "ACTION_DELEGATION_DISPATCHED",
+    "ACTION_DELEGATION_RETRIED",
     "ACTION_ESCALATION_RAISED",
     "ACTION_HEARTBEAT_STARTED",
+    "ACTION_PARALLEL_BATCH_STARTED",
+    "ACTION_QUEUE_DRAINED",
+    "ACTION_SEMAPHORE_WAIT",
     "SUPERVISOR_AUDIT_ACTIONS",
+    "SUPERVISOR_AUDIT_ACTIONS_V0_1",
+    "SUPERVISOR_AUDIT_ACTIONS_V0_2",
     "emit_delegation_completed",
     "emit_delegation_dispatched",
     "emit_escalation_raised",
