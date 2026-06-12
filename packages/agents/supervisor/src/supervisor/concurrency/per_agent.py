@@ -42,12 +42,17 @@ class PerAgentSemaphores:
     def cap_for(self, agent_id: str) -> int:
         return self._overrides.get(agent_id, self._default)
 
-    def _semaphore(self, agent_id: str) -> asyncio.Semaphore:
+    def semaphore_for(self, agent_id: str) -> asyncio.Semaphore:
+        """The (lazily created) semaphore for ``agent_id`` — public so a timeout-aware acquire
+        (Task 6) can wait on it directly."""
         sem = self._sems.get(agent_id)
         if sem is None:
             sem = asyncio.Semaphore(self.cap_for(agent_id))
             self._sems[agent_id] = sem
         return sem
+
+    def _semaphore(self, agent_id: str) -> asyncio.Semaphore:
+        return self.semaphore_for(agent_id)
 
     @asynccontextmanager
     async def acquire(self, agent_id: str) -> AsyncIterator[None]:
