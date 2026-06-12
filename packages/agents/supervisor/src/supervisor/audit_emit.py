@@ -140,6 +140,79 @@ def _count_triggers_by_source(triggers: Sequence[IncomingTask]) -> dict[str, int
     return dict(counts)
 
 
+# --- v0.2 Task 10: emission for the 4 additive vocabulary entries (Q4). Same append-only
+# F.6 hash-chain semantics as the v0.1 emitters — these add NEW entries, never edit existing. ---
+
+
+def emit_parallel_batch_started(
+    audit_log: AuditLog,
+    *,
+    customer_id: str,
+    tick_id: str,
+    target_agents: Sequence[str],
+) -> None:
+    """Emit once when a parallel delegation batch begins."""
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "tick_id": tick_id,
+        "batch_size": len(target_agents),
+        "target_agents": list(target_agents),
+    }
+    audit_log.append(ACTION_PARALLEL_BATCH_STARTED, payload)
+
+
+def emit_delegation_retried(
+    audit_log: AuditLog,
+    *,
+    contract: DelegationContract,
+    attempt: int,
+    failure_class: str,
+) -> None:
+    """Emit when a transient failure triggers the single bounded retry (Q3/H4)."""
+    payload: dict[str, Any] = {
+        "customer_id": contract.customer_id,
+        "delegation_id": contract.delegation_id,
+        "target_agent": contract.target_agent,
+        "attempt": attempt,
+        "failure_class": failure_class,
+    }
+    audit_log.append(ACTION_DELEGATION_RETRIED, payload)
+
+
+def emit_semaphore_wait(
+    audit_log: AuditLog,
+    *,
+    customer_id: str,
+    target_agent: str,
+    waited_sec: float,
+    cap: int,
+) -> None:
+    """Emit when a delegation waits on its per-agent concurrency slot (backpressure)."""
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "target_agent": target_agent,
+        "waited_sec": waited_sec,
+        "cap": cap,
+    }
+    audit_log.append(ACTION_SEMAPHORE_WAIT, payload)
+
+
+def emit_queue_drained(
+    audit_log: AuditLog,
+    *,
+    customer_id: str,
+    drained_count: int,
+    queue_name: str,
+) -> None:
+    """Emit when the scheduled queue finishes draining its due items."""
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "drained_count": drained_count,
+        "queue_name": queue_name,
+    }
+    audit_log.append(ACTION_QUEUE_DRAINED, payload)
+
+
 # The original v0.1 vocabulary (4) — surfaced separately so tests can assert it stays
 # byte-identical under the v0.2 extension (WI-O5).
 SUPERVISOR_AUDIT_ACTIONS_V0_1: frozenset[str] = frozenset(
@@ -181,6 +254,10 @@ __all__ = [
     "SUPERVISOR_AUDIT_ACTIONS_V0_2",
     "emit_delegation_completed",
     "emit_delegation_dispatched",
+    "emit_delegation_retried",
     "emit_escalation_raised",
     "emit_heartbeat_started",
+    "emit_parallel_batch_started",
+    "emit_queue_drained",
+    "emit_semaphore_wait",
 ]
