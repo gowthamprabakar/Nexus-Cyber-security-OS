@@ -32,9 +32,11 @@ from charter.llm import LLMProvider
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from audit.chain import verify_audit_chain
+from audit.readonly import assert_audit_readonly
 from audit.schemas import AuditEvent, AuditQueryResult, ChainIntegrityReport
 from audit.store import AuditStore
 from audit.summarizer import render_markdown
+from audit.tenant_authz import assert_admin_for_cross_tenant, cross_tenant_query
 from audit.tools.episode_reader import episode_audit_read
 from audit.tools.jsonl_reader import audit_jsonl_read
 
@@ -61,6 +63,7 @@ async def run(
     action: str | None = None,
     agent_id: str | None = None,
     correlation_id: str | None = None,
+    caller_role: str = "auditor",
     simulate_budget_overrun_dim: str | None = None,
 ) -> AuditQueryResult:
     """Ingest audit sources, verify chains, query, render report.
@@ -96,12 +99,21 @@ async def run(
             memory_session_factory=memory_session_factory,
         )
 
+        # Phase C SS3: make the F.6 read-only invariant load-bearing — every operation the run
+        # performs is asserted read-side (WI-F8). A future chain-mutation op would have to be
+        # added to READ_ONLY_OPERATIONS (a deliberate, reviewed change) or it trips the guard.
+        assert_audit_readonly("verify")
         chain_report = _verify_chains(jsonl_events=jsonl_events, memory_events=memory_events)
 
         combined = jsonl_events + memory_events
         if combined:
             await audit_store.ingest(tenant_id=tenant_id, events=combined)
 
+        # Phase C SS3: the run is single-tenant by construction; assert the cross-tenant invariant
+        # (WI-F11) so any future multi-tenant extension of run() would require the admin role
+        # rather than silently bypassing it. Single-tenant scope passes for any caller_role.
+        assert_audit_readonly("query")
+        assert_admin_for_cross_tenant(cross_tenant_query(tenant_ids=[tenant_id]), caller_role)
         result = await audit_store.query(
             tenant_id=tenant_id,
             since=since,
