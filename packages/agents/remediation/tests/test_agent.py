@@ -111,11 +111,10 @@ def _patch_executor(
         return ex
 
     monkeypatch.setattr(agent_mod, "apply_patch", fake_apply)
-    # Validator's rollback() captures apply_patch at import time — patch its
-    # module-local reference too.
-    import remediation.validator as validator_mod
-
-    monkeypatch.setattr(validator_mod, "apply_patch", fake_apply)
+    # Stage-5 EXECUTE and Stage-7 ROLLBACK both dispatch apply_patch via the
+    # charter registry (which closes over agent_mod.apply_patch at build time),
+    # so patching agent_mod is sufficient for both paths. (validator no longer
+    # imports apply_patch directly — PR-A1 routed rollback through ctx.call_tool.)
     monkeypatch.setattr(kc_mod, "apply_patch", fake_apply)
     # Also stub the binary check so absence of kubectl doesn't fail tests.
     monkeypatch.setattr(kc_mod, "_kubectl_binary", lambda: "/usr/local/bin/kubectl")

@@ -70,7 +70,6 @@ from k8s_posture.schemas import Severity
 from k8s_posture.tools.manifests import ManifestFinding
 
 from remediation import agent as agent_mod
-from remediation import validator as validator_mod
 from remediation.authz import Authorization, AuthorizationError
 from remediation.promotion import (
     ActionClassPromotion,
@@ -204,8 +203,10 @@ async def _run_case_async(
 
     with ExitStack() as stack:
         stack.enter_context(patch.object(agent_mod, "read_findings", fake_read))
+        # Stage-5 EXECUTE + Stage-7 ROLLBACK both dispatch apply_patch via the
+        # charter registry (which closes over agent_mod.apply_patch), so patching
+        # agent_mod covers both (PR-A1: rollback now routes through ctx.call_tool).
         stack.enter_context(patch.object(agent_mod, "apply_patch", _apply))
-        stack.enter_context(patch.object(validator_mod, "apply_patch", _apply))
         stack.enter_context(patch.object(kc_mod, "apply_patch", _apply))
         stack.enter_context(patch.object(agent_mod, "build_d6_detector", fake_factory))
         # Bypass the validator's rollback-window wait. `patch.object` on

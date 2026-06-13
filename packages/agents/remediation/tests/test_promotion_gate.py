@@ -186,12 +186,13 @@ def _patch_driver(
         del namespace, kubeconfig, in_cluster
         return fake_detect
 
-    import remediation.validator as validator_mod
     from remediation.tools import kubectl_executor as kc_mod
 
     monkeypatch.setattr(agent_mod, "read_findings", fake_read)
+    # Rollback dispatches apply_patch via the charter registry (closes over
+    # agent_mod.apply_patch), so patching agent_mod covers Stage-5 + Stage-7
+    # (PR-A1: validator no longer imports apply_patch directly).
     monkeypatch.setattr(agent_mod, "apply_patch", fake_apply)
-    monkeypatch.setattr(validator_mod, "apply_patch", fake_apply)
     monkeypatch.setattr(kc_mod, "apply_patch", fake_apply)
     monkeypatch.setattr(kc_mod, "_kubectl_binary", lambda: "/usr/local/bin/kubectl")
     monkeypatch.setattr(agent_mod, "build_d6_detector", fake_factory)
@@ -226,12 +227,13 @@ def _patch_driver_with_apply_spy(
         del namespace, kubeconfig, in_cluster
         return fake_detect
 
-    import remediation.validator as validator_mod
     from remediation.tools import kubectl_executor as kc_mod
 
     monkeypatch.setattr(agent_mod, "read_findings", fake_read)
+    # Rollback dispatches apply_patch via the charter registry (closes over
+    # agent_mod.apply_patch), so patching agent_mod covers Stage-5 + Stage-7
+    # (PR-A1: validator no longer imports apply_patch directly).
     monkeypatch.setattr(agent_mod, "apply_patch", fake_apply)
-    monkeypatch.setattr(validator_mod, "apply_patch", fake_apply)
     monkeypatch.setattr(kc_mod, "apply_patch", fake_apply)
     monkeypatch.setattr(kc_mod, "_kubectl_binary", lambda: "/usr/local/bin/kubectl")
     monkeypatch.setattr(agent_mod, "build_d6_detector", fake_factory)
