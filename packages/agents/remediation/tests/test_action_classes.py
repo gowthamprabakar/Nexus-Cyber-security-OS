@@ -48,9 +48,9 @@ def _finding(
 # ---------------------------- registry composition ------------------------
 
 
-def test_registry_has_5_action_classes() -> None:
-    """v0.1 ships exactly 5 action classes."""
-    assert len(ACTION_CLASS_REGISTRY) == 5
+def test_registry_has_7_action_classes() -> None:
+    """v0.2 ships 7 action classes (5 v0.1 + privileged-container + auto-mount-sa-token)."""
+    assert len(ACTION_CLASS_REGISTRY) == 7
 
 
 def test_registry_keys_are_d6_rule_ids() -> None:
@@ -61,6 +61,8 @@ def test_registry_keys_are_d6_rule_ids() -> None:
         "read-only-root-fs-missing",
         "image-pull-policy-not-always",
         "allow-privilege-escalation",
+        "privileged-container",
+        "auto-mount-sa-token",
     }
     assert set(ACTION_CLASS_REGISTRY) == expected
 
@@ -85,8 +87,8 @@ def test_lookup_returns_action_class_for_each_registered_rule(rule_id: str) -> N
 
 
 def test_lookup_returns_none_for_unknown_rule() -> None:
-    """privileged-container is intentionally NOT in v0.1 (too high blast radius)."""
-    assert lookup_action_class("privileged-container") is None
+    """host-network is intentionally NOT mapped at v0.2 (too high blast radius — v0.3)."""
+    assert lookup_action_class("host-network") is None
     assert lookup_action_class("host-network") is None
     assert lookup_action_class("totally-made-up-rule") is None
 
@@ -320,3 +322,14 @@ def test_all_v0_1_actions_use_strategic_merge_patch() -> None:
     for rule_id, ac in ACTION_CLASS_REGISTRY.items():
         artifact = ac.build(_finding(rule_id=rule_id))
         assert artifact.patch_strategy == "strategic"
+
+
+def test_v0_2_new_action_classes_wired() -> None:
+    """v0.2 Task 10 — the 2 new action classes are dispatchable via the registry."""
+    from remediation.action_classes import ACTION_CLASS_REGISTRY
+    from remediation.schemas import RemediationActionType
+
+    priv = ACTION_CLASS_REGISTRY["privileged-container"]
+    auto = ACTION_CLASS_REGISTRY["auto-mount-sa-token"]
+    assert priv.action_type is RemediationActionType.K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER
+    assert auto.action_type is RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN

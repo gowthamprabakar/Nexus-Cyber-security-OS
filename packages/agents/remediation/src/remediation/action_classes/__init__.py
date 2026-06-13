@@ -40,8 +40,14 @@ from collections.abc import Callable
 from k8s_posture.tools.manifests import ManifestFinding
 
 from remediation.action_classes._common import swap_for_inverse
+from remediation.action_classes.k8s_disable_auto_mount_sa_token import (
+    build_disable_auto_mount_sa_token,
+)
 from remediation.action_classes.k8s_disable_privilege_escalation import (
     build_disable_privilege_escalation,
+)
+from remediation.action_classes.k8s_disable_privileged_container import (
+    build_disable_privileged_container,
 )
 from remediation.action_classes.k8s_image_pull_policy_always import (
     build_image_pull_policy_always,
@@ -99,6 +105,17 @@ ACTION_CLASS_REGISTRY: dict[str, ActionClass] = {
     "allow-privilege-escalation": ActionClass(
         action_type=RemediationActionType.K8S_PATCH_DISABLE_PRIVILEGE_ESCALATION,
         build=build_disable_privilege_escalation,
+        inverse=swap_for_inverse,
+    ),
+    # v0.2 (Cycle 16) — 2 new lowest-blast-radius action classes (Q1).
+    "privileged-container": ActionClass(
+        action_type=RemediationActionType.K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER,
+        build=build_disable_privileged_container,
+        inverse=swap_for_inverse,
+    ),
+    "auto-mount-sa-token": ActionClass(
+        action_type=RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN,
+        build=build_disable_auto_mount_sa_token,
         inverse=swap_for_inverse,
     ),
 }

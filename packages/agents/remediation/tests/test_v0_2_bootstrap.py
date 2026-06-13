@@ -28,9 +28,9 @@ def test_three_operational_modes() -> None:
     assert {m.value for m in RemediationMode} == {"recommend", "dry_run", "execute"}
 
 
-def test_five_v0_1_action_classes_present() -> None:
-    # M3 expands this to 7; bootstrap pins the v0.1 baseline.
-    assert len(ACTION_CLASS_REGISTRY) == 5
+def test_seven_action_classes_present() -> None:
+
+    assert len(ACTION_CLASS_REGISTRY) == 7
 
 
 def test_changelog_safety_critical_banner() -> None:
