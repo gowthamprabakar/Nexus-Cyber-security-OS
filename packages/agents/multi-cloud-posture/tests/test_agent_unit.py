@@ -156,6 +156,25 @@ def test_build_registry_includes_four_readers() -> None:
         assert name in known
 
 
+def test_build_registry_registers_live_discovery_tools() -> None:
+    """Phase C SS4: the v0.2 live scope-discovery helpers dispatch through the charter.
+
+    Register-only — they are scope discovery (subscription/project + regions); run() does
+    not route to them because the live findings scanners that consume the scope are v0.3.
+    Registering makes the governed dispatch path ready and tracked as cloud-API calls.
+    """
+    reg = build_registry()
+    known = reg.known_tools()
+    for name in (
+        "discover_subscription_id",
+        "discover_locations",
+        "discover_project_id",
+        "discover_regions",
+    ):
+        assert name in known
+        assert reg.cloud_calls(name) == 1  # outbound cloud-API calls, budget-tracked
+
+
 # ---------------------------- empty path ---------------------------------
 
 

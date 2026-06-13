@@ -51,6 +51,11 @@ from multi_cloud_posture.tools.azure_defender import (
     AzureDefenderFinding,
     read_azure_findings,
 )
+from multi_cloud_posture.tools.azure_discovery import (
+    discover_locations,
+    discover_subscription_id,
+)
+from multi_cloud_posture.tools.gcp_discovery import discover_project_id, discover_regions
 from multi_cloud_posture.tools.gcp_iam import GcpIamFinding, read_gcp_iam_findings
 from multi_cloud_posture.tools.gcp_scc import GcpSccFinding, read_gcp_findings
 
@@ -58,12 +63,29 @@ DEFAULT_NLAH_VERSION = "0.1.0"
 
 
 def build_registry() -> ToolRegistry:
-    """Compose the tool universe available to this agent."""
+    """Compose the tool universe available to this agent.
+
+    Phase C SS4: the v0.2 live scope-discovery helpers are registered so they dispatch
+    through the charter proxy (ADR-016) — budget/audit/permission bound — rather than
+    being importable-but-ungoverned. They are scope discovery only (resolve the single
+    subscription/project + its regions, Q6); ``run()`` does NOT route to them yet because
+    the live Azure/GCP *findings* scanners that would consume the resolved scope are a v0.3
+    deliverable (the offline flow scans feeds, not a live subscription). Registering now
+    makes the governed dispatch path ready for those readers. cloud_calls=1 — each makes
+    outbound cloud-API calls.
+    """
     reg = ToolRegistry()
     reg.register("read_azure_findings", read_azure_findings, version="0.1.0", cloud_calls=0)
     reg.register("read_azure_activity", read_azure_activity, version="0.1.0", cloud_calls=0)
     reg.register("read_gcp_findings", read_gcp_findings, version="0.1.0", cloud_calls=0)
     reg.register("read_gcp_iam_findings", read_gcp_iam_findings, version="0.1.0", cloud_calls=0)
+    # v0.2 live scope-discovery (register-only; run() routing awaits v0.3 scan readers).
+    reg.register(
+        "discover_subscription_id", discover_subscription_id, version="0.2.0", cloud_calls=1
+    )
+    reg.register("discover_locations", discover_locations, version="0.2.0", cloud_calls=1)
+    reg.register("discover_project_id", discover_project_id, version="0.2.0", cloud_calls=1)
+    reg.register("discover_regions", discover_regions, version="0.2.0", cloud_calls=1)
     return reg
 
 
