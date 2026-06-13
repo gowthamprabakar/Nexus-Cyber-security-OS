@@ -33,6 +33,10 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from runtime_threat import __version__ as agent_version
+from runtime_threat.actions.snapshot import (
+    build_snapshot_actions,
+    snapshot_actions_to_json,
+)
 from runtime_threat.normalizer import normalize_to_findings
 from runtime_threat.schemas import FindingsReport
 from runtime_threat.summarizer import render_summary
@@ -160,6 +164,15 @@ async def run(
         ctx.write_output(
             "summary.md",
             render_summary(report).encode("utf-8"),
+        )
+
+        # Phase C SS2: emit read-only forensic snapshot actions for HIGH/CRITICAL findings. Every
+        # action routes through assert_authorized('snapshot') (Q4/WI-R8), making that invariant
+        # load-bearing in the run flow. Additive artifact — findings.json is byte-identical.
+        snapshot_actions = build_snapshot_actions(findings, requested_at=scan_started)
+        ctx.write_output(
+            "snapshot_actions.json",
+            snapshot_actions_to_json(snapshot_actions).encode("utf-8"),
         )
 
         ctx.assert_complete()
