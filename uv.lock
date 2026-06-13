@@ -20,6 +20,7 @@ members = [
     "nexus-multi-cloud-posture-agent",
     "nexus-network-threat-agent",
     "nexus-remediation-agent",
+    "nexus-runtime",
     "nexus-runtime-threat",
     "nexus-shared",
     "nexus-supervisor-agent",
@@ -2082,6 +2083,26 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "nexus-runtime"
+version = "0.1.0"
+source = { editable = "packages/runtime" }
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
 ]
 provides-extras = ["dev"]
 

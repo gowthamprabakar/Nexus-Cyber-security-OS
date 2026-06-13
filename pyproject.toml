@@ -9,6 +9,7 @@ dependencies = []
 members = [
     "packages/charter",
     "packages/eval-framework",
+    "packages/runtime",
     "packages/agents/cloud-posture",
     "packages/agents/vulnerability",
     "packages/agents/identity",
@@ -74,6 +75,7 @@ exclude = ["dist", "build", ".venv", "tests"]
 files = [
     "packages/charter/src",
     "packages/eval-framework/src",
+    "packages/runtime/src",
     "packages/agents/cloud-posture/src",
     "packages/agents/vulnerability/src",
     "packages/agents/identity/src",
