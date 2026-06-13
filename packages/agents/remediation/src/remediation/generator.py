@@ -52,7 +52,11 @@ def generate_artifacts(
         action_class = lookup_action_class(finding.rule_id)
         if action_class is None:
             continue
-        out.append(action_class.build(finding))
+        artifact = action_class.build(finding)
+        # Phase C SS6 (WI-A17): carry the source manifest path so the auto-mount-disable safety
+        # guard can read the pod spec at run() time. Central linkage — no per-action-class edit.
+        artifact.source_manifest_path = finding.manifest_path
+        out.append(artifact)
     return tuple(out)
 
 

@@ -818,4 +818,179 @@ async def test_dry_run_routes_apply_patch_through_charter(
     assert [e["payload"]["tool"] for e in tool_calls].count("apply_patch") == 1
 
 
+# ---------------------------------------------------------------------------
+# Phase C SS6 PR2 — action-specific safety invariants (WI-A16 privileged authz,
+# WI-A17 auto-mount validation) wired into run().
+# ---------------------------------------------------------------------------
+
+
+def _privileged_finding() -> ManifestFinding:
+    return ManifestFinding(
+        rule_id="privileged-container",
+        rule_title="Privileged container",
+        severity="high",
+        workload_kind="Deployment",
+        workload_name="frontend",
+        namespace="production",
+        container_name="nginx",
+        manifest_path="cluster:///production/Deployment/frontend",
+        detected_at=NOW,
+    )
+
+
+def _auto_mount_finding(manifest_path: str) -> ManifestFinding:
+    return ManifestFinding(
+        rule_id="auto-mount-sa-token",
+        rule_title="Auto Mount Sa Token",
+        severity="medium",
+        workload_kind="Deployment",
+        workload_name="frontend",
+        namespace="production",
+        container_name="",
+        manifest_path=manifest_path,
+        detected_at=NOW,
+    )
+
+
+def _write_workload_manifest(tmp_path: Path, *, sa: str = "default", active: bool = False) -> str:
+    from remediation.invariants.auto_mount_validation import SA_TOKEN_PATH
+
+    mount = (
+        f"\n            volumeMounts:\n              - mountPath: {SA_TOKEN_PATH}" if active else ""
+    )
+    text = (
+        "apiVersion: apps/v1\n"
+        "kind: Deployment\n"
+        "metadata:\n  name: frontend\n  namespace: production\n"
+        "spec:\n  template:\n    spec:\n"
+        f"      serviceAccountName: {sa}\n"
+        "      containers:\n"
+        f"        - name: nginx{mount}\n"
+    )
+    path = tmp_path / "frontend.yaml"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+@pytest.mark.asyncio
+async def test_privileged_action_refused_without_extra_authz(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """WI-A16: a privileged-container disable in the allowlist still refuses without the separate
+    privileged_actions_authorized opt-in — and refuses BEFORE any kubectl call."""
+    from remediation.invariants.privileged_authz import PrivilegedActionAuthzError
+
+    captured = _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_privileged_finding(),))
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER.value],
+        privileged_actions_authorized=False,
+    )
+    with pytest.raises(PrivilegedActionAuthzError):
+        await run(
+            _contract(tmp_path),
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            enable_execute=True,
+            authorization=auth,
+        )
+    assert captured["calls"] == []  # fail-closed before mutation
+
+
+@pytest.mark.asyncio
+async def test_privileged_action_proceeds_with_extra_authz(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """WI-A16: with privileged_actions_authorized=True the privileged action runs the pipeline."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_privileged_finding(),))
+    _patch_detector(monkeypatch, detector_output=())  # clean → validated
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER.value],
+        privileged_actions_authorized=True,
+    )
+    report = await run(
+        _contract(tmp_path),
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        enable_execute=True,
+        authorization=auth,
+    )
+    assert report.count_by_outcome()[RemediationOutcome.EXECUTED_VALIDATED.value] == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_mount_refused_on_active_token_consumer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """WI-A17: disabling auto-mount on a workload whose container mounts the SA token is refused."""
+    from remediation.invariants.auto_mount_validation import AutoMountValidationError
+
+    captured = _patch_executor(monkeypatch)
+    manifest = _write_workload_manifest(tmp_path, sa="default", active=True)
+    _patch_findings(monkeypatch, (_auto_mount_finding(manifest),))
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN.value],
+    )
+    with pytest.raises(AutoMountValidationError):
+        await run(
+            _contract(tmp_path),
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            enable_execute=True,
+            authorization=auth,
+        )
+    assert captured["calls"] == []  # fail-closed before mutation
+
+
+@pytest.mark.asyncio
+async def test_auto_mount_refused_when_manifest_unreadable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """WI-A17 fail-closed: an auto-mount action whose manifest cannot be read is refused — we
+    cannot verify the workload is not an active token consumer."""
+    from remediation.invariants.auto_mount_validation import AutoMountValidationError
+
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_auto_mount_finding(str(tmp_path / "nonexistent.yaml")),))
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN.value],
+    )
+    with pytest.raises(AutoMountValidationError):
+        await run(
+            _contract(tmp_path),
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            enable_execute=True,
+            authorization=auth,
+        )
+
+
+@pytest.mark.asyncio
+async def test_auto_mount_proceeds_on_clean_workload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """WI-A17: a default-SA workload with no active token consumer passes — the action runs."""
+    _patch_executor(monkeypatch)
+    manifest = _write_workload_manifest(tmp_path, sa="default", active=False)
+    _patch_findings(monkeypatch, (_auto_mount_finding(manifest),))
+    _patch_detector(monkeypatch, detector_output=())  # clean → validated
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN.value],
+    )
+    report = await run(
+        _contract(tmp_path),
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        enable_execute=True,
+        authorization=auth,
+    )
+    assert report.count_by_outcome()[RemediationOutcome.EXECUTED_VALIDATED.value] == 1
+
+
 _ = Sequence  # silence unused-import linter (Sequence is used by _patch_executor typing)

@@ -40,11 +40,12 @@ Cluster-access discipline mirrors D.6 v0.3 (3-way exclusion):
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
 from charter import Charter, ToolNotPermitted, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
@@ -69,6 +70,10 @@ from remediation.authz import (
 )
 from remediation.generator import generate_artifacts
 from remediation.invariants.action_allowlist import assert_action_allowlisted
+from remediation.invariants.auto_mount_validation import (
+    AutoMountValidationError,
+    assert_auto_mount_validation,
+)
 from remediation.invariants.blast_radius import assert_blast_radius_capped
 from remediation.invariants.default_recommend import assert_default_recommend
 from remediation.invariants.dry_run_first import (
@@ -76,6 +81,7 @@ from remediation.invariants.dry_run_first import (
     STAGE_EXECUTE,
     assert_dry_run_before_execute,
 )
+from remediation.invariants.privileged_authz import assert_privileged_action_extra_authz
 from remediation.invariants.rollback_mandatory import assert_rollback_on_failed_validation
 from remediation.invariants.tenant_scoped import assert_tenant_scoped
 from remediation.invariants.tool_proxy import assert_tool_proxy_for_execute
@@ -370,6 +376,18 @@ async def run(
             # refusal); this hard-asserts every artifact reaching the mutating stages is still
             # allowlisted — a defence-in-depth catch at the action boundary.
             assert_action_allowlisted(artifact.action_type, auth.authorized_actions)
+            # Phase C SS6 (PR2): the two v0.2 action-specific safety guards, at the same boundary.
+            # WI-A16 — a privileged action (disable-privileged-container) needs the SEPARATE
+            # privileged_actions_authorized opt-in beyond the H2 allowlist.
+            assert_privileged_action_extra_authz(artifact.action_type, auth.model_dump())
+            # WI-A17 — disabling SA-token auto-mount must not break a workload that actively
+            # consumes the token; hydrate the pod spec from the source manifest and validate.
+            sa_name, containers = _auto_mount_context(artifact)
+            assert_auto_mount_validation(
+                action_type=artifact.action_type,
+                service_account_name=sa_name,
+                containers=containers,
+            )
             outcome, description = await _process_artifact(
                 ctx=ctx,
                 artifact=artifact,
@@ -698,6 +716,61 @@ def _emit_promotion_evidence(
 
 
 # ---------------------------- helpers -------------------------------------
+
+
+def _auto_mount_context(
+    artifact: RemediationArtifact,
+) -> tuple[str | None, tuple[Mapping[str, Any], ...]]:
+    """Hydrate ``(service_account_name, containers)`` for the auto-mount guard (WI-A17).
+
+    Non-auto-mount artifacts need no context (``assert_auto_mount_validation`` returns early), so an
+    empty context is returned without touching the filesystem. For the auto-mount action the source
+    manifest is read + the pod spec resolved. If the manifest is absent or unreadable the action is
+    REFUSED (``AutoMountValidationError``) — disabling the SA-token mount without being able to
+    verify the workload is not an active consumer is the unsafe direction (fail-closed).
+    """
+    if artifact.action_type != RemediationActionType.K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN:
+        return (None, ())
+    path = artifact.source_manifest_path
+    if not path:
+        raise AutoMountValidationError(
+            "auto-mount disable requires the source manifest to verify no active token consumer; "
+            "none was carried on the artifact — refused (WI-A17)."
+        )
+    try:
+        manifest = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise AutoMountValidationError(
+            f"cannot read source manifest {path!r} to verify auto-mount safety — refused (WI-A17)"
+        ) from exc
+    pod_spec = _resolve_pod_spec(manifest if isinstance(manifest, dict) else {}, artifact.kind)
+    sa_name = pod_spec.get("serviceAccountName")
+    containers = [
+        c
+        for c in (*(pod_spec.get("containers") or []), *(pod_spec.get("initContainers") or []))
+        if isinstance(c, dict)
+    ]
+    return (str(sa_name) if sa_name else None, tuple(containers))
+
+
+def _resolve_pod_spec(manifest: Mapping[str, Any], kind: str) -> Mapping[str, Any]:
+    """Navigate a manifest dict to the pod spec by workload kind (mirrors k8s-posture's mapping).
+
+    Pod → spec; CronJob → spec.jobTemplate.spec.template.spec; everything else (Deployment /
+    StatefulSet / DaemonSet / ReplicaSet / Job) → spec.template.spec.
+    """
+    spec = manifest.get("spec")
+    if not isinstance(spec, dict):
+        return {}
+    if kind == "Pod":
+        return spec
+    if kind == "CronJob":
+        job = spec.get("jobTemplate")
+        tmpl = job.get("spec", {}).get("template") if isinstance(job, dict) else None
+    else:
+        tmpl = spec.get("template")
+    inner = tmpl.get("spec") if isinstance(tmpl, dict) else None
+    return inner if isinstance(inner, dict) else {}
 
 
 def _finding_rule_from_artifact(artifact: RemediationArtifact) -> str:

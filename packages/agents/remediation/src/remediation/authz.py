@@ -65,6 +65,10 @@ class Authorization(BaseModel):
     authorized_actions: list[str] = Field(default_factory=list)
     max_actions_per_run: int = Field(default=5, ge=1, le=50)
     rollback_window_sec: int = Field(default=300, ge=60, le=1800)
+    # Phase C SS6 (WI-A16): extra, separate acknowledgement required for privileged actions
+    # (e.g. disable-privileged-container) BEYOND the standard authorized_actions allowlist.
+    # Default OFF — a privileged action refuses unless the operator opts in explicitly.
+    privileged_actions_authorized: bool = False
 
     @classmethod
     def recommend_only(cls) -> Authorization:
