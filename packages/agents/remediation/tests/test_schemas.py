@@ -86,8 +86,8 @@ def test_ocsf_version_matches_substrate() -> None:
 
 
 def test_remediation_action_types_count() -> None:
-    """v0.2 ships 6 action classes after the privileged-container addition (Task 8)."""
-    assert len(list(RemediationActionType)) == 6
+    """v0.2 ships 7 action classes (5 v0.1 + privileged-container + auto-mount-sa-token)."""
+    assert len(list(RemediationActionType)) == 7
 
 
 def test_remediation_mode_values() -> None:
