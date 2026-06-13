@@ -1,0 +1,19 @@
+# Pre-commit hooks for Nexus Cyber OS — reset-trap mitigation (v0.2 quality audit PR #622, P3-5).
+#
+# Across Cycles 12-16 a recurring failure mode wiped uncommitted work: husky's
+# `ruff check --fix` FAILS (does not auto-fix) on a handful of rules — notably
+# RUF043 (regex metacharacters in pytest.raises(match=...)), RUF059, and S105
+# (variable names like *_TOKEN / *_PATH read as hardcoded secrets). A failed
+# husky commit chained with `git reset --hard` then erased the new files.
+#
+# This config surfaces those exact rules with `ruff check` (NO --fix) BEFORE the
+# commit, so they are caught while the work is still safely in the tree. Enable
+# locally with `pre-commit install` (and in CI bootstrap). It composes with — does
+# not replace — the existing husky + lint-staged + commitlint setup.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.0
+    hooks:
+      - id: ruff
+        name: ruff (surface RUF043/RUF059/S105 — no autofix)
+        args: ['--no-fix']
