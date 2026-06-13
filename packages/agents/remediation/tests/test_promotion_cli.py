@@ -84,7 +84,7 @@ def test_init_creates_promotion_yaml_with_default_action_classes(tmp_path: Path)
     assert tracker is not None
     assert tracker.file.cluster_id == "prod-eu-1"
     # All action classes registered at Stage 1 (6 after the v0.2 privileged-container add).
-    assert len(tracker.file.action_classes) == 6
+    assert len(tracker.file.action_classes) == 7
     for entry in tracker.file.action_classes.values():
         assert entry.stage is PromotionStage.STAGE_1
 
@@ -94,7 +94,7 @@ def test_init_creates_promotion_yaml_with_default_action_classes(tmp_path: Path)
     payloads = _audit_payloads(audit, "promotion.init.applied")
     assert payloads[0]["cluster_id"] == "prod-eu-1"
     assert payloads[0]["default_stage"] == 1
-    assert len(payloads[0]["action_classes"]) == 6
+    assert len(payloads[0]["action_classes"]) == 7
 
 
 def test_init_with_custom_action_classes(tmp_path: Path) -> None:

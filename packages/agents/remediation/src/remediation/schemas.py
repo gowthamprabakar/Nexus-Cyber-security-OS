@@ -73,6 +73,7 @@ class RemediationActionType(StrEnum):
     K8S_PATCH_DISABLE_PRIVILEGE_ESCALATION = "remediation_k8s_patch_disable_privilege_escalation"
     # v0.2 (Cycle 16) — 2 new lowest-blast-radius action classes (Q1).
     K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER = "remediation_k8s_patch_disable_privileged_container"
+    K8S_PATCH_DISABLE_AUTO_MOUNT_SA_TOKEN = "remediation_k8s_patch_disable_auto_mount_sa_token"  # noqa: S105 — action id, not a secret
 
 
 class RemediationMode(StrEnum):
