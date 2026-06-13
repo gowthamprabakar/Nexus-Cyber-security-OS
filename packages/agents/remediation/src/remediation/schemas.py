@@ -71,6 +71,8 @@ class RemediationActionType(StrEnum):
     K8S_PATCH_READ_ONLY_ROOT_FS = "remediation_k8s_patch_readOnlyRootFilesystem"
     K8S_PATCH_IMAGE_PULL_POLICY_ALWAYS = "remediation_k8s_patch_imagePullPolicy_Always"
     K8S_PATCH_DISABLE_PRIVILEGE_ESCALATION = "remediation_k8s_patch_disable_privilege_escalation"
+    # v0.2 (Cycle 16) — 2 new lowest-blast-radius action classes (Q1).
+    K8S_PATCH_DISABLE_PRIVILEGED_CONTAINER = "remediation_k8s_patch_disable_privileged_container"
 
 
 class RemediationMode(StrEnum):
