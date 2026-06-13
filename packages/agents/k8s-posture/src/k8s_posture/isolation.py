@@ -53,3 +53,24 @@ class ClusterScanSession:
                 f"resource from cluster {resource_cluster_id!r} in a scan bound to "
                 f"{self._cluster_id!r} — cross-cluster context leak forbidden (Q3/WI-K8)"
             )
+
+
+def resolve_cluster_context(
+    *,
+    in_cluster: bool,
+    kubeconfig: object | None,
+    manifest_dir: object | None,
+) -> str | None:
+    """The single cluster-context token for a scan's LIVE source, or None when offline.
+
+    Live sources carry a real cluster context the single-cluster invariant must guard:
+    ``in_cluster`` (the pod's own cluster) or ``kubeconfig`` (a named context). Offline sources
+    (kube-bench/Polaris feeds, or a ``manifest_dir`` of YAML) have no live cluster context, so the
+    invariant is N/A and this returns None.
+    """
+    if in_cluster:
+        return "in-cluster"
+    if kubeconfig is not None:
+        return str(kubeconfig)
+    del manifest_dir  # offline (manifest YAML / feeds) — no live cluster context
+    return None

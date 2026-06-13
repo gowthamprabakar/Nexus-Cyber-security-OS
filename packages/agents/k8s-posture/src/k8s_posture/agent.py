@@ -40,6 +40,10 @@ from shared.fabric.envelope import NexusEnvelope
 
 from k8s_posture import __version__ as agent_version
 from k8s_posture.dedup import dedupe_overlapping
+from k8s_posture.isolation import (
+    assert_single_cluster_context,
+    resolve_cluster_context,
+)
 from k8s_posture.normalizers.kube_bench import normalize_kube_bench
 from k8s_posture.normalizers.manifest import normalize_manifest
 from k8s_posture.normalizers.polaris import normalize_polaris
@@ -132,6 +136,16 @@ async def run(
             "manifest_dir, kubeconfig, and in_cluster are mutually exclusive — pick "
             "one workload source per run (Q6 / v0.3 Q2)"
         )
+
+    # Phase C SS2: for a LIVE-cluster scan, assert exactly one cluster context (Q3/WI-K8 — no
+    # cross-cluster leak), making assert_single_cluster_context load-bearing. Offline feed/manifest
+    # scans have no live cluster context, so the invariant is N/A. (Per-finding assert_belongs
+    # awaits a cluster_id on the finding schema — v0.3.)
+    _cluster_context = resolve_cluster_context(
+        in_cluster=in_cluster, kubeconfig=kubeconfig, manifest_dir=manifest_dir
+    )
+    if _cluster_context is not None:
+        assert_single_cluster_context([_cluster_context])
 
     registry = build_registry()
     model_pin = "deterministic"
