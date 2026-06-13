@@ -58,13 +58,14 @@ _AGENTS = _REPO / "packages" / "agents"
 _DRIVER_MODULES = ("agent.py", "normalizer.py")
 
 # Known registered-tool bypasses awaiting a dedicated fix task (debt, NOT
-# by-design). Surfaced by the P1 widened scan (v0.2 audit PR #622):
-# - vulnerability: tools/registry_scan.py (a v0.2 "live registry" module) calls
-#   the registered `trivy_image_scan` directly instead of via ctx.call_tool.
-#   It is a cloud-read bypass (no mutation) in a module not yet on the run()
-#   path; tracked as a P2/P3 follow-up to route it through the charter. Until
-#   then this entry keeps CI green while asserting the bypass still exists.
-PENDING_MIGRATION: set[str] = {"vulnerability"}
+# by-design). Surfaced by the P1 widened scan (v0.2 audit PR #622).
+#
+# Phase C SS4 (2026-06-13) emptied this set: the vulnerability bypass —
+# tools/registry_scan.py calling the registered `trivy_image_scan` directly —
+# was fixed by threading the active Charter through the registry-scan chain
+# (registry_scan -> {ecr,acr,gcr}_scan -> registry_pipeline) so Trivy now
+# dispatches via `ctx.call_tool` (ADR-016). No bypasses remain.
+PENDING_MIGRATION: set[str] = set()
 
 # By-design exemptions (NOT debt): the audit agent (F.6) is the always-on class
 # (ADR-007 v1.3) and reads the audit log directly, intentionally outside the
