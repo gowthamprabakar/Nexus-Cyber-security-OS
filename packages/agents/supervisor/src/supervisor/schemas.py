@@ -57,6 +57,7 @@ class TriggerSource(StrEnum):
     EVENTS_BUS = "events_bus"  # F.7 events.> subscription
     OPERATOR_CLI = "operator_cli"  # `supervisor schedule` or direct CLI
     SCHEDULED_QUEUE = "scheduled_queue"  # file-backed queue
+    CONTINUOUS = "continuous"  # per-tenant continuous scheduler (Phase C; A.0-orchestrated)
 
 
 class IncomingTask(BaseModel):

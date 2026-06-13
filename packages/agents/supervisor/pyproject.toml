@@ -8,6 +8,7 @@ dependencies = [
     "nexus-charter",
     "nexus-shared",
     "nexus-eval-framework",
+    "nexus-runtime",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
     "click>=8.1.0",
@@ -30,6 +31,7 @@ supervisor = "supervisor.cli:main"
 supervisor = "supervisor.eval_runner:SupervisorEvalRunner"
 
 [tool.uv.sources]
+nexus-runtime = { workspace = true }
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
 nexus-eval-framework = { workspace = true }

@@ -87,6 +87,7 @@ class Heartbeat:
         workspace_root: Path,
         routing_rules: Sequence[RoutingRule],
         events_source: EventsSource | None = None,
+        continuous_source: EventsSource | None = None,
         invoker: DelegationInvoker | None = None,
         tick_interval_seconds: float = DEFAULT_TICK_INTERVAL_SECONDS,
         max_ticks: int | None = None,
@@ -100,6 +101,10 @@ class Heartbeat:
         self._workspace_root = Path(workspace_root)
         self._routing_rules = tuple(routing_rules)
         self._events_source = events_source or make_no_op_events_source()
+        # Phase C SS1: the continuous (scheduler-driven) trigger source — A.0 orchestration. Same
+        # shape as the events source; default no-op preserves pre-Phase-C behaviour exactly. The
+        # supervisor wires a ContinuousTriggerSource (over nexus_runtime.ContinuousDriver) here.
+        self._continuous_source = continuous_source or make_no_op_events_source()
         self._invoker = invoker
         self._tick_interval_seconds = tick_interval_seconds
         self._max_ticks = max_ticks
@@ -134,7 +139,8 @@ class Heartbeat:
             self._workspace_root,
             customer_id=self._customer_id,
         )
-        triggers = list(events_triggers) + list(queued_triggers)
+        continuous_triggers = await self._continuous_source(self._customer_id)
+        triggers = list(events_triggers) + list(queued_triggers) + list(continuous_triggers)
         return await agent_run(
             customer_id=self._customer_id,
             workspace_root=self._workspace_root,
