@@ -41,6 +41,7 @@ writes.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,12 +56,14 @@ from supervisor.audit_emit import (
     emit_escalation_raised,
     emit_heartbeat_started,
 )
+from supervisor.contract_signing import assert_signed_contract, sign_delegation
 from supervisor.dispatch import DelegationInvoker, dispatch_parallel
 from supervisor.escalation import (
     build_delegation_escalation,
     build_routing_escalation,
     write_escalation_markdown,
 )
+from supervisor.hierarchy import SUPERVISOR_AGENT_ID, assert_no_peer_to_peer
 from supervisor.routing.router import route
 from supervisor.scheduled_queue import drain as drain_scheduled_queue
 from supervisor.schemas import (
@@ -115,6 +118,7 @@ async def run(
     semantic_store: Any | None = None,
     tick_id: str | None = None,
     concurrency: int = MAX_PARALLEL_DISPATCH,
+    signing_secret: bytes | None = None,
 ) -> SupervisorReport:
     """Run the 5-stage Supervisor pipeline for one tick.
 
@@ -137,6 +141,10 @@ async def run(
             omitted.
         concurrency: Per-customer dispatch concurrency cap;
             defaults to ``MAX_PARALLEL_DISPATCH = 5``.
+        signing_secret: HMAC key the supervisor signs each
+            ``DelegationContract`` with before dispatch (WI-O9).
+            Defaults to a freshly minted per-tick key; production
+            wires the shared key the specialists verify against.
 
     Returns:
         ``SupervisorReport`` with triggers + decisions + outcomes
@@ -177,8 +185,20 @@ async def run(
             contract_to_task[contract.delegation_id] = task
             contract_to_rule[contract.delegation_id] = decision.rule_id
 
-    # Stage 3 DISPATCH — emit dispatched audit entries first, then
-    # invoke under Semaphore(concurrency).
+    # Stage 3 DISPATCH — make the two supervisor invariants load-bearing before any
+    # contract leaves the supervisor. (a) assert_no_peer_to_peer proves the H2 hierarchy at
+    # code level (WI-O8): the supervisor (Agent #0) is the sole dispatch source, so a refactor
+    # that dispatched from a specialist would trip the guard rather than silently establishing a
+    # peer-to-peer path. (b) sign_delegation + assert_signed_contract make the HMAC tamper-
+    # evidence load-bearing (WI-O9): every dispatched contract carries a present + valid
+    # signature, so a specialist (and the F.6 audit trail) can detect in-flight tampering.
+    secret = signing_secret if signing_secret is not None else os.urandom(32)
+    for contract in contracts:
+        assert_no_peer_to_peer(SUPERVISOR_AGENT_ID, contract.target_agent)
+        signed = sign_delegation(contract, secret=secret)
+        assert_signed_contract(signed, secret=secret)
+
+    # Emit dispatched audit entries first, then invoke under Semaphore(concurrency).
     for contract in contracts:
         emit_delegation_dispatched(
             audit_log,
