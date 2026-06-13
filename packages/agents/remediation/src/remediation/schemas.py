@@ -1,4 +1,10 @@
-"""Remediation Agent schemas — OCSF v1.3 `class_uid 2007 Remediation Activity`.
+"""Remediation Agent schemas — Remediation Activity (`class_uid 2007`).
+
+NOTE (accuracy, per v0.2 quality audit PR #622): `class_uid 2007 "Remediation
+Activity"` is a **Nexus fleet extension**, NOT a class in the upstream OCSF v1.3
+schema (whose Findings category tops out at 2006). It is documented here for a
+future OCSF working-group alignment; the wire shape otherwise follows OCSF v1.3
+conventions (category_uid 2, metadata, finding_info, etc.).
 
 A.1 is the **first producer** of OCSF class 2007 in the platform. Downstream
 consumers (D.7 / fabric / Meta-Harness / S.1 console when shipped) subscribe to
@@ -47,7 +53,7 @@ from shared.fabric.envelope import NexusEnvelope, unwrap_ocsf, wrap_ocsf
 OCSF_VERSION = "1.3.0"
 OCSF_CATEGORY_UID = 2  # Findings
 OCSF_CATEGORY_NAME = "Findings"
-OCSF_CLASS_UID = 2007  # Remediation Activity (per OCSF v1.3)
+OCSF_CLASS_UID = 2007  # Remediation Activity (Nexus fleet extension; not in upstream OCSF v1.3)
 OCSF_CLASS_NAME = "Remediation Activity"
 OCSF_ACTIVITY_REMEDIATE = 1  # Apply
 OCSF_STATUS_NEW = 1

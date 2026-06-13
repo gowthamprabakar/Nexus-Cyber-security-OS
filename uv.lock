@@ -1588,7 +1588,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "nexus-curiosity-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/agents/curiosity" }
 dependencies = [
     { name = "click" },
