@@ -215,6 +215,7 @@ async def test_run_refuses_execute_without_authorization(
             _contract(tmp_path),
             findings_path=tmp_path / "findings.json",
             mode=RemediationMode.EXECUTE,
+            enable_execute=True,
             authorization=Authorization.recommend_only(),
         )
 
@@ -406,6 +407,7 @@ async def test_execute_mode_validated_runs_full_pipeline(
         _contract(tmp_path),
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=auth,
     )
     # 2 kubectl calls: dry-run + execute. No rollback.
@@ -434,11 +436,88 @@ async def test_execute_mode_rollback_when_finding_persists(
         _contract(tmp_path),
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=auth,
     )
     # 3 kubectl calls: dry-run, execute, rollback.
     assert len(captured["calls"]) == 3
     assert report.count_by_outcome()[RemediationOutcome.EXECUTED_ROLLED_BACK.value] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_invokes_safety_invariants_on_execute_rollback_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Phase C SS6 (Option alpha): an execute run that rolls back invokes the seven universal
+    safety invariants - tenant scope, the H1 dual-layer, blast-radius, action allowlist,
+    dry-run-first, tool-proxy, and mandatory rollback. Spy on names bound in remediation.agent."""
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(rule_id="run-as-root"),))
+    _patch_detector(monkeypatch, detector_output=(_manifest_finding(rule_id="run-as-root"),))
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value],
+    )
+
+    seen: list[str] = []
+    for name in (
+        "assert_tenant_scoped",
+        "assert_default_recommend",
+        "assert_blast_radius_capped",
+        "assert_action_allowlisted",
+        "assert_dry_run_before_execute",
+        "assert_tool_proxy_for_execute",
+        "assert_rollback_on_failed_validation",
+    ):
+        real = getattr(agent_mod, name)
+
+        def _spy(*args: object, _name: str = name, _real: object = real, **kwargs: object) -> None:
+            seen.append(_name)
+            _real(*args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(agent_mod, name, _spy)
+
+    await run(
+        _contract(tmp_path),
+        findings_path=tmp_path / "findings.json",
+        mode=RemediationMode.EXECUTE,
+        enable_execute=True,
+        authorization=auth,
+    )
+
+    assert {
+        "assert_tenant_scoped",
+        "assert_default_recommend",
+        "assert_blast_radius_capped",
+        "assert_action_allowlisted",
+        "assert_dry_run_before_execute",
+        "assert_tool_proxy_for_execute",
+        "assert_rollback_on_failed_validation",
+    } <= set(seen)
+
+
+@pytest.mark.asyncio
+async def test_run_execute_without_kill_switch_hard_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Phase C SS6: even with auth.yaml authorizing execute, run() refuses to mutate without the
+    kill-switch (enable_execute=False) — the H1 dual-layer is now load-bearing inside run()."""
+    from remediation.invariants.default_recommend import DefaultRecommendViolationError
+
+    _patch_executor(monkeypatch)
+    _patch_findings(monkeypatch, (_manifest_finding(),))
+    auth = Authorization(
+        mode_execute_authorized=True,
+        authorized_actions=[RemediationActionType.K8S_PATCH_RUN_AS_NON_ROOT.value],
+    )
+    with pytest.raises(DefaultRecommendViolationError):
+        await run(
+            _contract(tmp_path),
+            findings_path=tmp_path / "findings.json",
+            mode=RemediationMode.EXECUTE,
+            enable_execute=False,
+            authorization=auth,
+        )
 
 
 @pytest.mark.asyncio
@@ -458,6 +537,7 @@ async def test_execute_mode_execute_failure_skips_validate(
         _contract(tmp_path),
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=auth,
     )
     # 2 kubectl calls: dry-run + execute (no rollback; validate never ran).
@@ -483,6 +563,7 @@ async def test_all_seven_output_files_written(
         _contract(tmp_path),
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=auth,
     )
     workspace = tmp_path / "ws"
@@ -623,6 +704,7 @@ async def test_execute_routes_apply_patch_through_charter_audit(
         contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_execute_auth(),
     )
     tool_calls = [e for e in _audit_lines(contract) if e.get("action") == "tool_call"]
@@ -645,6 +727,7 @@ async def test_execute_pipeline_auditor_still_records(
         contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_execute_auth(),
     )
     actions = {e.get("action") for e in _audit_lines(contract)}
@@ -669,6 +752,7 @@ async def test_execute_consumes_cloud_budget_and_can_exhaust(
             contract,
             findings_path=tmp_path / "findings.json",
             mode=RemediationMode.EXECUTE,
+            enable_execute=True,
             authorization=_execute_auth(),
         )
     assert exc.value.dimension == "cloud_api_calls"
@@ -688,6 +772,7 @@ async def test_execute_refused_when_apply_patch_not_permitted(
             contract,
             findings_path=tmp_path / "findings.json",
             mode=RemediationMode.EXECUTE,
+            enable_execute=True,
             authorization=_execute_auth(),
         )
     assert exc.value.tool == "apply_patch"
@@ -706,6 +791,7 @@ async def test_execute_refused_when_apply_patch_forbidden(
             contract,
             findings_path=tmp_path / "findings.json",
             mode=RemediationMode.EXECUTE,
+            enable_execute=True,
             authorization=_execute_auth(),
         )
     assert exc.value.tool == "apply_patch"

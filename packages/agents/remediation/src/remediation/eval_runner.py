@@ -225,6 +225,10 @@ async def _run_case_async(
             mode=mode,
             authorization=auth,
             promotion=tracker,
+            # Phase C SS6: the eval harness simulates an authorized operator with the kill-switch
+            # engaged, so execute-mode cases exercise the full pipeline (the case's auth.yaml is
+            # the other H1 layer). recommend / dry-run cases ignore the flag.
+            enable_execute=True,
         )
 
 

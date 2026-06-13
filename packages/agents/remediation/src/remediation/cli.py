@@ -243,6 +243,9 @@ def run_cmd(
                 kubeconfig=kubeconfig,
                 in_cluster=in_cluster,
                 cluster_namespace=cluster_namespace,
+                # Phase C SS6: thread the kill-switch so run()'s H1 dual-layer (WI-A8) enforces it
+                # too; the UsageError above stays as the early operator-facing message.
+                enable_execute=enable_execute,
             )
         )
     except AuthorizationError as exc:
