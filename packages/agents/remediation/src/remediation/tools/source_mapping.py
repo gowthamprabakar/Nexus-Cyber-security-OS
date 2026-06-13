@@ -15,9 +15,18 @@ from remediation.action_classes import ACTION_CLASS_REGISTRY
 #: k8s-posture (D.6) is the primary source — its workload rule_ids are exactly A.1's action keys.
 K8S_POSTURE_ACTIONABLE_RULES: frozenset[str] = frozenset(ACTION_CLASS_REGISTRY)
 
-#: Per-source actionable-rule registry (Q3). Task 12 adds the F.3 + D.5 cloud-K8s entries.
+#: F.3 (EKS) + D.5 (AKS/GKE) surface workload-level K8s findings only when they scan a managed
+#: cluster's workloads; when such a finding carries a canonical workload rule_id (run-as-root,
+#: privileged-container, ...) A.1 can act on it exactly as for k8s-posture. Most cloud-posture
+#: findings are cluster/control-plane (IAM, networking, encryption) and match NO action class —
+#: those are correctly non-actionable here (honest WI-A3: the cloud-K8s overlap is thin).
+CLOUD_K8S_ACTIONABLE_RULES: frozenset[str] = K8S_POSTURE_ACTIONABLE_RULES
+
+#: Per-source actionable-rule registry (Q3, WI-A1 — per-source, never an aggregate).
 SOURCE_RULE_MAP: dict[str, frozenset[str]] = {
-    "k8s_posture": K8S_POSTURE_ACTIONABLE_RULES,
+    "k8s_posture": K8S_POSTURE_ACTIONABLE_RULES,  # D.6 — primary source
+    "cloud_posture": CLOUD_K8S_ACTIONABLE_RULES,  # F.3 — EKS workload findings
+    "multi_cloud_posture": CLOUD_K8S_ACTIONABLE_RULES,  # D.5 — AKS/GKE workload findings
 }
 
 
