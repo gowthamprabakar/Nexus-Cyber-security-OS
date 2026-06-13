@@ -42,6 +42,10 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from network_threat import __version__ as agent_version
+from network_threat.actions.temporary_ip_block import (
+    build_temporary_ip_blocks,
+    temporary_ip_blocks_to_json,
+)
 from network_threat.detectors.beacon import detect_beacon
 from network_threat.detectors.dga import detect_dga
 from network_threat.detectors.port_scan import detect_port_scan
@@ -185,6 +189,16 @@ async def run(
         ctx.write_output(
             "report.md",
             render_summary(report).encode("utf-8"),
+        )
+
+        # Phase C SS2: emit TTL-bounded IP-block proposals for HIGH/CRITICAL findings' public
+        # source IPs. Every block routes through assert_block_authorized (Q4/WI-N8/WI-N10),
+        # making that invariant load-bearing; private/invalid IPs are skipped by the guard.
+        # Additive artifact — findings.json is byte-identical.
+        ip_blocks = build_temporary_ip_blocks(findings, requested_at=scan_started)
+        ctx.write_output(
+            "ip_block_actions.json",
+            temporary_ip_blocks_to_json(ip_blocks).encode("utf-8"),
         )
 
         ctx.assert_complete()

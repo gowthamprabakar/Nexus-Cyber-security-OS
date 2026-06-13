@@ -11,14 +11,21 @@ Remediation cycle (WI-N9). `assert_block_authorized` is the **hard code-level gu
 from __future__ import annotations
 
 import ipaddress
-from dataclasses import dataclass
+import json
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+
+from network_threat.schemas import NetworkFinding, Severity
 
 #: The only action type authorized at v0.2.
 AUTHORIZED_ACTION_TYPE = "temporary_ip_block"
 
 #: IP block TTL hard cap (seconds) — per benchmark safety H5: blocks are never permanent.
 MAX_TTL_SECONDS = 3600
+
+#: Findings at these severities warrant a TTL-bounded block of their public source IP(s).
+_BLOCK_SEVERITIES = frozenset({Severity.HIGH, Severity.CRITICAL})
 
 
 class UnauthorizedNetworkActionError(RuntimeError):
@@ -98,3 +105,44 @@ def request_temporary_ip_block(
         requested_at=requested_at.isoformat(),
         expires_at=expires.isoformat(),
     )
+
+
+def build_temporary_ip_blocks(
+    findings: Sequence[NetworkFinding],
+    *,
+    requested_at: datetime,
+    ttl_seconds: int = MAX_TTL_SECONDS,
+) -> list[TemporaryIpBlock]:
+    """Emit a TTL-bounded block per public source IP of each HIGH/CRITICAL finding (Phase C SS2).
+
+    The run-flow integration point that makes ``assert_block_authorized`` load-bearing: every block
+    routes through ``request_temporary_ip_block`` -> ``assert_block_authorized``. A private/invalid
+    source IP is correctly NOT blockable at v0.2 (WI-N10) — the guard rejects it and we skip it, so
+    the guard stays authoritative rather than being pre-empted by a looser filter. Each public IP is
+    blocked at most once per run.
+    """
+    blocks: list[TemporaryIpBlock] = []
+    seen: set[str] = set()
+    for finding in findings:
+        if finding.severity not in _BLOCK_SEVERITIES:
+            continue
+        for src_ip in finding.src_ips:
+            if not src_ip or src_ip in seen:
+                continue
+            try:
+                block = request_temporary_ip_block(
+                    src_ip,
+                    ttl_seconds=ttl_seconds,
+                    reason=f"{finding.title} ({finding.finding_id})",
+                    requested_at=requested_at,
+                )
+            except UnauthorizedNetworkActionError:
+                continue  # private / invalid IP — not blockable at v0.2 (guard authoritative)
+            seen.add(src_ip)
+            blocks.append(block)
+    return blocks
+
+
+def temporary_ip_blocks_to_json(blocks: Sequence[TemporaryIpBlock]) -> str:
+    """Render TTL-bounded blocks as the additive ``ip_block_actions.json`` workspace artifact."""
+    return json.dumps([asdict(b) for b in blocks], indent=2)
