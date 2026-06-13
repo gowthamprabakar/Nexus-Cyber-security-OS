@@ -366,6 +366,7 @@ async def test_run_all_downgraded_execute_mode_emits_refused_for_stage2(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
         promotion=tracker,
     )
@@ -432,6 +433,7 @@ async def test_run_mixed_stages_emits_per_finding_split(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
         promotion=tracker,
     )
@@ -507,6 +509,7 @@ async def test_evidence_stage3_emitted_after_validated_execute(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
     )
 
@@ -530,6 +533,7 @@ async def test_evidence_unexpected_rollback_emitted_on_rollback_path(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
     )
 
@@ -574,6 +578,7 @@ async def test_backward_compat_promotion_none_skips_gate(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
         promotion=None,
     )
@@ -655,6 +660,7 @@ async def test_proof_refused_findings_invoke_zero_kubectl_calls(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,  # Stage-1 caps at recommend → all downgraded
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
         promotion=tracker,
     )
@@ -732,6 +738,7 @@ async def test_proof_per_finding_split_caps_cluster_contact_at_effective_mode(
         contract=contract,
         findings_path=tmp_path / "findings.json",
         mode=RemediationMode.EXECUTE,
+        enable_execute=True,
         authorization=_auth_for_mode(RemediationMode.EXECUTE),
         promotion=tracker,
     )

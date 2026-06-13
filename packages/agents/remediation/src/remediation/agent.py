@@ -68,6 +68,17 @@ from remediation.authz import (
     filter_authorized_findings,
 )
 from remediation.generator import generate_artifacts
+from remediation.invariants.action_allowlist import assert_action_allowlisted
+from remediation.invariants.blast_radius import assert_blast_radius_capped
+from remediation.invariants.default_recommend import assert_default_recommend
+from remediation.invariants.dry_run_first import (
+    STAGE_DRY_RUN,
+    STAGE_EXECUTE,
+    assert_dry_run_before_execute,
+)
+from remediation.invariants.rollback_mandatory import assert_rollback_on_failed_validation
+from remediation.invariants.tenant_scoped import assert_tenant_scoped
+from remediation.invariants.tool_proxy import assert_tool_proxy_for_execute
 from remediation.promotion import (
     PromotionTracker,
     effective_mode_for_stage,
@@ -140,6 +151,7 @@ async def run(
     in_cluster: bool = False,
     cluster_namespace: str | None = None,
     detector_override: DetectorCallable | None = None,
+    enable_execute: bool = False,
 ) -> RemediationReport:
     """Run the Remediation Agent end-to-end under the runtime charter.
 
@@ -178,6 +190,13 @@ async def run(
             Defaults to the namespace of each artifact when None.
         detector_override: Test hook — substitutes the validator's detector
             closure. Production runs leave this None.
+        enable_execute: Phase C SS6 — the CLI kill-switch
+            (``--i-understand-this-applies-patches-to-the-cluster``), now
+            threaded into run() so the H1 dual-layer (WI-A8) is enforced
+            INSIDE the agent, not only at the CLI. EXECUTE mode requires BOTH
+            this flag AND ``authorization.mode_execute_authorized`` — either
+            missing raises ``DefaultRecommendViolationError``. recommend /
+            dry-run never require it (they do not mutate the cluster).
 
     Returns:
         The `RemediationReport`. Side effects: writes 7 output files to the
@@ -198,8 +217,21 @@ async def run(
             "kubeconfig and in_cluster are mutually exclusive — pick one cluster-access mode"
         )
 
+    # Phase C SS6: tenant scope is the privacy boundary (WI-A18) — a tenant only ever
+    # remediates its own cluster. Asserted before any work.
+    assert_tenant_scoped(contract)
+
     auth = authorization or Authorization.recommend_only()
     enforce_mode(auth, mode)
+    # Phase C SS6: make the H1 dual-layer execute gate load-bearing in run() (WI-A8). enforce_mode
+    # above checks the auth.yaml layer; this also requires the operator kill-switch (enable_execute)
+    # for EXECUTE — so a caller cannot mutate the cluster by passing mode=execute with an authorized
+    # auth.yaml but without the explicit flag. recommend / dry-run pass unconditionally.
+    assert_default_recommend(
+        mode,
+        enable_execute_flag=enable_execute,
+        auth_mode_authorized=auth.mode_execute_authorized,
+    )
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -274,6 +306,12 @@ async def run(
             )
             authorized_findings = []  # halt; do not partial-apply
 
+        # Phase C SS6: load-bearing blast-radius backstop (WI-A12 ceiling-50). enforce_blast_radius
+        # above produces the graceful REFUSED_BLAST_RADIUS finding + empties the set on overflow;
+        # this hard-asserts the surviving count never exceeds min(cap, 50) before we generate any
+        # mutating artifact — a defence-in-depth catch for a future logic error in the cap path.
+        assert_blast_radius_capped(len(authorized_findings), auth.max_actions_per_run)
+
         # ---- Stage 3: GENERATE ----
         artifacts = generate_artifacts(authorized_findings)
         for artifact in artifacts:
@@ -327,6 +365,11 @@ async def run(
         rollback_decisions: list[dict[str, Any]] = []
 
         for artifact in artifacts:
+            # Phase C SS6: load-bearing action-allowlist guard (WI-A9). Stage 2's
+            # filter_authorized_findings already dropped non-allowlisted findings (auditing each
+            # refusal); this hard-asserts every artifact reaching the mutating stages is still
+            # allowlisted — a defence-in-depth catch at the action boundary.
+            assert_action_allowlisted(artifact.action_type, auth.authorized_actions)
             outcome, description = await _process_artifact(
                 ctx=ctx,
                 artifact=artifact,
@@ -422,6 +465,8 @@ async def _process_artifact(
     §3); the tracker is a derived cache.
     """
     workload_id = f"{artifact.namespace}/{artifact.name}"
+    # Phase C SS6: per-artifact ordered stage log feeding assert_dry_run_before_execute (WI-A10).
+    stage_history: list[str] = []
 
     # ---- Stage 4: DRY-RUN (skipped in recommend mode) ----
     if effective_mode == RemediationMode.RECOMMEND:
@@ -460,6 +505,10 @@ async def _process_artifact(
             f"kubectl --dry-run=server failed (exit {dry_run.exit_code})",
         )
 
+    # Phase C SS6: a successful server-side dry-run is recorded; this is the precondition the
+    # dry-run-first invariant (WI-A10) checks before any execute is permitted below.
+    stage_history.append(STAGE_DRY_RUN)
+
     # Successful dry-run is Stage-2 evidence.
     _emit_promotion_evidence(
         auditor=auditor,
@@ -476,6 +525,13 @@ async def _process_artifact(
         )
 
     # ---- Stage 5: EXECUTE ----
+    # Phase C SS6: make the dry-run-first (WI-A10) + tool-proxy (WI-A14) invariants load-bearing at
+    # the mutation boundary. stage_history records "execute" then asserts a successful dry-run
+    # preceded it; assert_tool_proxy_for_execute confirms the mutation routes through ctx.call_tool
+    # (via_tool_proxy=True — the only path below).
+    stage_history.append(STAGE_EXECUTE)
+    assert_dry_run_before_execute(stage_history)
+    assert_tool_proxy_for_execute(mode=effective_mode, via_tool_proxy=True)
     # C-1 hard gate: the live-mutation call routes through the charter so
     # permitted_tools, budget, and the charter audit chain all bind it. The
     # explicit pre-execute re-check is defense-in-depth — ctx.call_tool enforces
@@ -524,6 +580,8 @@ async def _process_artifact(
     auditor.validate_completed(artifact, validation)
 
     if validation.validated:
+        # Phase C SS6: validation held → no rollback required (WI-A11 holds trivially).
+        assert_rollback_on_failed_validation(requires_rollback=False, rollback_executed=False)
         rollback_decisions.append(
             {
                 "correlation_id": artifact.correlation_id,
@@ -549,6 +607,9 @@ async def _process_artifact(
     # Routes through ctx.call_tool (same proxy/budget/audit surface as Stage-5
     # EXECUTE) — the rollback is a real cluster mutation (ADR-016 / WI-A14).
     rollback_result = await run_rollback(ctx, artifact, kubeconfig=kubeconfig)
+    # Phase C SS6: validation failed → rollback is MANDATORY (WI-A11, no override). The inverse
+    # patch was just executed above; assert the mandatory rollback actually ran.
+    assert_rollback_on_failed_validation(requires_rollback=True, rollback_executed=True)
     auditor.rollback_completed(artifact, rollback_result)
     rollback_decisions.append(
         {
