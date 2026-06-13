@@ -1,0 +1,25 @@
+# Live-lane CI — SAFETY-CRITICAL class (representative: A.1 remediation). workflow_dispatch ONLY.
+# Exercises the full 7-stage pipeline (execute + rollback) against a real `kind` cluster.
+name: live-safety-critical
+on:
+  workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: 'Extra pytest args'
+        required: false
+        default: 'packages/agents/remediation'
+jobs:
+  live-safety-critical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.11.1'
+      - run: uv python install 3.12
+      - run: uv sync --all-extras --all-packages
+      - name: run safety-critical live lane (NEXUS_LIVE_K8S + NEXUS_LIVE_REMEDIATION)
+        env:
+          NEXUS_LIVE_K8S: '1'
+          NEXUS_LIVE_REMEDIATION: '1'
+        run: uv run pytest ${{ github.event.inputs.pytest_args }} -v --no-cov
