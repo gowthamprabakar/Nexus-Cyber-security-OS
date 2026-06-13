@@ -1,0 +1,31 @@
+# Live-lane CI — STANDARD detect class (representative: F.3 cloud-posture).
+#
+# workflow_dispatch ONLY (Phase C SS1 decision): operator-triggered, never on push, so the standard
+# push/PR CI never goes red for missing cloud credentials. Configure the referenced repo secrets
+# before running; without them the lane's reachability probes skip (gated on NEXUS_LIVE_AWS + a live
+# AWS/localstack endpoint).
+name: live-standard
+on:
+  workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: 'Extra pytest args (e.g. a specific test path)'
+        required: false
+        default: 'packages/agents/cloud-posture'
+jobs:
+  live-standard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.11.1'
+      - run: uv python install 3.12
+      - run: uv sync --all-extras --all-packages
+      - name: run standard live lane (NEXUS_LIVE_AWS)
+        env:
+          NEXUS_LIVE_AWS: '1'
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: uv run pytest ${{ github.event.inputs.pytest_args }} -v --no-cov

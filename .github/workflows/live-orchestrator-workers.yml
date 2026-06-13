@@ -1,0 +1,27 @@
+# Live-lane CI — ORCHESTRATOR-WORKERS class (representative: D.7 investigation). workflow_dispatch ONLY.
+name: live-orchestrator-workers
+on:
+  workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: 'Extra pytest args'
+        required: false
+        default: 'packages/agents/investigation'
+jobs:
+  live-orchestrator-workers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.11.1'
+      - run: uv python install 3.12
+      - run: uv sync --all-extras --all-packages
+      - name: run orchestrator-workers live lane (NEXUS_LIVE_INVESTIGATION)
+        env:
+          NEXUS_LIVE_INVESTIGATION: '1'
+          NEXUS_LLM_PROVIDER: ${{ secrets.NEXUS_LLM_PROVIDER }}
+          NEXUS_LLM_MODEL_PIN: ${{ secrets.NEXUS_LLM_MODEL_PIN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: uv run pytest ${{ github.event.inputs.pytest_args }} -v --no-cov
