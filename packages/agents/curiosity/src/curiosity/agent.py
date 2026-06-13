@@ -56,15 +56,20 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 from ulid import ULID
 
+from curiosity.claims.producer_only import assert_no_claims_subscription
 from curiosity.claims_publisher import publish_claims
 from curiosity.entities import HypothesisEntity
+from curiosity.gate.llm_gate import assert_llm_only_with_gaps
 from curiosity.hypothesizer import (
     DEFAULT_MODEL_PIN,
     HypothesizerError,
     hypothesize,
 )
 from curiosity.kg_writer import upsert_hypotheses
+from curiosity.ocsf.claim_translator import coverage_gap_id
 from curiosity.ocsf.emission import render_curiosity_findings_json
+from curiosity.privacy.categorical import assert_categorical_only
+from curiosity.retry.bounded import assert_bounded_retry
 from curiosity.reviewer import RETRY_HINT_Q6, review
 from curiosity.schemas import (
     CuriosityClaim,
@@ -73,14 +78,22 @@ from curiosity.schemas import (
     Hypothesis,
     ProbeDirective,
 )
+from curiosity.tenant.scoped import assert_tenant_scoped
 from curiosity.tools.coverage_gap_detector import detect_coverage_gaps
 from curiosity.tools.sibling_state_reader import read_sibling_state
+from curiosity.validation.coverage_gap_cited import assert_coverage_gap_cited
 
 _LOG = logging.getLogger(__name__)
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 _AGENT_ID = "curiosity"
 _Q6_RETRY_BUDGET = 1
+
+#: Phase C SS5: D.12 is producer-only (publishes claims.curiosity.>, never subscribes to
+#: claims.>). The fabric subjects it subscribes to — currently NONE — are declared here so
+#: assert_no_claims_subscription can enforce the producer-only fence (WI-X14) at run() time:
+#: a regression that added a claims.* subscription to this tuple would trip the guard.
+_SUBSCRIPTION_SUBJECTS: tuple[str, ...] = ()
 
 
 def build_registry() -> ToolRegistry:
@@ -139,6 +152,10 @@ async def run(
         SemanticStore and publishes ``CuriosityClaim`` payloads on
         ``claims.>``.
     """
+    # Phase C SS5: tenant scope is the privacy boundary (WI-X13) — assert before any
+    # cross-agent state is read. Cross-tenant aggregation is forbidden by the contract, always.
+    assert_tenant_scoped(contract)
+
     registry = build_registry()
     correlation_id = new_correlation_id()
 
@@ -156,6 +173,11 @@ async def run(
         # Stage 2: DETECT — deterministic region-gap detection.
         gaps = detect_coverage_gaps(state)
 
+        # Phase C SS5: cost-discipline gate (WI-X15) — the LLM may only run when ≥1 gap was
+        # detected. The hypothesizer short-circuits to an empty draft on no gaps, so llm_called
+        # tracks bool(gaps); the guard makes that contract load-bearing at the driver boundary.
+        assert_llm_only_with_gaps(gaps, llm_called=bool(gaps))
+
         # Stages 3-4: HYPOTHESIZE + REVIEW with Q6 retry loop.
         draft, retry_count = await _hypothesize_and_review(
             llm_provider=llm_provider,
@@ -163,12 +185,31 @@ async def run(
             model_pin=model_pin,
         )
 
+        # Phase C SS5: bounded-retry invariant (WI-X10). attempts = initial + retries; the loop
+        # caps retries at _Q6_RETRY_BUDGET, so a runaway would trip the bound here.
+        assert_bounded_retry(retry_count + 1)
+
         # Stage 5: PERSIST — SemanticStore upsert (Q5 opt-in).
         # Stage 6: PUBLISH — claims.> fabric emit (Q5 opt-in).
         # Build the claims first so PERSIST + PUBLISH share the same
         # claim_id per hypothesis.
         claims = _build_claims(draft=draft, contract=contract)
         entities = _build_entities(claims=claims, contract=contract)
+
+        # Phase C SS5: make the generative-hallucination + categorical guards load-bearing per
+        # claim, before anything is persisted or published. assert_coverage_gap_cited (WI-X11)
+        # hard-blocks a hypothesis citing a gap that was not in the detected set; assert_
+        # categorical_only (WI-X9) hard-blocks plaintext PII in the statement/rationale.
+        detected_gaps = {coverage_gap_id(gap) for gap in gaps}
+        for claim in claims:
+            assert_coverage_gap_cited(claim.hypothesis, detected_gaps)
+            assert_categorical_only(claim.hypothesis.statement)
+            assert_categorical_only(claim.hypothesis.rationale)
+
+        # Phase C SS5: producer-only fence (WI-X14) — D.12 publishes claims.curiosity.> and must
+        # never subscribe to claims.>. Assert the declared subscription set carries no claims.*
+        # subject before any fabric I/O.
+        assert_no_claims_subscription(_SUBSCRIPTION_SUBJECTS)
 
         await upsert_hypotheses(semantic_store=semantic_store, entities=entities)
         await publish_claims(js_client=js_client, claims=claims)
