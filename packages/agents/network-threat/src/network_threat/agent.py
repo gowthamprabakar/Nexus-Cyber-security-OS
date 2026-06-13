@@ -69,12 +69,20 @@ from network_threat.summarizer import render_summary
 from network_threat.tools.dns_log_reader import read_dns_logs
 from network_threat.tools.suricata_reader import read_suricata_alerts
 from network_threat.tools.vpc_flow_reader import read_vpc_flow_logs
+from network_threat.tools.vpc_flow_realtime_aws import read_vpc_flow_live
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
 
 def build_registry() -> ToolRegistry:
-    """Compose the tool universe available to this agent."""
+    """Compose the tool universe available to this agent.
+
+    Phase C SS4: ``read_vpc_flow_live`` is registered so the v0.2 live CloudWatch VPC-flow
+    poller dispatches through the charter proxy (ADR-016) and ``run()`` can route to a live
+    log group behind a guarded flag. cloud_calls=1 (CloudWatch filter_log_events). The Suricata
+    + Zeek REALTIME subscribers are continuous/streaming infrastructure (SS1 ContinuousDriver
+    territory), not request/response tools, so they are intentionally NOT registered here.
+    """
     reg = ToolRegistry()
     reg.register(
         "read_suricata_alerts",
@@ -93,6 +101,12 @@ def build_registry() -> ToolRegistry:
         read_dns_logs,
         version="0.1.0",
         cloud_calls=0,
+    )
+    reg.register(
+        "read_vpc_flow_live",
+        read_vpc_flow_live,
+        version="0.2.0",
+        cloud_calls=1,
     )
     return reg
 
@@ -120,6 +134,9 @@ async def run(
     suricata_feed: Path | str | None = None,
     vpc_flow_feed: Path | str | None = None,
     dns_feed: Path | str | None = None,
+    vpc_flow_log_group: str | None = None,
+    aws_profile: str | None = None,
+    aws_region: str = "us-east-1",
 ) -> FindingsReport:
     """Run the Network Threat Agent end-to-end under the runtime charter.
 
@@ -131,6 +148,12 @@ async def run(
             Skipped if None.
         dns_feed: Optional path to a DNS log file (BIND text or Route 53 JSON).
             Skipped if None.
+        vpc_flow_log_group: Phase C SS4 guarded live route. When set, the VPC
+            flow source is a live CloudWatch Logs group polled via
+            ``read_vpc_flow_live`` (boto3) instead of ``vpc_flow_feed`` —
+            mutually exclusive with it. Suricata/DNS still come from feeds.
+        aws_profile: Optional boto3 profile for the live VPC-flow poll.
+        aws_region: AWS region for the live VPC-flow poll (default us-east-1).
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -138,6 +161,12 @@ async def run(
         log at `audit.jsonl`.
     """
     del llm_provider  # reserved for future iterations
+
+    if vpc_flow_log_group is not None and vpc_flow_feed:
+        raise ValueError(
+            "vpc_flow_log_group is mutually exclusive with vpc_flow_feed — pick the live "
+            "CloudWatch route or the file feed (Phase C SS4)"
+        )
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -147,12 +176,15 @@ async def run(
         scan_started = datetime.now(UTC)
         envelope = _envelope(contract, correlation_id=correlation_id, model_pin=model_pin)
 
-        # Stage 1: INGEST — three feeds concurrent.
+        # Stage 1: INGEST — three feeds concurrent (VPC flow may come from a live group).
         suricata_alerts, flow_records, dns_events = await _ingest(
             ctx,
             suricata_feed=suricata_feed,
             vpc_flow_feed=vpc_flow_feed,
             dns_feed=dns_feed,
+            vpc_flow_log_group=vpc_flow_log_group,
+            aws_profile=aws_profile,
+            aws_region=aws_region,
         )
 
         # Stage 2: PATTERN_DETECT — three deterministic detectors over the parsed feeds.
@@ -215,19 +247,38 @@ async def _ingest(
     suricata_feed: Path | str | None,
     vpc_flow_feed: Path | str | None,
     dns_feed: Path | str | None,
+    vpc_flow_log_group: str | None = None,
+    aws_profile: str | None = None,
+    aws_region: str = "us-east-1",
 ) -> tuple[Sequence[SuricataAlert], Sequence[FlowRecord], Sequence[DnsEvent]]:
-    """Stage 1 — fan out the three feeds via TaskGroup. Skipped feeds → empty tuple."""
+    """Stage 1 — fan out the feeds via TaskGroup. Skipped sources → empty tuple.
+
+    Phase C SS4: the VPC-flow source is the live ``read_vpc_flow_live`` CloudWatch poll when
+    ``vpc_flow_log_group`` is set (making that reader load-bearing through the charter),
+    otherwise the offline ``read_vpc_flow_logs`` file feed. Both yield FlowRecord tuples, so
+    downstream detection is source-agnostic.
+    """
     async with asyncio.TaskGroup() as tg:
         suricata_task = (
             tg.create_task(ctx.call_tool("read_suricata_alerts", path=Path(suricata_feed)))
             if suricata_feed
             else None
         )
-        flow_task = (
-            tg.create_task(ctx.call_tool("read_vpc_flow_logs", path=Path(vpc_flow_feed)))
-            if vpc_flow_feed
-            else None
-        )
+        if vpc_flow_log_group is not None:
+            flow_task = tg.create_task(
+                ctx.call_tool(
+                    "read_vpc_flow_live",
+                    log_group=vpc_flow_log_group,
+                    profile=aws_profile,
+                    region=aws_region,
+                )
+            )
+        elif vpc_flow_feed:
+            flow_task = tg.create_task(
+                ctx.call_tool("read_vpc_flow_logs", path=Path(vpc_flow_feed))
+            )
+        else:
+            flow_task = None
         dns_task = (
             tg.create_task(ctx.call_tool("read_dns_logs", path=Path(dns_feed)))
             if dns_feed
