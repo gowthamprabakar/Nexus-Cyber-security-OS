@@ -255,28 +255,30 @@ async def test_q6_retry_succeeds_on_second_pass(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_q6_retry_budget_exhausted_accepts_degraded(tmp_path: Path) -> None:
-    """Q6 violation persists across both passes; driver accepts the
-    degraded draft (review_retries=1) and logs a warning."""
+async def test_q6_retry_budget_exhausted_plaintext_pii_hard_fails(tmp_path: Path) -> None:
+    """Phase C SS5: a degraded draft that STILL leaks plaintext PII after the retry budget is
+    now hard-blocked by the load-bearing assert_categorical_only (WI-Y8) — the run raises and no
+    narrative is written, rather than the pre-SS5 behaviour of accepting + writing the leak."""
+    from synthesis.privacy.categorical import CategoricalContractViolationError
+
     contract = _contract(tmp_path)
     leak_outline = _outline_json(sections=1)
     responses = [
         _resp(leak_outline),
         _resp("Bucket contained 123-45-6789 — an SSN."),
         _resp(_exec_summary_json()),
-        # Retry still leaks
+        # Retry still leaks an actual SSN value.
         _resp(leak_outline),
         _resp("Still leaking 987-65-4321 — another SSN."),
         _resp(_exec_summary_json()),
     ]
     provider = FakeLLMProvider(responses)
 
-    report = await run(contract, llm_provider=provider)
+    with pytest.raises(CategoricalContractViolationError):
+        await run(contract, llm_provider=provider)
 
-    assert report.review_retries == 1
-    # Driver still wrote the markdown files (degraded but legal).
-    narrative = Path(contract.workspace) / "narrative.md"
-    assert narrative.exists()
+    # The invariant fires BEFORE write_output — no PII-bearing artifact reaches disk.
+    assert not (Path(contract.workspace) / "narrative.md").exists()
 
 
 # ---------------------------------------------------------------------------
