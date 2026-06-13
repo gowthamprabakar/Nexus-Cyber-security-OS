@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
+import curiosity.agent as agent_mod
 import pytest
 from charter.contract import BudgetSpec, ExecutionContract
 from charter.llm import FakeLLMProvider, LLMResponse, TokenUsage
@@ -191,6 +192,46 @@ async def test_happy_path_emits_claim_persists_and_publishes(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_run_invokes_all_six_invariants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase C SS5: a real run invokes all six D.12 invariants — tenant scope, the LLM gate,
+    bounded retry, the producer-only fence, and the per-claim coverage-gap + categorical guards."""
+    contract = _contract(tmp_path)
+    store = _make_semantic_store(region_entities=[_region_entity("us-east-1", asset_count=42)])
+    js = _make_js_client()
+    provider = FakeLLMProvider([_resp(_valid_hypothesis_json(count=1))])
+
+    seen: list[str] = []
+    for name in (
+        "assert_tenant_scoped",
+        "assert_llm_only_with_gaps",
+        "assert_bounded_retry",
+        "assert_no_claims_subscription",
+        "assert_coverage_gap_cited",
+        "assert_categorical_only",
+    ):
+        real = getattr(agent_mod, name)
+
+        def _spy(*args: object, _name: str = name, _real: object = real, **kwargs: object) -> None:
+            seen.append(_name)
+            _real(*args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(agent_mod, name, _spy)
+
+    await run(contract, llm_provider=provider, semantic_store=store, js_client=js)
+
+    assert {
+        "assert_tenant_scoped",
+        "assert_llm_only_with_gaps",
+        "assert_bounded_retry",
+        "assert_no_claims_subscription",
+        "assert_coverage_gap_cited",
+        "assert_categorical_only",
+    } <= set(seen)
+
+
+@pytest.mark.asyncio
 async def test_markdown_and_json_files_written(tmp_path: Path) -> None:
     contract = _contract(tmp_path)
     store = _make_semantic_store(region_entities=[_region_entity("us-east-1")])
@@ -294,8 +335,12 @@ async def test_q6_retry_succeeds_on_second_pass(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_q6_retry_budget_exhausted_accepts_degraded(tmp_path: Path) -> None:
-    """Both passes leak — driver accepts degraded draft, review_retries=1."""
+async def test_q6_retry_budget_exhausted_plaintext_pii_hard_fails(tmp_path: Path) -> None:
+    """Phase C SS5: a degraded draft that STILL leaks plaintext PII after the retry budget is now
+    hard-blocked by the load-bearing assert_categorical_only (WI-X9) — the run raises before any
+    claim is persisted/published or any markdown is written, instead of the pre-SS5 accept."""
+    from curiosity.privacy.categorical import CategoricalContractViolationError
+
     contract = _contract(tmp_path)
     store = _make_semantic_store(region_entities=[_region_entity("us-east-1")])
 
@@ -324,12 +369,11 @@ async def test_q6_retry_budget_exhausted_accepts_degraded(tmp_path: Path) -> Non
     }
     provider = FakeLLMProvider([_resp(json.dumps(leaky)), _resp(json.dumps(leaky))])
 
-    report = await run(contract, llm_provider=provider, semantic_store=store)
+    with pytest.raises(CategoricalContractViolationError):
+        await run(contract, llm_provider=provider, semantic_store=store)
 
-    assert report.review_retries == 1  # budget=1, exhausted
-    # Workspace files still produced (degraded but legal)
-    md = Path(contract.workspace) / "hypotheses.md"
-    assert md.exists()
+    # The invariant fires before write_output / publish — no PII-bearing artifact reaches disk.
+    assert not (Path(contract.workspace) / "hypotheses.md").exists()
 
 
 # ---------------------------------------------------------------------------
