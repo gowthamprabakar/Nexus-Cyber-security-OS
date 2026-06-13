@@ -152,6 +152,10 @@ class RemediationArtifact(BaseModel):
     source_finding_uid: str = Field(min_length=1)
     # Idempotency key — same source finding → same correlation_id → same artifact.
     correlation_id: str = Field(min_length=1)
+    # Phase C SS6 (WI-A17): path to the source manifest, carried so the auto-mount-disable
+    # safety guard can read the pod spec (serviceAccountName + containers) at run() time.
+    # Empty when the finding had no manifest path (e.g. a live-cluster source — v0.3).
+    source_manifest_path: str = Field(default="")
 
 
 # ---------------------------- typed OCSF wrapper ---------------------------
