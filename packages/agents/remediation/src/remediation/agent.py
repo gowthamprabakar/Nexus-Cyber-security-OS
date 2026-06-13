@@ -81,6 +81,7 @@ from remediation.invariants.dry_run_first import (
     STAGE_EXECUTE,
     assert_dry_run_before_execute,
 )
+from remediation.invariants.idempotent_scoped import assert_idempotent_workspace_scoped
 from remediation.invariants.privileged_authz import assert_privileged_action_extra_authz
 from remediation.invariants.rollback_mandatory import assert_rollback_on_failed_validation
 from remediation.invariants.tenant_scoped import assert_tenant_scoped
@@ -387,6 +388,15 @@ async def run(
                 action_type=artifact.action_type,
                 service_account_name=sa_name,
                 containers=containers,
+            )
+            # Phase C SS6 (PR3, WI-A13/H6): idempotent + workspace-scoped. The correlation_id must
+            # be the deterministic hash-derived id (so re-running a finding never double-applies)
+            # and the per-action artifact file must land inside the contract workspace.
+            assert_idempotent_workspace_scoped(
+                correlation_id=artifact.correlation_id,
+                source_finding_id=artifact.source_finding_uid,
+                artifact_path=workspace / "artifacts" / f"{artifact.correlation_id}.json",
+                workspace_root=workspace,
             )
             outcome, description = await _process_artifact(
                 ctx=ctx,
