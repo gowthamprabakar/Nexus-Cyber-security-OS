@@ -60,6 +60,8 @@ from synthesis.narrator import (
     narrate,
 )
 from synthesis.ocsf.emission import SYNTHESIS_FINDING_OUTPUT, build_synthesis_finding_json
+from synthesis.privacy.categorical import assert_categorical_only
+from synthesis.retry.bounded import assert_bounded_retry
 from synthesis.reviewer import RETRY_HINT_Q6, review
 from synthesis.schemas import (
     ContextBundle,
@@ -71,6 +73,7 @@ from synthesis.schemas import (
     SynthesisReport,
 )
 from synthesis.tools.sibling_workspace_reader import read_sibling_workspaces
+from synthesis.validation.hallucination_guard import assert_findings_cited
 
 _LOG = logging.getLogger(__name__)
 
@@ -175,6 +178,11 @@ async def run(
             model_pin=model_pin,
         )
 
+        # Phase C SS5: make the bounded-retry invariant load-bearing (WI-Y10). attempts =
+        # initial + retries; the loop caps retries at _Q6_RETRY_BUDGET, so a future change that
+        # let the loop run away would trip the H5 bound here rather than silently overspending.
+        assert_bounded_retry(retry_count + 1)
+
         # Stage 5: SUMMARIZE — assemble the SynthesisReport.
         scan_completed = datetime.now(UTC)
         report = _assemble_report(
@@ -189,6 +197,18 @@ async def run(
         # Stage 6: HANDOFF — write markdown files; optional KG upsert.
         narrative_md = _render_narrative_md(report)
         exec_summary_md = _render_executive_summary_md(report)
+
+        # Phase C SS5: make the two LLM-output invariants load-bearing on the rendered
+        # narrative, before any artifact is written. assert_categorical_only (WI-Y8) hard-blocks
+        # plaintext PII/PAN leaking into the narrative or summary; assert_findings_cited (WI-Y13
+        # hallucination guard) hard-blocks narrative prose that cites a finding id beyond the
+        # report's validated citation set (the outline-selected ids the reviewer accepted) — so
+        # an LLM that invents an id in its free text trips the guard. Validation-only — the
+        # rendered bytes are unchanged, so the stub eval cases stay byte-identical (WI-Y5).
+        assert_categorical_only(narrative_md)
+        assert_categorical_only(exec_summary_md)
+        assert_findings_cited(narrative_md, set(report.cited_finding_ids))
+
         ctx.write_output("narrative.md", narrative_md.encode("utf-8"))
         ctx.write_output("executive_summary.md", exec_summary_md.encode("utf-8"))
         # v0.2 Task 4 (Q1): additive OCSF 2004 emission alongside the markdown artifacts.
