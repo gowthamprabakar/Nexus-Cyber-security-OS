@@ -59,6 +59,14 @@ class ContinuousDriver:
     def agents(self) -> tuple[str, ...]:
         return tuple(self._schedulers)
 
+    def mark_ran(self, agent_id: str, tenant_id: str, *, at: datetime) -> None:
+        """Mark one (agent, tenant) run as completed via its registered scheduler.
+
+        Used by trigger-source style integrations (e.g. the supervisor's per-customer heartbeat)
+        that dispatch the run themselves rather than through ``tick``'s dispatch callable.
+        """
+        self._schedulers[agent_id].mark_ran(tenant_id, at=at)
+
     def due_runs(self, now: datetime) -> list[DueRun]:
         """The flat, deterministic list of due (agent, tenant) runs at ``now`` — agents in
         registration order, tenants in each scheduler's ``due`` order."""
