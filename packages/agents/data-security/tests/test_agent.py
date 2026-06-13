@@ -114,10 +114,11 @@ def _private_bucket_dict(name: str = "private") -> dict:
 # ---------------------------------------------------------------------------
 
 
-def test_build_registry_has_three_tools() -> None:
+def test_build_registry_has_expected_tools() -> None:
     reg = build_registry()
     names = sorted(reg.known_tools())
-    assert names == ["read_f3_findings", "read_s3_inventory", "read_s3_objects"]
+    # Phase C SS4 added scan_s3_live (the guarded live S3 route).
+    assert names == ["read_f3_findings", "read_s3_inventory", "read_s3_objects", "scan_s3_live"]
 
 
 # ---------------------------------------------------------------------------

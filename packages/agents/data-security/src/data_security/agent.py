@@ -75,16 +75,24 @@ from data_security.tools import (
     read_s3_inventory,
     read_s3_objects,
 )
+from data_security.tools.s3_live_scan import scan_s3_live
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
 
 def build_registry() -> ToolRegistry:
-    """Compose the tool universe available to this agent."""
+    """Compose the tool universe available to this agent.
+
+    Phase C SS4: ``scan_s3_live`` is registered so the v0.2 live S3 readers dispatch through
+    the charter proxy (ADR-016) — budget/audit/permission bound — and ``run()`` can route to a
+    live AWS account behind a guarded flag. cloud_calls=1 (boto3 list/get calls). The Azure
+    Blob + GCS live readers stay client-injected + ungoverned until their SDKs land (v0.3).
+    """
     reg = ToolRegistry()
     reg.register("read_s3_inventory", read_s3_inventory, version="0.1.0", cloud_calls=0)
     reg.register("read_s3_objects", read_s3_objects, version="0.1.0", cloud_calls=0)
     reg.register("read_f3_findings", read_f3_findings, version="0.1.0", cloud_calls=0)
+    reg.register("scan_s3_live", scan_s3_live, version="0.2.0", cloud_calls=1)
     return reg
 
 
@@ -110,6 +118,9 @@ async def run(
     llm_provider: LLMProvider | None = None,  # plumbed; not called in v0.1
     s3_inventory_feed: Path | str | None = None,
     s3_objects_feed: Path | str | None = None,
+    live_s3_account_id: str | None = None,
+    aws_profile: str | None = None,
+    aws_region: str | None = None,
     cloud_posture_workspace: Path | str | None = None,
     trusted_sensitivity_tag: str = "Restricted",
 ) -> FindingsReport:
@@ -123,6 +134,13 @@ async def run(
         s3_objects_feed: Optional S3 object-sample JSON path. Skipped if
             None; detectors run without classifier signal (no CRITICAL
             uplift via classifier).
+        live_s3_account_id: Phase C SS4 guarded live route. When set, INGEST
+            scans a live AWS account via ``scan_s3_live`` (boto3) instead of
+            the JSON feeds — mutually exclusive with ``s3_inventory_feed`` /
+            ``s3_objects_feed``. Azure/GCS live routing is a v0.3 deliverable
+            (their SDKs are not yet dependencies).
+        aws_profile: Optional boto3 profile name for the live S3 route.
+        aws_region: Optional AWS region for the live S3 route.
         cloud_posture_workspace: Optional path to a sibling F.3 workspace
             directory containing ``findings.json`` (Q4). When present,
             Stage 4 CORRELATE runs and Stage 5 SCORE uplifts severity for
@@ -138,6 +156,12 @@ async def run(
     """
     del llm_provider  # reserved for future iterations
 
+    if live_s3_account_id is not None and (s3_inventory_feed or s3_objects_feed):
+        raise ValueError(
+            "live_s3_account_id is mutually exclusive with s3_inventory_feed / "
+            "s3_objects_feed — pick the live AWS route or the JSON feeds (Phase C SS4)"
+        )
+
     registry = build_registry()
     model_pin = "deterministic"
     correlation_id = new_correlation_id()
@@ -146,11 +170,14 @@ async def run(
         scan_started = datetime.now(UTC)
         envelope = _envelope(contract, correlation_id=correlation_id, model_pin=model_pin)
 
-        # Stage 1 — INGEST: two feeds concurrent via TaskGroup.
+        # Stage 1 — INGEST: live AWS account (SS4 guarded route) or the JSON feeds.
         buckets, samples = await _ingest(
             ctx,
             s3_inventory_feed=s3_inventory_feed,
             s3_objects_feed=s3_objects_feed,
+            live_s3_account_id=live_s3_account_id,
+            aws_profile=aws_profile,
+            aws_region=aws_region,
         )
 
         # Stage 2 — CLASSIFY: per-bucket classifier-label aggregation.
@@ -214,8 +241,27 @@ async def _ingest(
     *,
     s3_inventory_feed: Path | str | None,
     s3_objects_feed: Path | str | None,
+    live_s3_account_id: str | None = None,
+    aws_profile: str | None = None,
+    aws_region: str | None = None,
 ) -> tuple[Sequence[BucketInventory], Sequence[ObjectSample]]:
-    """Stage 1 — fan out the two feeds via TaskGroup. Skipped feed → empty tuple."""
+    """Stage 1 — ingest buckets + object samples.
+
+    Phase C SS4: when ``live_s3_account_id`` is set, dispatch the single ``scan_s3_live``
+    tool (boto3 inventory + per-bucket sampling) through the charter, making the live S3
+    readers load-bearing. Otherwise fan out the two JSON feeds via TaskGroup (a skipped feed
+    → empty tuple). The two paths return the same shapes, so downstream stages are
+    source-agnostic.
+    """
+    if live_s3_account_id is not None:
+        buckets_live, samples_live = await ctx.call_tool(
+            "scan_s3_live",
+            account_id=live_s3_account_id,
+            profile=aws_profile,
+            region=aws_region,
+        )
+        return buckets_live, samples_live
+
     async with asyncio.TaskGroup() as tg:
         inventory_task = (
             tg.create_task(ctx.call_tool("read_s3_inventory", path=Path(s3_inventory_feed)))
