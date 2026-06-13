@@ -128,11 +128,11 @@ def test_enforce_mode_error_message_names_flag() -> None:
 
 
 def test_unknown_rule_id_is_refused() -> None:
-    """A rule that has no v0.1 action class (e.g. privileged-container) is refused."""
+    """A rule that has no v0.1 action class (e.g. host-network) is refused."""
     auth = Authorization(
         authorized_actions=["remediation_k8s_patch_runAsNonRoot"],
     )
-    findings = [_finding(rule_id="privileged-container")]
+    findings = [_finding(rule_id="host-network")]
     authorized, refused = filter_authorized_findings(auth, findings)
     assert authorized == []
     assert len(refused) == 1
@@ -168,7 +168,7 @@ def test_filter_partitions_mixed_findings_correctly() -> None:
     findings = [
         _finding(rule_id="run-as-root", workload_name="a"),  # authorized
         _finding(rule_id="missing-resource-limits", workload_name="b"),  # not allowlisted
-        _finding(rule_id="privileged-container", workload_name="c"),  # no action class
+        _finding(rule_id="host-network", workload_name="c"),  # no action class
         _finding(rule_id="run-as-root", workload_name="d"),  # authorized
     ]
     authorized, refused = filter_authorized_findings(auth, findings)

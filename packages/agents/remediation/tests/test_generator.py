@@ -82,7 +82,7 @@ def test_unmapped_rule_is_silently_skipped() -> None:
     artifacts = generate_artifacts(
         [
             _finding(rule_id="run-as-root", workload_name="actionable"),
-            _finding(rule_id="privileged-container", workload_name="unmapped"),
+            _finding(rule_id="host-pid", workload_name="unmapped"),
             _finding(rule_id="host-network", workload_name="also-unmapped"),
         ]
     )
