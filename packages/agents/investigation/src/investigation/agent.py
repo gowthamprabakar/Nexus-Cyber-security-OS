@@ -50,6 +50,9 @@ from ulid import ULID
 
 from investigation.bus_emit import BusEmitter, mint_investigation_id
 from investigation.orchestrator import SubAgentOrchestrator, SubResult
+from investigation.orchestrator_bounds import assert_worker_bounded
+from investigation.privacy.categorical import assert_categorical_only
+from investigation.retry.bounded import assert_bounded_retry
 from investigation.schemas import (
     Hypothesis,
     IncidentReport,
@@ -65,6 +68,9 @@ from investigation.tools.ioc_extractor import extract_iocs
 from investigation.tools.memory_walk import memory_neighbors_walk
 from investigation.tools.mitre_mapper import map_to_mitre
 from investigation.tools.related_findings import RelatedFinding, find_related_findings
+from investigation.validation.evidence_chain import assert_evidence_chain
+from investigation.validation.evidence_cited import assert_findings_cited
+from investigation.validation.no_speculation import assert_no_speculation
 
 _NATS_URL_ENV_VAR = "NEXUS_NATS_URL"
 _DEFAULT_NATS_URL = "nats://localhost:4222"
@@ -199,6 +205,11 @@ async def run(
                 related_findings=sub_outputs.related_findings,
                 timeline=timeline,
             )
+            # Phase C SS5: D.7 synthesis is single-attempt (one LLM call, then deterministic
+            # fallback — no retry loop), so attempts = 1. assert_bounded_retry makes the H5 bound
+            # load-bearing (WI-I... bounded retry): a future change that added a retry loop would
+            # have to thread its attempt count through here or trip the bound.
+            assert_bounded_retry(1)
 
             # Stage 4 — VALIDATE (drop unresolved-evidence hypotheses)
             current_stage = "validate"
@@ -207,6 +218,21 @@ async def run(
                 audit_events=sub_outputs.audit_events,
                 related_findings=sub_outputs.related_findings,
             )
+
+            # Phase C SS5: make the four hypothesis invariants load-bearing on the survivors
+            # (Stage 4 dropped unresolved-evidence ones; these HARD-assert the survivors are
+            # clean, catching any validation gap). assert_no_speculation (WI-I13 evidence floor)
+            # + assert_evidence_chain (WI-I12 well-formed + resolving) + assert_findings_cited
+            # (WI-I10 every ref resolves) + assert_categorical_only (WI-I8 no plaintext PII in
+            # the hypothesis statement). Validation-only — no artifact bytes change.
+            evidence_set = _collect_evidence_refs(
+                sub_outputs.audit_events, sub_outputs.related_findings
+            )
+            for hypothesis in validated:
+                assert_no_speculation(hypothesis)
+                assert_evidence_chain(hypothesis, evidence_set)
+                assert_findings_cited(hypothesis, evidence_set)
+                assert_categorical_only(hypothesis.statement)
 
             # Stage 5 — PLAN (containment templates per finding class_uid)
             current_stage = "plan"
@@ -356,6 +382,10 @@ async def _stage_spawn(
         {"kind": "asset_enum"},
         {"kind": "attribution"},
     ]
+    # Phase C SS5: make the Orchestrator-Workers bound load-bearing before any worker spawns
+    # (WI-I11). Children spawn at parent_depth + 1; parallel is the batch width. A future change
+    # that deepened the tree past 3 or widened the batch past 5 would trip the H5 cap here.
+    assert_worker_bounded(depth=1, parallel=len(scopes))
     results = await orch.spawn_batch(parent_depth=0, scopes=scopes, worker=_worker)
     return _merge_sub_outputs(results)
 
@@ -390,6 +420,25 @@ def _merge_sub_outputs(results: tuple[SubResult, ...]) -> _SubInvestigationOutpu
 # ---------------------------- Stage 4: VALIDATE ------------------------
 
 
+def _collect_evidence_refs(
+    audit_events: tuple[AuditEvent, ...],
+    related_findings: tuple[RelatedFinding, ...],
+) -> set[str]:
+    """The set of resolvable ``<kind>:<id>`` evidence refs for the collected corpus.
+
+    Shared by Stage 4 VALIDATE (drop unresolved) and the Phase C SS5 evidence invariants
+    (assert_evidence_chain / assert_findings_cited), so both judge against the same universe.
+    """
+    valid_refs: set[str] = set()
+    for ae in audit_events:
+        valid_refs.add(f"audit_event:{ae.entry_hash[:16]}")
+    for rf in related_findings:
+        uid = str((rf.payload.get("finding_info") or {}).get("uid", ""))
+        if uid:
+            valid_refs.add(f"finding:{uid}")
+    return valid_refs
+
+
 def _stage_validate(
     *,
     hypotheses: tuple[Hypothesis, ...],
@@ -404,13 +453,7 @@ def _stage_validate(
     that got pruned by Stage 2 — currently impossible by construction,
     but Phase 1c may add finding-level filtering).
     """
-    valid_refs: set[str] = set()
-    for ae in audit_events:
-        valid_refs.add(f"audit_event:{ae.entry_hash[:16]}")
-    for rf in related_findings:
-        uid = str((rf.payload.get("finding_info") or {}).get("uid", ""))
-        if uid:
-            valid_refs.add(f"finding:{uid}")
+    valid_refs = _collect_evidence_refs(audit_events, related_findings)
 
     out: list[Hypothesis] = []
     for h in hypotheses:
