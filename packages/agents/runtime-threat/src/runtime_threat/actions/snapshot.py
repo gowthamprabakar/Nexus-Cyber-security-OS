@@ -9,11 +9,18 @@ emit a non-snapshot action raises (backstops pause-trigger #11).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from datetime import datetime
+
+from runtime_threat.schemas import RuntimeFinding, Severity
 
 #: The only action type authorized at v0.2 — read-only (Q4/WI-R8).
 AUTHORIZED_ACTION_TYPES = frozenset({"snapshot"})
+
+#: Findings at these severities warrant a read-only forensic snapshot for investigation.
+_SNAPSHOT_SEVERITIES = frozenset({Severity.HIGH, Severity.CRITICAL})
 
 
 class UnauthorizedActionError(RuntimeError):
@@ -62,3 +69,39 @@ def request_workload_snapshot(
         reason=reason,
         requested_at=requested_at.isoformat(),
     )
+
+
+def build_snapshot_actions(
+    findings: Sequence[RuntimeFinding],
+    *,
+    requested_at: datetime,
+) -> list[SnapshotAction]:
+    """Emit a read-only forensic snapshot request per HIGH/CRITICAL finding (Phase C SS2).
+
+    This is the run-flow integration point that makes ``assert_authorized`` load-bearing: every
+    emitted action routes through ``request_workload_snapshot`` -> ``assert_authorized('snapshot')``,
+    so a future kill/quarantine action could never be emitted from the run loop without tripping
+    the guard. Findings below HIGH, or without a targetable host, are skipped.
+    """
+    actions: list[SnapshotAction] = []
+    for finding in findings:
+        if finding.severity not in _SNAPSHOT_SEVERITIES:
+            continue
+        host_ids = finding.host_ids
+        host_id = host_ids[0] if host_ids else ""
+        if not host_id:
+            continue
+        actions.append(
+            request_workload_snapshot(
+                host_id=host_id,
+                container_id="",
+                reason=f"{finding.title} ({finding.finding_id})",
+                requested_at=requested_at,
+            )
+        )
+    return actions
+
+
+def snapshot_actions_to_json(actions: Sequence[SnapshotAction]) -> str:
+    """Render snapshot actions as the additive ``snapshot_actions.json`` workspace artifact."""
+    return json.dumps([asdict(a) for a in actions], indent=2)
