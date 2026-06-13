@@ -8,13 +8,16 @@ invocation.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from charter import Charter
+from charter.contract import BudgetSpec, ExecutionContract
 from k8s_posture.tools.manifests import ManifestFinding
 from remediation.action_classes._common import wrap_container_patch
+from remediation.agent import build_registry
 from remediation.schemas import RemediationActionType, RemediationArtifact
 from remediation.tools import kubectl_executor as kc_mod
 from remediation.validator import (
@@ -25,6 +28,40 @@ from remediation.validator import (
 )
 
 NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=UTC)
+
+
+def _rollback_ctx(
+    tmp_path: Path,
+    *,
+    permitted: tuple[str, ...] = ("apply_patch",),
+    cloud_api_calls: int = 20,
+) -> Charter:
+    """A charter context that dispatches apply_patch through the registry — the
+    same proxy/budget/audit surface Stage-5 EXECUTE uses (PR-A1)."""
+    contract = ExecutionContract(
+        schema_version="0.1",
+        delegation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+        source_agent="supervisor",
+        target_agent="remediation",
+        customer_id="cust_test",
+        task="rollback proxy test",
+        required_outputs=["x"],
+        budget=BudgetSpec(
+            llm_calls=1,
+            tokens=1,
+            wall_clock_sec=60.0,
+            cloud_api_calls=cloud_api_calls,
+            mb_written=10,
+        ),
+        permitted_tools=list(permitted),
+        completion_condition="x",
+        escalation_rules=[],
+        workspace=str(tmp_path / "ws"),
+        persistent_root=str(tmp_path / "persistent"),
+        created_at=NOW,
+        expires_at=NOW + timedelta(hours=1),
+    )
+    return Charter(contract, tools=build_registry())
 
 
 def _finding(
@@ -220,7 +257,9 @@ async def test_validate_outcome_waits_for_rollback_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rollback_swaps_patch_for_inverse(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rollback_swaps_patch_for_inverse(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """`rollback` must call kubectl with the artifact's `inverse_patch_body` as the
     new patch body."""
 
@@ -234,7 +273,8 @@ async def test_rollback_swaps_patch_for_inverse(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(kc_mod, "_kubectl_binary", lambda: "/usr/local/bin/kubectl")
 
     artifact = _artifact()
-    result = await rollback(artifact)
+    with _rollback_ctx(tmp_path) as ctx:
+        result = await rollback(ctx, artifact)
 
     # Three calls expected: pre-fetch, patch, post-fetch (state capture is default).
     calls = captured["calls"]
@@ -269,7 +309,8 @@ async def test_rollback_uses_kubeconfig_when_provided(
     kc = tmp_path / "kc.yaml"
     kc.write_text("apiVersion: v1\nkind: Config\n")
 
-    await rollback(_artifact(), kubeconfig=kc)
+    with _rollback_ctx(tmp_path) as ctx:
+        await rollback(ctx, _artifact(), kubeconfig=kc)
     # Every kubectl invocation should carry --kubeconfig.
     for cmd in captured:
         assert "--kubeconfig" in cmd

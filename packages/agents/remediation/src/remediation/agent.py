@@ -546,7 +546,9 @@ async def _process_artifact(
         )
 
     # ---- Stage 7: ROLLBACK ----
-    rollback_result = await run_rollback(artifact, kubeconfig=kubeconfig)
+    # Routes through ctx.call_tool (same proxy/budget/audit surface as Stage-5
+    # EXECUTE) — the rollback is a real cluster mutation (ADR-016 / WI-A14).
+    rollback_result = await run_rollback(ctx, artifact, kubeconfig=kubeconfig)
     auditor.rollback_completed(artifact, rollback_result)
     rollback_decisions.append(
         {

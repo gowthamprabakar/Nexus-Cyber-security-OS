@@ -52,11 +52,12 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from charter import Charter, ToolNotPermitted
 from k8s_posture.tools.cluster_workloads import read_cluster_workloads
 from k8s_posture.tools.manifests import ManifestFinding
 
 from remediation.schemas import RemediationArtifact
-from remediation.tools.kubectl_executor import PatchResult, apply_patch
+from remediation.tools.kubectl_executor import PatchResult
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,7 @@ def _container_matches(finding: ManifestFinding, artifact: RemediationArtifact) 
 
 
 async def rollback(
+    ctx: Charter,
     artifact: RemediationArtifact,
     *,
     kubeconfig: Path | None = None,
@@ -177,7 +179,18 @@ async def rollback(
     when building the original artifact (every action class is a pure-function
     pair `(build, inverse)` — this is what makes deterministic rollback work).
 
+    The rollback is a real `kubectl patch` mutation, so — exactly like Stage-5
+    EXECUTE — it routes through ``ctx.call_tool("apply_patch", ...)`` rather than
+    a direct import call. This binds the rollback to the same safety surface as
+    every other mutation: the permitted_tools whitelist, the per-tool budget
+    (cloud_api_calls), and the charter audit chain (ADR-016 / audit #316 C-1 /
+    WI-A14). The pre-call permitted_tools re-check mirrors agent.py's Stage-5
+    gate so the invariant is impossible to miss for anyone editing this path.
+    (The v0.2 Quality Audit, PR #622, found this path bypassing the proxy.)
+
     Args:
+        ctx: The active charter context — the rollback mutation is dispatched
+            through it so budget/audit/permission all bind.
         artifact: The artifact whose execution we're rolling back. We swap
             `patch_body` with `inverse_patch_body` and re-apply.
         kubeconfig: Same cluster-access discipline as Stage 4/5. Defaults to
@@ -199,12 +212,16 @@ async def rollback(
         source_finding_uid=artifact.source_finding_uid,
         correlation_id=f"{artifact.correlation_id}-rollback",
     )
-    return await apply_patch(
-        inverse_artifact,
+    if "apply_patch" not in ctx.contract.permitted_tools:
+        raise ToolNotPermitted(tool="apply_patch", permitted=list(ctx.contract.permitted_tools))
+    result: PatchResult = await ctx.call_tool(
+        "apply_patch",
+        artifact=inverse_artifact,
         dry_run=False,
         kubeconfig=kubeconfig,
         fetch_state=True,
     )
+    return result
 
 
 # ---------------------------- detector builder ---------------------------
