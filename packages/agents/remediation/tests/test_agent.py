@@ -448,9 +448,10 @@ async def test_execute_mode_rollback_when_finding_persists(
 async def test_run_invokes_safety_invariants_on_execute_rollback_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Phase C SS6 (Option alpha): an execute run that rolls back invokes the seven universal
-    safety invariants - tenant scope, the H1 dual-layer, blast-radius, action allowlist,
-    dry-run-first, tool-proxy, and mandatory rollback. Spy on names bound in remediation.agent."""
+    """Phase C SS6 (Option alpha): an execute run that rolls back invokes the universal safety
+    invariants - tenant scope, the H1 dual-layer, blast-radius, action allowlist, dry-run-first,
+    tool-proxy, mandatory rollback, and the H6 idempotent/workspace-scope guard (PR3). Spy on the
+    names bound in remediation.agent."""
     _patch_executor(monkeypatch)
     _patch_findings(monkeypatch, (_manifest_finding(rule_id="run-as-root"),))
     _patch_detector(monkeypatch, detector_output=(_manifest_finding(rule_id="run-as-root"),))
@@ -468,6 +469,7 @@ async def test_run_invokes_safety_invariants_on_execute_rollback_path(
         "assert_dry_run_before_execute",
         "assert_tool_proxy_for_execute",
         "assert_rollback_on_failed_validation",
+        "assert_idempotent_workspace_scoped",
     ):
         real = getattr(agent_mod, name)
 
@@ -493,6 +495,7 @@ async def test_run_invokes_safety_invariants_on_execute_rollback_path(
         "assert_dry_run_before_execute",
         "assert_tool_proxy_for_execute",
         "assert_rollback_on_failed_validation",
+        "assert_idempotent_workspace_scoped",
     } <= set(seen)
 
 

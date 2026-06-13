@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from k8s_posture.tools.manifests import ManifestFinding
 from remediation.action_classes import ACTION_CLASS_REGISTRY
+from remediation.action_classes._common import correlation_id_for
 from remediation.batch_safety import artifacts_requiring_rollback, assert_all_dry_run_passed
 from remediation.invariants.action_allowlist import assert_action_allowlisted
 from remediation.invariants.auto_mount_validation import assert_auto_mount_validation
@@ -83,10 +84,12 @@ def test_full_invariant_chain_passes_for_authorized_execute() -> None:
             action_type=at, service_account_name="default", containers=[{"name": "app"}]
         )
         assert_dry_run_before_execute(["generate", "dry_run", "execute"])
+        # SS6 PR3 (Option a): correlation_id must be the deterministic hash-derived id.
+        corr = correlation_id_for(f"{rule_id}/frontend")
         assert_idempotent_workspace_scoped(
-            correlation_id=f"{rule_id}-corr",
+            correlation_id=corr,
             source_finding_id=rule_id,
-            artifact_path=f"/ws/{rule_id}.yaml",
+            artifact_path=f"/ws/artifacts/{corr}.json",
             workspace_root="/ws",
         )
     assert_rollback_on_failed_validation(requires_rollback=False, rollback_executed=False)
