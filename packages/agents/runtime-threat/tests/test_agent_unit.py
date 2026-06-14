@@ -15,10 +15,10 @@ from typing import Any
 
 import pytest
 from charter.contract import BudgetSpec, ExecutionContract
+from nexus_runtime.osquery import OsqueryResult
 from runtime_threat import agent as agent_mod
 from runtime_threat.agent import build_registry, run
 from runtime_threat.tools.falco import FalcoAlert
-from runtime_threat.tools.osquery import OsqueryResult
 from runtime_threat.tools.tracee import TraceeAlert
 
 NOW = datetime(2026, 5, 11, tzinfo=UTC)

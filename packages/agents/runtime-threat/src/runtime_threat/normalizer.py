@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from nexus_runtime.osquery import OsqueryResult
 from shared.fabric.envelope import NexusEnvelope
 
 from runtime_threat.schemas import (
@@ -50,7 +51,6 @@ from runtime_threat.severity import (
     tracee_to_severity,
 )
 from runtime_threat.tools.falco import FalcoAlert
-from runtime_threat.tools.osquery import OsqueryResult
 from runtime_threat.tools.tracee import TraceeAlert
 
 _CONTEXT_INVALID = re.compile(r"[^a-z0-9_-]")

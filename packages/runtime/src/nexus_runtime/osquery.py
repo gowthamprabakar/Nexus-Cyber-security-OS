@@ -1,9 +1,9 @@
 """OSQuery subprocess wrapper — runs a SQL query against `osqueryi --json`.
 
-OSQuery turns OS state (processes, listening sockets, kernel modules,
-file integrity, etc.) into a SQL-queryable database. Invoking
-`osqueryi --json "SELECT pid, name FROM processes LIMIT 5"` emits a
-JSON array of rows where every value is a string:
+Shared OS-state primitive (A-2.3 hoist). OSQuery turns OS state (processes,
+listening sockets, kernel modules, package DBs, file integrity, etc.) into a
+SQL-queryable database. Invoking `osqueryi --json "SELECT pid, name FROM
+processes LIMIT 5"` emits a JSON array of rows where every value is a string:
 
     [
       {"pid": "1234", "name": "init"},
@@ -11,9 +11,16 @@ JSON array of rows where every value is a string:
       ...
     ]
 
+Originally D.3 (runtime-threat) local; **hoisted to ``nexus_runtime`` in A-2.3**
+so it is a single shared implementation for its now-two consumers — D.3 runtime
+detection and D.1 vulnerability **reachability** (the package→loaded-library→PID
+join: ``deb/rpm/apk_packages`` ↔ ``process_memory_map`` ↔ ``processes``). Mirrors
+the ``bounded_drain`` / ``llm_invariants`` hoist precedent: pure asyncio + stdlib,
+zero charter/shared dependency, so any agent can import it.
+
 Per ADR-005 the subprocess invocation goes through
-`asyncio.create_subprocess_exec`. Live OSQuery (distributed scheduler,
-fleet management) is deferred to Phase 1c per the D.3 plan.
+``asyncio.create_subprocess_exec``. The ``osqueryi`` binary is operator-provisioned
+at runtime (same model as Trivy); absence degrades to a clean ``OsqueryError``.
 """
 
 from __future__ import annotations
@@ -35,7 +42,7 @@ class OsqueryResult:
 
     `rows` is a tuple of string-valued dicts — OSQuery returns every
     column as a string by default. Type coercion (e.g. int(`pid`)) is
-    the normalizer's job.
+    the caller's job.
     """
 
     sql: str
