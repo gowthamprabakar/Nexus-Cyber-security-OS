@@ -33,13 +33,13 @@ from curiosity.agent import run as curiosity_run
 from curiosity.claims.producer_only import assert_no_claims_subscription
 from curiosity.gate.llm_gate import assert_llm_only_with_gaps
 from curiosity.ocsf.emission import emit_curiosity_findings
-from curiosity.privacy.categorical import assert_categorical_only
-from curiosity.retry.bounded import assert_bounded_retry
 from curiosity.tenant.scoped import assert_tenant_scoped
 from curiosity.validation.coverage_gap_cited import (
     assert_coverage_gap_cited,
     detected_gap_ids,
 )
+from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]

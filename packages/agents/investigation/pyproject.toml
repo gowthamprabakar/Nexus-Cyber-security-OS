@@ -7,6 +7,7 @@ license = { file = "../../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
     "nexus-shared",
+    "nexus-runtime",
     "nexus-eval-framework",
     "nexus-audit-agent",
     "pydantic>=2.9.0",
@@ -34,6 +35,7 @@ investigation = "investigation.eval_runner:InvestigationEvalRunner"
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
+nexus-runtime = { workspace = true }
 nexus-eval-framework = { workspace = true }
 nexus-audit-agent = { workspace = true }
 

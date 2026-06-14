@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from investigation.privacy.categorical import (
+from nexus_runtime.llm_invariants.categorical import (
     CategoricalContractViolationError,
     assert_categorical_only,
 )

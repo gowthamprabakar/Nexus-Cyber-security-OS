@@ -259,7 +259,7 @@ async def test_q6_retry_budget_exhausted_plaintext_pii_hard_fails(tmp_path: Path
     """Phase C SS5: a degraded draft that STILL leaks plaintext PII after the retry budget is
     now hard-blocked by the load-bearing assert_categorical_only (WI-Y8) — the run raises and no
     narrative is written, rather than the pre-SS5 behaviour of accepting + writing the leak."""
-    from synthesis.privacy.categorical import CategoricalContractViolationError
+    from nexus_runtime.llm_invariants.categorical import CategoricalContractViolationError
 
     contract = _contract(tmp_path)
     leak_outline = _outline_json(sections=1)
