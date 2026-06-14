@@ -629,6 +629,115 @@ async def test_report_metadata_carries_customer_and_delegation(
     assert report.agent == "threat_intel"
 
 
+# ---------------------------------------------------------------------------
+# A-1 live-loop wiring — INGEST drives the live readers (v0.3 Track A)
+# ---------------------------------------------------------------------------
+
+
+def _live_contract(tmp_path: Path) -> ExecutionContract:
+    """Contract whose permitted_tools admit the live readers (A-1 route)."""
+    return ExecutionContract(
+        schema_version="0.1",
+        delegation_id="01J7M3X9Z1K8RPVQNH2T8DBHFZ",
+        source_agent="supervisor",
+        target_agent="threat_intel",
+        customer_id="acme",
+        task="Threat intel scan (live)",
+        required_outputs=["findings.json", "report.md"],
+        budget=BudgetSpec(
+            llm_calls=5,
+            tokens=10_000,
+            wall_clock_sec=60.0,
+            cloud_api_calls=10,
+            mb_written=10,
+        ),
+        permitted_tools=["read_nvd_live", "read_cisa_kev_live", "read_mitre_attack_live"],
+        completion_condition="findings.json AND report.md exist",
+        escalation_rules=[],
+        workspace=str(tmp_path / "ws"),
+        persistent_root=str(tmp_path / "p"),
+        created_at=datetime.now(UTC),
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+
+
+def _patch_live_readers(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    nvd: list[NvdCveRecord] | None = None,
+    kev: list[KevEntry] | None = None,
+    mitre: list[TechniqueRecord] | None = None,
+) -> dict[str, AsyncMock]:
+    """Replace the three LIVE readers with mocks returning ``(records, cursor)``.
+
+    Returns the mocks so a test can assert called/not-called — the live readers
+    must be load-bearing only when ``live_feeds`` is set.
+    """
+    nvd_mock = AsyncMock(return_value=(tuple(nvd or []), "2026-05-21T00:00:00"))
+    kev_mock = AsyncMock(return_value=(tuple(kev or []), "cursor-kev"))
+    mitre_mock = AsyncMock(return_value=(tuple(mitre or []), "cursor-mitre"))
+    monkeypatch.setattr(agent_mod, "read_nvd_live", nvd_mock)
+    monkeypatch.setattr(agent_mod, "read_cisa_kev_live", kev_mock)
+    monkeypatch.setattr(agent_mod, "read_mitre_attack_live", mitre_mock)
+    return {"nvd": nvd_mock, "kev": kev_mock, "mitre": mitre_mock}
+
+
+@pytest.mark.asyncio
+async def test_live_feeds_route_emits_cve_kev_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A-1: with ``live_feeds=True`` INGEST polls the live readers and the full
+    pipeline emits the cve-in-kev finding — the live readers are load-bearing in
+    ``run()``, not offline-only."""
+    mocks = _patch_live_readers(monkeypatch, kev=[_kev("CVE-2021-44228")])
+    d1_ws = tmp_path / "d1"
+    _write_d1_findings_with_cve(d1_ws, "CVE-2021-44228")
+
+    report = await run(
+        _live_contract(tmp_path),
+        vulnerability_workspace=d1_ws,
+        live_feeds=True,
+    )
+    assert report.total == 1
+    assert report.findings[0]["finding_info"]["types"][0] == "threat_intel_cve_in_kev_catalog"
+    mocks["nvd"].assert_awaited_once()  # all three live readers drove INGEST
+    mocks["kev"].assert_awaited_once()
+    mocks["mitre"].assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_live_feeds_mutually_exclusive_with_snapshots(tmp_path: Path) -> None:
+    """A-1: ``live_feeds`` + any ``*_snapshot`` raises before the charter opens."""
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        await run(
+            _contract(tmp_path),
+            kev_snapshot=_placeholder(tmp_path / "kev.json"),
+            live_feeds=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_live_readers_not_called_when_live_feeds_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A-1 byte-identical guard: the default (``live_feeds=False``) never touches
+    the live readers — the offline path is unchanged."""
+    live = _patch_live_readers(monkeypatch, kev=[_kev("CVE-2021-44228")])
+    _patch_readers(monkeypatch, kev=[_kev("CVE-2021-44228")])
+    d1_ws = tmp_path / "d1"
+    _write_d1_findings_with_cve(d1_ws, "CVE-2021-44228")
+
+    report = await run(
+        _contract(tmp_path),
+        kev_snapshot=_placeholder(tmp_path / "kev.json"),
+        vulnerability_workspace=d1_ws,
+    )
+    assert report.total == 1  # offline path still works
+    live["nvd"].assert_not_awaited()
+    live["kev"].assert_not_awaited()
+    live["mitre"].assert_not_awaited()
+
+
 # Type-narrowing helper so mypy doesn't flag Sequence[Any] later. Suppresses
 # unused-import warning while keeping the runtime-threat schema imports.
 _ = Sequence

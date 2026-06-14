@@ -142,6 +142,10 @@ async def run(
     network_threat_workspace: Path | str | None = None,
     runtime_threat_workspace: Path | str | None = None,
     semantic_store: SemanticStore | None = None,
+    live_feeds: bool = False,
+    nvd_since: str | None = None,
+    kev_since: str | None = None,
+    mitre_since: str | None = None,
 ) -> FindingsReport:
     """Run the Threat Intel Agent end-to-end under the runtime charter.
 
@@ -164,6 +168,17 @@ async def run(
         semantic_store: Optional SemanticStore for KG writes (single-
             tenant v0.1; multi-tenant production blocks on the
             future SET LOCAL tenant-RLS substrate-fix plan).
+        live_feeds: A-1 live-loop wiring. When True, INGEST polls the live
+            NVD / CISA-KEV / MITRE readers (charter-registered, one cloud
+            call each) instead of the offline snapshots — mutually
+            exclusive with the ``*_snapshot`` paths. Default False keeps the
+            deterministic offline path (byte-identical to pre-A-1).
+        nvd_since: Optional ISO ``lastModified`` cursor for the live NVD
+            poll (dedup); ignored unless ``live_feeds`` is set.
+        kev_since: Optional cursor for the live CISA-KEV poll; ignored
+            unless ``live_feeds`` is set.
+        mitre_since: Optional cursor for the live MITRE ATT&CK poll;
+            ignored unless ``live_feeds`` is set.
 
     Returns:
         The ``FindingsReport``. Side effects: writes ``findings.json``
@@ -171,6 +186,14 @@ async def run(
         chained audit log at ``audit.jsonl``.
     """
     del llm_provider  # reserved for future iterations
+
+    # A-1 live-loop wiring: live feeds and offline snapshots are mutually exclusive —
+    # pick the live NVD/KEV/MITRE poll or the deterministic JSON snapshots, not both.
+    if live_feeds and (nvd_snapshot or kev_snapshot or mitre_attack_snapshot):
+        raise ValueError(
+            "live_feeds is mutually exclusive with nvd_snapshot / kev_snapshot / "
+            "mitre_attack_snapshot — pick the live readers or the offline snapshots (A-1)"
+        )
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -186,6 +209,10 @@ async def run(
             nvd_snapshot=nvd_snapshot,
             kev_snapshot=kev_snapshot,
             mitre_attack_snapshot=mitre_attack_snapshot,
+            live_feeds=live_feeds,
+            nvd_since=nvd_since,
+            kev_since=kev_since,
+            mitre_since=mitre_since,
         )
 
         # Stage 2: ENRICH — build indices, optionally persist to KG.
@@ -257,12 +284,37 @@ async def _ingest(
     nvd_snapshot: Path | str | None,
     kev_snapshot: Path | str | None,
     mitre_attack_snapshot: Path | str | None,
+    live_feeds: bool = False,
+    nvd_since: str | None = None,
+    kev_since: str | None = None,
+    mitre_since: str | None = None,
 ) -> tuple[
     Sequence[NvdCveRecord],
     Sequence[KevEntry],
     Sequence[TechniqueRecord],
 ]:
-    """Stage 1 — fan out the three feeds via TaskGroup. Skipped feeds -> empty tuple."""
+    """Stage 1 — fan out the three feeds via TaskGroup. Skipped feeds -> empty tuple.
+
+    A-1 live-loop wiring (v0.3): when ``live_feeds`` is set, INGEST polls the live
+    NVD / CISA-KEV / MITRE readers (already charter-registered) instead of the offline
+    snapshots, making the live readers load-bearing in ``run()`` rather than offline-only.
+    The live readers return ``(records, cursor)``; INGEST keeps the records (the run-once
+    path discards the resume cursor) so downstream stages stay source-agnostic — the live
+    and offline paths return the same record shapes.
+    """
+    if live_feeds:
+        async with asyncio.TaskGroup() as tg:
+            nvd_live_task = tg.create_task(ctx.call_tool("read_nvd_live", since=nvd_since))
+            kev_live_task = tg.create_task(ctx.call_tool("read_cisa_kev_live", since=kev_since))
+            mitre_live_task = tg.create_task(
+                ctx.call_tool("read_mitre_attack_live", since=mitre_since)
+            )
+        # Each live reader returns ``(records, cursor)``; keep records, drop the cursor.
+        nvd_live: Sequence[NvdCveRecord] = nvd_live_task.result()[0]
+        kev_live: Sequence[KevEntry] = kev_live_task.result()[0]
+        mitre_live: Sequence[TechniqueRecord] = mitre_live_task.result()[0]
+        return nvd_live, kev_live, mitre_live
+
     async with asyncio.TaskGroup() as tg:
         nvd_task = (
             tg.create_task(ctx.call_tool("read_nvd_feed", path=Path(nvd_snapshot)))
