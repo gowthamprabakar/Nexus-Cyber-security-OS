@@ -29,6 +29,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from nexus_runtime.realtime import EventStream, bounded_drain
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -41,10 +42,17 @@ from runtime_threat.normalizer import normalize_to_findings
 from runtime_threat.schemas import FindingsReport
 from runtime_threat.summarizer import render_summary
 from runtime_threat.tools.falco import FalcoAlert, falco_alerts_read
+from runtime_threat.tools.falco_normalize import normalize_falco_event
 from runtime_threat.tools.osquery import OsqueryResult, osquery_run
 from runtime_threat.tools.tracee import TraceeAlert, tracee_alerts_read
+from runtime_threat.tools.tracee_normalize import normalize_tracee_event
 
 DEFAULT_NLAH_VERSION = "0.1.0"
+
+#: A-1.5 default bounded-drain cap for an injected live stream — a single-shot
+#: run() drains at most this many events (count bound) so an infinite push
+#: stream always terminates. Operators tune via ``realtime_max_events``.
+DEFAULT_REALTIME_MAX_EVENTS = 10_000
 
 
 def build_registry() -> ToolRegistry:
@@ -96,6 +104,9 @@ async def run(
     osquery_pack: Path | str | None = None,
     osquery_severity: int = 2,
     osquery_finding_context: str = "query_hit",
+    falco_stream: EventStream | None = None,
+    tracee_stream: EventStream | None = None,
+    realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
 ) -> FindingsReport:
     """Run the Runtime Threat Agent end-to-end under the runtime charter.
 
@@ -109,6 +120,18 @@ async def run(
         osquery_severity: Severity for OSQuery findings (0-3 scale, same as
             Tracee). Default 2 (medium).
         osquery_finding_context: Context slug for OSQuery findings' IDs.
+        falco_stream: A-1.5 live-loop wiring. An injected Falco push event
+            stream (``subscribe()`` yields raw Falco event dicts). When set,
+            INGEST drains it via ``bounded_drain`` (count-bounded by
+            ``realtime_max_events``) through the existing
+            ``normalize_falco_event`` — byte-identical to the offline
+            ``FalcoAlert`` shape. Mutually exclusive with ``falco_feed``.
+        tracee_stream: A-1.5 live-loop wiring. An injected Tracee push event
+            stream, drained through ``normalize_tracee_event`` →
+            ``TraceeAlert`` (byte-identical offline shape). Mutually exclusive
+            with ``tracee_feed``.
+        realtime_max_events: Count bound for the live drains (default
+            ``DEFAULT_REALTIME_MAX_EVENTS``) so an infinite stream terminates.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -116,6 +139,17 @@ async def run(
         log at `audit.jsonl`.
     """
     del llm_provider  # reserved for future iterations
+
+    if falco_stream is not None and falco_feed:
+        raise ValueError(
+            "falco_stream is mutually exclusive with falco_feed — pick the live "
+            "realtime stream or the JSONL feed (A-1)"
+        )
+    if tracee_stream is not None and tracee_feed:
+        raise ValueError(
+            "tracee_stream is mutually exclusive with tracee_feed — pick the live "
+            "realtime stream or the JSONL feed (A-1)"
+        )
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -134,6 +168,10 @@ async def run(
             falco_feed=falco_feed,
             tracee_feed=tracee_feed,
             osquery_pack=osquery_pack,
+            falco_stream=falco_stream,
+            tracee_stream=tracee_stream,
+            realtime_max_events=realtime_max_events,
+            received_at=scan_started,
         )
 
         findings = await normalize_to_findings(
@@ -186,13 +224,46 @@ async def _fetch_feeds(
     falco_feed: Path | str | None,
     tracee_feed: Path | str | None,
     osquery_pack: Path | str | None,
+    falco_stream: EventStream | None = None,
+    tracee_stream: EventStream | None = None,
+    realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
+    received_at: datetime | None = None,
 ) -> tuple[
     Sequence[FalcoAlert],
     Sequence[TraceeAlert],
     Sequence[OsqueryResult],
 ]:
-    """Read the three feeds concurrently. Skipped feeds return empty results."""
+    """Read the three feeds concurrently. Skipped feeds return empty results.
+
+    A-1.5: when ``falco_stream`` / ``tracee_stream`` is set, that slot is drained from
+    the injected live push stream via ``bounded_drain`` (count-bounded) through the existing
+    per-sensor normalizer — byte-identical to the offline shape, so downstream stays
+    source-agnostic. Stream and feed for the same slot are mutually exclusive (guarded in
+    ``run()``).
+    """
+    when = received_at if received_at is not None else datetime.now(UTC)
     osquery_sql = _read_osquery_pack(osquery_pack)
+
+    # A-1.5 live drains — direct over the injected stream (the stream IS the live source).
+    falco_live: tuple[FalcoAlert, ...] | None = None
+    if falco_stream is not None:
+
+        def _falco_norm(raw: dict[str, object]) -> FalcoAlert | None:
+            normalized = normalize_falco_event(raw, received_at=when)
+            return normalized.alert if normalized is not None else None
+
+        falco_live = await bounded_drain(falco_stream, _falco_norm, max_events=realtime_max_events)
+
+    tracee_live: tuple[TraceeAlert, ...] | None = None
+    if tracee_stream is not None:
+
+        def _tracee_norm(raw: dict[str, object]) -> TraceeAlert | None:
+            normalized = normalize_tracee_event(raw, received_at=when)
+            return normalized.alert if normalized is not None else None
+
+        tracee_live = await bounded_drain(
+            tracee_stream, _tracee_norm, max_events=realtime_max_events
+        )
 
     async with asyncio.TaskGroup() as tg:
         falco_task = (
@@ -209,8 +280,12 @@ async def _fetch_feeds(
             tg.create_task(ctx.call_tool("osquery_run", sql=osquery_sql)) if osquery_sql else None
         )
 
-    falco_alerts: Sequence[FalcoAlert] = falco_task.result() if falco_task else ()
-    tracee_alerts: Sequence[TraceeAlert] = tracee_task.result() if tracee_task else ()
+    falco_alerts: Sequence[FalcoAlert] = (
+        falco_live if falco_live is not None else (falco_task.result() if falco_task else ())
+    )
+    tracee_alerts: Sequence[TraceeAlert] = (
+        tracee_live if tracee_live is not None else (tracee_task.result() if tracee_task else ())
+    )
     osquery_results: Sequence[OsqueryResult] = (osquery_task.result(),) if osquery_task else ()
     return falco_alerts, tracee_alerts, osquery_results
 

@@ -8,7 +8,7 @@ the test surface is the agent's wiring of charter + tools + normalizer
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -324,3 +324,76 @@ async def test_run_accepts_llm_provider_without_calling_it(
     provider = FakeLLMProvider(responses=[])
     await run(_contract(tmp_path), llm_provider=provider)
     assert provider.calls == []
+
+
+# ---------------------------------------------------------------------------
+# A-1.5 — Falco + Tracee realtime streams via bounded_drain
+# ---------------------------------------------------------------------------
+
+
+class _Stream:
+    """A finite fake push stream (models a live socket for the ungated layer)."""
+
+    def __init__(self, events: list[dict[str, Any]]) -> None:
+        self._events = events
+
+    async def subscribe(self) -> AsyncIterator[dict[str, Any]]:
+        for e in self._events:
+            yield e
+
+
+_FALCO_RAW = {
+    "rule": "Terminal shell in container",
+    "priority": "Warning",
+    "output": "shell spawned",
+    "output_fields": {"container.id": "c1"},
+}
+_TRACEE_RAW = {"eventName": "security_file_open", "containerId": "c1", "processName": "cat"}
+
+
+@pytest.mark.asyncio
+async def test_run_falco_stream_emits_finding(tmp_path: Path) -> None:
+    """A-1.5: an injected Falco stream drives a finding via bounded_drain."""
+    report = await run(_contract(tmp_path), falco_stream=_Stream([_FALCO_RAW]))
+    assert report.total >= 1
+    payload = json.loads((tmp_path / "ws" / "findings.json").read_text())
+    assert payload["findings"][0]["finding_info"]["types"][0] == "runtime_process"
+
+
+@pytest.mark.asyncio
+async def test_run_tracee_stream_emits_finding(tmp_path: Path) -> None:
+    """A-1.5: an injected Tracee stream drives a finding via bounded_drain."""
+    report = await run(_contract(tmp_path), tracee_stream=_Stream([_TRACEE_RAW]))
+    assert report.total >= 1
+    assert (tmp_path / "ws" / "findings.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_realtime_max_events_bounds_the_drain(tmp_path: Path) -> None:
+    """A-1.5: realtime_max_events caps how many stream events are ingested."""
+    events = [
+        {"rule": f"rule-{i}", "priority": "Warning", "output": "x", "output_fields": {}}
+        for i in range(5)
+    ]
+    report = await run(_contract(tmp_path), falco_stream=_Stream(events), realtime_max_events=2)
+    assert report.total == 2  # 5 distinct-rule events, bound capped ingestion at 2
+
+
+@pytest.mark.asyncio
+async def test_falco_stream_mutually_exclusive_with_feed(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        await run(
+            _contract(tmp_path),
+            falco_stream=_Stream([_FALCO_RAW]),
+            falco_feed=tmp_path / "falco.jsonl",
+        )
+
+
+@pytest.mark.asyncio
+async def test_tracee_stream_mutually_exclusive_with_feed(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        await run(
+            _contract(tmp_path),
+            tracee_stream=_Stream([_TRACEE_RAW]),
+            tracee_feed=tmp_path / "tracee.jsonl",
+        )
