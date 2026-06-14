@@ -38,6 +38,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from nexus_runtime.realtime import EventStream, bounded_drain
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -67,9 +68,16 @@ from network_threat.schemas import (
 )
 from network_threat.summarizer import render_summary
 from network_threat.tools.dns_log_reader import read_dns_logs
+from network_threat.tools.suricata_normalize import normalize_suricata_event
 from network_threat.tools.suricata_reader import read_suricata_alerts
 from network_threat.tools.vpc_flow_reader import read_vpc_flow_logs
 from network_threat.tools.vpc_flow_realtime_aws import read_vpc_flow_live
+from network_threat.tools.zeek_normalize import normalize_zeek_dns
+
+#: A-1.4 default bounded-drain cap for an injected live stream — a single-shot
+#: run() drains at most this many events (count bound) so an infinite push
+#: stream always terminates. Operators tune via ``realtime_max_events``.
+DEFAULT_REALTIME_MAX_EVENTS = 10_000
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -137,6 +145,9 @@ async def run(
     vpc_flow_log_group: str | None = None,
     aws_profile: str | None = None,
     aws_region: str = "us-east-1",
+    suricata_stream: EventStream | None = None,
+    zeek_stream: EventStream | None = None,
+    realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
 ) -> FindingsReport:
     """Run the Network Threat Agent end-to-end under the runtime charter.
 
@@ -154,6 +165,18 @@ async def run(
             mutually exclusive with it. Suricata/DNS still come from feeds.
         aws_profile: Optional boto3 profile for the live VPC-flow poll.
         aws_region: AWS region for the live VPC-flow poll (default us-east-1).
+        suricata_stream: A-1.4 live-loop wiring. An injected Suricata push event
+            stream (``subscribe()`` yields raw eve.json dicts). When set, INGEST
+            drains it via ``bounded_drain`` (count-bounded by
+            ``realtime_max_events``) through the existing
+            ``normalize_suricata_event`` — byte-identical to the offline
+            ``SuricataAlert`` shape. Mutually exclusive with ``suricata_feed``.
+        zeek_stream: A-1.4 live-loop wiring. An injected Zeek push event stream.
+            INGEST drains it through ``normalize_zeek_dns`` (DNS events only;
+            Zeek-conn → FlowRecord is a deferred follow-up), byte-identical to
+            the offline DNS shape. Mutually exclusive with ``dns_feed``.
+        realtime_max_events: Count bound for the live drains (default
+            ``DEFAULT_REALTIME_MAX_EVENTS``) so an infinite stream terminates.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -166,6 +189,16 @@ async def run(
         raise ValueError(
             "vpc_flow_log_group is mutually exclusive with vpc_flow_feed — pick the live "
             "CloudWatch route or the file feed (Phase C SS4)"
+        )
+    if suricata_stream is not None and suricata_feed:
+        raise ValueError(
+            "suricata_stream is mutually exclusive with suricata_feed — pick the live "
+            "realtime stream or the eve.json feed (A-1)"
+        )
+    if zeek_stream is not None and dns_feed:
+        raise ValueError(
+            "zeek_stream is mutually exclusive with dns_feed — Zeek emits the DNS events "
+            "for that slot (A-1)"
         )
 
     registry = build_registry()
@@ -185,6 +218,10 @@ async def run(
             vpc_flow_log_group=vpc_flow_log_group,
             aws_profile=aws_profile,
             aws_region=aws_region,
+            suricata_stream=suricata_stream,
+            zeek_stream=zeek_stream,
+            realtime_max_events=realtime_max_events,
+            received_at=scan_started,
         )
 
         # Stage 2: PATTERN_DETECT — three deterministic detectors over the parsed feeds.
@@ -250,6 +287,10 @@ async def _ingest(
     vpc_flow_log_group: str | None = None,
     aws_profile: str | None = None,
     aws_region: str = "us-east-1",
+    suricata_stream: EventStream | None = None,
+    zeek_stream: EventStream | None = None,
+    realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
+    received_at: datetime | None = None,
 ) -> tuple[Sequence[SuricataAlert], Sequence[FlowRecord], Sequence[DnsEvent]]:
     """Stage 1 — fan out the feeds via TaskGroup. Skipped sources → empty tuple.
 
@@ -257,7 +298,35 @@ async def _ingest(
     ``vpc_flow_log_group`` is set (making that reader load-bearing through the charter),
     otherwise the offline ``read_vpc_flow_logs`` file feed. Both yield FlowRecord tuples, so
     downstream detection is source-agnostic.
+
+    A-1.4: when ``suricata_stream`` / ``zeek_stream`` is set, that slot is drained from the
+    injected live push stream via ``bounded_drain`` (count-bounded) through the existing
+    per-sensor normalizer — byte-identical to the offline shape. Stream and feed for the same
+    slot are mutually exclusive (guarded in ``run()``). Zeek emits DNS events only; Zeek-conn
+    → FlowRecord is a deferred follow-up, so the live flow source stays VPC-only.
     """
+    when = received_at if received_at is not None else datetime.now(UTC)
+
+    # A-1.4 live drains — direct over the injected stream (the stream IS the live source).
+    suricata_live: tuple[SuricataAlert, ...] | None = None
+    if suricata_stream is not None:
+
+        def _suricata_norm(raw: dict[str, object]) -> SuricataAlert | None:
+            normalized = normalize_suricata_event(raw, received_at=when)
+            return normalized.alert if normalized is not None else None
+
+        suricata_live = await bounded_drain(
+            suricata_stream, _suricata_norm, max_events=realtime_max_events
+        )
+
+    dns_live: tuple[DnsEvent, ...] | None = None
+    if zeek_stream is not None:
+
+        def _zeek_dns_norm(raw: dict[str, object]) -> DnsEvent | None:
+            return normalize_zeek_dns(raw, received_at=when)
+
+        dns_live = await bounded_drain(zeek_stream, _zeek_dns_norm, max_events=realtime_max_events)
+
     async with asyncio.TaskGroup() as tg:
         suricata_task = (
             tg.create_task(ctx.call_tool("read_suricata_alerts", path=Path(suricata_feed)))
@@ -285,9 +354,16 @@ async def _ingest(
             else None
         )
 
-    suricata: Sequence[SuricataAlert] = suricata_task.result() if suricata_task else ()
+    # Live drains take their slot when present (mutually exclusive with the feed).
+    suricata: Sequence[SuricataAlert] = (
+        suricata_live
+        if suricata_live is not None
+        else (suricata_task.result() if suricata_task else ())
+    )
     flows: Sequence[FlowRecord] = flow_task.result() if flow_task else ()
-    dns: Sequence[DnsEvent] = dns_task.result() if dns_task else ()
+    dns: Sequence[DnsEvent] = (
+        dns_live if dns_live is not None else (dns_task.result() if dns_task else ())
+    )
     return suricata, flows, dns
 
 
