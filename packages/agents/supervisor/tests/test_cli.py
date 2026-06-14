@@ -418,3 +418,15 @@ def test_run_continuous_cadence_null_by_default(cli: CliRunner, tmp_path: Path) 
     )
     assert result.exit_code == 0, result.output
     assert '"continuous_cadence":null' in result.output
+
+
+def test_continuous_status_command(cli: CliRunner, tmp_path: Path) -> None:
+    """Track D D-2: `continuous-status` prints an inert read-only status JSON."""
+    result = cli.invoke(
+        main,
+        ["continuous-status", "--customer-id", "acme", "--workspace-root", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"customer_id":"acme"' in result.output
+    assert '"cadence":null' in result.output
+    assert '"freshness":{}' in result.output

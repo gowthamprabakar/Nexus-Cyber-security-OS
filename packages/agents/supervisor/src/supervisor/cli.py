@@ -47,6 +47,7 @@ from supervisor.heartbeat import (
 from supervisor.routing.parser import load_routing_rules
 from supervisor.scheduled_queue import enqueue as enqueue_scheduled
 from supervisor.schemas import IncomingTask, TriggerSource
+from supervisor.status_page import build_continuous_status
 
 _LOG = logging.getLogger(__name__)
 _DEFAULT_CASES_DIR = Path(__file__).parent.parent.parent / "eval" / "cases"
@@ -345,6 +346,28 @@ def run_cmd(
                 separators=(",", ":"),
             )
         )
+
+
+# ---------------------- continuous-status (Track D D-2) ------------------
+
+
+@main.command("continuous-status")
+@click.option("--customer-id", required=True)
+@click.option(
+    "--workspace-root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path.cwd(),
+    show_default=True,
+)
+def continuous_status_cmd(customer_id: str, workspace_root: Path) -> None:
+    """Print the per-tenant continuous-mode status (cadence + freshness + metrics).
+
+    Track D D-2 status-page stub — a read-only query surface for a v0.4
+    dashboard. Reads the resolved cadence + freshness file; metrics are a fresh
+    (inert) snapshot. Starts no loop, writes nothing.
+    """
+    status = build_continuous_status(workspace_root, customer_id=customer_id)
+    click.echo(json.dumps(status, separators=(",", ":"), sort_keys=True))
 
 
 if __name__ == "__main__":
