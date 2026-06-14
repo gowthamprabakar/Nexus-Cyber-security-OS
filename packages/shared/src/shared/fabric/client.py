@@ -104,6 +104,15 @@ _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
     # (WI-5). Third — and final, for Phase 1 — forbidden subscriber.
     # Added in A.4 v0.2 Task 11. See ADR-012 §v1.1.
     "meta_harness": frozenset({"claims.>"}),
+    # D.12 Curiosity is the PRODUCER of claims.> (it publishes
+    # claims.curiosity.>). It is fenced for a DIFFERENT reason than the three
+    # consumer-laundering subscribers above: a producer that also subscribed to
+    # claims.> would read its OWN hypotheses back as input, creating a
+    # generative feedback loop that amplifies speculation. Curiosity already
+    # enforces this at the code level (assert_no_claims_subscription, WI-X14);
+    # this is the substrate-level belt-and-suspenders fence (Phase D pre-flight
+    # P3-4, the held Phase C item). See ADR-012 §v1.2.
+    "curiosity": frozenset({"claims.>"}),
 }
 """Q7: connect timeout (seconds). nats-py expects an int."""
 
@@ -194,7 +203,8 @@ class JetStreamClient:
 
         ``agent_id`` (per ADR-012) keys the subscriber-ACL fence in
         :meth:`subscribe`. Agents enumerated in ``_FORBIDDEN_SUBSCRIPTIONS``
-        (currently ``"remediation"``) raise ``ForbiddenSubscriptionError``
+        (remediation / supervisor / meta_harness as consumers; curiosity as a
+        producer-only self-read fence) raise ``ForbiddenSubscriptionError``
         when attempting forbidden subject subscriptions. ``None`` (the
         default) skips the check — appropriate for tests + library
         callers that don't carry an agent identity. Production agent

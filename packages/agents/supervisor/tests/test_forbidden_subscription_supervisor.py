@@ -44,18 +44,18 @@ def test_remediation_still_in_registry_after_extension() -> None:
     assert _FORBIDDEN_SUBSCRIPTIONS["remediation"] == frozenset({"claims.>"})
 
 
-def test_registry_has_three_entries_after_a_4_v0_2() -> None:
-    """Forbidden-subscriber set after A.4 v0.2 Task 11 (ADR-012 §v1.1):
-    A.1 Remediation + Supervisor + A.4 Meta-Harness.
-
-    The Q-ARCH-1 trajectory CLOSES at three subscribers for Phase 1 —
-    no further additions are queued. Future auto-acting agents inherit
-    the standing rule; they don't pre-register here.
+def test_registry_membership_after_p3_4() -> None:
+    """Forbidden-subscriber set. The three CONSUMER-laundering subscribers
+    (A.1 Remediation + Supervisor + A.4 Meta-Harness) close the Q-ARCH-1
+    trajectory for Phase 1 per ADR-012 §v1.1. Phase D pre-flight P3-4 adds
+    curiosity — a distinct PRODUCER-ONLY fence (it publishes claims.> and must
+    not read its own claims back), not a fourth consumer.
     """
     assert set(_FORBIDDEN_SUBSCRIPTIONS.keys()) == {
         "remediation",
         "supervisor",
         "meta_harness",
+        "curiosity",
     }
 
 

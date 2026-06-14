@@ -160,9 +160,10 @@ async def test_meta_harness_fence_does_not_block_other_agents(
     mocker: MockerFixture,
 ) -> None:
     """The fence applies only to clients constructed with
-    ``agent_id="meta_harness"``. Other agents (e.g. investigation,
-    data_security, curiosity, threat_intel) continue to subscribe to
-    claims.> as normal per ADR-012 §"Non-acting consumers of claims.>"."""
+    ``agent_id="meta_harness"``. Non-acting consumers (e.g. investigation,
+    data_security, threat_intel) continue to subscribe to claims.> as normal
+    per ADR-012 §"Non-acting consumers of claims.>". (curiosity is itself fenced
+    as of P3-4 — but as a producer, not a consumer; see its own fence test.)"""
     nc, js = _make_nats_mock()
     _patch_nats_connect(mocker, nc)
     client = JetStreamClient(servers=["nats://localhost:4222"], agent_id="investigation")
@@ -180,8 +181,18 @@ async def test_meta_harness_fence_does_not_block_other_agents(
     js.subscribe.assert_awaited_once()
 
 
-def test_q_arch_1_trajectory_closed_at_three_forbidden_subscribers() -> None:
-    """ADR-012 §v1.1 closure: the registry contains exactly three forbidden
-    subscribers (remediation, supervisor, meta_harness). No further additions
-    are queued for Phase 1; new auto-acting agents inherit the standing rule."""
-    assert set(_FORBIDDEN_SUBSCRIPTIONS.keys()) == {"remediation", "supervisor", "meta_harness"}
+def test_forbidden_subscription_registry_membership() -> None:
+    """ADR-012 registry membership. The three CONSUMER-laundering subscribers
+    (remediation, supervisor, meta_harness) remain closed per §v1.1 — no further
+    consumer additions are queued for Phase 1. Phase D pre-flight P3-4 adds
+    curiosity, a distinct PRODUCER-ONLY fence (it publishes claims.> and must not
+    read its own claims back — a generative feedback loop, not consumer laundering)."""
+    assert set(_FORBIDDEN_SUBSCRIPTIONS.keys()) == {
+        "remediation",
+        "supervisor",
+        "meta_harness",
+        "curiosity",
+    }
+    # The three consumer-laundering subscribers are unchanged.
+    for consumer in ("remediation", "supervisor", "meta_harness"):
+        assert _FORBIDDEN_SUBSCRIPTIONS[consumer] == frozenset({"claims.>"})
