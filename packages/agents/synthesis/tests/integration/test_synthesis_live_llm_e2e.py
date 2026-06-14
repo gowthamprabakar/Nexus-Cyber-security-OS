@@ -18,16 +18,16 @@ from datetime import UTC, datetime
 
 import pytest
 from charter.llm import FakeLLMProvider, LLMResponse, TokenUsage
+from nexus_runtime.llm_invariants.bounded import BoundedRetryViolationError, assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import (
+    CategoricalContractViolationError,
+    assert_categorical_only,
+)
 from synthesis.cross_source import cross_source_context
 from synthesis.live_lane import synthesis_live_skip_reason
 from synthesis.ocsf.emission import build_synthesis_finding_json
 from synthesis.ocsf.narrative_translator import translate_report_to_ocsf
-from synthesis.privacy.categorical import (
-    CategoricalContractViolationError,
-    assert_categorical_only,
-)
 from synthesis.providers.triggers import make_resilient_provider
-from synthesis.retry.bounded import BoundedRetryViolationError, assert_bounded_retry
 from synthesis.schemas import ExecutiveSummary, NarrativeSection, SynthesisReport
 from synthesis.tools.fleet_enumeration import all_cited_finding_ids, enumerate_fleet
 from synthesis.tools.fleet_workspace_reader import SOURCE_AGENTS, FleetFindings
