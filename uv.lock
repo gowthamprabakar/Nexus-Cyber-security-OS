@@ -1931,8 +1931,8 @@ dspy = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
-    { name = "dspy", marker = "extra == 'dspy'", specifier = ">=2.5" },
-    { name = "gepa", marker = "extra == 'dspy'" },
+    { name = "dspy", marker = "extra == 'dspy'", specifier = ">=3.2.1,<3.3" },
+    { name = "gepa", marker = "extra == 'dspy'", specifier = "==0.0.27" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
     { name = "nexus-shared", editable = "packages/shared" },

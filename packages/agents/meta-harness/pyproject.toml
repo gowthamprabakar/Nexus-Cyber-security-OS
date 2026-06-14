@@ -23,9 +23,14 @@ dev = [
     "pytest-mock>=3.14.0",
     "types-PyYAML>=6.0.0",
 ]
+# v0.3 pre-flight P3 (Track C prereq): bounded pins. The DSPy compilation
+# pipeline is default-OFF (NEXUS_DSPY_PRODUCTION) and dormant at run(); the
+# old unbounded "dspy>=2.5" had silently drifted across a major to 3.x, and
+# gepa was completely unpinned. Track C activates this pipeline, so pin to the
+# lock-resolved, repo-tested versions with a major/minor cap for reproducibility.
 dspy = [
-    "dspy>=2.5",
-    "gepa",
+    "dspy>=3.2.1,<3.3",
+    "gepa==0.0.27",
 ]
 
 [project.scripts]
