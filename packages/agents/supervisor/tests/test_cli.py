@@ -374,3 +374,47 @@ def test_run_kill_switch_overrides_continuous_mode(cli: CliRunner, tmp_path: Pat
     )
     assert result.exit_code == 0, result.output
     assert '"continuous_effective":false' in result.output
+
+
+def test_run_echoes_continuous_cadence_from_env(
+    cli: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Track D D-2: the resolved per-tenant cadence is surfaced in the decision
+    record (inert — echoed, not registered with any driver)."""
+    monkeypatch.setenv("NEXUS_CONTINUOUS_CADENCE", "weekly")
+    result = cli.invoke(
+        main,
+        [
+            "run",
+            "--customer-id",
+            "acme",
+            "--workspace-root",
+            str(tmp_path),
+            "--tick-interval-seconds",
+            "0.01",
+            "--max-ticks",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"continuous_cadence":"weekly"' in result.output
+
+
+def test_run_continuous_cadence_null_by_default(cli: CliRunner, tmp_path: Path) -> None:
+    """Default (no cadence configured) → continuous_cadence null."""
+    result = cli.invoke(
+        main,
+        [
+            "run",
+            "--customer-id",
+            "acme",
+            "--workspace-root",
+            str(tmp_path),
+            "--tick-interval-seconds",
+            "0.01",
+            "--max-ticks",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"continuous_cadence":null' in result.output
