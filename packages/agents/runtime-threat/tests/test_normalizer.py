@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from nexus_runtime.osquery import OsqueryResult
 from runtime_threat.normalizer import normalize_to_findings
 from runtime_threat.schemas import FindingType, RuntimeFinding, Severity
 from runtime_threat.tools.falco import FalcoAlert
-from runtime_threat.tools.osquery import OsqueryResult
 from runtime_threat.tools.tracee import TraceeAlert
 from shared.fabric.envelope import NexusEnvelope
 

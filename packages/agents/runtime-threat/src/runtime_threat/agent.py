@@ -29,6 +29,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from nexus_runtime.osquery import OsqueryResult, osquery_run
 from nexus_runtime.realtime import EventStream, bounded_drain
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
@@ -43,7 +44,6 @@ from runtime_threat.schemas import FindingsReport
 from runtime_threat.summarizer import render_summary
 from runtime_threat.tools.falco import FalcoAlert, falco_alerts_read
 from runtime_threat.tools.falco_normalize import normalize_falco_event
-from runtime_threat.tools.osquery import OsqueryResult, osquery_run
 from runtime_threat.tools.tracee import TraceeAlert, tracee_alerts_read
 from runtime_threat.tools.tracee_normalize import normalize_tracee_event
 

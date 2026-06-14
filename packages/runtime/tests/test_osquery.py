@@ -1,4 +1,4 @@
-"""Tests for `runtime_threat.tools.osquery.osquery_run`.
+"""Tests for `nexus_runtime.osquery.osquery_run`.
 
 The subprocess is mocked via `monkeypatch` on `asyncio.create_subprocess_exec`
 so the tests don't depend on a real `osqueryi` binary being installed.
@@ -11,8 +11,8 @@ import json
 from typing import Any
 
 import pytest
-from runtime_threat.tools import osquery as osquery_mod
-from runtime_threat.tools.osquery import OsqueryError, OsqueryResult, osquery_run
+from nexus_runtime import osquery as osquery_mod
+from nexus_runtime.osquery import OsqueryError, OsqueryResult, osquery_run
 
 
 class _FakeProcess:

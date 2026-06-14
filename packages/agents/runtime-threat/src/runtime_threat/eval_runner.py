@@ -45,11 +45,11 @@ from charter.contract import BudgetSpec, ExecutionContract
 from charter.llm import LLMProvider
 from eval_framework.cases import EvalCase
 from eval_framework.runner import RunOutcome
+from nexus_runtime.osquery import OsqueryResult
 
 from runtime_threat import agent as agent_mod
 from runtime_threat.schemas import FindingsReport
 from runtime_threat.tools.falco import FalcoAlert
-from runtime_threat.tools.osquery import OsqueryResult
 from runtime_threat.tools.tracee import TraceeAlert
 
 
