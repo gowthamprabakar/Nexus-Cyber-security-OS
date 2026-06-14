@@ -109,3 +109,53 @@ packages/shared packages/charter` empty).
 - Phase D readiness audit — `phase-d-readiness-audit-2026-06-14.md` §Dimension 2/4.
 - Phase C completion — `phase-c-completion-2026-06-14.md` §SS1/SS4 (what was registered vs wired).
 - A-1 ground-truth sweep (2026-06-14) — verified 9-gap enumeration this doc records.
+
+---
+
+## 9. Mid-cascade addendum (2026-06-14) — recon finding + 4 reclassifications
+
+> **Why this addendum exists.** After §3's 8-agent work-list was set, a 6-agent
+> parallel recon read each remaining agent's actual run()/reader/emitter wiring. It
+> found the directive's "no new capability — wire existing infrastructure" premise
+> holds for **only 2** of the agents. The operator's **"Split"** decision
+> (2026-06-14) keeps A-1 as a wiring workstream and reclassifies the net-new work to
+> the depth tracks — extending the §2 MCP→A-3 and data-sec→A-6 precedent. This
+> addendum is the scope-of-record for that split.
+
+### 9.1 Recon verdict per agent
+
+| agent                   | verdict                    | why                                                                                                                                                                      |
+| ----------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| threat-intel            | ✅ pure wiring (DONE #653) | live readers return offline record shapes; `_ingest` live route                                                                                                          |
+| vulnerability           | ✅ pure wiring (DONE #654) | registry pipeline converges on `trivy_to_findings`→2002                                                                                                                  |
+| identity (federation)   | ✅ wiring (DONE #655)      | `federation_to_findings` 2nd emitter already exists; additive                                                                                                            |
+| network-threat          | ⚠️ needs net-new           | Suricata/Zeek are infinite push streams → need a bounded-drain adapter; Zeek-conn needs a missing `ZeekConn→FlowRecord` adapter                                          |
+| runtime-threat          | ⚠️ needs net-new           | falco/tracee infinite push streams → bounded-drain adapter; no production gRPC/pipe client exists                                                                        |
+| k8s-posture             | ⚠️ net-new capability      | live kube-bench/Polaris readers are sync class APIs + **no production runner exists** (only test fakes)                                                                  |
+| identity (Azure-AD ids) | ⚠️ net-new                 | `AzureAdListing` is shape-disjoint from `IdentityListing`, no emit path                                                                                                  |
+| synthesis               | ⚠️ net-new + risk          | fleet reader terminates in a dict the narrator can't consume → needs `FleetFindings→ContextBundle` adapter + Q6 matched-text scrub for 9 agents (safety-regression risk) |
+
+### 9.2 A-1 final scope (5 agents)
+
+1. ✅ threat-intel (#653) · 2. ✅ vulnerability (#654) · 3. ✅ identity-federation (#655)
+   · 4. network-threat (Suricata + Zeek-DNS, bounded-drain) · 5. runtime-threat (falco +
+   tracee, bounded-drain). Agents 4–5 consume a shared **bounded-drain infrastructure**
+   (operator-reviewed, abstraction-only) before their wiring PRs cascade.
+
+### 9.3 The 4 reclassifications (Split decision)
+
+| reclassified work                           | from | to                                 | reason                                              |
+| ------------------------------------------- | ---- | ---------------------------------- | --------------------------------------------------- |
+| k8s-posture live kube-bench/Polaris runners | A-1  | **A-3** (CSPM breadth)             | production runner is net-new capability, not wiring |
+| synthesis fleet source 3→12 (+ Q6 scrub)    | A-1  | **dedicated depth PR**             | needs adapter + Q6 safety replication for 9 agents  |
+| Azure-AD identity enumeration → findings    | A-1  | **A-4** (identity effective-perms) | shape-disjoint, net-new detection logic             |
+| Zeek-conn → FlowRecord adapter              | A-1  | **follow-up**                      | adapter does not exist; Zeek-DNS handled in A-1.4   |
+
+### 9.4 Bounded-drain infrastructure (the A-1.4/A-1.5 prerequisite)
+
+Suricata/Zeek/falco/tracee subscribers consume infinite push streams and return
+`StreamStats`, not records — a single-shot `run()` would hang. A shared, agent-agnostic
+bounded-drain abstraction (operator-reviewed, no wiring) lands first; network-threat and
+runtime-threat then wire to it. Existing per-sensor normalizers already produce
+byte-identical offline shapes, so downstream stays source-agnostic. CI exercises injected
+fake streams; real sockets stay gated behind the per-sensor `NEXUS_LIVE_*` lanes.
