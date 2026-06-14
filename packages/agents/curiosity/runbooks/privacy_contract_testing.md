@@ -4,7 +4,7 @@ D.12 emits LLM-generated text (hypothesis statements, rationale, probe directive
 discuss sensitive data **categorically** — by classification label, never by value (WI-X9).
 
 ```python
-from curiosity.privacy.categorical import assert_categorical_only
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 
 assert_categorical_only(hypothesis.statement)   # raises on plaintext SSN / AWS key / JWT / PAN
 assert_categorical_only(hypothesis.rationale)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from curiosity.retry.bounded import (
+from nexus_runtime.llm_invariants.bounded import (
     MAX_ATTEMPTS,
     BoundedRetryViolationError,
     assert_bounded_retry,
@@ -23,10 +23,10 @@ def test_one_retry_ok() -> None:
 
 
 def test_second_retry_raises() -> None:
-    with pytest.raises(BoundedRetryViolationError, match="retry budget of 2"):
+    with pytest.raises(BoundedRetryViolationError, match="bounded-retry cap"):
         assert_bounded_retry(3)
 
 
 def test_message_mentions_deterministic_draft() -> None:
-    with pytest.raises(BoundedRetryViolationError, match="deterministic draft"):
+    with pytest.raises(BoundedRetryViolationError, match="never retry beyond"):
         assert_bounded_retry(5)

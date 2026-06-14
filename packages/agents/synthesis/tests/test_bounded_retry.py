@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from synthesis.retry.bounded import (
+from nexus_runtime.llm_invariants.bounded import (
     MAX_ATTEMPTS,
     BoundedRetryViolationError,
     assert_bounded_retry,
@@ -23,7 +23,7 @@ def test_one_retry_ok() -> None:
 
 
 def test_third_attempt_rejected() -> None:
-    with pytest.raises(BoundedRetryViolationError, match="exceeds the H5 bound"):
+    with pytest.raises(BoundedRetryViolationError, match="bounded-retry cap"):
         assert_bounded_retry(3)
 
 
@@ -33,7 +33,7 @@ def test_large_attempt_rejected() -> None:
 
 
 def test_error_message_explains_bound() -> None:
-    with pytest.raises(BoundedRetryViolationError, match="degraded draft"):
+    with pytest.raises(BoundedRetryViolationError, match="never retry beyond"):
         assert_bounded_retry(4)
 
 

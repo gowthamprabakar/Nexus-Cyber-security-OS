@@ -7,6 +7,7 @@ license = { file = "../../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
     "nexus-shared",
+    "nexus-runtime",
     "nexus-eval-framework",
     "nexus-synthesis-agent",
     "nexus-cloud-posture",
@@ -37,6 +38,7 @@ curiosity = "curiosity.eval_runner:CuriosityEvalRunner"
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
+nexus-runtime = { workspace = true }
 nexus-eval-framework = { workspace = true }
 nexus-synthesis-agent = { workspace = true }
 nexus-cloud-posture = { workspace = true }
