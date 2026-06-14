@@ -405,3 +405,39 @@ The per-module Adopt/Fork/Rebuild matrix (§3) is the operational deliverable th
 The bee metaphor extends: before the brood-care bee (A.4) gets its new training system (DSPy+GEPA in v0.2.5), the hive needs to know what "effective foraging" means (G1) and which foragers should learn which skills (G2). Without those, the training system trains for the wrong things.
 
 — Recorded 2026-05-23, post-Wave-0-closure, in response to operator challenges that correctly identified the Hermes-adoption question and the missing-pieces gap.
+
+---
+
+## §10. Upstream re-check addendum (2026-06-14) — v0.3 Phase D pre-flight Task-5
+
+> **Why this addendum exists.** §6 Risk 4 + §7.3 named "Hermes upstream v0.15.0 release" as a reassessment trigger. The v0.3 directive's pre-flight Task-5 is that re-check. This section is **additive** — §1–§9 are preserved verbatim as the 2026-05-23 snapshot. Re-check performed against live upstream on 2026-06-14 (web spike, not a repo clone).
+
+### §10.1 Headline verdict — no change; REBUILD reinforced; Track C unblocked
+
+The re-check finds **nothing that invalidates the REBUILD verdict (§2.5) or the G1 → G2 → v0.2.5 sequencing (§5)**. Phase 2 has **not** shipped as code upstream, so Risk 4's specific worry ("Hermes v0.15.0 might ship Phase 2 before Nexus finishes G1+G2") has not materialised — and is moot anyway, since Nexus's own G1 (effectiveness scoring) and G2 (skill selection) both closed in the interim. Track C (DSPy+GEPA activation) has no upstream blocker.
+
+### §10.2 Four ground-truth corrections to the 2026-05-23 snapshot
+
+1. **The version numbers in §1/§8 do not correspond to real upstream release tags.** The parent `NousResearch/hermes-agent` repo uses **CalVer**, not semver. Latest release is **v2026.6.5** ("The Surface Release", 2026-06-06); prior tags are v2026.5.29(.2), v2026.5.28, v2026.5.16. There is no `v0.10.0`, no `v0.14.0`, and **no `v0.15.0`** — the very tag the re-check trigger names. The doc's "v0.14.0 (tagged)" / "v0.10.0 latest" were almost certainly an artifact of the original local-clone spike (`/mnt/user-data/repos/hermes-agent`), not the public release line. **Takeaway: the correct re-check axis is phase-shipment, not a version number.**
+
+2. **The self-evolution repo's phase roadmap has been restructured** since the snapshot. §1.2's recollection — Phase 1 Basic Skill Creation / 2 Skill Improvement / 3 Curator / 4 Feedback / 5 Autonomous — no longer matches upstream. The current `hermes-agent-self-evolution/PLAN.md` 5-phase roadmap is: **(1) Skill Evolution via DSPy+GEPA, (2) Tool Description Optimization, (3) System Prompt Evolution, (4) Code Evolution (Darwinian Evolver), (5) Continuous Self-Improvement Loop.** The §3 per-module Adopt/Fork/Rebuild matrix is keyed to the OLD phase names and should be read as historical.
+
+3. **Upstream independently converged on DSPy + GEPA** — the exact stack Nexus chose for A.4 v0.2.5 (and the exact two deps the v0.3 pre-flight PR-4 just pinned: `dspy`, `gepa`). `hermes-agent-self-evolution` is described as "optimize skills, prompts, and code using DSPy + GEPA," reading execution traces to understand _why_ things fail. This is corroboration that the Track C direction is sound — it is **not** a reason to adopt upstream code (see §10.3).
+
+4. **Phase-shipment status: Phase 2 unshipped.** `PLAN.md` states the roadmap is a proposal ("This plan IS the implementation of #337", an open issue) with a "~13–17 weeks if all phases prove valuable" estimate and an explicit "we may stop at Phase 1 or 2." Secondary sources (DeepWiki/README, a 2026-06 Security Boulevard write-up "8 Self-Evolving Skills Hermes Agent Writes on Its Own") describe Phase 1 as implemented. Reconciled reading: **Phase 1 (DSPy+GEPA skill optimization) is partially implemented; Phases 2–5 are planning-only.** Either reading leaves §10.1's verdict unchanged.
+
+### §10.3 Architecture verdict re-confirmed (REBUILD, not ADOPT)
+
+The §2 architectural-fit gaps are, if anything, wider. Parent v2026.6.5 **doubles down on the single-user/desktop model** — it adds a native cross-platform desktop GUI, a remote WebSocket gateway with OAuth, and a browser admin dashboard. Still no multi-tenancy, no tenant-RLS, no audit chain, no subscriber ACL (ADR-012). The single-user assumption (§2.1) and the dependency/eval/trust-boundary gaps (§2.2–§2.4) all hold. Direct code adoption remains infeasible; design inspiration only.
+
+### §10.4 Pre-flight disposition
+
+- **Task-5 result:** re-check complete; **no Track-blocking finding.** The pre-flight gate's Task-5 obligation is satisfied by this addendum.
+- **No action required** for Track C beyond the PR-4 pins already proposed.
+- **Optional future hygiene (NOT prescribed here):** if upstream's restructured Phase 2 (Tool Description Optimization) or Phase 3 (System Prompt Evolution) ever ships as code, that would be the next genuine reassessment trigger for A.4 v0.3 — re-key §3's matrix to the current phase names at that time.
+
+### §10.5 Sources (re-check, 2026-06-14)
+
+- `NousResearch/hermes-agent` releases — CalVer line, latest v2026.6.5 (2026-06-06).
+- `NousResearch/hermes-agent-self-evolution` — repo + `PLAN.md` (5-phase DSPy+GEPA roadmap; planning-only; "implementation of #337").
+- DeepWiki mirror of `hermes-agent-self-evolution`; Security Boulevard, "8 Self-Evolving Skills Hermes Agent Writes on Its Own" (2026-06).
