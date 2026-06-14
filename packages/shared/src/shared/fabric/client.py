@@ -111,7 +111,7 @@ _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
     # generative feedback loop that amplifies speculation. Curiosity already
     # enforces this at the code level (assert_no_claims_subscription, WI-X14);
     # this is the substrate-level belt-and-suspenders fence (Phase D pre-flight
-    # P3-4, the held Phase C item). See ADR-012 §"Subscriber ACL".
+    # P3-4, the held Phase C item). See ADR-012 §v1.2.
     "curiosity": frozenset({"claims.>"}),
 }
 """Q7: connect timeout (seconds). nats-py expects an int."""

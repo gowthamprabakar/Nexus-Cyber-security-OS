@@ -213,3 +213,43 @@ _FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
 - Supervisor v0.1 verification record (2026-05-21) — WI-5 forward-carry text.
 - ADR-007 v1.4 (2026-05-22) — progressive-disclosure NLAH loader; the substrate A.4 v0.2 uses to read deployed skills.
 - A.4 Meta-Harness v0.2 plan (`docs/superpowers/plans/2026-05-22-a-4-meta-harness-v0-2.md`) §"Q-ARCH-1" — predicted this amendment in the plan-resolution table.
+
+## v1.2 amendment (2026-06-14) — Curiosity producer-only fence (a NEW category)
+
+**Status.** Accepted. Substrate amendment paired with the `packages/shared/src/shared/fabric/client.py` change in the same PR (v0.3 Phase D pre-flight P3-4 — the held Phase C substrate item). Manual review required; no auto-merge.
+
+**This is a NEW fence category, not a fourth member of the v1.1 trajectory.** The three subscribers fenced in v1.0/v1.1 (A.1 Remediation, Supervisor, A.4 Meta-Harness) share one rationale: they are **auto-acting consumers**, and consuming a `claims.>` hypothesis as evidence would launder speculation into a destructive action, a downstream route, or deployed procedural memory. Call that the **consumer-laundering ACL**. Curiosity is fenced for a **different** reason and belongs to a distinct category — the **producer-only fence**.
+
+**Trigger.** D.12 Curiosity v0.2 is the **first `claims.>` publisher** — it emits `claims.curiosity.>` (producer-only; ADR-012). A producer that ALSO subscribed to `claims.>` would read its OWN hypotheses back as input, creating a generative feedback loop that amplifies speculation round over round. That is a failure mode the consumer-laundering ACL does not describe: Curiosity does not auto-act and does not launder claims into anything downstream — it would launder them into _itself_.
+
+**Belt-and-suspenders.** Curiosity already enforces producer-only at the code level — `assert_no_claims_subscription` (Curiosity v0.2 Task 16, WI-X14). This amendment adds the substrate-level fence so the guarantee holds even if a future Curiosity build dropped or regressed the code-level guard. The substrate is the lower, harder boundary; the code-level guard is the agent-local one. Both must hold.
+
+**Change to the forbidden-subscriber set.**
+
+| Agent (post-v1.2)            | Category                | Why forbidden                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A.1 Remediation**          | consumer-laundering     | (unchanged) Takes destructive action — kubectl apply, policy patches, rollback rollouts.                                                                                                                                                                                                                                                      |
+| **Supervisor (#0)**          | consumer-laundering     | (unchanged) Routes work that triggers downstream specialist invocations — including A.1.                                                                                                                                                                                                                                                      |
+| **A.4 Meta-Harness (v0.2+)** | consumer-laundering     | (unchanged from v1.1) Writes deployed procedural memory other agents act on.                                                                                                                                                                                                                                                                  |
+| **D.12 Curiosity (v0.2+)**   | **producer-only (NEW)** | NEW in v1.2. The producer of `claims.curiosity.>`; subscribing to `claims.>` would feed its own hypotheses back as input — a generative feedback loop. Distinct from consumer-laundering: it launders speculation into itself, not into a downstream action. Added in Curiosity v0.2 Task 16 (code-level) + v0.3 pre-flight P3-4 (substrate). |
+
+Enforcement code in `packages/shared/src/shared/fabric/client.py` after this amendment:
+
+```python
+_FORBIDDEN_SUBSCRIPTIONS: Final[dict[str, frozenset[str]]] = {
+    "remediation": frozenset({"claims.>"}),
+    "supervisor": frozenset({"claims.>"}),
+    "meta_harness": frozenset({"claims.>"}),
+    "curiosity": frozenset({"claims.>"}),
+}
+```
+
+**Supersession note for v1.1's "Q-ARCH-1 trajectory CLOSED at three subscribers."** v1.1 stated: "the registry has exactly three forbidden subscribers (remediation, supervisor, meta_harness) ... No further additions are pending for Phase 1." That statement remains accurate **as scoped** — it closed the **consumer-laundering** trajectory, and no fourth consumer-laundering subscriber has been added. The fourth entry, Curiosity, opens a **new category** v1.1 did not anticipate: producer-only self-read prevention. The consumer-laundering trajectory stays closed at three; the producer-only category opens at one. The two coexist. Membership tests that previously asserted "exactly three" are reframed to the four-entry set `{remediation, supervisor, meta_harness, curiosity}` in this PR.
+
+**Standing rule (extended).** v1.1's standing rule for future **auto-acting** agents is unchanged. This amendment adds a parallel standing rule: any future agent that is a `claims.>` **producer** must also appear in `_FORBIDDEN_SUBSCRIPTIONS` (producer-only fence) OR document in its plan why a self-read loop is impossible. Producers and auto-acting consumers are now both covered.
+
+**References.**
+
+- Curiosity v0.2 verification record (Cycle 15, record #599) — WI-X14 `assert_no_claims_subscription` (code-level producer-only fence) + "first claims.> publisher (ADR-012), producer-only."
+- Curiosity v0.2 Task 16 (`feat/curiosity-v0-2-task-16-producer-only`) — the code-level guard this substrate fence backstops.
+- Phase C completion record (`docs/_meta/phase-c-completion-2026-06-14.md`) — P3-4 carried as a held substrate item for operator review (does not self-merge).
