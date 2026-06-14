@@ -46,14 +46,23 @@ def test_four_new_additive_entries() -> None:
     )
 
 
-def test_full_set_is_eight() -> None:
-    assert len(SUPERVISOR_AUDIT_ACTIONS) == 8
+def test_full_set_is_nine() -> None:
+    # v0.1 (4) + v0.2 (4) + v0.3 (1, Track D D-2 continuous state-transition).
+    assert len(SUPERVISOR_AUDIT_ACTIONS) == 9
 
 
-def test_v0_1_and_v0_2_partition_the_full_set() -> None:
+def test_versions_partition_the_full_set() -> None:
     # Additive: the full set is exactly the disjoint union; nothing dropped, nothing renamed.
+    from supervisor.audit_emit import SUPERVISOR_AUDIT_ACTIONS_V0_3
+
     assert SUPERVISOR_AUDIT_ACTIONS_V0_1.isdisjoint(SUPERVISOR_AUDIT_ACTIONS_V0_2)
-    assert SUPERVISOR_AUDIT_ACTIONS == SUPERVISOR_AUDIT_ACTIONS_V0_1 | SUPERVISOR_AUDIT_ACTIONS_V0_2
+    assert SUPERVISOR_AUDIT_ACTIONS_V0_1.isdisjoint(SUPERVISOR_AUDIT_ACTIONS_V0_3)
+    assert SUPERVISOR_AUDIT_ACTIONS_V0_2.isdisjoint(SUPERVISOR_AUDIT_ACTIONS_V0_3)
+    assert SUPERVISOR_AUDIT_ACTIONS == (
+        SUPERVISOR_AUDIT_ACTIONS_V0_1
+        | SUPERVISOR_AUDIT_ACTIONS_V0_2
+        | SUPERVISOR_AUDIT_ACTIONS_V0_3
+    )
 
 
 def test_new_constants_in_full_set() -> None:

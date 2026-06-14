@@ -56,6 +56,11 @@ ACTION_DELEGATION_RETRIED = "supervisor.delegation.retried"
 ACTION_SEMAPHORE_WAIT = "supervisor.delegation.semaphore_wait"
 ACTION_QUEUE_DRAINED = "supervisor.queue.drained"
 
+# v0.3 Track D D-2 — 1 ADDITIVE vocabulary entry (ADR-010 additive-only). The 8
+# existing entries above stay byte-identical; this records continuous-mode state
+# resolution (OFF / ON / kill-switched) — a config/state event, NOT loop activation.
+ACTION_CONTINUOUS_STATE_TRANSITION = "supervisor.continuous.state_transition"
+
 
 def emit_heartbeat_started(
     audit_log: AuditLog,
@@ -213,6 +218,31 @@ def emit_queue_drained(
     audit_log.append(ACTION_QUEUE_DRAINED, payload)
 
 
+def emit_continuous_state_transition(
+    audit_log: AuditLog,
+    *,
+    customer_id: str,
+    continuous_mode_requested: bool,
+    continuous_kill_switch: bool,
+    continuous_effective: bool,
+    cadence: str | None = None,
+) -> None:
+    """Emit how continuous mode resolved for a tenant (D-2; config/state, not a loop).
+
+    Records the same decision the ``run`` CLI echoes — OFF / ON / kill-switched —
+    so the resolution is on the hash-chained audit trail. Writing it on a ``run``
+    invocation documents state; it does NOT start a loop (default-OFF preserved).
+    """
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "continuous_mode_requested": continuous_mode_requested,
+        "continuous_kill_switch": continuous_kill_switch,
+        "continuous_effective": continuous_effective,
+        "cadence": cadence,
+    }
+    audit_log.append(ACTION_CONTINUOUS_STATE_TRANSITION, payload)
+
+
 # The original v0.1 vocabulary (4) — surfaced separately so tests can assert it stays
 # byte-identical under the v0.2 extension (WI-O5).
 SUPERVISOR_AUDIT_ACTIONS_V0_1: frozenset[str] = frozenset(
@@ -234,13 +264,21 @@ SUPERVISOR_AUDIT_ACTIONS_V0_2: frozenset[str] = frozenset(
     }
 )
 
-# The full canonical set (8) — the v0.1 set plus the v0.2 additions.
+# The 1 ADDITIVE v0.3 entry (Track D D-2).
+SUPERVISOR_AUDIT_ACTIONS_V0_3: frozenset[str] = frozenset(
+    {
+        ACTION_CONTINUOUS_STATE_TRANSITION,
+    }
+)
+
+# The full canonical set (9) — the v0.1 set plus the v0.2 + v0.3 additions.
 SUPERVISOR_AUDIT_ACTIONS: frozenset[str] = (
-    SUPERVISOR_AUDIT_ACTIONS_V0_1 | SUPERVISOR_AUDIT_ACTIONS_V0_2
+    SUPERVISOR_AUDIT_ACTIONS_V0_1 | SUPERVISOR_AUDIT_ACTIONS_V0_2 | SUPERVISOR_AUDIT_ACTIONS_V0_3
 )
 
 
 __all__ = [
+    "ACTION_CONTINUOUS_STATE_TRANSITION",
     "ACTION_DELEGATION_COMPLETED",
     "ACTION_DELEGATION_DISPATCHED",
     "ACTION_DELEGATION_RETRIED",
@@ -252,6 +290,8 @@ __all__ = [
     "SUPERVISOR_AUDIT_ACTIONS",
     "SUPERVISOR_AUDIT_ACTIONS_V0_1",
     "SUPERVISOR_AUDIT_ACTIONS_V0_2",
+    "SUPERVISOR_AUDIT_ACTIONS_V0_3",
+    "emit_continuous_state_transition",
     "emit_delegation_completed",
     "emit_delegation_dispatched",
     "emit_delegation_retried",

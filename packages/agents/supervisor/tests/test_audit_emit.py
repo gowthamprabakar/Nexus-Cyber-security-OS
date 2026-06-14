@@ -68,14 +68,15 @@ def _read_entries(path: Path) -> list[dict[str, object]]:
 
 
 def test_supervisor_audit_actions_set_contains_original_four() -> None:
-    # v0.2 (Q4): the set grew additively to 8; the original 4 entries remain (WI-O5).
+    # Additive growth: v0.2 (Q4) → 8, v0.3 (Track D D-2) → 9; the original 4
+    # entries remain (WI-O5).
     assert {
         ACTION_HEARTBEAT_STARTED,
         ACTION_DELEGATION_DISPATCHED,
         ACTION_DELEGATION_COMPLETED,
         ACTION_ESCALATION_RAISED,
     } <= SUPERVISOR_AUDIT_ACTIONS
-    assert len(SUPERVISOR_AUDIT_ACTIONS) == 8
+    assert len(SUPERVISOR_AUDIT_ACTIONS) == 9
 
 
 def test_action_constants_match_documented_strings() -> None:
