@@ -36,7 +36,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from supervisor import __version__
-from supervisor.cli import main
+from supervisor.cli import _resolve_continuous_source, main
+from supervisor.continuous_source import ContinuousTriggerSource
 
 
 @pytest.fixture
@@ -283,3 +284,93 @@ def test_run_rejects_zero_tick_interval(cli: CliRunner, tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code != 0
+
+
+# ---------------------- Track D D-1: continuous-mode CLI wiring ----------
+
+
+def test_resolve_continuous_source_off_by_default() -> None:
+    """Default OFF → no continuous source (heartbeat-only preserved)."""
+    src, decision = _resolve_continuous_source(continuous_mode=False, continuous_kill_switch=False)
+    assert src is None
+    assert decision["continuous_effective"] is False
+
+
+def test_resolve_continuous_source_on_builds_trigger_source() -> None:
+    """--continuous-mode → a wired (but inert) ContinuousTriggerSource."""
+    src, decision = _resolve_continuous_source(continuous_mode=True, continuous_kill_switch=False)
+    assert isinstance(src, ContinuousTriggerSource)
+    assert decision["continuous_effective"] is True
+
+
+def test_resolve_continuous_source_kill_switch_overrides() -> None:
+    """Per-tenant kill-switch forces OFF even when continuous-mode is requested."""
+    src, decision = _resolve_continuous_source(continuous_mode=True, continuous_kill_switch=True)
+    assert src is None
+    assert decision["continuous_effective"] is False
+    assert decision["continuous_kill_switch"] is True
+
+
+def test_run_default_reports_heartbeat_only(cli: CliRunner, tmp_path: Path) -> None:
+    """`run` with no continuous flag echoes continuous_effective=false + completes."""
+    result = cli.invoke(
+        main,
+        [
+            "run",
+            "--customer-id",
+            "acme",
+            "--workspace-root",
+            str(tmp_path),
+            "--tick-interval-seconds",
+            "0.01",
+            "--max-ticks",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"continuous_effective":false' in result.output
+    assert "ticks completed: 1" in result.output
+
+
+def test_run_continuous_mode_wires_and_completes(cli: CliRunner, tmp_path: Path) -> None:
+    """`run --continuous-mode` echoes continuous_effective=true + still completes."""
+    result = cli.invoke(
+        main,
+        [
+            "run",
+            "--customer-id",
+            "acme",
+            "--workspace-root",
+            str(tmp_path),
+            "--tick-interval-seconds",
+            "0.01",
+            "--max-ticks",
+            "1",
+            "--continuous-mode",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"continuous_effective":true' in result.output
+    assert "ticks completed: 1" in result.output
+
+
+def test_run_kill_switch_overrides_continuous_mode(cli: CliRunner, tmp_path: Path) -> None:
+    """`run --continuous-mode --continuous-kill-switch` → effective false (override)."""
+    result = cli.invoke(
+        main,
+        [
+            "run",
+            "--customer-id",
+            "acme",
+            "--workspace-root",
+            str(tmp_path),
+            "--tick-interval-seconds",
+            "0.01",
+            "--max-ticks",
+            "1",
+            "--continuous-mode",
+            "--continuous-kill-switch",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert '"continuous_effective":false' in result.output
