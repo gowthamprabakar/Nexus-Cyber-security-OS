@@ -7,6 +7,7 @@ license = { file = "../../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
     "nexus-shared",
+    "nexus-runtime",
     "nexus-eval-framework",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
@@ -33,6 +34,7 @@ network_threat = "network_threat.eval_runner:NetworkThreatEvalRunner"
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
+nexus-runtime = { workspace = true }
 nexus-eval-framework = { workspace = true }
 
 [build-system]
