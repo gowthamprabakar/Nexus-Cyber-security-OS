@@ -35,8 +35,8 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from identity import __version__ as agent_version
-from identity.normalizer import normalize_to_findings
-from identity.schemas import FindingsReport
+from identity.normalizer import federation_to_findings, normalize_to_findings
+from identity.schemas import FindingsReport, IdentityFinding
 from identity.summarizer import render_summary
 from identity.tools.aws_access_analyzer import (
     AccessAnalyzerFinding,
@@ -46,6 +46,12 @@ from identity.tools.aws_iam import (
     IdentityListing,
     aws_iam_list_identities,
     aws_iam_simulate_principal_policy,
+)
+from identity.tools.federation import (
+    detect_aws_oidc_providers,
+    detect_aws_saml_providers,
+    detect_azure_federated_domains,
+    detect_azure_oidc_providers,
 )
 from identity.tools.permission_paths import EffectiveGrant
 
@@ -77,6 +83,22 @@ def build_registry() -> ToolRegistry:
         version="0.1.0",
         cloud_calls=10,
     )
+    # A-1 live-loop wiring: SAML/OIDC federation-trust detectors (AWS + Azure).
+    reg.register(
+        "detect_aws_saml_providers", detect_aws_saml_providers, version="0.2.0", cloud_calls=1
+    )
+    reg.register(
+        "detect_aws_oidc_providers", detect_aws_oidc_providers, version="0.2.0", cloud_calls=2
+    )
+    reg.register(
+        "detect_azure_federated_domains",
+        detect_azure_federated_domains,
+        version="0.2.0",
+        cloud_calls=1,
+    )
+    reg.register(
+        "detect_azure_oidc_providers", detect_azure_oidc_providers, version="0.2.0", cloud_calls=1
+    )
     return reg
 
 
@@ -105,6 +127,8 @@ async def run(
     analyzer_arn: str | None = None,
     users_with_mfa: frozenset[str] = frozenset(),
     dormant_threshold_days: int = DEFAULT_DORMANT_THRESHOLD_DAYS,
+    detect_federation: bool = False,
+    azure_credential_source: str | None = None,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -119,6 +143,14 @@ async def run(
             here + holding admin grants becomes an MFA_GAP finding. Phase 1c
             wires this from cloud-posture's IAM credential-report helpers.
         dormant_threshold_days: Last-used staleness threshold.
+        detect_federation: A-1 live-loop wiring. When True, detect SAML/OIDC
+            federation trusts (AWS via profile/region, Azure via
+            ``azure_credential_source``) and emit them through the
+            ``federation_to_findings`` second emitter (OCSF 2004), additively
+            alongside the AWS-IAM findings. Default False keeps the AWS-IAM
+            path byte-identical to pre-A-1.
+        azure_credential_source: Optional Azure credential-source hint for the
+            Azure federation detectors; ignored unless ``detect_federation``.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -166,6 +198,18 @@ async def run(
         for f in findings:
             report.add_finding(f)
 
+        # A-1 live-loop wiring: additive federation-trust emission (2nd emitter).
+        if detect_federation:
+            for f in await _detect_federation(
+                ctx,
+                envelope=envelope,
+                profile=profile,
+                aws_region=aws_region,
+                azure_credential_source=azure_credential_source,
+                detected_at=scan_started,
+            ):
+                report.add_finding(f)
+
         ctx.write_output(
             "findings.json",
             report.model_dump_json(indent=2).encode("utf-8"),
@@ -211,6 +255,48 @@ async def _fetch_inventory(
     listing: IdentityListing = listing_task.result()
     aa_findings: Sequence[AccessAnalyzerFinding] = aa_task.result() if aa_task else ()
     return listing, aa_findings
+
+
+async def _detect_federation(
+    ctx: Charter,
+    *,
+    envelope: NexusEnvelope,
+    profile: str | None,
+    aws_region: str,
+    azure_credential_source: str | None,
+    detected_at: datetime,
+) -> list[IdentityFinding]:
+    """A-1 live-loop wiring: detect SAML/OIDC federation trusts (AWS + Azure) and
+    map them to OCSF 2004 findings via the ``federation_to_findings`` emitter.
+
+    The four detectors dispatch concurrently through the charter; AWS uses
+    profile/region, Azure uses the ``credential_source`` seam. This is a second,
+    additive emitter — it does not touch the AWS-IAM ``normalize_to_findings``
+    path (WI-I5), so the offline AWS eval stays byte-identical.
+    """
+    async with asyncio.TaskGroup() as tg:
+        saml_task = tg.create_task(
+            ctx.call_tool("detect_aws_saml_providers", profile=profile, region=aws_region)
+        )
+        oidc_task = tg.create_task(
+            ctx.call_tool("detect_aws_oidc_providers", profile=profile, region=aws_region)
+        )
+        az_dom_task = tg.create_task(
+            ctx.call_tool(
+                "detect_azure_federated_domains", credential_source=azure_credential_source
+            )
+        )
+        az_oidc_task = tg.create_task(
+            ctx.call_tool("detect_azure_oidc_providers", credential_source=azure_credential_source)
+        )
+    return federation_to_findings(
+        envelope=envelope,
+        aws_saml=saml_task.result(),
+        aws_oidc=oidc_task.result(),
+        azure_federated_domains=az_dom_task.result(),
+        azure_oidc=az_oidc_task.result(),
+        detected_at=detected_at,
+    )
 
 
 def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:

@@ -50,6 +50,10 @@ def _contract(tmp_path: Path) -> ExecutionContract:
             "aws_iam_list_identities",
             "aws_iam_simulate_principal_policy",
             "aws_access_analyzer_findings",
+            "detect_aws_saml_providers",
+            "detect_aws_oidc_providers",
+            "detect_azure_federated_domains",
+            "detect_azure_oidc_providers",
         ],
         completion_condition="findings.json AND summary.md exist",
         escalation_rules=[],
@@ -434,3 +438,98 @@ async def test_run_accepts_llm_provider_without_calling_it(
     provider = FakeLLMProvider(responses=[])
     await run(_contract(tmp_path), llm_provider=provider)
     assert provider.calls == []
+
+
+# ---------------------------------------------------------------------------
+# A-1 live-loop wiring — federation-trust second emitter (v0.3 Track A)
+# ---------------------------------------------------------------------------
+
+
+def _patch_federation(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Patch the 4 federation detectors to each return one trust; return mocks.
+
+    Mirrors _patch_listing: build_registry() runs inside run() and reads the
+    module-global names, so setattr on agent_mod swaps the registered tools.
+    """
+    from identity.tools.federation import (
+        AwsOidcProvider,
+        AwsSamlProvider,
+        AzureFederatedDomain,
+        AzureOidcProvider,
+    )
+
+    calls: dict[str, Any] = {"saml": 0, "oidc": 0, "az_dom": 0, "az_oidc": 0}
+
+    async def fake_saml(**_: Any) -> tuple[AwsSamlProvider, ...]:
+        calls["saml"] += 1
+        return (
+            AwsSamlProvider(
+                arn="arn:aws:iam::111122223333:saml-provider/Okta", name="Okta", valid_until=None
+            ),
+        )
+
+    async def fake_oidc(**_: Any) -> tuple[AwsOidcProvider, ...]:
+        calls["oidc"] += 1
+        return (
+            AwsOidcProvider(
+                arn="arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com",
+                url="token.actions.githubusercontent.com",
+                client_ids=("sts.amazonaws.com",),
+            ),
+        )
+
+    async def fake_az_dom(**_: Any) -> tuple[AzureFederatedDomain, ...]:
+        calls["az_dom"] += 1
+        return (
+            AzureFederatedDomain(
+                domain="fed.contoso.com", authentication_type="Federated", is_verified=True
+            ),
+        )
+
+    async def fake_az_oidc(**_: Any) -> tuple[AzureOidcProvider, ...]:
+        calls["az_oidc"] += 1
+        return (
+            AzureOidcProvider(
+                id="Okta-OIDC",
+                display_name="Okta",
+                odata_type="#microsoft.graph.openIdConnectIdentityProvider",
+            ),
+        )
+
+    monkeypatch.setattr(agent_mod, "detect_aws_saml_providers", fake_saml)
+    monkeypatch.setattr(agent_mod, "detect_aws_oidc_providers", fake_oidc)
+    monkeypatch.setattr(agent_mod, "detect_azure_federated_domains", fake_az_dom)
+    monkeypatch.setattr(agent_mod, "detect_azure_oidc_providers", fake_az_oidc)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_federation_route_emits_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A-1: detect_federation=True emits one OCSF 2004 finding per trust,
+    additively, on an otherwise-empty AWS account."""
+    _patch_listing(monkeypatch, _empty_listing())
+    calls = _patch_federation(monkeypatch)
+
+    report = await run(_contract(tmp_path), detect_federation=True)
+
+    assert report.total == 4  # 4 trusts -> 4 federation findings (0 IAM findings)
+    assert all(v == 1 for v in calls.values())  # all 4 detectors drove the run
+    payload = json.loads((tmp_path / "ws" / "findings.json").read_text())
+    assert any("federation" in f["finding_info"]["types"][0] for f in payload["findings"])
+
+
+@pytest.mark.asyncio
+async def test_federation_disabled_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A-1 byte-identical guard: default (detect_federation=False) never calls
+    the federation detectors — the AWS-IAM path is unchanged."""
+    _patch_listing(monkeypatch, _empty_listing())
+    calls = _patch_federation(monkeypatch)
+
+    report = await run(_contract(tmp_path))
+
+    assert report.total == 0
+    assert all(v == 0 for v in calls.values())
