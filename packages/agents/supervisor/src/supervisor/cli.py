@@ -37,6 +37,7 @@ from nexus_runtime import ContinuousDriver
 
 from supervisor import __version__
 from supervisor.agent import run as agent_run
+from supervisor.cadence import resolve_cadence
 from supervisor.continuous_source import ContinuousTriggerSource
 from supervisor.eval_runner import SupervisorEvalRunner
 from supervisor.heartbeat import (
@@ -314,8 +315,13 @@ def run_cmd(
         continuous_mode=continuous_mode,
         continuous_kill_switch=continuous_kill_switch,
     )
+    # Track D D-2: resolve the per-tenant cadence (inert — surfaced in the decision
+    # record, NOT registered with any driver; activation is v0.4).
+    cadence = resolve_cadence(workspace_root=workspace_root, customer_id=customer_id)
+    decision_record: dict[str, object] = {"customer_id": customer_id, **decision}
+    decision_record["continuous_cadence"] = cadence.cadence if cadence else None
     # Audit/observability: record how continuous state resolved for this tenant.
-    click.echo(json.dumps({"customer_id": customer_id, **decision}, separators=(",", ":")))
+    click.echo(json.dumps(decision_record, separators=(",", ":")))
 
     hb = Heartbeat(
         customer_id=customer_id,
