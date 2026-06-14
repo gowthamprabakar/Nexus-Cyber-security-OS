@@ -46,13 +46,13 @@ from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from charter.memory import SemanticStore
+from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from ulid import ULID
 
 from investigation.bus_emit import BusEmitter, mint_investigation_id
 from investigation.orchestrator import SubAgentOrchestrator, SubResult
 from investigation.orchestrator_bounds import assert_worker_bounded
-from investigation.privacy.categorical import assert_categorical_only
-from investigation.retry.bounded import assert_bounded_retry
 from investigation.schemas import (
     Hypothesis,
     IncidentReport,

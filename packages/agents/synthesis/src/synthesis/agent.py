@@ -47,6 +47,8 @@ from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from charter.memory.semantic import SemanticStore
+from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -60,8 +62,6 @@ from synthesis.narrator import (
     narrate,
 )
 from synthesis.ocsf.emission import SYNTHESIS_FINDING_OUTPUT, build_synthesis_finding_json
-from synthesis.privacy.categorical import assert_categorical_only
-from synthesis.retry.bounded import assert_bounded_retry
 from synthesis.reviewer import RETRY_HINT_Q6, review
 from synthesis.schemas import (
     ContextBundle,

@@ -46,12 +46,12 @@ from investigation.orchestrator import (
     SUB_AGENT_ALLOWLIST,
 )
 from investigation.orchestrator_bounds import assert_worker_bounded
-from investigation.privacy.categorical import assert_categorical_only
-from investigation.retry.bounded import assert_bounded_retry
 from investigation.schemas import IncidentReport
 from investigation.validation.evidence_chain import assert_evidence_chain
 from investigation.validation.evidence_cited import assert_findings_cited
 from investigation.validation.no_speculation import assert_no_speculation
+from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]

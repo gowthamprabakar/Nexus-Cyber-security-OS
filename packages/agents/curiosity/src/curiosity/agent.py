@@ -51,6 +51,8 @@ from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from charter.memory.semantic import SemanticStore
+from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
+from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from shared.fabric import JetStreamClient
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
@@ -68,8 +70,6 @@ from curiosity.hypothesizer import (
 from curiosity.kg_writer import upsert_hypotheses
 from curiosity.ocsf.claim_translator import coverage_gap_id
 from curiosity.ocsf.emission import render_curiosity_findings_json
-from curiosity.privacy.categorical import assert_categorical_only
-from curiosity.retry.bounded import assert_bounded_retry
 from curiosity.reviewer import RETRY_HINT_Q6, review
 from curiosity.schemas import (
     CuriosityClaim,

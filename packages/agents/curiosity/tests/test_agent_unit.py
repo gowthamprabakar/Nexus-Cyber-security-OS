@@ -339,7 +339,7 @@ async def test_q6_retry_budget_exhausted_plaintext_pii_hard_fails(tmp_path: Path
     """Phase C SS5: a degraded draft that STILL leaks plaintext PII after the retry budget is now
     hard-blocked by the load-bearing assert_categorical_only (WI-X9) — the run raises before any
     claim is persisted/published or any markdown is written, instead of the pre-SS5 accept."""
-    from curiosity.privacy.categorical import CategoricalContractViolationError
+    from nexus_runtime.llm_invariants.categorical import CategoricalContractViolationError
 
     contract = _contract(tmp_path)
     store = _make_semantic_store(region_entities=[_region_entity("us-east-1")])
