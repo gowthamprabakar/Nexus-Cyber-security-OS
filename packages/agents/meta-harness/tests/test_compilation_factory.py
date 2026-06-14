@@ -268,3 +268,92 @@ def test_default_factory_enabled_when_flag_set(
         _PROVIDER, model_pin="deepseek-chat", workspace_root=tmp_path, audit_log=_audit(tmp_path)
     )
     assert factory is not None and callable(factory)
+
+
+# ----------------------------------------------- Track C C-1: SemanticStore storage
+
+
+class _FakeStore:
+    """Minimal SemanticStore double capturing upsert_entity calls."""
+
+    def __init__(self) -> None:
+        self.upserts: list[dict[str, Any]] = []
+
+    async def upsert_entity(
+        self,
+        *,
+        tenant_id: str,
+        entity_type: str,
+        external_id: str,
+        properties: dict[str, Any] | None = None,
+    ) -> str:
+        self.upserts.append(
+            {
+                "tenant_id": tenant_id,
+                "entity_type": entity_type,
+                "external_id": external_id,
+                "properties": properties,
+            }
+        )
+        return external_id
+
+
+@pytest.mark.asyncio
+async def test_success_records_compilation_to_semantic_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C-1 / Q-C1-2: a successful compilation upserts a dspy_compilation entity."""
+    monkeypatch.setattr(cf, "create_compiled_composer", lambda *a, **k: _FakeCompiled())
+    _seed_effectiveness(tmp_path)
+    controller = CompilationCadenceController(workspace_root=tmp_path)
+    legacy = _legacy_candidate(tmp_path)
+    store = _FakeStore()
+    factory = cf.make_dspy_candidate_factory(
+        _PROVIDER,
+        cadence_controller=controller,
+        model_pin="deepseek-chat",
+        workspace_root=tmp_path,
+        audit_log=_audit(tmp_path),
+        semantic_store=store,
+    )
+
+    result = await factory(SimpleNamespace(agent_id=_AGENT), legacy, _trigger())
+
+    assert result is not None
+    assert len(store.upserts) == 1
+    rec = store.upserts[0]
+    assert rec["entity_type"] == "dspy_compilation"
+    assert rec["external_id"] == f"{_AGENT}:{_SKILL_ID}"
+    assert rec["properties"]["skill_id"] == _SKILL_ID
+    assert rec["properties"]["model_pin"] == "deepseek-chat"
+
+
+@pytest.mark.asyncio
+async def test_success_without_store_still_produces_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C-1: semantic_store=None → no recording, candidate path unaffected."""
+    monkeypatch.setattr(cf, "create_compiled_composer", lambda *a, **k: _FakeCompiled())
+    _seed_effectiveness(tmp_path)
+    controller = CompilationCadenceController(workspace_root=tmp_path)
+    legacy = _legacy_candidate(tmp_path)
+    factory = _factory(tmp_path, controller)  # no semantic_store
+
+    result = await factory(SimpleNamespace(agent_id=_AGENT), legacy, _trigger())
+
+    assert result is not None
+
+
+def test_default_factory_accepts_semantic_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C-1: make_default_dspy_factory threads semantic_store when flag is set."""
+    monkeypatch.setenv(cf.ENV_PRODUCTION_FLAG, "1")
+    factory = cf.make_default_dspy_factory(
+        _PROVIDER,
+        model_pin="deepseek-chat",
+        workspace_root=tmp_path,
+        audit_log=_audit(tmp_path),
+        semantic_store=_FakeStore(),
+    )
+    assert factory is not None and callable(factory)
