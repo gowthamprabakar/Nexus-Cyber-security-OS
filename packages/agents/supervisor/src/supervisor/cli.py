@@ -33,9 +33,11 @@ from pathlib import Path
 import click
 from eval_framework.cases import load_cases
 from eval_framework.suite import run_suite
+from nexus_runtime import ContinuousDriver
 
 from supervisor import __version__
 from supervisor.agent import run as agent_run
+from supervisor.continuous_source import ContinuousTriggerSource
 from supervisor.eval_runner import SupervisorEvalRunner
 from supervisor.heartbeat import (
     DEFAULT_TICK_INTERVAL_SECONDS,
@@ -227,6 +229,34 @@ def schedule_cmd(
 # ---------------------- run (long-running loop) --------------------------
 
 
+def _resolve_continuous_source(
+    *, continuous_mode: bool, continuous_kill_switch: bool
+) -> tuple[ContinuousTriggerSource | None, dict[str, bool]]:
+    """Track D D-1: resolve the continuous trigger source for a ``run``.
+
+    Default OFF → ``None`` (Heartbeat falls back to its no-op continuous source =
+    heartbeat-only, byte-identical to pre-Track-D behaviour). When continuous mode
+    is requested AND not kill-switched for this tenant, build a
+    ``ContinuousTriggerSource`` over an empty ``ContinuousDriver`` — **wired but
+    inert** (no schedulers registered → no due runs), per Q3 "wire + OFF, NOT
+    activation". The per-tenant kill-switch overrides the global enable.
+
+    Returns ``(source_or_None, decision)`` where ``decision`` is the audit/
+    observability record of how the effective state was resolved.
+    """
+    effective = continuous_mode and not continuous_kill_switch
+    decision = {
+        "continuous_mode_requested": continuous_mode,
+        "continuous_kill_switch": continuous_kill_switch,
+        "continuous_effective": effective,
+    }
+    if not effective:
+        return None, decision
+    # Empty driver: wired into the tick path but produces no due runs until a
+    # future cycle registers schedulers. This is the "wire, not activate" state.
+    return ContinuousTriggerSource(ContinuousDriver()), decision
+
+
 @main.command("run")
 @click.option("--customer-id", required=True)
 @click.option(
@@ -253,21 +283,45 @@ def schedule_cmd(
     default=_DEFAULT_AGENTS_MD,
     show_default=True,
 )
+@click.option(
+    "--continuous-mode/--no-continuous-mode",
+    default=False,
+    show_default=True,
+    help="Track D: wire the continuous trigger source into the tick loop. "
+    "Default OFF = heartbeat-only. Wired-but-inert (NOT activated) when ON.",
+)
+@click.option(
+    "--continuous-kill-switch/--no-continuous-kill-switch",
+    default=False,
+    show_default=True,
+    help="Per-tenant kill-switch: forces continuous mode OFF for this tenant "
+    "even when --continuous-mode is set (overrides the global enable).",
+)
 def run_cmd(
     customer_id: str,
     workspace_root: Path,
     tick_interval_seconds: float,
     max_ticks: int | None,
     agents_md: Path,
+    continuous_mode: bool,
+    continuous_kill_switch: bool,
 ) -> None:
     """Start the heartbeat loop (long-running by default)."""
     workspace_root.mkdir(parents=True, exist_ok=True)
     rules = load_routing_rules(agents_md)
 
+    continuous_source, decision = _resolve_continuous_source(
+        continuous_mode=continuous_mode,
+        continuous_kill_switch=continuous_kill_switch,
+    )
+    # Audit/observability: record how continuous state resolved for this tenant.
+    click.echo(json.dumps({"customer_id": customer_id, **decision}, separators=(",", ":")))
+
     hb = Heartbeat(
         customer_id=customer_id,
         workspace_root=workspace_root,
         routing_rules=rules,
+        continuous_source=continuous_source,
         tick_interval_seconds=tick_interval_seconds,
         max_ticks=max_ticks,
     )
