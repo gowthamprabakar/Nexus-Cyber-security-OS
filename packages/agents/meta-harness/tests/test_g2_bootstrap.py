@@ -138,8 +138,15 @@ def test_g2_wi1_substrate_sealed_bootstrap() -> None:
     boundary (ADR-016, Milestone 1). That change is governed by its own guards
     (``charter/tests/test_tool_proxy.py`` + ``test_tool_import_guard.py``), not by
     this G2 bootstrap seal. The charter arm of this seal is therefore lifted for
-    the duration of that cycle; the ``packages/shared/`` arm remains in force (the
-    NLAH cycle's scope rules forbid touching shared/, and it does not).
+    the duration of that cycle.
+
+    Scope note (Phase D pre-flight P3-4, 2026-06-14): the producer-only curiosity
+    forbidden-subscription fence is an operator-approved [P3-SUBSTRATE-FENCE] touch
+    of ``shared.fabric.client`` + its conformance tests. Those specific files are
+    exempted below (governed by their own fence tests); the seal still catches any
+    OTHER ``packages/shared/`` change. This G2 bootstrap seal is a closed-cycle
+    artifact — a future cleanup should retire it now that substrate changes are
+    governed by per-change operator review + the specific fence/proxy guards.
     """
     import shutil
     import subprocess
@@ -160,8 +167,21 @@ def test_g2_wi1_substrate_sealed_bootstrap() -> None:
         cwd=_REPO_ROOT,
     )
     assert result.returncode == 0
-    diff_output = result.stdout.strip()
-    assert not diff_output, f"WI-1 violation — must not touch shared/ substrate.\n{diff_output}"
+    # P3-4-approved fence surface (exempted): the curiosity producer-only fence + conformance tests.
+    _P3_4_APPROVED = (
+        "fabric/client.py",
+        "test_forbidden_subscription_curiosity.py",
+        "test_forbidden_subscription_meta_harness.py",
+    )
+    unexpected = [
+        line
+        for line in result.stdout.splitlines()
+        if "|" in line and not any(approved in line for approved in _P3_4_APPROVED)
+    ]
+    assert not unexpected, (
+        "WI-1 violation — unexpected packages/shared/ change beyond the P3-4-approved fence:\n"
+        + "\n".join(unexpected)
+    )
 
 
 # ---------------------------------------------------------------------------
