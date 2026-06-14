@@ -57,9 +57,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from charter.audit import AuditLog
 from charter.llm import LLMProvider
 from charter.memory.semantic import EntityRow, SemanticStore
 
+from meta_harness.compilation_factory import make_default_dspy_factory
 from meta_harness.entities import ABComparisonResult, AgentScorecard
 from meta_harness.eval.batch import (
     BatchEvalConfig,
@@ -127,6 +129,7 @@ async def run(
     agent_filter: frozenset[str] = frozenset(),
     audit_chain_loader: AuditChainLoader | None = None,
     eval_runner_loader: EvalRunnerLoader | None = None,
+    dspy_model_pin: str = "deterministic",
 ) -> MetaHarnessReport:
     """Run the 8-stage Meta-Harness pipeline end-to-end.
 
@@ -184,6 +187,24 @@ async def run(
     # Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE (v0.2). Returns the
     # empty summary when any of the lifecycle inputs is None —
     # v0.1-equivalent backwards-compat shape.
+    # Track C C-1: wire the cadence-gated DSPy candidate factory into Stage 7.
+    # Default-OFF — make_default_dspy_factory returns None unless
+    # NEXUS_DSPY_PRODUCTION=1 (Gate 1), so the lifecycle stays legacy-only and
+    # byte-identical until an operator flips the flag. When enabled, the
+    # CompilationCadenceController applies the volume/cadence threshold (Gate 2);
+    # the quality threshold (Gate 3) is deferred to v0.4 (audit Q5). Compilation
+    # outputs are recorded to SemanticStore for cross-session reuse (Q-C1-2).
+    dspy_candidate_factory = None
+    if llm_provider is not None:
+        dspy_candidate_factory = make_default_dspy_factory(
+            llm_provider,
+            model_pin=dspy_model_pin,
+            workspace_root=workspace_root,
+            audit_log=AuditLog(workspace_root / "audit.jsonl", "meta_harness", run_id),
+            tenant_id=customer_id,
+            semantic_store=semantic_store,
+        )
+
     skill_lifecycle: SkillLifecycleSummary = await run_skill_lifecycle(
         scorecards=scorecards,
         customer_id=customer_id,
@@ -193,6 +214,7 @@ async def run(
         audit_chain_loader=audit_chain_loader,
         llm_provider=llm_provider,
         eval_runner_loader=eval_runner_loader,
+        dspy_candidate_factory=dspy_candidate_factory,
     )
 
     completed_at = datetime.now(UTC)

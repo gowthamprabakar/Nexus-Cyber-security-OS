@@ -43,6 +43,7 @@ from pathlib import Path
 
 from charter.audit import AuditLog
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
 
 from meta_harness.compilation_cadence import CompilationCadenceController
@@ -117,6 +118,7 @@ def make_dspy_candidate_factory(
     audit_log: AuditLog,
     tenant_id: str = "default",
     seed: int | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> DSPyCandidateFactory:
     """Build the ``dspy_candidate_factory`` ``skill_lifecycle`` injects (Task 6).
 
@@ -197,6 +199,23 @@ def make_dspy_candidate_factory(
                 now=datetime.now(UTC),
             )
             cadence_controller.record_compilation(agent_id)
+            # Track C C-1 / Q-C1-2: record the compilation output to SemanticStore
+            # for cross-session reuse (idempotent upsert). Inside the try so a store
+            # failure falls through to CF #2 (legacy path), never crashing the run.
+            if semantic_store is not None:
+                await semantic_store.upsert_entity(
+                    tenant_id=tenant_id,
+                    entity_type="dspy_compilation",
+                    external_id=f"{agent_id}:{candidate.skill_id}",
+                    properties={
+                        "agent_id": agent_id,
+                        "skill_id": candidate.skill_id,
+                        "trigger": decision.trigger.value if decision.trigger else None,
+                        "model_pin": model_pin,
+                        "shadow_path": str(candidate.shadow_path),
+                        "compiled_at": datetime.now(UTC).isoformat(),
+                    },
+                )
             _LOG.info(
                 "compilation_factory.candidate_produced agent_id=%s skill_id=%s trigger=%s",
                 agent_id,
@@ -235,6 +254,7 @@ def make_default_dspy_factory(
     audit_log: AuditLog,
     tenant_id: str = "default",
     seed: int | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> DSPyCandidateFactory | None:
     """Construct the production factory **only when ``NEXUS_DSPY_PRODUCTION=1``**.
 
@@ -261,6 +281,7 @@ def make_default_dspy_factory(
         audit_log=audit_log,
         tenant_id=tenant_id,
         seed=seed,
+        semantic_store=semantic_store,
     )
 
 
