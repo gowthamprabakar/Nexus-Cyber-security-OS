@@ -18,6 +18,7 @@ from k8s_posture.tools.cluster_workloads import (
     read_cluster_workloads,
 )
 from kubernetes.client import (
+    V1Capabilities,
     V1Container,
     V1CronJob,
     V1CronJobList,
@@ -32,9 +33,11 @@ from kubernetes.client import (
     V1ObjectMeta,
     V1Pod,
     V1PodList,
+    V1PodSecurityContext,
     V1PodSpec,
     V1PodTemplateSpec,
     V1ResourceRequirements,
+    V1SeccompProfile,
     V1SecurityContext,
 )
 from kubernetes.client.exceptions import ApiException
@@ -51,12 +54,14 @@ def _container(
     has_limits: bool = True,
     read_only_root_fs: bool = True,
     allow_priv_esc: bool = False,
+    drop_all_caps: bool = False,
 ) -> V1Container:
     sec = V1SecurityContext(
         run_as_user=run_as_user,
         privileged=privileged,
         read_only_root_filesystem=read_only_root_fs,
         allow_privilege_escalation=allow_priv_esc,
+        capabilities=V1Capabilities(drop=["ALL"]) if drop_all_caps else None,
     )
     resources = (
         V1ResourceRequirements(limits={"cpu": "500m", "memory": "256Mi"})
@@ -83,12 +88,17 @@ def _clean_pod_spec() -> V1PodSpec:
                 has_limits=True,
                 read_only_root_fs=True,
                 allow_priv_esc=False,
+                drop_all_caps=True,  # A-3: capabilities-not-dropped
             )
         ],
         host_network=False,
         host_pid=False,
         host_ipc=False,
         automount_service_account_token=False,
+        # A-3: seccomp-profile-missing — pod-level RuntimeDefault.
+        security_context=V1PodSecurityContext(
+            seccomp_profile=V1SeccompProfile(type="RuntimeDefault")
+        ),
     )
 
 
