@@ -1,0 +1,21 @@
+case_id: 006_sast_severity_mix
+description: Two Semgrep hits at different severities → two SAST findings
+fixture:
+  semgrep_results:
+    - check_id: python.lang.security.audit.dangerous-exec
+      path: src/app.py
+      start: { line: 42 }
+      extra:
+        message: Detected use of exec()
+        severity: ERROR
+    - check_id: python.lang.best-practice.weak-hash
+      path: src/util.py
+      start: { line: 8 }
+      extra:
+        message: Weak hash algorithm (md5)
+        severity: WARNING
+expected:
+  finding_count: 2
+  by_type:
+    appsec_sast_finding: 2
+  code_secret_count: 0

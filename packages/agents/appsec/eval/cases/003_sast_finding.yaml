@@ -1,0 +1,15 @@
+case_id: 003_sast_finding
+description: One Semgrep SAST hit → one OCSF 2003 SAST finding
+fixture:
+  semgrep_results:
+    - check_id: python.lang.security.audit.dangerous-exec
+      path: src/app.py
+      start: { line: 42 }
+      extra:
+        message: Detected use of exec() with a dynamic argument
+        severity: ERROR
+expected:
+  finding_count: 1
+  by_type:
+    appsec_sast_finding: 1
+  code_secret_count: 0
