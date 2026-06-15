@@ -44,6 +44,7 @@ from identity.tools.aws_access_analyzer import (
 )
 from identity.tools.aws_iam import (
     IdentityListing,
+    SimulationDecision,
     aws_iam_list_identities,
     aws_iam_simulate_principal_policy,
 )
@@ -53,10 +54,16 @@ from identity.tools.federation import (
     detect_azure_federated_domains,
     detect_azure_oidc_providers,
 )
-from identity.tools.permission_paths import EffectiveGrant
+from identity.tools.permission_paths import EffectiveGrant, resolve_effective_grants
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 DEFAULT_DORMANT_THRESHOLD_DAYS = 90
+
+# A-4 (v0.3) curated high-leverage action set (Fork 1a). Simulating every AWS
+# action per principal is combinatorially expensive; this bounded risk-weighted
+# set captures the privilege-escalation surface (anything-IAM, data-plane S3/EC2,
+# role assumption) and keeps the live SimulatePrincipalPolicy cost predictable.
+CURATED_RISK_ACTIONS: tuple[str, ...] = ("iam:*", "s3:*", "ec2:*", "sts:AssumeRole")
 
 # AWS managed admin policy + customer-managed admin pattern.
 _ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
@@ -129,6 +136,7 @@ async def run(
     dormant_threshold_days: int = DEFAULT_DORMANT_THRESHOLD_DAYS,
     detect_federation: bool = False,
     azure_credential_source: str | None = None,
+    assess_effective_perms: bool = False,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -151,6 +159,14 @@ async def run(
             path byte-identical to pre-A-1.
         azure_credential_source: Optional Azure credential-source hint for the
             Azure federation detectors; ignored unless ``detect_federation``.
+        assess_effective_perms: A-4 (v0.3) live-loop wiring. When True, drives the
+            IAM ``SimulatePrincipalPolicy`` simulator per principal against the
+            curated risk-action set (``CURATED_RISK_ACTIONS``) and resolves the
+            decisions into ``EffectiveGrant``s — replacing the v0.1 attached-policy
+            pattern-match (``_synthesize_admin_grants``) with simulator-derived
+            effective grants. Refines OVERPRIVILEGE with real per-action grants
+            (no new OCSF class). Requires live AWS; default False keeps the
+            attached-policy path byte-identical to pre-A-4 (offline eval intact).
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -175,7 +191,14 @@ async def run(
             ctx, aws_region=aws_region, profile=profile, analyzer_arn=analyzer_arn
         )
 
-        grants = _synthesize_admin_grants(listing)
+        # A-4 (v0.3): drive the effective-perms simulator when enabled (live AWS),
+        # else fall back to the v0.1 attached-policy pattern-match (byte-identical).
+        if assess_effective_perms:
+            grants = await _simulate_effective_grants(
+                ctx, listing, profile=profile, aws_region=aws_region
+            )
+        else:
+            grants = _synthesize_admin_grants(listing)
 
         findings = await normalize_to_findings(
             listing,
@@ -255,6 +278,45 @@ async def _fetch_inventory(
     listing: IdentityListing = listing_task.result()
     aa_findings: Sequence[AccessAnalyzerFinding] = aa_task.result() if aa_task else ()
     return listing, aa_findings
+
+
+async def _simulate_effective_grants(
+    ctx: Charter,
+    listing: IdentityListing,
+    *,
+    profile: str | None,
+    aws_region: str,
+) -> list[EffectiveGrant]:
+    """A-4: simulate effective permissions per principal → resolve to grants.
+
+    Drives ``aws_iam_simulate_principal_policy`` (via ctx.call_tool so the charter
+    gates/budgets/audits each call — ADR-016) for every user and role against
+    ``CURATED_RISK_ACTIONS``, then flattens the decisions through
+    ``resolve_effective_grants``. Users + roles only: the simulator already folds
+    in group-inherited policies for a user, so groups need no direct simulation
+    (per permission_paths Q3). Returns ``[]`` for an empty listing.
+    """
+    principal_arns = [u.arn for u in listing.users] + [r.arn for r in listing.roles]
+    if not principal_arns:
+        return []
+    async with asyncio.TaskGroup() as tg:
+        tasks = [
+            tg.create_task(
+                ctx.call_tool(
+                    "aws_iam_simulate_principal_policy",
+                    principal_arn=arn,
+                    actions=list(CURATED_RISK_ACTIONS),
+                    resources=("*",),
+                    profile=profile,
+                    region=aws_region,
+                )
+            )
+            for arn in principal_arns
+        ]
+    decisions: list[SimulationDecision] = []
+    for task in tasks:
+        decisions.extend(task.result())
+    return list(resolve_effective_grants(listing, decisions))
 
 
 async def _detect_federation(

@@ -112,6 +112,17 @@ def eval_cmd(cases_dir: Path) -> None:
     type=int,
     help="Last-used staleness threshold for dormant findings.",
 )
+@click.option(
+    "--assess-effective-perms/--no-assess-effective-perms",
+    "assess_effective_perms",
+    default=False,
+    show_default=True,
+    help=(
+        "A-4 (v0.3): drive the IAM SimulatePrincipalPolicy effective-perms "
+        "simulator (live AWS) instead of the attached-policy pattern-match. "
+        "Refines OVERPRIVILEGE with real per-action grants."
+    ),
+)
 def run_cmd(
     contract_path: Path,
     profile: str | None,
@@ -119,6 +130,7 @@ def run_cmd(
     analyzer_arn: str | None,
     mfa_users: tuple[str, ...],
     dormant_threshold_days: int,
+    assess_effective_perms: bool,
 ) -> None:
     """Run the Identity Agent against an ExecutionContract YAML."""
     contract = load_contract(contract_path)
@@ -130,6 +142,7 @@ def run_cmd(
             analyzer_arn=analyzer_arn,
             users_with_mfa=frozenset(mfa_users),
             dormant_threshold_days=dormant_threshold_days,
+            assess_effective_perms=assess_effective_perms,
         )
     )
 
