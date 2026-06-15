@@ -365,3 +365,76 @@ async def test_run_does_not_leak_pii_into_report_or_findings(tmp_path: Path) -> 
 
     # But the label tokens DO surface (this is the intended visible signal).
     assert "ssn" in report_text
+
+
+# ---------------------------------------------------------------------------
+# A-2.4 (ADR-015) — secrets-in-runtime cross-agent e2e (D.1 scans → DSPM emits)
+# ---------------------------------------------------------------------------
+
+
+def _write_d1_secrets(workspace: Path, secrets: list[dict]) -> Path:
+    """Write the runtime_secrets.json artifact exactly as D.1 emits it (the
+    contract from vulnerability.secrets.render_runtime_secrets_json)."""
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "runtime_secrets.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1",
+                "agent": "vulnerability",
+                "run_id": "d1-run",
+                "secrets": secrets,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return workspace
+
+
+_AWS_KEY_HIT = {
+    "rule_id": "aws-access-key-id",
+    "category": "AWS",
+    "severity": "CRITICAL",
+    "title": "AWS Access Key ID",
+    "target": "app/.env",
+    "start_line": 3,
+    "end_line": 3,
+}
+
+
+@pytest.mark.asyncio
+async def test_run_emits_ocsf_2003_secret_from_vulnerability_workspace(tmp_path: Path) -> None:
+    """D.1 writes runtime_secrets.json → DSPM run() emits OCSF 2003 SECRET finding."""
+    d1_ws = _write_d1_secrets(tmp_path / "d1-workspace", [_AWS_KEY_HIT])
+    contract = _make_contract(tmp_path)
+
+    report = await run(contract, vulnerability_workspace=d1_ws)
+
+    secret_findings = [
+        f for f in report.findings if f["finding_info"]["uid"].startswith("CSPM-RUNTIME-SECRET-")
+    ]
+    assert len(secret_findings) == 1
+    sf = secret_findings[0]
+    assert sf["class_uid"] == 2003
+    assert sf["evidences"][0]["source_finding_type"] == "data_security_secret_exposed_in_runtime"
+    # Multi-tenant: the resource's account is the consuming tenant, not D.1's.
+    assert sf["resources"][0]["owner"]["account_uid"] == "cust_test"
+
+
+@pytest.mark.asyncio
+async def test_run_without_vulnerability_workspace_no_secret_findings(tmp_path: Path) -> None:
+    """No vulnerability_workspace → no secret findings (default byte-identical)."""
+    contract = _make_contract(tmp_path)
+    report = await run(contract)
+    assert not [
+        f for f in report.findings if f["finding_info"]["uid"].startswith("CSPM-RUNTIME-SECRET-")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_secret_handoff_redacts_plaintext_end_to_end(tmp_path: Path) -> None:
+    """The emitted findings.json never contains a plaintext secret value."""
+    d1_ws = _write_d1_secrets(tmp_path / "d1-workspace", [_AWS_KEY_HIT])
+    contract = _make_contract(tmp_path)
+    await run(contract, vulnerability_workspace=d1_ws)
+    findings_text = (tmp_path / "findings.json").read_text(encoding="utf-8")
+    assert "AKIA" not in findings_text
