@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
@@ -28,15 +29,17 @@ from appsec.normalizers.gitleaks_secrets import (
     render_code_secrets_json,
 )
 from appsec.ocsf.emission import finding_to_ocsf
-from appsec.schemas import FindingsReport, RepoInventory
+from appsec.schemas import FindingsReport, RepoInventory, RepoRef
 from appsec.tools.checkov_runner import run_checkov
 from appsec.tools.gitleaks_runner import run_gitleaks
+from appsec.tools.repo_clone import CloneRunner, clone_repository
 from appsec.tools.repo_discovery import discover_repositories
 from appsec.tools.scm_connector import ScmConnector, StaticScmConnector
 
 _DISCOVER_TOOL = "discover_repositories"
 _CHECKOV_TOOL = "run_checkov"
 _GITLEAKS_TOOL = "run_gitleaks"
+_CLONE_TOOL = "clone_repository"
 
 
 def build_registry() -> ToolRegistry:
@@ -51,6 +54,9 @@ def build_registry() -> ToolRegistry:
     # Checkov + gitleaks are local subprocesses (no cloud API), operator-provisioned.
     reg.register(_CHECKOV_TOOL, run_checkov, version="0.1.0", cloud_calls=0)
     reg.register(_GITLEAKS_TOOL, run_gitleaks, version="0.1.0", cloud_calls=0)
+    # B-1 PR6: shallow git clone of discovered repos (network I/O, not a cloud-API
+    # budget line — git over https; counted as 1 per repo for visibility).
+    reg.register(_CLONE_TOOL, clone_repository, version="0.1.0", cloud_calls=1)
     return reg
 
 
@@ -77,19 +83,30 @@ async def run(
     contract: ExecutionContract,
     *,
     scm_connector: ScmConnector | None = None,
+    clone_root: Path | str | None = None,
+    scm_token: str | None = None,
+    clone_runner: CloneRunner | None = None,
 ) -> RepoInventory:
     """Run the AppSec agent: discover repositories and write artifacts.
 
     Args:
         contract: The signed ``ExecutionContract``.
         scm_connector: The SCM connector to discover repos through. Defaults to an
-            empty ``StaticScmConnector`` (deterministic no-op discovery). B-1 PR2
-            injects live GitHub/GitLab/Bitbucket connectors built from the
-            Pattern-A ``ScmCredentialResolver``.
+            empty ``StaticScmConnector`` (deterministic no-op discovery). Live
+            GitHub/GitLab/Bitbucket connectors are built from the Pattern-A
+            ``ScmCredentialResolver``.
+        clone_root: B-1 PR6 — when set, each discovered repo without a local_path
+            is shallow-cloned under this dir (so Checkov/gitleaks can scan it) via
+            the charter-gated clone tool. When None (default), only repos that
+            already carry a local_path are scanned (byte-identical to pre-PR6).
+        scm_token: Token injected into the clone URL for private repos (never
+            logged/stored). Typically the Pattern-A resolver's resolved token.
+        clone_runner: Injectable clone runner (tests pass a fake; default shells git).
 
     Returns:
         The ``RepoInventory``. Side effects: writes ``repo_inventory.json``,
-        ``findings.json``, ``summary.md`` to the charter workspace + the audit log.
+        ``findings.json``, ``summary.md`` (+ ``code_secrets.json`` when secrets
+        found) to the charter workspace + the audit log.
     """
     connector = scm_connector if scm_connector is not None else StaticScmConnector()
     registry = build_registry()
@@ -97,7 +114,24 @@ async def run(
 
     with correlation_scope(correlation_id), Charter(contract, tools=registry) as ctx:
         scan_started = datetime.now(UTC)
-        repositories = await ctx.call_tool(_DISCOVER_TOOL, connector=connector)
+        repositories = list(await ctx.call_tool(_DISCOVER_TOOL, connector=connector))
+
+        # B-1 PR6: clone discovered repos locally so the scanners can run on them.
+        if clone_root is not None:
+            cloned: list[RepoRef] = []
+            for repo in repositories:
+                if repo.local_path is not None:
+                    cloned.append(repo)
+                    continue
+                result = await ctx.call_tool(
+                    _CLONE_TOOL,
+                    repo=repo,
+                    dest_root=clone_root,
+                    token=scm_token,
+                    runner=clone_runner,
+                )
+                cloned.append(result if result is not None else repo)
+            repositories = cloned
 
         inventory = RepoInventory(
             agent="appsec",

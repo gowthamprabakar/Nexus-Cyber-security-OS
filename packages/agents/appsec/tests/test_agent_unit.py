@@ -30,7 +30,12 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["discover_repositories", "run_checkov", "run_gitleaks"],
+        permitted_tools=[
+            "discover_repositories",
+            "run_checkov",
+            "run_gitleaks",
+            "clone_repository",
+        ],
         completion_condition="repo_inventory.json AND findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),
@@ -159,6 +164,42 @@ async def test_run_gitleaks_writes_redacted_code_secrets(
     payload = json.loads(text)
     assert payload["agent"] == "appsec"
     assert payload["secrets"][0]["rule_id"] == "aws-access-token"
+
+
+async def test_run_clone_root_clones_then_scans(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """clone_root set → discovered repo (no local_path) is cloned, then scanned."""
+    cloned_dest = tmp_path / "clones" / "github" / "acme" / "api"
+
+    async def fake_clone(args: list[str], timeout: float) -> int:
+        return 0
+
+    seen_paths: list[str] = []
+
+    async def spy_checkov(repo_path: str, **_: object) -> CheckovResult:
+        seen_paths.append(repo_path)
+        return CheckovResult(payload={})
+
+    async def empty_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
+        return GitleaksResult(payload=[])
+
+    monkeypatch.setattr(agent_mod, "run_checkov", spy_checkov)
+    monkeypatch.setattr(agent_mod, "run_gitleaks", empty_gitleaks)
+
+    # repo discovered WITHOUT a local_path (as a live connector returns it)
+    repo = RepoRef(
+        host="github", owner="acme", name="api", clone_url="https://github.com/acme/api.git"
+    )
+    inventory = await run(
+        _contract(tmp_path),
+        scm_connector=StaticScmConnector([repo]),
+        clone_root=tmp_path / "clones",
+        clone_runner=fake_clone,
+    )
+    # The inventory repo now carries the cloned local_path, and the scanner saw it.
+    assert inventory.repositories[0].local_path == str(cloned_dest)
+    assert seen_paths == [str(cloned_dest)]
 
 
 async def test_run_skips_checkov_without_local_path(
