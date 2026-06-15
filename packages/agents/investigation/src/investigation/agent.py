@@ -46,6 +46,7 @@ from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from charter.memory import SemanticStore
+from nexus_runtime.hermes import detect_skill_trigger, upsert_skill_candidate
 from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
 from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from ulid import ULID
@@ -121,6 +122,50 @@ def build_registry() -> ToolRegistry:
     reg.register("memory_neighbors_walk", memory_neighbors_walk, version="0.1.0", cloud_calls=0)
     reg.register("find_related_findings", find_related_findings, version="0.1.0", cloud_calls=0)
     return reg
+
+
+async def _propose_skill_candidate(
+    *,
+    audit_path: Path,
+    semantic_store: SemanticStore,
+    agent_id: str,
+    run_id: str,
+    tenant_id: str,
+) -> None:
+    """Hermes Phase 1 (C-2): propose a skill candidate from this run's audit chain.
+
+    Reads the run's audit entries, runs the hoisted ``detect_skill_trigger`` with
+    ``include_llm_stages=True`` (D.7 synthesis stages are LLM-driven), and on a
+    novel-workflow hit upserts a ``skill_candidate`` entity. Proposer-only (C2-C):
+    ``deployed_tool_sequence_hashes`` is empty — novelty adjudication + deployment
+    are the meta-harness eval-gate's sole authority.
+    """
+    entries = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    trigger = detect_skill_trigger(
+        agent_id=agent_id,
+        run_id=run_id,
+        audit_entries=entries,
+        deployed_tool_sequence_hashes=frozenset(),
+        include_llm_stages=True,
+    )
+    if trigger is None:
+        return
+    await upsert_skill_candidate(
+        semantic_store,
+        tenant_id=tenant_id,
+        skill_id=f"{agent_id}:{trigger.tool_sequence_hash}",
+        properties={
+            "agent_id": agent_id,
+            "run_id": trigger.run_id,
+            "tool_sequence_hash": trigger.tool_sequence_hash,
+            "tool_names": list(trigger.tool_names),
+            "audit_entry_hashes": list(trigger.audit_entry_hashes),
+        },
+    )
 
 
 async def run(
@@ -262,6 +307,18 @@ async def run(
             # C-3 fix: assert the contract's required_outputs were all written
             # before the run is allowed to complete (was missing).
             ctx.assert_complete()
+
+            # Hermes Phase 1 (C-2): propose a skill candidate from this run's
+            # audit chain. Proposer-only (C2-C) — meta-harness eval-gate + C-1
+            # remain the SOLE deploy authority; this agent never deploys.
+            if ctx.audit is not None:
+                await _propose_skill_candidate(
+                    audit_path=ctx.audit.path,
+                    semantic_store=semantic_store,
+                    agent_id="investigation",
+                    run_id=contract.delegation_id,
+                    tenant_id=scope.tenant_id,
+                )
 
             # F.7 v0.2: emit `investigation.completed` at Stage-6 success.
             if bus is not None and ctx.audit is not None:
