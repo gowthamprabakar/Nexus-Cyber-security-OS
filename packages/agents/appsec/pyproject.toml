@@ -7,6 +7,7 @@ license = { file = "../../../LICENSE-BSL" }
 dependencies = [
     "nexus-charter",
     "nexus-shared",
+    "nexus-eval-framework",
     "pydantic>=2.9.0",
     "click>=8.1.0",
     "structlog>=24.4.0",
@@ -24,9 +25,13 @@ dev = [
 [project.scripts]
 appsec = "appsec.cli:main"
 
+[project.entry-points."nexus_eval_runners"]
+appsec = "appsec.eval_runner:AppSecEvalRunner"
+
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
+nexus-eval-framework = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

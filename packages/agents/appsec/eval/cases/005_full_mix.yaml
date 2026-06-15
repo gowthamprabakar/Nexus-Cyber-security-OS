@@ -1,0 +1,37 @@
+case_id: 005_full_mix
+description: All three scanners fire — 2 IaC + 1 SAST findings + 1 redacted secret
+fixture:
+  checkov_failed_checks:
+    - check_id: CKV_AWS_20
+      check_name: S3 Bucket has public ACL
+      file_path: /main.tf
+      file_line_range: [1, 5]
+      resource: aws_s3_bucket.public
+      severity: HIGH
+    - check_id: CKV_AWS_18
+      check_name: S3 Bucket has access logging disabled
+      file_path: /main.tf
+      file_line_range: [7, 12]
+      resource: aws_s3_bucket.public
+      severity: LOW
+  semgrep_results:
+    - check_id: python.lang.security.audit.dangerous-exec
+      path: src/app.py
+      start: { line: 42 }
+      extra:
+        message: Detected use of exec()
+        severity: ERROR
+  gitleaks_hits:
+    - RuleID: aws-access-token
+      Description: AWS Access Token
+      File: src/config.py
+      StartLine: 12
+      EndLine: 12
+      Secret: AKIAIOSFODNN7EXAMPLE
+      Match: KEY=AKIAIOSFODNN7EXAMPLE
+expected:
+  finding_count: 3
+  by_type:
+    appsec_iac_misconfiguration: 2
+    appsec_sast_finding: 1
+  code_secret_count: 1

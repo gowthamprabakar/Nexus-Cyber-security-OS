@@ -1,0 +1,15 @@
+case_id: 002_iac_misconfig
+description: One Checkov IaC misconfiguration → one OCSF 2003 IaC finding
+fixture:
+  checkov_failed_checks:
+    - check_id: CKV_AWS_20
+      check_name: S3 Bucket has public ACL
+      file_path: /main.tf
+      file_line_range: [1, 5]
+      resource: aws_s3_bucket.public
+      severity: HIGH
+expected:
+  finding_count: 1
+  by_type:
+    appsec_iac_misconfiguration: 1
+  code_secret_count: 0

@@ -1,0 +1,10 @@
+case_id: 001_clean_repo
+description: A repo with no IaC misconfigs, no secrets, no SAST hits — clean scan
+fixture:
+  checkov_failed_checks: []
+  gitleaks_hits: []
+  semgrep_results: []
+expected:
+  finding_count: 0
+  by_type: {}
+  code_secret_count: 0
