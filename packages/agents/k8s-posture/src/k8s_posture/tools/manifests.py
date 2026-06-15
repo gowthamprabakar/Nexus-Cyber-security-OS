@@ -89,6 +89,18 @@ _RULES: dict[str, _Rule] = {
         "automountServiceAccountToken not explicitly disabled",
         Severity.MEDIUM,
     ),
+    # A-3 (v0.3): additive manifest-rule expansion (well-known hardening; not
+    # CIS-numbered — no fabrication). Both container-level securityContext checks.
+    "capabilities-not-dropped": _Rule(
+        "capabilities-not-dropped",
+        "Linux capabilities not dropped (securityContext.capabilities.drop omits ALL)",
+        Severity.HIGH,
+    ),
+    "seccomp-profile-missing": _Rule(
+        "seccomp-profile-missing",
+        "seccompProfile not set to RuntimeDefault or Localhost",
+        Severity.MEDIUM,
+    ),
 }
 
 
@@ -304,6 +316,24 @@ def _check_pod_level_rules(
                 detected_at=detected_at,
             )
         )
+    # A-3: seccompProfile — finding iff the pod doesn't set RuntimeDefault/Localhost.
+    # Checked at pod level (the common locus; covers all containers, avoids
+    # pod→container inheritance false-positives).
+    pod_sec_ctx = pod_spec.get("securityContext")
+    seccomp = pod_sec_ctx.get("seccompProfile") if isinstance(pod_sec_ctx, dict) else None
+    seccomp_type = seccomp.get("type") if isinstance(seccomp, dict) else None
+    if seccomp_type not in ("RuntimeDefault", "Localhost"):
+        out.append(
+            _build_finding(
+                _RULES["seccomp-profile-missing"],
+                workload_kind=workload_kind,
+                workload_name=workload_name,
+                namespace=namespace,
+                container_name="",
+                manifest_path=manifest_path,
+                detected_at=detected_at,
+            )
+        )
     return out
 
 
@@ -369,6 +399,23 @@ def _check_container_rules(
         out.append(
             _build_finding(
                 _RULES["read-only-root-fs-missing"],
+                workload_kind=workload_kind,
+                workload_name=workload_name,
+                namespace=namespace,
+                container_name=container_name,
+                manifest_path=manifest_path,
+                detected_at=detected_at,
+            )
+        )
+
+    # A-3: capabilities — finding iff the container doesn't drop ALL capabilities.
+    capabilities = sec_ctx_dict.get("capabilities")
+    drop = capabilities.get("drop") if isinstance(capabilities, dict) else None
+    drops_all = isinstance(drop, list) and any(str(cap).upper() == "ALL" for cap in drop)
+    if not drops_all:
+        out.append(
+            _build_finding(
+                _RULES["capabilities-not-dropped"],
                 workload_kind=workload_kind,
                 workload_name=workload_name,
                 namespace=namespace,

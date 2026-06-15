@@ -46,7 +46,7 @@ def _deployment(*, container: dict[str, Any], **pod_spec_overrides: Any) -> dict
 
 
 def _safe_container(*, name: str = "nginx") -> dict[str, Any]:
-    """A container that passes all 10 rules — for testing missing-fields → finding."""
+    """A container that passes all container-level rules — fully hardened."""
     return {
         "name": name,
         "image": "nginx:1.27",
@@ -56,9 +56,14 @@ def _safe_container(*, name: str = "nginx") -> dict[str, Any]:
             "privileged": False,
             "allowPrivilegeEscalation": False,
             "readOnlyRootFilesystem": True,
+            "capabilities": {"drop": ["ALL"]},  # A-3: capabilities-not-dropped
         },
         "resources": {"limits": {"cpu": "500m", "memory": "256Mi"}},
     }
+
+
+# A-3: pod-level securityContext that satisfies seccomp-profile-missing.
+_SAFE_POD_SECURITY_CONTEXT: dict[str, Any] = {"seccompProfile": {"type": "RuntimeDefault"}}
 
 
 # ---------------------------- file / directory handling ------------------
@@ -342,12 +347,49 @@ async def test_auto_mount_sa_token_silent_when_explicit_false(tmp_path: Path) ->
 
 @pytest.mark.asyncio
 async def test_fully_safe_manifest_emits_no_findings(tmp_path: Path) -> None:
-    """A pod with all best-practice security context + resource limits + automount=false."""
-    pod = _pod(container=_safe_container(), automountServiceAccountToken=False)
+    """A pod with all best-practice security context + resource limits + automount=false
+    + dropped capabilities + seccompProfile (A-3 additions)."""
+    pod = _pod(
+        container=_safe_container(),
+        automountServiceAccountToken=False,
+        securityContext=_SAFE_POD_SECURITY_CONTEXT,
+    )
     _write_manifest(tmp_path, "safe", pod)
 
     out = await read_manifests(path=tmp_path)
     assert out == ()
+
+
+@pytest.mark.asyncio
+async def test_capabilities_not_dropped_fires_then_silent(tmp_path: Path) -> None:
+    """No capabilities.drop=ALL → finding; with it → silent."""
+    pod = _pod(container={**_safe_container(), "securityContext": {"runAsUser": 1000}})
+    _write_manifest(tmp_path, "caps", pod)
+    out = await read_manifests(path=tmp_path)
+    assert any(f.rule_id == "capabilities-not-dropped" for f in out)
+
+    safe = _pod(
+        container=_safe_container(),
+        automountServiceAccountToken=False,
+        securityContext=_SAFE_POD_SECURITY_CONTEXT,
+    )
+    _write_manifest(tmp_path, "caps", safe)
+    out2 = await read_manifests(path=tmp_path)
+    assert not any(f.rule_id == "capabilities-not-dropped" for f in out2)
+
+
+@pytest.mark.asyncio
+async def test_seccomp_profile_missing_fires_then_silent(tmp_path: Path) -> None:
+    """No pod seccompProfile → finding; RuntimeDefault → silent."""
+    pod = _pod(container=_safe_container())  # no pod securityContext
+    _write_manifest(tmp_path, "seccomp", pod)
+    out = await read_manifests(path=tmp_path)
+    assert any(f.rule_id == "seccomp-profile-missing" for f in out)
+
+    safe = _pod(container=_safe_container(), securityContext=_SAFE_POD_SECURITY_CONTEXT)
+    _write_manifest(tmp_path, "seccomp", safe)
+    out2 = await read_manifests(path=tmp_path)
+    assert not any(f.rule_id == "seccomp-profile-missing" for f in out2)
 
 
 # ---------------------------- multiple workloads / docs -----------------
