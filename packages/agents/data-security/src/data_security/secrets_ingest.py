@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -69,20 +70,59 @@ def _to_severity(raw: str) -> Severity:
     return _SEVERITY_MAP.get(raw.upper(), Severity.MEDIUM)
 
 
-def _build_finding_id(target: str, sequence: int) -> str:
-    src = source_token(DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME)
+@dataclass(frozen=True)
+class _SecretSource:
+    """Per-producer config for the shared secret→OCSF-2003 builder."""
+
+    finding_type: DataSecurityFindingType
+    scope: str  # finding_id cloud segment (RUNTIME | CODE)
+    rule_id: str
+    cloud: str
+    arn_scheme: str
+    source_agent: str
+    locus: str  # human label: "runtime" | "code"
+    detector: str  # "D.1" | "D.14"
+
+
+_RUNTIME_SOURCE = _SecretSource(
+    finding_type=DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME,
+    scope="RUNTIME",
+    rule_id="secret_exposed_in_runtime",
+    cloud="runtime",
+    arn_scheme="runtime-secret",
+    source_agent="vulnerability",
+    locus="runtime",
+    detector="D.1",
+)
+_CODE_SOURCE = _SecretSource(
+    finding_type=DataSecurityFindingType.SECRET_EXPOSED_IN_CODE,
+    scope="CODE",
+    rule_id="secret_exposed_in_code",
+    cloud="code",
+    arn_scheme="code-secret",
+    source_agent="appsec",
+    locus="code",
+    detector="D.14",
+)
+
+#: Sibling artifact AppSec (D.14) writes (same shape as runtime_secrets.json).
+CODE_SECRETS_FILENAME = "code_secrets.json"
+
+
+def _build_finding_id(source: _SecretSource, target: str, sequence: int) -> str:
+    src = source_token(source.finding_type)
     context = _SLUG_RE.sub("-", target.lower()).strip("-") or "secret"
     context = context[:40]
-    return f"CSPM-RUNTIME-{src}-{sequence:03d}-{context}"
+    return f"CSPM-{source.scope}-{src}-{sequence:03d}-{context}"
 
 
-def secrets_to_findings(
+def _secrets_to_findings(
     secrets: Sequence[dict[str, Any]],
     *,
     envelope: NexusEnvelope,
     detected_at: datetime,
+    source: _SecretSource,
 ) -> list[CloudPostureFinding]:
-    """Map redacted secret-hit dicts to OCSF 2003 SECRET_EXPOSED_IN_RUNTIME findings."""
     findings: list[CloudPostureFinding] = []
     for sequence, secret in enumerate(secrets):
         rule_id = str(secret.get("rule_id", "")) or "unknown"
@@ -92,31 +132,31 @@ def secrets_to_findings(
         start_line = secret.get("start_line", 0)
 
         affected = AffectedResource(
-            cloud="runtime",
+            cloud=source.cloud,
             account_id=envelope.tenant_id,
             region="local",
             resource_type="file",
             resource_id=target,
-            arn=f"runtime-secret://{target}",
+            arn=f"{source.arn_scheme}://{target}",
         )
         evidence: dict[str, Any] = {
-            "rule": "secret_exposed_in_runtime",
-            "source_finding_type": DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME.value,
+            "rule": source.rule_id,
+            "source_finding_type": source.finding_type.value,
             "secret_rule_id": rule_id,
             "secret_category": category,
             "target": target,
             "start_line": start_line,
-            "source_agent": "vulnerability",
+            "source_agent": source.source_agent,
         }
         findings.append(
             build_finding(
-                finding_id=_build_finding_id(target, sequence),
-                rule_id="secret_exposed_in_runtime",
+                finding_id=_build_finding_id(source, target, sequence),
+                rule_id=source.rule_id,
                 severity=_to_severity(str(secret.get("severity", ""))),
-                title=f"Secret exposed in runtime: {title_txt}",
+                title=f"Secret exposed in {source.locus}: {title_txt}",
                 description=(
-                    f"D.1 detected a secret ({rule_id}) in {target} "
-                    f"line {start_line}. Owned per ADR-015: D.1 scans, DSPM emits."
+                    f"{source.detector} detected a secret ({rule_id}) in {target} "
+                    f"line {start_line}. Owned per ADR-015: {source.detector} scans, DSPM emits."
                 ),
                 affected=[affected],
                 detected_at=detected_at,
@@ -125,6 +165,43 @@ def secrets_to_findings(
             )
         )
     return findings
+
+
+def secrets_to_findings(
+    secrets: Sequence[dict[str, Any]],
+    *,
+    envelope: NexusEnvelope,
+    detected_at: datetime,
+) -> list[CloudPostureFinding]:
+    """Map redacted secret-hit dicts to OCSF 2003 SECRET_EXPOSED_IN_RUNTIME findings."""
+    return _secrets_to_findings(
+        secrets, envelope=envelope, detected_at=detected_at, source=_RUNTIME_SOURCE
+    )
+
+
+def code_secrets_to_findings(
+    secrets: Sequence[dict[str, Any]],
+    *,
+    envelope: NexusEnvelope,
+    detected_at: datetime,
+) -> list[CloudPostureFinding]:
+    """Map redacted code-secret dicts to OCSF 2003 SECRET_EXPOSED_IN_CODE findings."""
+    return _secrets_to_findings(
+        secrets, envelope=envelope, detected_at=detected_at, source=_CODE_SOURCE
+    )
+
+
+def read_code_secrets(appsec_workspace: Path | str) -> list[dict[str, Any]]:
+    """Read D.14's redacted ``code_secrets.json`` from a sibling workspace."""
+    path = Path(appsec_workspace) / CODE_SECRETS_FILENAME
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    secrets = payload.get("secrets", [])
+    return list(secrets) if isinstance(secrets, list) else []
 
 
 def ingest_runtime_secret_findings(
@@ -140,9 +217,26 @@ def ingest_runtime_secret_findings(
     return secrets_to_findings(secrets, envelope=envelope, detected_at=detected_at)
 
 
+def ingest_code_secret_findings(
+    appsec_workspace: Path | str | None,
+    *,
+    envelope: NexusEnvelope,
+    detected_at: datetime,
+) -> list[CloudPostureFinding]:
+    """Read + map D.14's code-secrets handoff to OCSF 2003 findings (``[]`` if unset)."""
+    if appsec_workspace is None:
+        return []
+    secrets = read_code_secrets(appsec_workspace)
+    return code_secrets_to_findings(secrets, envelope=envelope, detected_at=detected_at)
+
+
 __all__ = [
+    "CODE_SECRETS_FILENAME",
     "RUNTIME_SECRETS_FILENAME",
+    "code_secrets_to_findings",
+    "ingest_code_secret_findings",
     "ingest_runtime_secret_findings",
+    "read_code_secrets",
     "read_runtime_secrets",
     "secrets_to_findings",
 ]

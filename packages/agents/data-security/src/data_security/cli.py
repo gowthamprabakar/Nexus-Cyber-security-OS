@@ -116,6 +116,17 @@ def eval_cmd(cases_dir: Path) -> None:
     ),
 )
 @click.option(
+    "--appsec-workspace",
+    "appsec_workspace",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Optional path to a sibling D.14 AppSec workspace containing "
+        "code_secrets.json. Emits OCSF 2003 SECRET_EXPOSED_IN_CODE findings "
+        "(B-1 / ADR-015: AppSec scans, DSPM emits)."
+    ),
+)
+@click.option(
     "--trusted-sensitivity-tag",
     "trusted_sensitivity_tag",
     type=str,
@@ -139,6 +150,7 @@ def run_cmd(
     s3_objects_feed: Path | None,
     cloud_posture_workspace: Path | None,
     vulnerability_workspace: Path | None,
+    appsec_workspace: Path | None,
     trusted_sensitivity_tag: str,
     customer_domains: tuple[str, ...],
 ) -> None:
@@ -159,6 +171,7 @@ def run_cmd(
             s3_objects_feed=s3_objects_feed,
             cloud_posture_workspace=cloud_posture_workspace,
             vulnerability_workspace=vulnerability_workspace,
+            appsec_workspace=appsec_workspace,
             trusted_sensitivity_tag=trusted_sensitivity_tag,
         )
     )

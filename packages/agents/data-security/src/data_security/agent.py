@@ -68,7 +68,10 @@ from data_security.schemas import (
     FindingsReport,
 )
 from data_security.scorer import apply_correlation_uplift
-from data_security.secrets_ingest import ingest_runtime_secret_findings
+from data_security.secrets_ingest import (
+    ingest_code_secret_findings,
+    ingest_runtime_secret_findings,
+)
 from data_security.summarizer import render_summary
 from data_security.tools import (
     BucketInventory,
@@ -124,6 +127,7 @@ async def run(
     aws_region: str | None = None,
     cloud_posture_workspace: Path | str | None = None,
     vulnerability_workspace: Path | str | None = None,
+    appsec_workspace: Path | str | None = None,
     trusted_sensitivity_tag: str = "Restricted",
 ) -> FindingsReport:
     """Run the Data Security Agent end-to-end under the runtime charter.
@@ -152,6 +156,11 @@ async def run(
             When present, Stage 3b ingests D.1's redacted secret hits and
             emits OCSF 2003 ``SECRET_EXPOSED_IN_RUNTIME`` findings (D.1 scans,
             DSPM emits). Absent/empty → no secret findings (byte-identical).
+        appsec_workspace: Optional path to a sibling D.14 AppSec workspace
+            directory containing ``code_secrets.json`` (B-1 / ADR-015 §Rationale-3).
+            When present, ingests AppSec's redacted secrets-in-code and emits OCSF
+            2003 ``SECRET_EXPOSED_IN_CODE`` findings (AppSec scans, DSPM emits).
+            Absent/empty → no secret findings (byte-identical).
         trusted_sensitivity_tag: Override for the trusted ``Sensitivity``
             tag value (defaults to ``"Restricted"`` — the documented
             common AWS Data Classification posture).
@@ -210,6 +219,13 @@ async def run(
             *d5_findings,
             *ingest_runtime_secret_findings(
                 vulnerability_workspace,
+                envelope=envelope,
+                detected_at=scan_started,
+            ),
+            # B-1 PR4 (ADR-015 §Rationale-3): consume AppSec (D.14) secrets-in-code
+            # the same way as D.1 runtime secrets → OCSF 2003 SECRET_EXPOSED_IN_CODE.
+            *ingest_code_secret_findings(
+                appsec_workspace,
                 envelope=envelope,
                 detected_at=scan_started,
             ),

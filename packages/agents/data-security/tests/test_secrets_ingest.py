@@ -13,7 +13,9 @@ from pathlib import Path
 
 from data_security.schemas import DataSecurityFindingType
 from data_security.secrets_ingest import (
+    CODE_SECRETS_FILENAME,
     RUNTIME_SECRETS_FILENAME,
+    ingest_code_secret_findings,
     ingest_runtime_secret_findings,
     read_runtime_secrets,
     secrets_to_findings,
@@ -103,3 +105,58 @@ def test_no_plaintext_in_emitted_finding(tmp_path: Path) -> None:
     serialized = json.dumps(findings[0].to_dict())
     assert "AKIA" not in serialized
     assert "match" not in serialized.lower()
+
+
+# --- B-1 (ADR-015 §Rationale-3): code-secrets from D.14 AppSec ---------------
+
+
+def _write_code_artifact(workspace: Path, secrets: list[dict[str, object]]) -> None:
+    workspace.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "0.1",
+        "agent": "appsec",
+        "run_id": "run-1",
+        "secrets": secrets,
+    }
+    (workspace / CODE_SECRETS_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
+
+
+_CODE_HIT = {
+    "rule_id": "aws-access-token",
+    "category": "code_secret",
+    "severity": "HIGH",
+    "title": "AWS Access Token",
+    "target": "src/config.py",
+    "start_line": 12,
+    "end_line": 12,
+}
+
+
+def test_ingest_code_none_workspace_is_empty() -> None:
+    assert ingest_code_secret_findings(None, envelope=_envelope(), detected_at=_DETECTED_AT) == []
+
+
+def test_ingest_code_emits_secret_exposed_in_code(tmp_path: Path) -> None:
+    _write_code_artifact(tmp_path, [_CODE_HIT])
+    findings = ingest_code_secret_findings(tmp_path, envelope=_envelope(), detected_at=_DETECTED_AT)
+    assert len(findings) == 1
+    ocsf = findings[0].to_dict()
+    assert ocsf["class_uid"] == 2003
+    assert ocsf["evidences"][0]["source_finding_type"] == (
+        DataSecurityFindingType.SECRET_EXPOSED_IN_CODE.value
+    )
+    assert ocsf["compliance"]["control"] == "secret_exposed_in_code"
+    assert findings[0].finding_id.startswith("CSPM-CODE-SECRET-")
+
+
+def test_runtime_path_unchanged_byte_identical(tmp_path: Path) -> None:
+    # The refactor must keep the runtime discriminator + finding-id prefix intact.
+    _write_artifact(tmp_path, [_HIT])
+    findings = ingest_runtime_secret_findings(
+        tmp_path, envelope=_envelope(), detected_at=_DETECTED_AT
+    )
+    ocsf = findings[0].to_dict()
+    assert ocsf["evidences"][0]["source_finding_type"] == (
+        DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME.value
+    )
+    assert findings[0].finding_id.startswith("CSPM-RUNTIME-SECRET-")

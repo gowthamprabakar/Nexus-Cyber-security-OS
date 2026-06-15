@@ -77,6 +77,9 @@ class DataSecurityFindingType(StrEnum):
     # (Trivy's secret scanner), DSPM EMITS. Appended so existing discriminators +
     # the offline eval stay byte-identical.
     SECRET_EXPOSED_IN_RUNTIME = "data_security_secret_exposed_in_runtime"  # noqa: S105  # enum label, not a credential
+    # v0.3 B-1 (ADR-015 §Rationale-3): secrets-in-CODE — AppSec (D.14) SCANS
+    # (gitleaks), DSPM EMITS. Same unified OCSF 2003 emission point as runtime.
+    SECRET_EXPOSED_IN_CODE = "data_security_secret_exposed_in_code"  # noqa: S105  # enum label, not a credential
 
 
 class ClassifierLabel(StrEnum):
@@ -122,6 +125,7 @@ _FT_SOURCE_TOKEN: dict[DataSecurityFindingType, str] = {
     DataSecurityFindingType.S3_OBJECT_SENSITIVE_IN_UNTRUSTED_LOCATION: "SENSLOC",
     DataSecurityFindingType.S3_OVERSHARING_IAM: "OVERSHARE",
     DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME: "SECRET",
+    DataSecurityFindingType.SECRET_EXPOSED_IN_CODE: "SECRET",
 }
 
 
