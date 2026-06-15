@@ -76,4 +76,21 @@ def build_control_index(
     return {k: tuple(v) for k, v in out.items()}
 
 
-__all__ = ["ControlIndex", "ControlIndexKey", "IndexedMapping", "build_control_index"]
+def build_control_by_id(controls: Iterable[CisControl]) -> dict[str, CisControl]:
+    """Index controls by ``control_id`` for native-CIS attribution (A-3).
+
+    The native-CIS correlation path (cloud-posture findings carrying Prowler's own
+    ``evidence.cis_controls``) needs to resolve a bare ``control_id`` → its
+    ``CisControl`` (name/description/level/required), independent of the
+    ``source_mappings`` forward index. Last definition wins on duplicate ids.
+    """
+    return {control.control_id: control for control in controls}
+
+
+__all__ = [
+    "ControlIndex",
+    "ControlIndexKey",
+    "IndexedMapping",
+    "build_control_by_id",
+    "build_control_index",
+]

@@ -18,7 +18,7 @@ from cloud_posture.schemas import AffectedResource as CspmAffectedResource
 from cloud_posture.schemas import Severity as CspmSeverity
 from cloud_posture.schemas import build_finding as build_cspm_finding
 from compliance.correlators.cloud_posture_correlator import correlate_cloud_posture
-from compliance.correlators.control_index import build_control_index
+from compliance.correlators.control_index import build_control_by_id, build_control_index
 from compliance.schemas import ControlLevel, ControlMapping
 from compliance.tools.cis_aws_benchmark import CisControl
 from shared.fabric.envelope import NexusEnvelope
@@ -440,3 +440,86 @@ async def test_index_built_from_real_bundled_yaml_round_trips(tmp_path: Path) ->
     )
     # CSPM-AWS-IAM-001 maps to CIS 1.10 in the bundled library.
     assert any(f.rule_id == "cis_aws_v3:1.10" for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# A-3 native-CIS attribution (Prowler's own evidence.cis_controls)
+# ---------------------------------------------------------------------------
+
+
+def _f3_finding_with_cis(cis_controls: list[str], *, rule_id: str = "CSPM-AWS-NONE-999") -> dict:
+    finding = _f3_finding(finding_id=f"{rule_id}-alice", rule_id=rule_id)
+    finding["evidences"] = [{"prowler_check": "x", "cis_controls": cis_controls}]
+    return finding
+
+
+@pytest.mark.asyncio
+async def test_native_cis_emits_for_catalog_control(tmp_path: Path) -> None:
+    _write_f3_findings(tmp_path, [_f3_finding_with_cis(["CIS-3.0:1.10"])])
+    findings = await correlate_cloud_posture(
+        cloud_posture_workspace=tmp_path,
+        control_index={},  # no YAML mapping → only the native pass can emit
+        controls_by_id=build_control_by_id([_control("1.10")]),
+        correlated_at=datetime(2026, 6, 15, tzinfo=UTC),
+        envelope=_envelope(),
+    )
+    assert len(findings) == 1
+    assert findings[0].to_dict()["compliance"]["control"].endswith("1.10")
+
+
+@pytest.mark.asyncio
+async def test_native_cis_ignores_wrong_version(tmp_path: Path) -> None:
+    _write_f3_findings(tmp_path, [_f3_finding_with_cis(["CIS-2.0:1.10"])])
+    findings = await correlate_cloud_posture(
+        cloud_posture_workspace=tmp_path,
+        control_index={},
+        controls_by_id=build_control_by_id([_control("1.10")]),
+        correlated_at=datetime(2026, 6, 15, tzinfo=UTC),
+        envelope=_envelope(),
+    )
+    assert findings == ()
+
+
+@pytest.mark.asyncio
+async def test_native_cis_ignores_control_absent_from_catalog(tmp_path: Path) -> None:
+    _write_f3_findings(tmp_path, [_f3_finding_with_cis(["CIS-3.0:9.99"])])
+    findings = await correlate_cloud_posture(
+        cloud_posture_workspace=tmp_path,
+        control_index={},
+        controls_by_id=build_control_by_id([_control("1.10")]),  # 9.99 not in catalog
+        correlated_at=datetime(2026, 6, 15, tzinfo=UTC),
+        envelope=_envelope(),
+    )
+    assert findings == ()
+
+
+@pytest.mark.asyncio
+async def test_native_cis_format_robust_underscore(tmp_path: Path) -> None:
+    _write_f3_findings(tmp_path, [_f3_finding_with_cis(["cis_3.0_aws:1.10"])])
+    findings = await correlate_cloud_posture(
+        cloud_posture_workspace=tmp_path,
+        control_index={},
+        controls_by_id=build_control_by_id([_control("1.10")]),
+        correlated_at=datetime(2026, 6, 15, tzinfo=UTC),
+        envelope=_envelope(),
+    )
+    assert len(findings) == 1
+
+
+@pytest.mark.asyncio
+async def test_native_cis_deduped_against_yaml_pass(tmp_path: Path) -> None:
+    # Finding maps to 1.10 via the YAML index AND carries native CIS-3.0:1.10 →
+    # exactly ONE finding for (finding, 1.10), not two.
+    rule_id = "CSPM-AWS-IAM-001"
+    finding = _f3_finding(finding_id=f"{rule_id}-alice", rule_id=rule_id)
+    finding["evidences"] = [{"cis_controls": ["CIS-3.0:1.10"]}]
+    _write_f3_findings(tmp_path, [finding])
+    control = _control("1.10", mappings=[_mapping(rule_id, "1.10")])
+    findings = await correlate_cloud_posture(
+        cloud_posture_workspace=tmp_path,
+        control_index=build_control_index([control]),
+        controls_by_id=build_control_by_id([control]),
+        correlated_at=datetime(2026, 6, 15, tzinfo=UTC),
+        envelope=_envelope(),
+    )
+    assert len(findings) == 1
