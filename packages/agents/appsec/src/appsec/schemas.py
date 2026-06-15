@@ -24,6 +24,16 @@ class Severity(StrEnum):
     INFO = "info"
 
 
+class AppSecFindingType(StrEnum):
+    """Discriminator for AppSec findings (drives OCSF 2003 ``finding_info.types[0]``).
+
+    Stable wire-format identifier (ADR-010) — one value per scanner family. B-1 PR2
+    lands IaC; SAST + secrets-in-code discriminators append in later PRs.
+    """
+
+    IAC_MISCONFIGURATION = "appsec_iac_misconfiguration"
+
+
 class RepoRef(BaseModel):
     """A single discovered source repository (no secret material)."""
 
@@ -35,6 +45,7 @@ class RepoRef(BaseModel):
     clone_url: str = Field(min_length=1)
     default_branch: str = "main"
     visibility: str = "unknown"  # public | private | internal | unknown
+    local_path: str | None = None  # set when the repo is checked out locally (scannable)
 
     @property
     def slug(self) -> str:
@@ -63,6 +74,7 @@ class AppSecFinding(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     finding_id: str
+    finding_type: AppSecFindingType
     rule_id: str
     severity: Severity
     title: str
