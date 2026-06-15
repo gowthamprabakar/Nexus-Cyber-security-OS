@@ -39,6 +39,7 @@ tenant-RLS substrate-fix plan.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,6 +48,7 @@ from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
 from charter.memory.semantic import SemanticStore
+from nexus_runtime.hermes import detect_skill_trigger, upsert_skill_candidate
 from nexus_runtime.llm_invariants.bounded import assert_bounded_retry
 from nexus_runtime.llm_invariants.categorical import assert_categorical_only
 from shared.fabric.correlation import correlation_scope, new_correlation_id
@@ -112,6 +114,50 @@ def _envelope(
         nlah_version=DEFAULT_NLAH_VERSION,
         model_pin=model_pin,
         charter_invocation_id=contract.delegation_id,
+    )
+
+
+async def _propose_skill_candidate(
+    *,
+    audit_path: Path,
+    semantic_store: SemanticStore,
+    agent_id: str,
+    run_id: str,
+    tenant_id: str,
+) -> None:
+    """Hermes Phase 1 (C-2): propose a skill candidate from this run's audit chain.
+
+    Reads the run's audit entries, runs the hoisted ``detect_skill_trigger`` with
+    ``include_llm_stages=True`` (D.13 is LLM-stage-driven, not tool-driven), and on
+    a novel-workflow hit upserts a ``skill_candidate`` entity into the SemanticStore.
+    Proposer-only (C2-C): ``deployed_tool_sequence_hashes`` is empty — novelty
+    adjudication + deployment are the meta-harness eval-gate's sole authority.
+    """
+    entries = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    trigger = detect_skill_trigger(
+        agent_id=agent_id,
+        run_id=run_id,
+        audit_entries=entries,
+        deployed_tool_sequence_hashes=frozenset(),
+        include_llm_stages=True,
+    )
+    if trigger is None:
+        return
+    await upsert_skill_candidate(
+        semantic_store,
+        tenant_id=tenant_id,
+        skill_id=f"{agent_id}:{trigger.tool_sequence_hash}",
+        properties={
+            "agent_id": agent_id,
+            "run_id": trigger.run_id,
+            "tool_sequence_hash": trigger.tool_sequence_hash,
+            "tool_names": list(trigger.tool_names),
+            "audit_entry_hashes": list(trigger.audit_entry_hashes),
+        },
     )
 
 
@@ -228,6 +274,18 @@ async def run(
                 review_retries=report.review_retries,
             ),
         )
+
+        # Hermes Phase 1 (C-2): detect a novel LLM-stage workflow in this run and
+        # PROPOSE it as a skill candidate. C2-C: propose-only — the meta-harness
+        # eval-gate + C-1 remain the SOLE deploy authority; this agent never deploys.
+        if semantic_store is not None and ctx.audit is not None:
+            await _propose_skill_candidate(
+                audit_path=ctx.audit.path,
+                semantic_store=semantic_store,
+                agent_id="synthesis",
+                run_id=contract.delegation_id,
+                tenant_id=contract.customer_id,
+            )
 
         ctx.assert_complete()
 
