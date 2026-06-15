@@ -121,6 +121,12 @@ def _overprivilege_findings(
                     "admin_action_count": len(admin_grants),
                     "attached_policies": attached,
                     "inline_admin": False,
+                    # A-4: surface the simulator's real per-action/per-resource
+                    # grants (was only counted). On the default attached-policy
+                    # path these are the synthesized "*:*"/"*"; on the simulator
+                    # path they are the concrete allowed actions/resources.
+                    "admin_actions": sorted({g.action for g in admin_grants}),
+                    "admin_resource_patterns": sorted({g.resource_pattern for g in admin_grants}),
                 },
                 detected_at=when,
                 envelope=envelope,
