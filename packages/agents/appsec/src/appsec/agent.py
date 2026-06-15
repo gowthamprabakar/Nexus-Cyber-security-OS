@@ -12,6 +12,7 @@ nothing and emits an empty inventory + report.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from charter import Charter, ToolRegistry
@@ -19,11 +20,15 @@ from charter.contract import ExecutionContract
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 
 from appsec import __version__ as agent_version
+from appsec.normalizers.checkov_iac import checkov_to_findings
+from appsec.ocsf.emission import finding_to_ocsf
 from appsec.schemas import FindingsReport, RepoInventory
+from appsec.tools.checkov_runner import run_checkov
 from appsec.tools.repo_discovery import discover_repositories
 from appsec.tools.scm_connector import ScmConnector, StaticScmConnector
 
 _DISCOVER_TOOL = "discover_repositories"
+_CHECKOV_TOOL = "run_checkov"
 
 
 def build_registry() -> ToolRegistry:
@@ -35,6 +40,8 @@ def build_registry() -> ToolRegistry:
     """
     reg = ToolRegistry()
     reg.register(_DISCOVER_TOOL, discover_repositories, version="0.1.0", cloud_calls=50)
+    # Checkov is a local subprocess (no cloud API), operator-provisioned binary.
+    reg.register(_CHECKOV_TOOL, run_checkov, version="0.1.0", cloud_calls=0)
     return reg
 
 
@@ -97,11 +104,40 @@ async def run(
             customer_id=contract.customer_id,
             run_id=contract.delegation_id,
             scan_started_at=scan_started,
-            scan_completed_at=datetime.now(UTC),
+            scan_completed_at=scan_started,
         )
 
+        # B-1 PR2 (Q-AppSec-3): run Checkov IaC scan on each repo checked out
+        # locally. Repos without a local_path are skipped (live checkout = B-1 PR3).
+        for repo in inventory.repositories:
+            if repo.local_path is None:
+                continue
+            result = await ctx.call_tool(_CHECKOV_TOOL, repo_path=repo.local_path)
+            for finding in checkov_to_findings(result.payload, repo_slug=repo.slug):
+                report.add_finding(finding)
+
+        report.scan_completed_at = datetime.now(UTC)
+        ocsf_findings = [
+            finding_to_ocsf(
+                f,
+                customer_id=contract.customer_id,
+                run_id=contract.delegation_id,
+                detected_at=scan_started,
+            )
+            for f in report.findings
+        ]
+        findings_doc = {
+            "agent": "appsec",
+            "agent_version": agent_version,
+            "customer_id": contract.customer_id,
+            "run_id": contract.delegation_id,
+            "scan_started_at": scan_started.isoformat(),
+            "scan_completed_at": report.scan_completed_at.isoformat(),
+            "findings": ocsf_findings,
+        }
+
         ctx.write_output("repo_inventory.json", inventory.model_dump_json(indent=2).encode("utf-8"))
-        ctx.write_output("findings.json", report.model_dump_json(indent=2).encode("utf-8"))
+        ctx.write_output("findings.json", json.dumps(findings_doc, indent=2).encode("utf-8"))
         ctx.write_output("summary.md", _render_summary(inventory, report).encode("utf-8"))
 
         ctx.assert_complete()
