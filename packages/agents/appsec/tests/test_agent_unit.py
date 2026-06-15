@@ -13,6 +13,7 @@ from appsec.schemas import RepoRef
 from appsec.tools.checkov_runner import CheckovResult
 from appsec.tools.gitleaks_runner import GitleaksResult
 from appsec.tools.scm_connector import StaticScmConnector
+from appsec.tools.semgrep_runner import SemgrepResult
 from charter.contract import BudgetSpec, ExecutionContract
 
 pytestmark = pytest.mark.asyncio
@@ -35,6 +36,7 @@ def _contract(tmp_path: Path) -> ExecutionContract:
             "run_checkov",
             "run_gitleaks",
             "clone_repository",
+            "run_semgrep",
         ],
         completion_condition="repo_inventory.json AND findings.json AND summary.md exist",
         escalation_rules=[],
@@ -104,8 +106,12 @@ async def test_run_checkov_emits_ocsf_2003(tmp_path: Path, monkeypatch: pytest.M
     async def empty_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
         return GitleaksResult(payload=[])
 
+    async def empty_semgrep(repo_path: str, **_: object) -> SemgrepResult:
+        return SemgrepResult(payload={})
+
     monkeypatch.setattr(agent_mod, "run_checkov", fake_checkov)
     monkeypatch.setattr(agent_mod, "run_gitleaks", empty_gitleaks)
+    monkeypatch.setattr(agent_mod, "run_semgrep", empty_semgrep)
     repo = RepoRef(
         host="github",
         owner="acme",
@@ -146,8 +152,12 @@ async def test_run_gitleaks_writes_redacted_code_secrets(
             ]
         )
 
+    async def empty_semgrep(repo_path: str, **_: object) -> SemgrepResult:
+        return SemgrepResult(payload={})
+
     monkeypatch.setattr(agent_mod, "run_checkov", empty_checkov)
     monkeypatch.setattr(agent_mod, "run_gitleaks", fake_gitleaks)
+    monkeypatch.setattr(agent_mod, "run_semgrep", empty_semgrep)
     repo = RepoRef(
         host="github",
         owner="acme",
@@ -184,8 +194,12 @@ async def test_run_clone_root_clones_then_scans(
     async def empty_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
         return GitleaksResult(payload=[])
 
+    async def empty_semgrep(repo_path: str, **_: object) -> SemgrepResult:
+        return SemgrepResult(payload={})
+
     monkeypatch.setattr(agent_mod, "run_checkov", spy_checkov)
     monkeypatch.setattr(agent_mod, "run_gitleaks", empty_gitleaks)
+    monkeypatch.setattr(agent_mod, "run_semgrep", empty_semgrep)
 
     # repo discovered WITHOUT a local_path (as a live connector returns it)
     repo = RepoRef(
@@ -200,6 +214,49 @@ async def test_run_clone_root_clones_then_scans(
     # The inventory repo now carries the cloned local_path, and the scanner saw it.
     assert inventory.repositories[0].local_path == str(cloned_dest)
     assert seen_paths == [str(cloned_dest)]
+
+
+async def test_run_semgrep_emits_sast_ocsf_2003(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Semgrep findings → OCSF 2003 with the SAST discriminator in findings.json."""
+
+    async def empty_checkov(repo_path: str, **_: object) -> CheckovResult:
+        return CheckovResult(payload={})
+
+    async def empty_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
+        return GitleaksResult(payload=[])
+
+    async def fake_semgrep(repo_path: str, **_: object) -> SemgrepResult:
+        return SemgrepResult(
+            payload={
+                "results": [
+                    {
+                        "check_id": "python.lang.security.audit.subprocess-shell-true",
+                        "path": "/src/app.py",
+                        "start": {"line": 7},
+                        "extra": {"message": "shell=True", "severity": "ERROR"},
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(agent_mod, "run_checkov", empty_checkov)
+    monkeypatch.setattr(agent_mod, "run_gitleaks", empty_gitleaks)
+    monkeypatch.setattr(agent_mod, "run_semgrep", fake_semgrep)
+    repo = RepoRef(
+        host="github",
+        owner="acme",
+        name="api",
+        clone_url="https://github.com/acme/api.git",
+        local_path=str(tmp_path / "checkout"),
+    )
+    await run(_contract(tmp_path), scm_connector=StaticScmConnector([repo]))
+
+    findings = json.loads((tmp_path / "ws" / "findings.json").read_text())["findings"]
+    assert len(findings) == 1
+    assert findings[0]["class_uid"] == 2003
+    assert findings[0]["finding_info"]["types"] == ["appsec_sast_finding"]
 
 
 async def test_run_skips_checkov_without_local_path(

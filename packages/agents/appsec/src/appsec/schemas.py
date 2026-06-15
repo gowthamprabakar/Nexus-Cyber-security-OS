@@ -32,6 +32,7 @@ class AppSecFindingType(StrEnum):
     """
 
     IAC_MISCONFIGURATION = "appsec_iac_misconfiguration"
+    SAST_FINDING = "appsec_sast_finding"  # B-1 PR8: Semgrep static analysis
 
 
 class RepoRef(BaseModel):
