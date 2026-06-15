@@ -114,6 +114,9 @@ async def test_overprivilege_finding_emitted_for_admin_grant() -> None:
     assert ALICE in finding.principal_arns
     assert finding.evidence["attached_policies"] == ["AdminPolicy"]
     assert finding.evidence["admin_action_count"] == 1
+    # A-4: the real per-action/per-resource grants are surfaced, not just counted.
+    assert finding.evidence["admin_actions"] == ["iam:*"]
+    assert finding.evidence["admin_resource_patterns"] == ["*"]
 
 
 @pytest.mark.asyncio
