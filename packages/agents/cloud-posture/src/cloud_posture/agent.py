@@ -48,6 +48,7 @@ from shared.fabric.envelope import NexusEnvelope
 
 from cloud_posture import __version__ as agent_version
 from cloud_posture.credentials import CredentialResolver
+from cloud_posture.prowler_compliance import extract_cis_controls
 from cloud_posture.schemas import (
     AffectedResource,
     CloudPostureFinding,
@@ -148,17 +149,58 @@ def _rule_id_for(check_id: str) -> str:
     return f"CSPM-AWS-PROWLER-{nnn:03d}"
 
 
+def _prowler_check_id(raw: dict[str, Any]) -> str:
+    """Prowler check id — json-ocsf ``metadata.event_code``, legacy ``CheckID``.
+
+    Dual-shape so the real Prowler json-ocsf output parses while the existing
+    simplified-shape fixtures stay byte-identical. KeyError on a row carrying
+    neither is caught by the caller (the row is dropped, not fatal).
+    """
+    meta = raw.get("metadata")
+    if isinstance(meta, dict):
+        event_code = meta.get("event_code")
+        if isinstance(event_code, str) and event_code:
+            return event_code
+    return str(raw["CheckID"])
+
+
 def _affected_from_prowler(raw: dict[str, Any]) -> AffectedResource:
-    arn = raw["ResourceArn"]
+    """Resource details — json-ocsf ``resources[0]`` + ``cloud``, legacy flat keys."""
+    resources = raw.get("resources")
+    if isinstance(resources, list) and resources:
+        resource = resources[0]
+        cloud_raw = raw.get("cloud")
+        cloud: dict[str, Any] = cloud_raw if isinstance(cloud_raw, dict) else {}
+        account_raw = cloud.get("account")
+        account: dict[str, Any] = account_raw if isinstance(account_raw, dict) else {}
+        arn = str(resource.get("uid", ""))
+        account_id = str(account.get("uid", ""))
+        region = str(cloud.get("region") or resource.get("region") or "")
+        resource_type = str(resource.get("type", "")).lower()
+    else:
+        arn = raw["ResourceArn"]
+        account_id = str(raw["AccountId"])
+        region = str(raw["Region"])
+        resource_type = str(raw["ResourceType"]).lower()
     resource_id = arn.rsplit(":", 1)[-1].rsplit("/", 1)[-1] or arn
     return AffectedResource(
         cloud="aws",
-        account_id=str(raw["AccountId"]),
-        region=str(raw["Region"]),
-        resource_type=str(raw["ResourceType"]).lower(),
+        account_id=account_id,
+        region=region,
+        resource_type=resource_type,
         resource_id=resource_id,
         arn=arn,
     )
+
+
+def _prowler_title(raw: dict[str, Any], check_id: str) -> str:
+    """Title — json-ocsf ``finding_info.title``, legacy ``StatusExtended``."""
+    finding_info = raw.get("finding_info")
+    if isinstance(finding_info, dict):
+        title = finding_info.get("title")
+        if isinstance(title, str) and title:
+            return title
+    return str(raw.get("StatusExtended") or raw.get("status_detail") or check_id)
 
 
 def _envelope(contract: ExecutionContract, *, model_pin: str) -> NexusEnvelope:
@@ -181,14 +223,21 @@ def _finding_from_prowler(
     poison the whole report.
     """
     try:
-        check_id = str(raw["CheckID"])
+        check_id = _prowler_check_id(raw)
         rule_id = _rule_id_for(check_id)
         affected = _affected_from_prowler(raw)
         finding_id = f"{rule_id}-{_sanitize_context(affected.arn)}"
         severity = _PROWLER_SEVERITY_MAP.get(
-            str(raw.get("Severity", "info")).lower(), Severity.INFO
+            str(raw.get("severity", raw.get("Severity", "info"))).lower(), Severity.INFO
         )
-        title = str(raw.get("StatusExtended") or check_id)
+        title = _prowler_title(raw, check_id)
+        evidence: dict[str, Any] = {"prowler_check": check_id, "raw": raw}
+        # A-3 (v0.3, option B): surface Prowler's NATIVE CIS attribution when the
+        # json-ocsf output carries it (unmapped.compliance). Absent → no key →
+        # findings from the simplified-shape fixtures stay byte-identical.
+        cis_controls = extract_cis_controls(raw)
+        if cis_controls:
+            evidence["cis_controls"] = list(cis_controls)
         return build_finding(
             finding_id=finding_id,
             rule_id=rule_id,
@@ -198,7 +247,7 @@ def _finding_from_prowler(
             affected=[affected],
             detected_at=datetime.now(UTC),
             envelope=_envelope(contract, model_pin=model_pin),
-            evidence={"prowler_check": check_id, "raw": raw},
+            evidence=evidence,
         )
     except (KeyError, ValueError):
         return None
