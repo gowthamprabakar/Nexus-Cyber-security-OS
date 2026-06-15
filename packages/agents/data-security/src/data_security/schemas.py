@@ -73,6 +73,10 @@ class DataSecurityFindingType(StrEnum):
         "data_security_s3_object_sensitive_in_untrusted_location"
     )
     S3_OVERSHARING_IAM = "data_security_s3_oversharing_iam"
+    # v0.3 A-2.4 (ADR-015): secrets-in-runtime owned cross-agent — D.1 SCANS
+    # (Trivy's secret scanner), DSPM EMITS. Appended so existing discriminators +
+    # the offline eval stay byte-identical.
+    SECRET_EXPOSED_IN_RUNTIME = "data_security_secret_exposed_in_runtime"  # noqa: S105  # enum label, not a credential
 
 
 class ClassifierLabel(StrEnum):
@@ -117,6 +121,7 @@ _FT_SOURCE_TOKEN: dict[DataSecurityFindingType, str] = {
     DataSecurityFindingType.S3_BUCKET_UNENCRYPTED: "UNENC",
     DataSecurityFindingType.S3_OBJECT_SENSITIVE_IN_UNTRUSTED_LOCATION: "SENSLOC",
     DataSecurityFindingType.S3_OVERSHARING_IAM: "OVERSHARE",
+    DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME: "SECRET",
 }
 
 

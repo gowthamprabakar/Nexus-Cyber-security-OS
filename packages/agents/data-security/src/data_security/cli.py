@@ -105,6 +105,17 @@ def eval_cmd(cases_dir: Path) -> None:
     ),
 )
 @click.option(
+    "--vulnerability-workspace",
+    "vulnerability_workspace",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Optional path to a sibling D.1 vulnerability workspace containing "
+        "runtime_secrets.json. Emits OCSF 2003 SECRET_EXPOSED_IN_RUNTIME "
+        "findings (A-2.4 / ADR-015: D.1 scans, DSPM emits)."
+    ),
+)
+@click.option(
     "--trusted-sensitivity-tag",
     "trusted_sensitivity_tag",
     type=str,
@@ -127,6 +138,7 @@ def run_cmd(
     s3_inventory_feed: Path | None,
     s3_objects_feed: Path | None,
     cloud_posture_workspace: Path | None,
+    vulnerability_workspace: Path | None,
     trusted_sensitivity_tag: str,
     customer_domains: tuple[str, ...],
 ) -> None:
@@ -146,6 +158,7 @@ def run_cmd(
             s3_inventory_feed=s3_inventory_feed,
             s3_objects_feed=s3_objects_feed,
             cloud_posture_workspace=cloud_posture_workspace,
+            vulnerability_workspace=vulnerability_workspace,
             trusted_sensitivity_tag=trusted_sensitivity_tag,
         )
     )
