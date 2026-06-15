@@ -28,6 +28,7 @@ from appsec.normalizers.gitleaks_secrets import (
     gitleaks_to_secret_hits,
     render_code_secrets_json,
 )
+from appsec.normalizers.semgrep_sast import semgrep_to_findings
 from appsec.ocsf.emission import finding_to_ocsf
 from appsec.schemas import FindingsReport, RepoInventory, RepoRef
 from appsec.tools.checkov_runner import run_checkov
@@ -35,11 +36,13 @@ from appsec.tools.gitleaks_runner import run_gitleaks
 from appsec.tools.repo_clone import CloneRunner, clone_repository
 from appsec.tools.repo_discovery import discover_repositories
 from appsec.tools.scm_connector import ScmConnector, StaticScmConnector
+from appsec.tools.semgrep_runner import run_semgrep
 
 _DISCOVER_TOOL = "discover_repositories"
 _CHECKOV_TOOL = "run_checkov"
 _GITLEAKS_TOOL = "run_gitleaks"
 _CLONE_TOOL = "clone_repository"
+_SEMGREP_TOOL = "run_semgrep"
 
 
 def build_registry() -> ToolRegistry:
@@ -57,6 +60,8 @@ def build_registry() -> ToolRegistry:
     # B-1 PR6: shallow git clone of discovered repos (network I/O, not a cloud-API
     # budget line — git over https; counted as 1 per repo for visibility).
     reg.register(_CLONE_TOOL, clone_repository, version="0.1.0", cloud_calls=1)
+    # B-1 PR8: Semgrep SAST (local subprocess; operator-provisioned binary + ruleset).
+    reg.register(_SEMGREP_TOOL, run_semgrep, version="0.1.0", cloud_calls=0)
     return reg
 
 
@@ -164,6 +169,10 @@ async def run(
             # handoff (ADR-015: AppSec scans, DSPM emits OCSF 2003).
             leaks = await ctx.call_tool(_GITLEAKS_TOOL, repo_path=repo.local_path)
             code_secret_hits.extend(gitleaks_to_secret_hits(leaks))
+            # B-1 PR8 (Q-AppSec-5): Semgrep SAST → OCSF 2003 (SAST discriminator).
+            sast = await ctx.call_tool(_SEMGREP_TOOL, repo_path=repo.local_path)
+            for finding in semgrep_to_findings(sast.payload, repo_slug=repo.slug):
+                report.add_finding(finding)
 
         report.scan_completed_at = datetime.now(UTC)
         ocsf_findings = [
