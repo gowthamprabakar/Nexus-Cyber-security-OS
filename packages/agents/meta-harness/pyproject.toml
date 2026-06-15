@@ -9,6 +9,7 @@ dependencies = [
     "nexus-shared",
     "nexus-eval-framework",
     "nexus-synthesis-agent",
+    "nexus-runtime",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
     "click>=8.1.0",
@@ -44,6 +45,7 @@ nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
 nexus-eval-framework = { workspace = true }
 nexus-synthesis-agent = { workspace = true }
+nexus-runtime = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
