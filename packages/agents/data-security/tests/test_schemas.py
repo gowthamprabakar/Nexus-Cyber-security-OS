@@ -101,14 +101,16 @@ def test_build_finding_callable_is_reexported() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_data_security_finding_type_has_4_values() -> None:
-    """One value per detector module landing in Tasks 5-8."""
+def test_data_security_finding_type_has_5_values() -> None:
+    """4 S3 detector modules (Tasks 5-8) + 1 cross-agent secrets discriminator
+    (v0.3 A-2.4 / ADR-015 — D.1 scans, DSPM emits). Appended additively."""
     members = set(DataSecurityFindingType)
-    assert len(members) == 4
+    assert len(members) == 5
     assert DataSecurityFindingType.S3_BUCKET_PUBLIC in members
     assert DataSecurityFindingType.S3_BUCKET_UNENCRYPTED in members
     assert DataSecurityFindingType.S3_OBJECT_SENSITIVE_IN_UNTRUSTED_LOCATION in members
     assert DataSecurityFindingType.S3_OVERSHARING_IAM in members
+    assert DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME in members
 
 
 def test_data_security_finding_type_wire_strings_have_namespace_prefix() -> None:

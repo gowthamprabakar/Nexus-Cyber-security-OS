@@ -68,6 +68,7 @@ from data_security.schemas import (
     FindingsReport,
 )
 from data_security.scorer import apply_correlation_uplift
+from data_security.secrets_ingest import ingest_runtime_secret_findings
 from data_security.summarizer import render_summary
 from data_security.tools import (
     BucketInventory,
@@ -122,6 +123,7 @@ async def run(
     aws_profile: str | None = None,
     aws_region: str | None = None,
     cloud_posture_workspace: Path | str | None = None,
+    vulnerability_workspace: Path | str | None = None,
     trusted_sensitivity_tag: str = "Restricted",
 ) -> FindingsReport:
     """Run the Data Security Agent end-to-end under the runtime charter.
@@ -145,6 +147,11 @@ async def run(
             directory containing ``findings.json`` (Q4). When present,
             Stage 4 CORRELATE runs and Stage 5 SCORE uplifts severity for
             matched findings.
+        vulnerability_workspace: Optional path to a sibling D.1 workspace
+            directory containing ``runtime_secrets.json`` (A-2.4 / ADR-015).
+            When present, Stage 3b ingests D.1's redacted secret hits and
+            emits OCSF 2003 ``SECRET_EXPOSED_IN_RUNTIME`` findings (D.1 scans,
+            DSPM emits). Absent/empty → no secret findings (byte-identical).
         trusted_sensitivity_tag: Override for the trusted ``Sensitivity``
             tag value (defaults to ``"Restricted"`` — the documented
             common AWS Data Classification posture).
@@ -193,6 +200,20 @@ async def run(
             scan_time=scan_started,
             trusted_sensitivity_tag=trusted_sensitivity_tag,
         )
+
+        # Stage 3b — A-2.4 (ADR-015): ingest D.1's secrets-in-runtime handoff.
+        # D.1 SCANS (writes redacted runtime_secrets.json); DSPM EMITS the OCSF
+        # 2003 SECRET_EXPOSED_IN_RUNTIME finding. No plaintext crosses (D.1
+        # redacted at source). Additive: empty/absent artifact → zero findings,
+        # so the no-secret path is byte-identical.
+        d5_findings = [
+            *d5_findings,
+            *ingest_runtime_secret_findings(
+                vulnerability_workspace,
+                envelope=envelope,
+                detected_at=scan_started,
+            ),
+        ]
 
         # Stage 4 — CORRELATE: optional F.3 sibling-workspace read.
         correlation = await _correlate(
