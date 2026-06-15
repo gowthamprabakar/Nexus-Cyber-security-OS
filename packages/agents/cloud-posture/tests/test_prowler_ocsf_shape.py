@@ -13,7 +13,7 @@ from pathlib import Path
 
 from charter.contract import BudgetSpec, ExecutionContract
 from cloud_posture.agent import _finding_from_prowler
-from cloud_posture.prowler_compliance import extract_cis_controls
+from cloud_posture.prowler_compliance import aggregate_cis_coverage, extract_cis_controls
 
 # Real Prowler 5.x json-ocsf finding (per official schema).
 _OCSF_FINDING = {
@@ -109,6 +109,25 @@ def test_ocsf_shape_parses_and_carries_cis(tmp_path: Path) -> None:
     assert evidence["prowler_check"] == "iam_user_hardware_mfa_enabled"
     assert evidence["cis_controls"] == ["CIS-3.0:1.10", "CIS-3.0:1.6"]
     assert payload["finding_info"]["title"] == "Ensure hardware MFA is enabled for the root user"
+
+
+def test_cis_coverage_aggregates_native_controls(tmp_path: Path) -> None:
+    f1 = _finding_from_prowler(_OCSF_FINDING, contract=_contract(tmp_path), model_pin="x")
+    f2 = _finding_from_prowler(_OCSF_FINDING, contract=_contract(tmp_path), model_pin="x")
+    assert f1 is not None and f2 is not None
+    coverage = aggregate_cis_coverage([f1.to_dict(), f2.to_dict()])
+    # Distinct controls de-duped across findings; grouped by framework.
+    assert coverage["total_controls_covered"] == 2
+    assert coverage["controls"] == ["CIS-3.0:1.10", "CIS-3.0:1.6"]
+    assert coverage["by_framework"]["CIS-3.0"] == ["1.10", "1.6"]
+
+
+def test_cis_coverage_empty_without_native_cis(tmp_path: Path) -> None:
+    f = _finding_from_prowler(_LEGACY_FINDING, contract=_contract(tmp_path), model_pin="x")
+    assert f is not None
+    coverage = aggregate_cis_coverage([f.to_dict()])
+    assert coverage["total_controls_covered"] == 0
+    assert coverage["by_framework"] == {}
 
 
 def test_legacy_shape_still_parses_without_cis(tmp_path: Path) -> None:

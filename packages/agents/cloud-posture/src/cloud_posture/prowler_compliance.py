@@ -15,6 +15,7 @@ from sources without native compliance metadata are unchanged.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 
@@ -43,4 +44,32 @@ def extract_cis_controls(raw: dict[str, Any]) -> tuple[str, ...]:
     return tuple(controls)
 
 
-__all__ = ["extract_cis_controls"]
+def aggregate_cis_coverage(ocsf_findings: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate the native CIS controls Prowler emitted across a finding set.
+
+    Reads each finding's ``evidences[].cis_controls`` (populated by
+    ``extract_cis_controls`` at emission) and rolls them up into a coverage
+    summary — distinct controls touched, grouped by framework. Surfaces CSPM
+    CIS breadth honestly: it only counts controls Prowler itself reported (zero
+    fabrication / no hand-assigned mappings). Empty when no finding carried any.
+    """
+    controls: set[str] = set()
+    by_framework: dict[str, set[str]] = {}
+    for finding in ocsf_findings:
+        for evidence in finding.get("evidences", []) or []:
+            if not isinstance(evidence, dict):
+                continue
+            for control in evidence.get("cis_controls", []) or []:
+                if not isinstance(control, str) or not control:
+                    continue
+                controls.add(control)
+                framework, _, control_id = control.partition(":")
+                by_framework.setdefault(framework, set()).add(control_id)
+    return {
+        "total_controls_covered": len(controls),
+        "controls": sorted(controls),
+        "by_framework": {fw: sorted(ids) for fw, ids in sorted(by_framework.items())},
+    }
+
+
+__all__ = ["aggregate_cis_coverage", "extract_cis_controls"]

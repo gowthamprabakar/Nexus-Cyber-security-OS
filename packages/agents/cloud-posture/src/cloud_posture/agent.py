@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -48,7 +49,7 @@ from shared.fabric.envelope import NexusEnvelope
 
 from cloud_posture import __version__ as agent_version
 from cloud_posture.credentials import CredentialResolver
-from cloud_posture.prowler_compliance import extract_cis_controls
+from cloud_posture.prowler_compliance import aggregate_cis_coverage, extract_cis_controls
 from cloud_posture.schemas import (
     AffectedResource,
     CloudPostureFinding,
@@ -464,6 +465,11 @@ async def run(
             "summary.md",
             render_summary(report, degraded_regions=degraded_regions).encode("utf-8"),
         )
+        # A-3 (option B): roll up the native CIS controls Prowler emitted into a
+        # coverage artifact (additive; findings.json byte-identical). Surfaces CSPM
+        # CIS breadth using Prowler's own attributions — no hand-assigned mappings.
+        cis_coverage = aggregate_cis_coverage([f.to_dict() for f in findings])
+        ctx.write_output("cis_coverage.json", json.dumps(cis_coverage, indent=2).encode("utf-8"))
 
         ctx.assert_complete()
         return report
