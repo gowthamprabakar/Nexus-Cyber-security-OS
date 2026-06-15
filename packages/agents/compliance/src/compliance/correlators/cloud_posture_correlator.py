@@ -54,6 +54,8 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -64,11 +66,79 @@ from compliance.correlators.control_index import ControlIndex, IndexedMapping
 from compliance.schemas import (
     AffectedResource,
     ComplianceFinding,
+    ComplianceFramework,
+    ControlMapping,
     build_finding,
     severity_for_level,
 )
+from compliance.tools.cis_aws_benchmark import CisControl
 
 _LOG = logging.getLogger(__name__)
+
+# A-3: native-CIS attribution. cloud-posture findings carry Prowler's OWN CIS
+# controls in evidence.cis_controls (e.g. "CIS-3.0:1.10"). We consume only the
+# version matching the loaded framework (cis_aws_v3 = v3.x) and only control_ids
+# that actually exist in the catalog — never fabricated, never cross-version.
+_NATIVE_SOURCE_RULE_ID = "prowler_native_cis"
+_NATIVE_CIS_VERSION_PREFIX = "CIS-3"
+
+
+def _normalize_framework(key: str) -> str:
+    """Normalize a Prowler compliance-framework key for version matching.
+
+    Handles the format variants Prowler uses across surfaces (``CIS-3.0`` /
+    ``cis_3.0_aws`` / mixed case) → uppercase, separators unified to ``-``.
+    """
+    return re.sub(r"[ _]", "-", key).upper()
+
+
+def _extract_native_cis_control_ids(payload: dict[str, Any]) -> list[str]:
+    """Pull native CIS-v3 control ids from a finding's ``evidences[].cis_controls``.
+
+    Each entry is ``"<framework>:<control_id>"`` (A-3 PR1 emission). Keeps only
+    entries whose framework normalizes to the loaded version (``CIS-3*``); returns
+    control ids in first-seen order, de-duped. Cross-version (CIS-2.x) is dropped.
+    """
+    evidences = payload.get("evidences")
+    if not isinstance(evidences, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for evidence in evidences:
+        if not isinstance(evidence, dict):
+            continue
+        cis_controls = evidence.get("cis_controls")
+        if not isinstance(cis_controls, list):
+            continue
+        for entry in cis_controls:
+            if not isinstance(entry, str):
+                continue
+            framework, separator, control_id = entry.rpartition(":")
+            if not separator or not control_id:
+                continue
+            if not _normalize_framework(framework).startswith(_NATIVE_CIS_VERSION_PREFIX):
+                continue
+            if control_id not in seen:
+                seen.add(control_id)
+                out.append(control_id)
+    return out
+
+
+def _native_indexed_mapping(control: CisControl) -> IndexedMapping:
+    """Build an IndexedMapping for a native-CIS attribution (synthetic mapping)."""
+    return IndexedMapping(
+        framework=ComplianceFramework.CIS_AWS_V3,
+        control_id=control.control_id,
+        control_name=control.name,
+        control_description=control.description,
+        mapping=ControlMapping(
+            source_agent="cloud_posture",
+            source_rule_id=_NATIVE_SOURCE_RULE_ID,
+            control_id=control.control_id,
+            level=control.level,
+            required=control.required,
+        ),
+    )
 
 
 async def correlate_cloud_posture(
@@ -77,16 +147,25 @@ async def correlate_cloud_posture(
     control_index: ControlIndex,
     correlated_at: datetime,
     envelope: NexusEnvelope,
+    controls_by_id: Mapping[str, CisControl] | None = None,
 ) -> tuple[ComplianceFinding, ...]:
     """Read F.3 findings + emit per-mapping ComplianceFindings.
 
-    Returns an empty tuple if ``cloud_posture_workspace`` is ``None``
-    (operator didn't pin an F.3 workspace) or if no F.3 finding's
-    rule_id hits the control index.
+    Two attribution passes:
+
+    1. **YAML source_mappings** — the hand-curated ``(cloud_posture, rule_id)`` →
+       CIS-control index (the existing path).
+    2. **Native CIS (A-3)** — when ``controls_by_id`` is supplied, consume Prowler's
+       OWN CIS attributions from each finding's ``evidence.cis_controls`` for any
+       control_id that exists in the loaded v3 catalog (version-matched, never
+       fabricated). De-duped against pass 1 per (source finding, control_id).
+
+    Returns ``()`` when no workspace is pinned, or neither attribution source has
+    anything to emit.
     """
     if cloud_posture_workspace is None:
         return ()
-    if not control_index:
+    if not control_index and not controls_by_id:
         return ()
 
     raw_findings = await asyncio.to_thread(_read_f3_findings, cloud_posture_workspace)
@@ -95,17 +174,20 @@ async def correlate_cloud_posture(
 
     out: list[ComplianceFinding] = []
     sequence = 0
+    emitted: set[tuple[str, str]] = set()
+
+    # Pass 1 — YAML source_mappings.
     for raw in raw_findings:
         rule_id = _extract_rule_id(raw)
         if not rule_id:
             continue
-        key = ("cloud_posture", rule_id)
-        mappings = control_index.get(key)
+        mappings = control_index.get(("cloud_posture", rule_id))
         if not mappings:
             continue
         source_finding_id = _extract_source_finding_id(raw) or "unknown"
         for indexed in mappings:
             sequence += 1
+            emitted.add((source_finding_id, indexed.control_id))
             out.append(
                 _build_compliance_finding(
                     indexed=indexed,
@@ -116,6 +198,29 @@ async def correlate_cloud_posture(
                     envelope=envelope,
                 )
             )
+
+    # Pass 2 — native CIS attribution (A-3), de-duped against pass 1.
+    if controls_by_id:
+        for raw in raw_findings:
+            source_finding_id = _extract_source_finding_id(raw) or "unknown"
+            for control_id in _extract_native_cis_control_ids(raw):
+                control = controls_by_id.get(control_id)
+                if control is None:
+                    continue
+                if (source_finding_id, control_id) in emitted:
+                    continue
+                emitted.add((source_finding_id, control_id))
+                sequence += 1
+                out.append(
+                    _build_compliance_finding(
+                        indexed=_native_indexed_mapping(control),
+                        source_payload=raw,
+                        source_finding_id=source_finding_id,
+                        sequence=sequence,
+                        correlated_at=correlated_at,
+                        envelope=envelope,
+                    )
+                )
     return tuple(out)
 
 

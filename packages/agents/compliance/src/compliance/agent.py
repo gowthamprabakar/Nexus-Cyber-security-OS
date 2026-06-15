@@ -36,7 +36,7 @@ agent OCSF structured fields only.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -50,7 +50,11 @@ from shared.fabric.envelope import NexusEnvelope
 from compliance import __version__ as agent_version
 from compliance.aggregator import aggregate_controls
 from compliance.correlators.cloud_posture_correlator import correlate_cloud_posture
-from compliance.correlators.control_index import ControlIndex, build_control_index
+from compliance.correlators.control_index import (
+    ControlIndex,
+    build_control_by_id,
+    build_control_index,
+)
 from compliance.correlators.data_security_correlator import correlate_data_security
 from compliance.entities import ControlEntity, FrameworkEntity
 from compliance.kg_writer import KnowledgeGraphWriter
@@ -146,6 +150,9 @@ async def run(
         # Stage 2: ENRICH — build the cross-correlator control index;
         # optionally persist framework + control entities to the KG.
         control_index = build_control_index(controls_tuple)
+        # A-3: control-by-id catalog for native-CIS attribution (Prowler's own
+        # evidence.cis_controls on cloud-posture findings).
+        controls_by_id = build_control_by_id(controls_tuple)
         if semantic_store is not None:
             await _persist_to_semantic_store(
                 semantic_store=semantic_store,
@@ -159,6 +166,7 @@ async def run(
             cloud_posture_workspace=_as_path(cloud_posture_workspace),
             data_security_workspace=_as_path(data_security_workspace),
             control_index=control_index,
+            controls_by_id=controls_by_id,
             correlated_at=correlated_at,
             envelope=envelope,
         )
@@ -248,6 +256,7 @@ async def _correlate(
     cloud_posture_workspace: Path | None,
     data_security_workspace: Path | None,
     control_index: ControlIndex,
+    controls_by_id: Mapping[str, CisControl],
     correlated_at: datetime,
     envelope: NexusEnvelope,
 ) -> tuple[
@@ -260,6 +269,7 @@ async def _correlate(
             correlate_cloud_posture(
                 cloud_posture_workspace=cloud_posture_workspace,
                 control_index=control_index,
+                controls_by_id=controls_by_id,
                 correlated_at=correlated_at,
                 envelope=envelope,
             )
