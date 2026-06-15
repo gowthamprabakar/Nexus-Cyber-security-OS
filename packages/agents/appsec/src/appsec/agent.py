@@ -21,14 +21,22 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 
 from appsec import __version__ as agent_version
 from appsec.normalizers.checkov_iac import checkov_to_findings
+from appsec.normalizers.gitleaks_secrets import (
+    CODE_SECRETS_OUTPUT,
+    CodeSecretHit,
+    gitleaks_to_secret_hits,
+    render_code_secrets_json,
+)
 from appsec.ocsf.emission import finding_to_ocsf
 from appsec.schemas import FindingsReport, RepoInventory
 from appsec.tools.checkov_runner import run_checkov
+from appsec.tools.gitleaks_runner import run_gitleaks
 from appsec.tools.repo_discovery import discover_repositories
 from appsec.tools.scm_connector import ScmConnector, StaticScmConnector
 
 _DISCOVER_TOOL = "discover_repositories"
 _CHECKOV_TOOL = "run_checkov"
+_GITLEAKS_TOOL = "run_gitleaks"
 
 
 def build_registry() -> ToolRegistry:
@@ -40,8 +48,9 @@ def build_registry() -> ToolRegistry:
     """
     reg = ToolRegistry()
     reg.register(_DISCOVER_TOOL, discover_repositories, version="0.1.0", cloud_calls=50)
-    # Checkov is a local subprocess (no cloud API), operator-provisioned binary.
+    # Checkov + gitleaks are local subprocesses (no cloud API), operator-provisioned.
     reg.register(_CHECKOV_TOOL, run_checkov, version="0.1.0", cloud_calls=0)
+    reg.register(_GITLEAKS_TOOL, run_gitleaks, version="0.1.0", cloud_calls=0)
     return reg
 
 
@@ -107,14 +116,20 @@ async def run(
             scan_completed_at=scan_started,
         )
 
-        # B-1 PR2 (Q-AppSec-3): run Checkov IaC scan on each repo checked out
-        # locally. Repos without a local_path are skipped (live checkout = B-1 PR3).
+        # Scan each repo checked out locally. Repos without a local_path are
+        # skipped (live SCM checkout = a later B-1 PR).
+        code_secret_hits: list[CodeSecretHit] = []
         for repo in inventory.repositories:
             if repo.local_path is None:
                 continue
-            result = await ctx.call_tool(_CHECKOV_TOOL, repo_path=repo.local_path)
-            for finding in checkov_to_findings(result.payload, repo_slug=repo.slug):
+            # B-1 PR2 (Q-AppSec-3): Checkov IaC → OCSF 2003 findings.
+            iac = await ctx.call_tool(_CHECKOV_TOOL, repo_path=repo.local_path)
+            for finding in checkov_to_findings(iac.payload, repo_slug=repo.slug):
                 report.add_finding(finding)
+            # B-1 PR3 (Q-AppSec-4): gitleaks secrets-in-code → redacted DSPM
+            # handoff (ADR-015: AppSec scans, DSPM emits OCSF 2003).
+            leaks = await ctx.call_tool(_GITLEAKS_TOOL, repo_path=repo.local_path)
+            code_secret_hits.extend(gitleaks_to_secret_hits(leaks))
 
         report.scan_completed_at = datetime.now(UTC)
         ocsf_findings = [
@@ -139,6 +154,14 @@ async def run(
         ctx.write_output("repo_inventory.json", inventory.model_dump_json(indent=2).encode("utf-8"))
         ctx.write_output("findings.json", json.dumps(findings_doc, indent=2).encode("utf-8"))
         ctx.write_output("summary.md", _render_summary(inventory, report).encode("utf-8"))
+        # B-1 PR3 (ADR-015): hand off REDACTED secrets-in-code to DSPM (OCSF 2003
+        # emit is DSPM's). Written only when secrets were found → byte-identical
+        # otherwise. Plaintext never crosses (gitleaks Secret/Match dropped).
+        if code_secret_hits:
+            ctx.write_output(
+                CODE_SECRETS_OUTPUT,
+                render_code_secrets_json(run_id=contract.delegation_id, hits=code_secret_hits),
+            )
 
         ctx.assert_complete()
 

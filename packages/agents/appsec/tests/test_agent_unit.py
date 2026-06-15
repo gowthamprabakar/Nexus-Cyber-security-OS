@@ -11,6 +11,7 @@ from appsec import agent as agent_mod
 from appsec.agent import build_registry, run
 from appsec.schemas import RepoRef
 from appsec.tools.checkov_runner import CheckovResult
+from appsec.tools.gitleaks_runner import GitleaksResult
 from appsec.tools.scm_connector import StaticScmConnector
 from charter.contract import BudgetSpec, ExecutionContract
 
@@ -29,7 +30,7 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["discover_repositories", "run_checkov"],
+        permitted_tools=["discover_repositories", "run_checkov", "run_gitleaks"],
         completion_condition="repo_inventory.json AND findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),
@@ -95,7 +96,11 @@ async def test_run_checkov_emits_ocsf_2003(tmp_path: Path, monkeypatch: pytest.M
             }
         )
 
+    async def empty_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
+        return GitleaksResult(payload=[])
+
     monkeypatch.setattr(agent_mod, "run_checkov", fake_checkov)
+    monkeypatch.setattr(agent_mod, "run_gitleaks", empty_gitleaks)
     repo = RepoRef(
         host="github",
         owner="acme",
@@ -110,6 +115,50 @@ async def test_run_checkov_emits_ocsf_2003(tmp_path: Path, monkeypatch: pytest.M
     assert findings[0]["class_uid"] == 2003
     assert findings[0]["finding_info"]["types"] == ["appsec_iac_misconfiguration"]
     assert findings[0]["compliance"]["control"] == "CKV_AWS_20"
+
+
+async def test_run_gitleaks_writes_redacted_code_secrets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """gitleaks hits → code_secrets.json handoff (redacted, ADR-015 → DSPM)."""
+    plaintext = "AKIAIOSFODNN7EXAMPLE"  # AWS docs example, test fixture
+
+    async def empty_checkov(repo_path: str, **_: object) -> CheckovResult:
+        return CheckovResult(payload={})
+
+    async def fake_gitleaks(repo_path: str, **_: object) -> GitleaksResult:
+        return GitleaksResult(
+            payload=[
+                {
+                    "RuleID": "aws-access-token",
+                    "Description": "AWS Access Token",
+                    "File": "src/config.py",
+                    "StartLine": 12,
+                    "EndLine": 12,
+                    "Secret": plaintext,
+                    "Match": f"KEY={plaintext}",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(agent_mod, "run_checkov", empty_checkov)
+    monkeypatch.setattr(agent_mod, "run_gitleaks", fake_gitleaks)
+    repo = RepoRef(
+        host="github",
+        owner="acme",
+        name="api",
+        clone_url="https://github.com/acme/api.git",
+        local_path=str(tmp_path / "checkout"),
+    )
+    await run(_contract(tmp_path), scm_connector=StaticScmConnector([repo]))
+
+    secrets_path = tmp_path / "ws" / "code_secrets.json"
+    assert secrets_path.exists()
+    text = secrets_path.read_text()
+    assert plaintext not in text  # redaction holds end-to-end
+    payload = json.loads(text)
+    assert payload["agent"] == "appsec"
+    assert payload["secrets"][0]["rule_id"] == "aws-access-token"
 
 
 async def test_run_skips_checkov_without_local_path(
