@@ -62,6 +62,37 @@ DEFAULT_RULE_PACK = RulePack(
         FalcoRule(
             "Launch privileged container", "Notice", ("container", "mitre_privilege_escalation")
         ),
+        # v0.4 Stage 1.1 expansion — standard runtime-threat detections, each mapped to a
+        # MITRE ATT&CK tactic tag (the agent's own rule abstractions, not transcribed
+        # upstream Falco rule ids; consistent with the four v0.2 entries above).
+        FalcoRule("Reverse shell spawned", "Critical", ("network", "shell", "mitre_execution")),
+        FalcoRule("Write below etc", "Warning", ("filesystem", "mitre_persistence")),
+        FalcoRule(
+            "Modify shell configuration file", "Warning", ("filesystem", "mitre_persistence")
+        ),
+        FalcoRule("Crypto mining activity detected", "Critical", ("network", "mitre_impact")),
+        FalcoRule("Unexpected setuid call", "Warning", ("process", "mitre_privilege_escalation")),
+        FalcoRule(
+            "Drop and execute new binary in container",
+            "Warning",
+            ("container", "process", "mitre_execution"),
+        ),
+        FalcoRule(
+            "Cloud or kubectl CLI run in container", "Warning", ("container", "mitre_discovery")
+        ),
+        FalcoRule(
+            "Package management launched in container",
+            "Notice",
+            ("container", "mitre_persistence"),
+        ),
+        FalcoRule(
+            "Sensitive host path mounted by container",
+            "Warning",
+            ("container", "mitre_privilege_escalation"),
+        ),
+        FalcoRule(
+            "Clear or tamper system logs", "Warning", ("filesystem", "mitre_defense_evasion")
+        ),
     ),
 )
 
