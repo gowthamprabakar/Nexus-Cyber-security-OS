@@ -18,9 +18,11 @@ from pathlib import Path
 
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 
 from appsec import __version__ as agent_version
+from appsec.kg_writer import KnowledgeGraphWriter
 from appsec.normalizers.checkov_iac import checkov_to_findings
 from appsec.normalizers.gitleaks_secrets import (
     CODE_SECRETS_OUTPUT,
@@ -91,6 +93,7 @@ async def run(
     clone_root: Path | str | None = None,
     scm_token: str | None = None,
     clone_runner: CloneRunner | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> RepoInventory:
     """Run the AppSec agent: discover repositories and write artifacts.
 
@@ -175,6 +178,14 @@ async def run(
                 report.add_finding(finding)
 
         report.scan_completed_at = datetime.now(UTC)
+
+        # v0.4 Stage 1.6: write the code-side inventory (repositories + IaC artifacts)
+        # to the fleet graph when a SemanticStore is injected. Opt-in — default None
+        # is inert (no graph writes), so the artifacts stay byte-identical.
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record(inventory, report.findings)
+
         ocsf_findings = [
             finding_to_ocsf(
                 f,
