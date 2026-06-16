@@ -29,6 +29,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from nexus_runtime.osquery import OsqueryResult, osquery_run
 from nexus_runtime.realtime import EventStream, bounded_drain
 from shared.fabric.correlation import correlation_scope, new_correlation_id
@@ -39,6 +40,7 @@ from runtime_threat.actions.snapshot import (
     build_snapshot_actions,
     snapshot_actions_to_json,
 )
+from runtime_threat.kg_writer import KnowledgeGraphWriter
 from runtime_threat.normalizer import normalize_to_findings
 from runtime_threat.schemas import FindingsReport
 from runtime_threat.summarizer import render_summary
@@ -107,6 +109,7 @@ async def run(
     falco_stream: EventStream | None = None,
     tracee_stream: EventStream | None = None,
     realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Runtime Threat Agent end-to-end under the runtime charter.
 
@@ -194,6 +197,13 @@ async def run(
         )
         for f in findings:
             report.add_finding(f)
+
+        # v0.4 Stage 1.1: write runtime inventory (host + L6 behaviour events) to the
+        # fleet graph when a SemanticStore is injected. Opt-in — default None is inert
+        # (no graph writes), so findings.json stays byte-identical.
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record_findings(findings)
 
         ctx.write_output(
             "findings.json",
