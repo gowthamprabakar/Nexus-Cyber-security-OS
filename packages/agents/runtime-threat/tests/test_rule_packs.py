@@ -29,7 +29,19 @@ def test_parse_rule_pack() -> None:
 def test_default_pack_present() -> None:
     mgr = RulePackManager()
     assert "default" in mgr.pack_names
-    assert len(DEFAULT_RULE_PACK.rules) == 4
+    # v0.4 Stage 1.1: expanded from the 4 v0.2 baseline rules to 14.
+    assert len(DEFAULT_RULE_PACK.rules) == 14
+
+
+def test_default_pack_rules_carry_mitre_tag() -> None:
+    # Every default rule maps to at least one MITRE ATT&CK tactic tag.
+    for rule in DEFAULT_RULE_PACK.rules:
+        assert any(t.startswith("mitre_") for t in rule.tags), rule.name
+
+
+def test_default_pack_rule_names_unique() -> None:
+    names = [r.name for r in DEFAULT_RULE_PACK.rules]
+    assert len(names) == len(set(names))
 
 
 def test_register_custom_pack() -> None:
