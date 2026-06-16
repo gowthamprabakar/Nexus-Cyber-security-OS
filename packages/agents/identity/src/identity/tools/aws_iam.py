@@ -44,6 +44,9 @@ class IamUser:
     attached_policy_arns: tuple[str, ...] = field(default_factory=tuple)
     inline_policy_names: tuple[str, ...] = field(default_factory=tuple)
     group_memberships: tuple[str, ...] = field(default_factory=tuple)
+    #: v0.4 Stage 1.5: inline policy (name, document) pairs — the documents, not
+    #: just names (`inline_policy_names`), so per-role evaluation can read grants.
+    inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +59,7 @@ class IamRole:
     assume_role_policy_document: dict[str, Any]
     attached_policy_arns: tuple[str, ...] = field(default_factory=tuple)
     inline_policy_names: tuple[str, ...] = field(default_factory=tuple)
+    inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +71,7 @@ class IamGroup:
     member_user_names: tuple[str, ...] = field(default_factory=tuple)
     attached_policy_arns: tuple[str, ...] = field(default_factory=tuple)
     inline_policy_names: tuple[str, ...] = field(default_factory=tuple)
+    inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,16 +188,42 @@ def _list_policies(iam: Any, degraded: list[dict[str, str]]) -> list[IamPolicy]:
     return policies
 
 
-def _get_policy_document(iam: Any, policy_arn: str, version_id: str) -> dict[str, Any]:
-    """Fetch a managed policy's version document. boto3 may return it URL-encoded
-    (a str) or already decoded (a dict, e.g. under moto); handle both."""
-    raw = iam.get_policy_version(PolicyArn=policy_arn, VersionId=version_id)["PolicyVersion"][
-        "Document"
-    ]
+def _decode_policy_document(raw: Any) -> dict[str, Any]:
+    """Decode an IAM policy document. boto3 may return it URL-encoded (a str) or
+    already decoded (a dict, e.g. under moto); handle both."""
     if isinstance(raw, str):
         decoded = json.loads(unquote(raw))
         return dict(decoded) if isinstance(decoded, dict) else {}
     return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _get_policy_document(iam: Any, policy_arn: str, version_id: str) -> dict[str, Any]:
+    """Fetch a managed policy's version document (URL-encoded or dict)."""
+    raw = iam.get_policy_version(PolicyArn=policy_arn, VersionId=version_id)["PolicyVersion"][
+        "Document"
+    ]
+    return _decode_policy_document(raw)
+
+
+def _get_inline_policy_documents(
+    iam: Any,
+    getter_name: str,
+    principal_kw: str,
+    principal_name: str,
+    names: list[str],
+) -> tuple[tuple[str, dict[str, Any]], ...]:
+    """Fetch each inline policy's document via ``get_{user,role,group}_policy``.
+
+    v0.4 Stage 1.5: previously only the inline policy *names* were enumerated; this
+    retrieves the actual documents so effective-permission evaluation can read the
+    inline grants (not just attached/managed ones). Returns (name, document) pairs.
+    """
+    getter = getattr(iam, getter_name)
+    out: list[tuple[str, dict[str, Any]]] = []
+    for n in names:
+        resp = getter(**{principal_kw: principal_name, "PolicyName": n})
+        out.append((n, _decode_policy_document(resp.get("PolicyDocument"))))
+    return tuple(out)
 
 
 def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
@@ -205,6 +236,9 @@ def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
                     iam, "list_attached_user_policies", "UserName", name
                 )
                 inline = _list_inline_policy_names(iam, "list_user_policies", "UserName", name)
+                inline_docs = _get_inline_policy_documents(
+                    iam, "get_user_policy", "UserName", name, inline
+                )
                 groups = _list_user_groups(iam, name)
                 users.append(
                     IamUser(
@@ -220,6 +254,7 @@ def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
                         attached_policy_arns=tuple(attached),
                         inline_policy_names=tuple(inline),
                         group_memberships=tuple(groups),
+                        inline_policies=inline_docs,
                     )
                 )
             except Exception as exc:
@@ -237,6 +272,9 @@ def _list_roles(iam: Any, degraded: list[dict[str, str]]) -> list[IamRole]:
                     iam, "list_attached_role_policies", "RoleName", name
                 )
                 inline = _list_inline_policy_names(iam, "list_role_policies", "RoleName", name)
+                inline_docs = _get_inline_policy_documents(
+                    iam, "get_role_policy", "RoleName", name, inline
+                )
                 last_used = r.get("RoleLastUsed", {}).get("LastUsedDate")
                 roles.append(
                     IamRole(
@@ -248,6 +286,7 @@ def _list_roles(iam: Any, degraded: list[dict[str, str]]) -> list[IamRole]:
                         assume_role_policy_document=dict(r.get("AssumeRolePolicyDocument") or {}),
                         attached_policy_arns=tuple(attached),
                         inline_policy_names=tuple(inline),
+                        inline_policies=inline_docs,
                     )
                 )
             except Exception as exc:
@@ -270,6 +309,9 @@ def _list_groups(iam: Any, degraded: list[dict[str, str]]) -> list[IamGroup]:
                     iam, "list_attached_group_policies", "GroupName", name
                 )
                 inline = _list_inline_policy_names(iam, "list_group_policies", "GroupName", name)
+                inline_docs = _get_inline_policy_documents(
+                    iam, "get_group_policy", "GroupName", name, inline
+                )
                 groups.append(
                     IamGroup(
                         arn=str(g["Arn"]),
@@ -279,6 +321,7 @@ def _list_groups(iam: Any, degraded: list[dict[str, str]]) -> list[IamGroup]:
                         member_user_names=tuple(members),
                         attached_policy_arns=tuple(attached),
                         inline_policy_names=tuple(inline),
+                        inline_policies=inline_docs,
                     )
                 )
             except Exception as exc:
