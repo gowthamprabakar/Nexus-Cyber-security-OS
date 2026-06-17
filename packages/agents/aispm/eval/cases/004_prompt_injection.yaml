@@ -1,0 +1,12 @@
+case_id: 004_prompt_injection
+description: Garak probe elicits a jailbreak on a Bedrock model (OCSF 2004).
+fixture:
+  probe:
+    target: anthropic.claude
+    provider: bedrock
+    garak_entries:
+      - { entry_type: eval, probe: dan, detector: dan, passed: 3, total: 10 }
+expected:
+  finding_count: 1
+  by_type:
+    aispm_promptinjection_dan: 1

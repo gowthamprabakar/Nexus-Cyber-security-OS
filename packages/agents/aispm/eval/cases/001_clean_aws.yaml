@@ -1,0 +1,16 @@
+case_id: 001_clean_aws
+description: A well-configured AWS AI account yields no findings.
+fixture:
+  aws:
+    account_id: '111122223333'
+    sagemaker_endpoints:
+      - name: prod
+        data_capture_enabled: true
+        kms_encrypted: true
+        network_isolated: true
+        model_name: m1
+    bedrock_logging_enabled: true
+    bedrock_guardrails: 2
+expected:
+  finding_count: 0
+  by_type: {}
