@@ -32,10 +32,12 @@ from typing import Any
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider  # canonical Protocol lives in charter.llm
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from identity import __version__ as agent_version
+from identity.kg_writer import KnowledgeGraphWriter
 from identity.normalizer import federation_to_findings, normalize_to_findings
 from identity.schemas import FindingsReport, IdentityFinding
 from identity.summarizer import render_summary
@@ -138,6 +140,7 @@ async def run(
     detect_federation: bool = False,
     azure_credential_source: str | None = None,
     assess_effective_perms: bool = False,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -168,6 +171,11 @@ async def run(
             effective grants. Refines OVERPRIVILEGE with real per-action grants
             (no new OCSF class). Requires live AWS; default False keeps the
             attached-policy path byte-identical to pre-A-4 (offline eval intact).
+        semantic_store: v0.4 Stage 1.2 (D.2) opt-in fleet-graph sink. When set,
+            the IAM principal inventory (users/roles/groups + managed policies,
+            ATTACHED_TO / MEMBER_OF edges) is written via ``KnowledgeGraphWriter``
+            after the listing fetch. ``HAS_ACCESS_TO`` stays Stage 3 correlation.
+            Default None is inert — no graph writes, ``findings.json`` byte-identical.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -191,6 +199,14 @@ async def run(
         listing, aa_findings = await _fetch_inventory(
             ctx, aws_region=aws_region, profile=profile, analyzer_arn=analyzer_arn
         )
+
+        # v0.4 Stage 1.2: write the IAM principal inventory to the fleet graph when a
+        # SemanticStore is injected. Opt-in — default None is inert (no graph writes),
+        # so findings.json + summary.md stay byte-identical. HAS_ACCESS_TO (principal →
+        # resource) stays Stage 3 cross-agent correlation.
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record_listing(listing)
 
         # A-4 (v0.3): drive the effective-perms simulator when enabled (live AWS),
         # else fall back to the v0.1 attached-policy pattern-match (byte-identical).
