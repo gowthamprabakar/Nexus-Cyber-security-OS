@@ -1,4 +1,4 @@
-"""Live-GCP lane gating (D.5 v0.2 Task 14).
+"""Live-GCP lane gating (D.15 v0.2 Task 14).
 
 Mirrors `live_lane_azure` (Task 13) / `cloud_posture.live_lane` (Q1). A DISTINCT
 gate from `NEXUS_LIVE_AZURE` — the two lanes are independent (separate env vars,

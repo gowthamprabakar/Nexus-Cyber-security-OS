@@ -1,4 +1,4 @@
-"""D.5 Multi-Cloud Posture v0.2 — bootstrap smoke tests (Milestone 1, Task 1).
+"""D.15 Multi-Cloud Posture v0.2 — bootstrap smoke tests (Milestone 1, Task 1).
 
 The version-extension eligibility guards (ADR-010): the v0.2 bump must not
 perturb the v0.1 contracts. They assert the version moved to 0.2.0 and that the

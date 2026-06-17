@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 12 — Defender + SCC + native provenance tagging (Q7 / WI-D2)."""
+"""D.15 v0.2 Task 12 — Defender + SCC + native provenance tagging (Q7 / WI-D2)."""
 
 from __future__ import annotations
 

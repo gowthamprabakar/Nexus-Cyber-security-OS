@@ -1,4 +1,4 @@
-"""`MultiCloudPostureEvalRunner` — the canonical `EvalRunner` for D.5.
+"""`MultiCloudPostureEvalRunner` — the canonical `EvalRunner` for D.15.
 
 Mirrors D.4's
 [`eval_runner.py`](../../../network-threat/src/network_threat/eval_runner.py)

@@ -1,4 +1,4 @@
-"""Starting CIS Microsoft Azure Foundations Benchmark rule subset (D.5 v0.2 Task 10).
+"""Starting CIS Microsoft Azure Foundations Benchmark rule subset (D.15 v0.2 Task 10).
 
 **8 high-signal native rules across 5 resource types** — a *starting subset* per
 Q4; the full CIS-Azure benchmark is v0.3 (WI-D3 honesty: reported as a subset, not

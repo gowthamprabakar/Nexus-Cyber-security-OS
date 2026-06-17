@@ -2,7 +2,7 @@
 
 Owner: multi-cloud-posture on-call · Audience: a cloud-security operator / SRE with read access to Azure Defender for Cloud, Azure Activity Log, GCP Security Command Center, and GCP Cloud Asset Inventory IAM · Last reviewed: 2026-05-13.
 
-This runbook walks an operator through pointing the Multi-Cloud Posture Agent (D.5) at the four v0.1 feeds — Azure Defender + Azure Activity Log + GCP SCC + GCP Cloud Asset Inventory IAM — interpreting the OCSF Compliance Findings it emits, and routing the findings into the rest of the Nexus pipeline (D.7 Investigation, F.6 Audit).
+This runbook walks an operator through pointing the Multi-Cloud Posture Agent (D.15) at the four v0.1 feeds — Azure Defender + Azure Activity Log + GCP SCC + GCP Cloud Asset Inventory IAM — interpreting the OCSF Compliance Findings it emits, and routing the findings into the rest of the Nexus pipeline (D.7 Investigation, F.6 Audit).
 
 > **Status:** v0.1. Live SDK calls (`azure-mgmt-security` / `google-cloud-securitycenter`) and per-tenant secret-store integration ship in Phase 1c. v0.1 reads operator-pinned filesystem snapshots.
 
@@ -229,7 +229,7 @@ If you see no `## Critical findings` section, no CRITICAL findings fired — ope
 
 ### To D.7 Investigation
 
-Pin the D.5 workspace as a `--sibling-workspace`:
+Pin the D.15 workspace as a `--sibling-workspace`:
 
 ```bash
 uv run investigation-agent run \
@@ -237,11 +237,11 @@ uv run investigation-agent run \
     --sibling-workspace /workspaces/cust_acme/multi_cloud_posture/01J7M3X9.../
 ```
 
-D.7 reads `findings.json` and folds the multi-cloud posture findings into its 6-stage incident-correlation pipeline. **D.5 emits the same `class_uid 2003` as F.3 cloud-posture**, so D.7's correlation logic doesn't need cloud-specific code — only the `finding_info.types[0]` discriminator distinguishes the source.
+D.7 reads `findings.json` and folds the multi-cloud posture findings into its 6-stage incident-correlation pipeline. **D.15 emits the same `class_uid 2003` as F.3 cloud-posture**, so D.7's correlation logic doesn't need cloud-specific code — only the `finding_info.types[0]` discriminator distinguishes the source.
 
 ### To F.6 Audit
 
-D.5 emits its own audit chain at `<workspace>/audit.jsonl`:
+D.15 emits its own audit chain at `<workspace>/audit.jsonl`:
 
 ```bash
 uv run audit-agent query \
@@ -253,7 +253,7 @@ uv run audit-agent query \
 
 ### To remediation (Phase 1c — NOT in v0.1)
 
-D.5 emits findings only; Track-A remediation (A.1-A.3) lands in Phase 1c and acts on the per-finding `rule_id` + `affected.resource_id` to drive Tier-1/2/3 actions.
+D.15 emits findings only; Track-A remediation (A.1-A.3) lands in Phase 1c and acts on the per-finding `rule_id` + `affected.resource_id` to drive Tier-1/2/3 actions.
 
 ---
 
@@ -272,18 +272,18 @@ D.5 emits findings only; Track-A remediation (A.1-A.3) lands in Phase 1c and act
 
 ## 8. Production deployment notes
 
-- **AWS coverage** lives in F.3 cloud-posture, not D.5. F.3 + D.5 together cover the three top clouds (~95% of customer footprint).
+- **AWS coverage** lives in F.3 cloud-posture, not D.15. F.3 + D.15 together cover the three top clouds (~95% of customer footprint).
 - **Live SDK paths** (Azure `azure-mgmt-security` + GCP `google-cloud-securitycenter`) land in Phase 1c behind the same reader signatures — operators won't need to change CLI usage when the live path ships.
 - **GCP SCC tier requirement**: Standard tier minimum. Without SCC enabled, only the IAM feed produces findings (and Azure feeds if applicable).
 - **Bundled v0.1 IAM grading rules** cover the highest-impact bindings; deeper rule sets (e.g. role-chain analysis, custom-role detection) land in Phase 1c.
-- **Multi-cloud correlation** is D.7's job. D.5 emits per-cloud findings; D.7 stitches them into one incident timeline.
+- **Multi-cloud correlation** is D.7's job. D.15 emits per-cloud findings; D.7 stitches them into one incident timeline.
 
 ---
 
 ## Cross-references
 
-- D.5 plan: [`docs/superpowers/plans/2026-05-13-d-5-multi-cloud-posture.md`](../../../../docs/superpowers/plans/2026-05-13-d-5-multi-cloud-posture.md)
+- D.15 plan: [`docs/superpowers/plans/2026-05-13-d-5-multi-cloud-posture.md`](../../../../docs/superpowers/plans/2026-05-13-d-5-multi-cloud-posture.md)
 - F.3 cloud-posture (AWS reference): [`packages/agents/cloud-posture/`](../../cloud-posture/)
 - D.7 Investigation consumer: [`packages/agents/investigation/runbooks/investigation_workflow.md`](../../investigation/runbooks/investigation_workflow.md)
 - F.6 Audit query: [`packages/agents/audit/runbooks/audit_query_operator.md`](../../audit/runbooks/audit_query_operator.md)
-- ADR-007 (reference NLAH, D.5 is the 8th agent): [`docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md`](../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)
+- ADR-007 (reference NLAH, D.15 is the 8th agent): [`docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md`](../../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)

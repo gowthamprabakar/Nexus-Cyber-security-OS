@@ -2,13 +2,13 @@
 
 Multi-Cloud Posture Agent — **third Phase-1b agent**; **eighth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / **multi-cloud-posture**). Lifts CSPM coverage from AWS-only (F.3) to **Azure + GCP**.
 
-> **Agent-ID note (2026-05-20).** Prior README copy self-claimed the ID "D.5"; that identifier is reserved for the operator's Data Security agent (DSPM) per the 2026-05-20 remaining-agents sketch §0. This package is referenced by its package name (`multi-cloud-posture`) throughout the codebase going forward.
+> **Agent-ID note (v0.4, 2026-06-18).** Earlier copy self-claimed "D.5", which collided with the Data Security agent (DSPM, the canonical D.5). Per the v0.4 D-numbering resolution this agent is **D.15** (clear primacy after AppSec D.14). The python package directory name (`multi-cloud-posture`) is unchanged.
 
 **Status: v0.2 (Level 2 — live Azure + GCP, single-subscription / single-project).** v0.2 matures the agent from offline JSON passthrough to **live SDKs + native rule engines**, an [ADR-010](../../../docs/_meta/decisions/ADR-010-version-extension-template.md) version-extension. See the [v0.2 plan](../../../docs/superpowers/plans/2026-06-09-d-5-multi-cloud-posture-v0-2.md).
 
 ## v0.2 (Level 2) — what's new
 
-Per-cloud (single subscription / single project — Q6), no charter touch (D.5 is the 2nd consumer of F.3's seams; the charter hoist fires at D.2):
+Per-cloud (single subscription / single project — Q6), no charter touch (D.15 is the 2nd consumer of F.3's seams; the charter hoist fires at D.2):
 
 - **Credential resolvers** — Azure `DefaultAzureCredential` chain ([`credentials_azure.py`](src/multi_cloud_posture/credentials_azure.py), `--azure-credential-source`) and GCP ADC ([`credentials_gcp.py`](src/multi_cloud_posture/credentials_gcp.py), `--gcp-credential-source`). Secret-free seams.
 - **Subscription / project + region discovery** — current-scope only ([`tools/azure_discovery.py`](src/multi_cloud_posture/tools/azure_discovery.py), [`tools/gcp_discovery.py`](src/multi_cloud_posture/tools/gcp_discovery.py)).

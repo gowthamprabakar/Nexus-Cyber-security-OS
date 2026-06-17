@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 3 — Azure subscription + region discovery tests (no live Azure)."""
+"""D.15 v0.2 Task 3 — Azure subscription + region discovery tests (no live Azure)."""
 
 from __future__ import annotations
 

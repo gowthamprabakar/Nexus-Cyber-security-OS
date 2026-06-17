@@ -1,4 +1,4 @@
-"""D.5 GCP project + region discovery (v0.2 Task 7).
+"""D.15 GCP project + region discovery (v0.2 Task 7).
 
 Analog to `cloud_posture`'s account/region discovery (Q1 — GCP-native shape).
 **Current-project only (Q6** — multi-project / folder / organization enumeration

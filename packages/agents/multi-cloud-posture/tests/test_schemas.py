@@ -1,4 +1,4 @@
-"""Tests for `multi_cloud_posture.schemas` — re-export of F.3 + D.5 enums."""
+"""Tests for `multi_cloud_posture.schemas` — re-export of F.3 + D.15 enums."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from multi_cloud_posture.schemas import (
 
 
 def test_reexports_class_uid_2003() -> None:
-    """Q1 confirmed — D.5 emits the same OCSF Compliance Finding shape as F.3."""
+    """Q1 confirmed — D.15 emits the same OCSF Compliance Finding shape as F.3."""
     assert OCSF_CLASS_UID == 2003
     assert OCSF_CLASS_NAME == "Compliance Finding"
     assert OCSF_CATEGORY_UID == 2
@@ -188,7 +188,7 @@ def test_build_finding_round_trip_via_reexport() -> None:
 
 
 def test_findings_report_aggregates_re_exported_findings() -> None:
-    """`FindingsReport` is re-exported; D.5 uses it verbatim."""
+    """`FindingsReport` is re-exported; D.15 uses it verbatim."""
     from datetime import UTC, datetime
 
     rpt = FindingsReport(

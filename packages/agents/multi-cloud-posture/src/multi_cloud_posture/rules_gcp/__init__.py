@@ -1,4 +1,4 @@
-"""Native GCP rule engine (D.5 v0.2 Task 11).
+"""Native GCP rule engine (D.15 v0.2 Task 11).
 
 New non-IAM CIS-GCP rules emitting OCSF 2003 tagged `Source: Nexus-native`
 (`CSPMFindingType.GCP_NATIVE`), alongside the existing IAM-binding rules in

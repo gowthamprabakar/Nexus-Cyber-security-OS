@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 7 — GCP project + region discovery tests (no live GCP)."""
+"""D.15 v0.2 Task 7 — GCP project + region discovery tests (no live GCP)."""
 
 from __future__ import annotations
 

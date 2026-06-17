@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 5 — Azure scan-error sanitizer + partial-scan degradation."""
+"""D.15 v0.2 Task 5 — Azure scan-error sanitizer + partial-scan degradation."""
 
 from __future__ import annotations
 
