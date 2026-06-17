@@ -38,7 +38,7 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["discover_aws_ai"],
+        permitted_tools=["discover_aws_ai", "discover_azure_ai", "discover_gcp_ai"],
         completion_condition="findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),

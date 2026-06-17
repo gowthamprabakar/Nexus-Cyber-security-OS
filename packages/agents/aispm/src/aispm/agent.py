@@ -23,8 +23,12 @@ from shared.fabric.envelope import NexusEnvelope
 
 from aispm import __version__ as agent_version
 from aispm.posture.aws import evaluate_aws_ai
+from aispm.posture.azure import evaluate_azure_ai
+from aispm.posture.gcp import evaluate_gcp_ai
 from aispm.schemas import FindingsReport
 from aispm.tools.aws_ai import AwsAiReader, read_aws_ai
+from aispm.tools.azure_ai import AzureAiReader, read_azure_ai
+from aispm.tools.gcp_ai import GcpAiReader, read_gcp_ai
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -32,12 +36,14 @@ DEFAULT_NLAH_VERSION = "0.1.0"
 def build_registry() -> ToolRegistry:
     """Compose the tool universe available to this agent.
 
-    AWS AI-discovery wired (PR2). Azure OpenAI + Vertex readers register here in PR3, the
-    Garak probe in PR4 (each ``cloud_calls``-budgeted so the Charter tracks API usage).
+    AWS + Azure OpenAI + Vertex AI discovery wired (PR2-3). The Garak prompt-injection probe
+    registers here in PR4 (each ``cloud_calls``-budgeted so the Charter tracks API usage).
     """
     reg = ToolRegistry()
-    # One logical AWS-AI scan (SageMaker endpoints/notebooks + Bedrock) → representative cost.
+    # One logical scan per cloud (several API calls) → representative cost.
     reg.register("discover_aws_ai", read_aws_ai, version="0.4.0", cloud_calls=10)
+    reg.register("discover_azure_ai", read_azure_ai, version="0.4.0", cloud_calls=10)
+    reg.register("discover_gcp_ai", read_gcp_ai, version="0.4.0", cloud_calls=10)
     return reg
 
 
@@ -72,6 +78,11 @@ async def run(
     aws_region: str = "us-east-1",
     aws_profile: str | None = None,
     aws_reader: AwsAiReader | None = None,
+    azure_subscription_id: str | None = None,
+    azure_reader: AzureAiReader | None = None,
+    gcp_project_id: str | None = None,
+    gcp_location: str = "us-central1",
+    gcp_reader: GcpAiReader | None = None,
     semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the AI-SPM agent end-to-end under the runtime charter.
@@ -118,6 +129,31 @@ async def run(
             )
             for finding in evaluate_aws_ai(
                 aws_inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        # Connector: Azure OpenAI discovery (PR3).
+        if azure_subscription_id is not None:
+            azure_inventory = await ctx.call_tool(
+                "discover_azure_ai",
+                subscription_id=azure_subscription_id,
+                reader=azure_reader,
+            )
+            for finding in evaluate_azure_ai(
+                azure_inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        # Connector: GCP Vertex AI discovery (PR3).
+        if gcp_project_id is not None:
+            gcp_inventory = await ctx.call_tool(
+                "discover_gcp_ai",
+                project_id=gcp_project_id,
+                location=gcp_location,
+                reader=gcp_reader,
+            )
+            for finding in evaluate_gcp_ai(
+                gcp_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
 
