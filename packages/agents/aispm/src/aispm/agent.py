@@ -12,6 +12,7 @@ spine) in PR5.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 
 from charter import Charter, ToolRegistry
@@ -25,12 +26,17 @@ from aispm import __version__ as agent_version
 from aispm.posture.aws import evaluate_aws_ai
 from aispm.posture.azure import evaluate_azure_ai
 from aispm.posture.gcp import evaluate_gcp_ai
+from aispm.posture.prompt_injection import evaluate_prompt_injection
 from aispm.schemas import FindingsReport
 from aispm.tools.aws_ai import AwsAiReader, read_aws_ai
 from aispm.tools.azure_ai import AzureAiReader, read_azure_ai
+from aispm.tools.garak import GarakRunner, run_garak
 from aispm.tools.gcp_ai import GcpAiReader, read_gcp_ai
 
 DEFAULT_NLAH_VERSION = "0.1.0"
+
+#: Gate for active prompt-injection probing (Garak sends adversarial prompts → cost+safety).
+_PROBE_GATE_ENV = "NEXUS_LIVE_AISPM_PROBE"
 
 
 def build_registry() -> ToolRegistry:
@@ -44,6 +50,9 @@ def build_registry() -> ToolRegistry:
     reg.register("discover_aws_ai", read_aws_ai, version="0.4.0", cloud_calls=10)
     reg.register("discover_azure_ai", read_azure_ai, version="0.4.0", cloud_calls=10)
     reg.register("discover_gcp_ai", read_gcp_ai, version="0.4.0", cloud_calls=10)
+    # Active prompt-injection probe (gated). Higher cloud_calls — garak invokes the model
+    # many times. Only invoked behind NEXUS_LIVE_AISPM_PROBE (or an injected test runner).
+    reg.register("probe_garak", run_garak, version="0.4.0", cloud_calls=50)
     return reg
 
 
@@ -83,6 +92,10 @@ async def run(
     gcp_project_id: str | None = None,
     gcp_location: str = "us-central1",
     gcp_reader: GcpAiReader | None = None,
+    probe_target: str | None = None,
+    probe_provider: str = "bedrock",
+    probe_account_id: str | None = None,
+    garak_runner: GarakRunner | None = None,
     semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the AI-SPM agent end-to-end under the runtime charter.
@@ -154,6 +167,27 @@ async def run(
             )
             for finding in evaluate_gcp_ai(
                 gcp_inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        # (b) Prompt-injection (PR4): active Garak red-team. GATED — runs only when a target
+        # is set AND NEXUS_LIVE_AISPM_PROBE=1 (or a test runner is injected). Default-off →
+        # byte-identical. Emits OCSF 2004 detections. Garak is a subprocess (no torch in core).
+        probe_enabled = garak_runner is not None or os.environ.get(_PROBE_GATE_ENV) == "1"
+        if probe_target is not None and probe_enabled:
+            garak_results = await ctx.call_tool(
+                "probe_garak",
+                target=probe_target,
+                runner=garak_runner,
+                output_dir=ctx.workspace_mgr.workspace / "garak_out",
+            )
+            for finding in evaluate_prompt_injection(
+                garak_results,
+                provider=probe_provider,
+                account_id=probe_account_id or contract.customer_id,
+                target=probe_target,
+                envelope=envelope,
+                detected_at=scan_started,
             ):
                 report.add_finding(finding)
 
