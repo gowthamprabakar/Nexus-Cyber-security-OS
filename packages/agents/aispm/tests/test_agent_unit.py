@@ -12,6 +12,11 @@ from charter import ToolRegistry
 from charter.contract import BudgetSpec, ExecutionContract
 
 
+class _FakeGarakRunner:
+    async def probe(self, *, target: str) -> list[dict]:
+        return [{"entry_type": "eval", "probe": "dan", "detector": "dan", "passed": 4, "total": 10}]
+
+
 class _FakeAwsAiReader:
     def sagemaker_endpoints(self) -> list[dict]:
         return [{"name": "prod", "data_capture_enabled": False, "model_name": "m1"}]
@@ -38,7 +43,12 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["discover_aws_ai", "discover_azure_ai", "discover_gcp_ai"],
+        permitted_tools=[
+            "discover_aws_ai",
+            "discover_azure_ai",
+            "discover_gcp_ai",
+            "probe_garak",
+        ],
         completion_condition="findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),
@@ -85,3 +95,28 @@ async def test_aws_connector_emits_findings(tmp_path: Path) -> None:
     types = {f["finding_info"]["types"][0] for f in doc["findings"]}
     assert "aispm_sagemaker_inference_logging_disabled" in types
     assert all(f["class_uid"] == 2003 for f in doc["findings"])
+
+
+@pytest.mark.asyncio
+async def test_probe_default_off_no_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No probe target + gate unset → no prompt-injection probe (default-off, byte-identical).
+    monkeypatch.delenv("NEXUS_LIVE_AISPM_PROBE", raising=False)
+    report = await run(_contract(tmp_path), probe_target="bedrock:claude")
+    assert report.total == 0  # gate off → garak never runs
+
+
+@pytest.mark.asyncio
+async def test_probe_with_injected_runner_emits_2004(tmp_path: Path) -> None:
+    # Injected runner bypasses the env gate (deterministic test path).
+    report = await run(
+        _contract(tmp_path),
+        probe_target="bedrock:claude",
+        probe_provider="bedrock",
+        garak_runner=_FakeGarakRunner(),
+    )
+    assert report.total == 1  # dan probe: 6/10 failed → one 2004 detection
+    doc = json.loads((tmp_path / "ws" / "findings.json").read_text())
+    assert doc["findings"][0]["class_uid"] == 2004
+    assert doc["findings"][0]["finding_info"]["types"][0].startswith("aispm_promptinjection_")
