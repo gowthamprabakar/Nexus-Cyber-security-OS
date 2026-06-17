@@ -1,6 +1,6 @@
 """Tests — ``compliance.schemas`` (Task 2).
 
-Verifies the F.3 schema re-export (Q1) and the D.6-specific
+Verifies the F.3 schema re-export (Q1) and the D.9-specific
 additions: finding-id regex, framework + control-level enums,
 type-discriminator builder, canonical severity-for-level table,
 ``build_finding`` constructor, and the ``ComplianceFinding`` typed

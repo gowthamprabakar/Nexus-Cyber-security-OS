@@ -51,9 +51,9 @@ resources:
 **Why this matters for the auditor.** The aggregated evidence block carries **two distinct sibling perspectives** on the same control failure:
 
 1. **F.3's view** is infrastructure-as-code-shaped: which S3 bucket policy / Block Public Access setting was wrong.
-2. **D.5's view** is data-shaped: what sensitive data was potentially exposed (classifier labels in D.5's `evidence.classifier_labels_found`; D.6 doesn't carry those substrings forward but the linkage is preserved via `source_finding.finding_id`).
+2. **D.5's view** is data-shaped: what sensitive data was potentially exposed (classifier labels in D.5's `evidence.classifier_labels_found`; D.9 doesn't carry those substrings forward but the linkage is preserved via `source_finding.finding_id`).
 
-D.7 Investigation can follow either pointer back to its original sibling-agent finding for the full context. D.6 v0.2 will expose this multi-source linkage to the posture-deltas report so auditors can see whether a control fixed itself across both surfaces or only one.
+D.7 Investigation can follow either pointer back to its original sibling-agent finding for the full context. D.9 v0.2 will expose this multi-source linkage to the posture-deltas report so auditors can see whether a control fixed itself across both surfaces or only one.
 
 **Markdown report row:**
 

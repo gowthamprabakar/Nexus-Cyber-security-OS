@@ -309,7 +309,7 @@ async def test_severity_table_drives_emit_severity(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_f3_resources_propagated_to_compliance_finding(tmp_path: Path) -> None:
-    """F.3's `resources[]` entries are projected into D.6's AffectedResource list."""
+    """F.3's `resources[]` entries are projected into D.9's AffectedResource list."""
     _write_f3_findings(
         tmp_path,
         [_f3_finding(rule_id="CSPM-AWS-IAM-001", resource_id="alice")],

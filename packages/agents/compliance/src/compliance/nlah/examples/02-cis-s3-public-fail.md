@@ -20,7 +20,7 @@ resources:
     uid: arn:aws:s3:::company-secrets
 ```
 
-> D.5 stamps the short rule_id (`s3_bucket_public`) into `compliance.control`. D.6 joins on that field. The full `DataSecurityFindingType.value` (`data_security_s3_bucket_public`) lives in `evidence.source_finding_type` but D.6 doesn't read from there in v0.1.
+> D.5 stamps the short rule_id (`s3_bucket_public`) into `compliance.control`. D.9 joins on that field. The full `DataSecurityFindingType.value` (`data_security_s3_bucket_public`) lives in `evidence.source_finding_type` but D.9 doesn't read from there in v0.1.
 
 **Mapping** (from `control_libraries/cis_aws_v3.yaml` — `s3_bucket_public` lands on TWO controls):
 

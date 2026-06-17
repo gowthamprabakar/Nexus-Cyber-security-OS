@@ -1,7 +1,7 @@
-"""Tests for `compliance.nlah_loader` — D.6's ADR-007 v1.2 shim.
+"""Tests for `compliance.nlah_loader` — D.9's ADR-007 v1.2 shim.
 
-D.6 is the 9th agent shipped natively against v1.2 (D.3 / F.6 / D.7 /
-D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8 / D.6).
+D.9 is the 9th agent shipped natively against v1.2 (D.3 / F.6 / D.7 /
+D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8 / D.9).
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def test_tools_md_lists_full_tool_surface() -> None:
 
 
 def test_readme_documents_seven_stage_pipeline() -> None:
-    """D.6 has a 7-stage pipeline (INGEST/ENRICH/CORRELATE/AGGREGATE/
+    """D.9 has a 7-stage pipeline (INGEST/ENRICH/CORRELATE/AGGREGATE/
     SCORE/SUMMARIZE/HANDOFF). All 7 must appear in the README."""
     readme = (default_nlah_dir() / "README.md").read_text(encoding="utf-8").upper()
     for stage in [

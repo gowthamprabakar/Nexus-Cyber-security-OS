@@ -1,6 +1,6 @@
 # `nexus-compliance-agent`
 
-Compliance Agent — **D.6**; **third of the 7 unbuilt agents** shipped under the [2026-05-20 Path-B-breadth-first operating rule](../../../docs/superpowers/sketches/2026-05-20-agent-version-roadmaps.md); **thirteenth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / A.1 / D.5 / D.8 / **D.6**). Maps sibling-agent findings (F.3 Cloud Posture + D.5 Data Security) to compliance-framework controls and emits framework-level compliance findings + a posture-summary report.
+Compliance Agent — **D.9**; **third of the 7 unbuilt agents** shipped under the [2026-05-20 Path-B-breadth-first operating rule](../../../docs/superpowers/sketches/2026-05-20-agent-version-roadmaps.md); **thirteenth under [ADR-007](../../../docs/_meta/decisions/ADR-007-cloud-posture-as-reference-agent.md)** (F.3 / D.1 / D.2 / D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / A.1 / D.5 / D.8 / **D.9**). Maps sibling-agent findings (F.3 Cloud Posture + D.5 Data Security) to compliance-framework controls and emits framework-level compliance findings + a posture-summary report.
 
 > **v0.1 shipped 2026-05-21.** 16 tasks, PRs #89-#104 merged. 225 tests passing. 10/10 eval cases pass. Q6 CIS Benchmarks® attribution + paraphrase posture verified at unit, render, and CLI layers. See [`docs/_meta/d-6-compliance-v0-1-verification-2026-05-21.md`](../../../docs/_meta/d-6-compliance-v0-1-verification-2026-05-21.md) for the closure record.
 
@@ -23,7 +23,7 @@ Compliance Agent — **D.6**; **third of the 7 unbuilt agents** shipped under th
 
 Per-control PASS/FAIL roll-up: one `ComplianceFinding` per `(control, status-change)` tuple; FAIL if any contributing source-finding has severity ≥ MEDIUM. PASS controls omitted from v0.1 output (added in v0.2 for attestation export). OCSF v1.3 Compliance Finding (`class_uid 2003`) re-exported from F.3 with `finding_info.types[0]="compliance_cis_aws_v3_<control_id>"` discriminator. Deterministic (no LLM in loop).
 
-## Deferred to D.6 v0.2 / v0.3 / v0.4 / v0.5+
+## Deferred to D.9 v0.2 / v0.3 / v0.4 / v0.5+
 
 - **v0.2:** SOC2, PCI-DSS v4.0, HIPAA Security Rule, NIST 800-53 Rev. 5; PASS-finding emission for attestation export; F.6 audit-chain live read; periodic posture deltas via `findings.>` fabric-event subscription.
 - **v0.3:** vendor-specific compliance dashboards; auditor-export PDF.
@@ -34,9 +34,9 @@ Full version trajectory: [`docs/superpowers/sketches/2026-05-20-agent-version-ro
 
 ## ADR-007 conformance
 
-D.6 is the **13th** agent under the reference template, **9th** shipped natively against v1.2 (D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8 / **D.6**). Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader`). **Not** in the v1.3 always-on class — D.6 honours every budget axis. **Does not consume** the v1.4 candidate; single-driver per the agent spec.
+D.9 is the **13th** agent under the reference template, **9th** shipped natively against v1.2 (D.3 / F.6 / D.7 / D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8 / **D.9**). Inherits v1.1 (LLM adapter via `charter.llm_adapter`; no per-agent `llm.py`) and v1.2 (NLAH loader is a 21-LOC shim over `charter.nlah_loader`). **Not** in the v1.3 always-on class — D.9 honours every budget axis. **Does not consume** the v1.4 candidate; single-driver per the agent spec.
 
-**Schema reuse (Q1).** D.6 re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim — `Severity`, `AffectedResource`, `FindingsReport`, OCSF constants. Adds `ComplianceFramework` enum + `ControlLevel` enum + `compliance_finding_type(framework, control_id)` discriminator builder + `severity_for_level(level, required)` canonical table + D.6-specific `COMPLIANCE_FINDING_ID_RE` and `build_finding` on top. Downstream consumers (D.7, Meta-Harness) filter on `class_uid == 2003` first then on `finding_info.types[0] == "compliance_*"` to disambiguate D.6 emits from F.3 / D.5 / multi-cloud / k8s posture emits.
+**Schema reuse (Q1).** D.9 re-exports F.3's `class_uid 2003 Compliance Finding` schema verbatim — `Severity`, `AffectedResource`, `FindingsReport`, OCSF constants. Adds `ComplianceFramework` enum + `ControlLevel` enum + `compliance_finding_type(framework, control_id)` discriminator builder + `severity_for_level(level, required)` canonical table + D.9-specific `COMPLIANCE_FINDING_ID_RE` and `build_finding` on top. Downstream consumers (D.7, Meta-Harness) filter on `class_uid == 2003` first then on `finding_info.types[0] == "compliance_*"` to disambiguate D.9 emits from F.3 / D.5 / multi-cloud / k8s posture emits.
 
 ## Smoke runbook
 
