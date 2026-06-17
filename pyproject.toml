@@ -28,6 +28,7 @@ members = [
     "packages/agents/meta-harness",
     "packages/agents/supervisor",
     "packages/agents/appsec",
+    "packages/agents/sspm",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -93,6 +94,7 @@ files = [
     "packages/agents/synthesis/src",
     "packages/agents/curiosity/src",
     "packages/agents/appsec/src",
+    "packages/agents/sspm/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
