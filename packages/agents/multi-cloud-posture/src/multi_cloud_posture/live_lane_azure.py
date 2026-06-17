@@ -1,4 +1,4 @@
-"""Live-Azure lane gating (D.5 v0.2 Task 13).
+"""Live-Azure lane gating (D.15 v0.2 Task 13).
 
 Mirrors `cloud_posture.live_lane` (Q1; in-package so the helpers are importable +
 unit-testable under `--import-mode=importlib`). Whether the `NEXUS_LIVE_AZURE`

@@ -12,7 +12,7 @@ def test_package_imports() -> None:
 
 
 def test_charter_llm_adapter_import_works() -> None:
-    """ADR-007 v1.1 — D.5 is the **eighth** consumer of the hoist."""
+    """ADR-007 v1.1 — D.15 is the **eighth** consumer of the hoist."""
     from charter.llm_adapter import (  # noqa: F401
         LLMConfig,
         LLMProvider,
@@ -22,7 +22,7 @@ def test_charter_llm_adapter_import_works() -> None:
 
 
 def test_charter_nlah_loader_import_works() -> None:
-    """ADR-007 v1.2 — D.5 is the **fifth** agent shipped natively against v1.2
+    """ADR-007 v1.2 — D.15 is the **fifth** agent shipped natively against v1.2
     (after D.3 + F.6 + D.7 + D.4).
     """
     from charter.nlah_loader import (  # noqa: F401
@@ -32,23 +32,23 @@ def test_charter_nlah_loader_import_works() -> None:
 
 
 def test_charter_audit_log_import_works() -> None:
-    """D.5 emits its own per-run audit chain via charter.audit.AuditLog (F.1)."""
+    """D.15 emits its own per-run audit chain via charter.audit.AuditLog (F.1)."""
     from charter.audit import AuditLog
 
     assert AuditLog.__name__ == "AuditLog"
 
 
 def test_charter_memory_episodic_import_works() -> None:
-    """D.5 lazily persists per-run findings to the F.5 EpisodicStore (Phase 1c)."""
+    """D.15 lazily persists per-run findings to the F.5 EpisodicStore (Phase 1c)."""
     from charter.memory import EpisodicStore
 
     assert EpisodicStore.__name__ == "EpisodicStore"
 
 
 def test_cloud_posture_schema_reexport_available() -> None:
-    """D.5 re-exports F.3's `class_uid 2003 Compliance Finding` (Q1 resolution).
+    """D.15 re-exports F.3's `class_uid 2003 Compliance Finding` (Q1 resolution).
 
-    The schema-as-typing-layer pattern is unchanged; D.5 adds a
+    The schema-as-typing-layer pattern is unchanged; D.15 adds a
     `CloudProvider` enum discriminator on top.
     """
     from cloud_posture.schemas import (

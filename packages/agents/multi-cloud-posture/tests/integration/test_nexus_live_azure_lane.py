@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 13 — NEXUS_LIVE_AZURE gated-lane tests (gating logic only).
+"""D.15 v0.2 Task 13 — NEXUS_LIVE_AZURE gated-lane tests (gating logic only).
 
 Exercise the lane's env-gating + reachability + skip-message helpers
 (`multi_cloud_posture.live_lane_azure`). They do NOT hit Azure — Task 15 owns the

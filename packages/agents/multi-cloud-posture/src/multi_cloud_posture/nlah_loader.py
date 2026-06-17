@@ -1,6 +1,6 @@
 """Per-agent NLAH shim — delegates to `charter.nlah_loader` (ADR-007 v1.2).
 
-D.5 is the fifth agent shipped natively against v1.2 (after D.3 / F.6 / D.7 / D.4).
+D.15 is the fifth agent shipped natively against v1.2 (after D.3 / F.6 / D.7 / D.4).
 """
 
 from __future__ import annotations

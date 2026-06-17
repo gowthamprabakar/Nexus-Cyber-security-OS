@@ -1,17 +1,17 @@
 """Multi-cloud posture schemas — re-export F.3's OCSF v1.3 Compliance Finding.
 
-**Q1 resolution (per the D.5 plan).** D.5 emits the **identical wire shape**
+**Q1 resolution (per the D.15 plan).** D.15 emits the **identical wire shape**
 as F.3 Cloud Posture (`class_uid 2003 Compliance Finding`) — no fork, no
-duplication. The schema-as-typing-layer pattern is unchanged; D.5 adds a
+duplication. The schema-as-typing-layer pattern is unchanged; D.15 adds a
 `CloudProvider` enum and a `CSPMFindingType` discriminator that ride
 inside the existing OCSF surface.
 
-Cross-agent OCSF inventory after D.5 (CSPM family):
+Cross-agent OCSF inventory after D.15 (CSPM family):
 
 | Agent                            | OCSF class_uid | Class name             | Discriminator         |
 | -------------------------------- | -------------- | ---------------------- | --------------------- |
 | Cloud Posture (F.3) — AWS        | 2003           | Compliance Finding     | (none — AWS only)     |
-| **Multi-Cloud Posture (D.5)**    | **2003**       | **Compliance Finding** | **CSPMFindingType**   |
+| **Multi-Cloud Posture (D.15)**    | **2003**       | **Compliance Finding** | **CSPMFindingType**   |
 
 Re-exports from `cloud_posture.schemas`:
 - `OCSF_*` constants
@@ -22,10 +22,10 @@ Re-exports from `cloud_posture.schemas`:
 - `FindingsReport` aggregate
 - `FINDING_ID_RE` (validates `CSPM-<CLOUD>-<SVC>-<NNN>-<context>`)
 
-D.5-specific additions:
+D.15-specific additions:
 - `CloudProvider` enum (AZURE / GCP) — explicit filter key
 - `CSPMFindingType` enum (4 discriminators, one per source feed)
-- helpers for D.5 finding-id construction
+- helpers for D.15 finding-id construction
 """
 
 from __future__ import annotations

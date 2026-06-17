@@ -1,8 +1,8 @@
-"""D.5 Azure credential-resolution seam (v0.2 Task 2).
+"""D.15 Azure credential-resolution seam (v0.2 Task 2).
 
 Mirrors the **contract** of `cloud_posture.CredentialResolver` (Q1 — same shape,
 Azure-native). F.3's resolver is boto3-specific, so there is no literal
-cloud-agnostic seam to import yet; D.5 replicates the shape and the
+cloud-agnostic seam to import yet; D.15 replicates the shape and the
 literal hoist-to-`charter` is deferred to **D.2** (the 3rd consumer) per ADR-007.
 The substrate seal stays empty either way.
 

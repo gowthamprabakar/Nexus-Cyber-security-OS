@@ -1,4 +1,4 @@
-"""Partial-scan degradation primitives for D.5 (v0.2 Tasks 5 + 9).
+"""Partial-scan degradation primitives for D.15 (v0.2 Tasks 5 + 9).
 
 Mirrors `cloud_posture`'s Pattern E in-package (Q1). When a live per-region /
 per-scope scan fails, it is recorded as a **secret-free, traceback-free** degraded

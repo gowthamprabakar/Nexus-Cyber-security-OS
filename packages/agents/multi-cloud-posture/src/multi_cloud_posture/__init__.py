@@ -1,4 +1,4 @@
-"""Nexus Multi-Cloud Posture Agent — D.5 / Agent #8 under ADR-007.
+"""Nexus Multi-Cloud Posture Agent — D.15 / Agent #8 under ADR-007.
 
 The third Phase-1b agent. Lifts CSPM coverage from AWS-only (F.3) to
 Azure + GCP. Emits OCSF v1.3 Compliance Findings (`class_uid 2003`) —
@@ -26,7 +26,7 @@ v0.2 (Level 2 — live Azure + GCP). Per the v0.2 plan
 version-extension: live Azure + GCP SDKs, single-subscription / single-project
 credential resolution + discovery + region scoping, native rule engines (Azure
 from zero, GCP expanded), and Defender/SCC provenance tagging — additive only,
-with the OCSF 2003 wire shape + offline eval cases byte-stable. D.5 imports the
+with the OCSF 2003 wire shape + offline eval cases byte-stable. D.15 imports the
 cloud-agnostic seams directly from `cloud_posture` (2nd consumer; no charter
 hoist — that fires at D.2 per ADR-007).
 """

@@ -1,8 +1,8 @@
-"""D.5 v0.2 Task 15 — live-GCP integration tests (read-only).
+"""D.15 v0.2 Task 15 — live-GCP integration tests (read-only).
 
 Gated by the `gcp_live_project` fixture (`NEXUS_LIVE_GCP=1` + reachable); **skips
 cleanly** otherwise, so CI never touches GCP. Read-only, single project (Q6).
-Exercises the live seams D.5 v0.2 built — ADC resolution + project/region
+Exercises the live seams D.15 v0.2 built — ADC resolution + project/region
 discovery — and the agent's OCSF 2003 output + audit chain. Operator-run.
 """
 

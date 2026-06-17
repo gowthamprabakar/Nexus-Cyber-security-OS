@@ -1,4 +1,4 @@
-"""Native Azure rule engine — evaluation + OCSF 2003 emission (D.5 v0.2 Task 10).
+"""Native Azure rule engine — evaluation + OCSF 2003 emission (D.15 v0.2 Task 10).
 
 Resources are produced by the live Azure readers (`azure-mgmt`) when they land;
 the engine + rules are **pure** and tested offline with mock resources. Each

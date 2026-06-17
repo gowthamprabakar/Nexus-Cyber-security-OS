@@ -70,7 +70,7 @@
       impersonate service accounts.
 ```
 
-**Operator next steps** (out-of-band; D.5 emits findings only):
+**Operator next steps** (out-of-band; D.15 emits findings only):
 
 1. Revoke the `roles/owner` from `bob@external-vendor.com` immediately.
 2. Audit other IAM bindings for the same external domain via Cloud Asset Inventory's `search-all-iam-policies` API.

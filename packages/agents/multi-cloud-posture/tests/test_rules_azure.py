@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 10 — native Azure rule engine + CIS rules (offline, mock resources)."""
+"""D.15 v0.2 Task 10 — native Azure rule engine + CIS rules (offline, mock resources)."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """Render a Multi-Cloud Posture `FindingsReport` as operator-readable markdown.
 
-Two structural pins (per the D.5 plan):
+Two structural pins (per the D.15 plan):
 
 1. **Per-cloud breakdown** — pinned ABOVE the per-severity sections.
    Operators want a one-glance Azure vs GCP split before drilling down.

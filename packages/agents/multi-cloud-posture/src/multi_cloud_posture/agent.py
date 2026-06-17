@@ -1,8 +1,8 @@
 """Multi-Cloud Posture Agent driver — wires charter + 4 readers + 2 normalizers + summarizer.
 
 Mirrors D.4's [`agent.py`](../../../network-threat/src/network_threat/agent.py)
-shape (filesystem-only fan-out via TaskGroup) with the D.5-specific
-five-stage pipeline. ADR-007 pattern check (D.5): the `agent.run`
+shape (filesystem-only fan-out via TaskGroup) with the D.15-specific
+five-stage pipeline. ADR-007 pattern check (D.15): the `agent.run`
 signature converges across agents — `(contract, *, llm_provider, ...)`.
 Confirmed for the eighth time.
 
@@ -20,7 +20,7 @@ Differences from D.4:
 - **Two** normalizers (Azure + GCP), each lifting per-source records
   into the F.3 OCSF 2003 wire shape via `build_finding`.
 - No detector layer — Azure/GCP findings are already analyst
-  interpretations from upstream tooling; D.5 only normalises them.
+  interpretations from upstream tooling; D.15 only normalises them.
 - `customer_domain_allowlist` is plumbed into the GCP IAM reader for
   the external-user severity rule.
 """
