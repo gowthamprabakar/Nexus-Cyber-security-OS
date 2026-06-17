@@ -24,25 +24,30 @@ from shared.fabric.envelope import NexusEnvelope
 from sspm import __version__ as agent_version
 from sspm.credentials import SaaSCredentialResolver
 from sspm.posture.github import evaluate_github_org
+from sspm.posture.m365 import evaluate_m365_tenant
 from sspm.schemas import FindingsReport
 from sspm.tools.github_org import HttpTransport, httpx_transport, read_github_org
+from sspm.tools.m365 import GraphClient, build_graph_client, read_m365_tenant
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
-#: Env var holding the GitHub PAT (resolved per call by SaaSCredentialResolver, never stored).
+#: Env vars holding SaaS credentials (resolved per call by SaaSCredentialResolver, never stored).
 _GITHUB_TOKEN_ENV = "NEXUS_SSPM_GITHUB_TOKEN"
+_M365_CLIENT_ID_ENV = "NEXUS_SSPM_M365_CLIENT_ID"
+_M365_CLIENT_SECRET_ENV = "NEXUS_SSPM_M365_CLIENT_SECRET"
 
 
 def build_registry() -> ToolRegistry:
     """Compose the tool universe available to this agent.
 
     Each connector reader is ``cloud_calls``-budgeted so the Charter tracks SaaS API
-    usage. M365 + Slack readers register here in PR3-4.
+    usage. The Slack reader registers here in PR4.
     """
     reg = ToolRegistry()
-    # One logical SaaS-org scan (org + repos + per-repo branch protection) → representative
-    # cloud cost (mirrors the k8s read_cluster_inventory single-invocation convention).
+    # One logical SaaS scan per connector (several API calls) → representative cloud cost
+    # (mirrors the k8s read_cluster_inventory single-invocation convention).
     reg.register("read_github_org", read_github_org, version="0.4.0", cloud_calls=10)
+    reg.register("read_m365_tenant", read_m365_tenant, version="0.4.0", cloud_calls=10)
     return reg
 
 
@@ -76,6 +81,8 @@ async def run(
     github_org: str | None = None,
     github_transport: HttpTransport | None = None,
     github_max_repos: int = 100,
+    m365_tenant: str | None = None,
+    m365_graph: GraphClient | None = None,
     semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the SSPM agent end-to-end under the runtime charter.
@@ -87,6 +94,11 @@ async def run(
         github_transport: Injectable HTTP seam for the GitHub connector (tests pass a
             deterministic fake). Default None → the live httpx-backed transport.
         github_max_repos: Cap on repos enumerated for the GitHub scan.
+        m365_tenant: When set, scan this Microsoft 365 tenant's posture (PR3 connector).
+            OAuth2 client-credentials via ``SaaSCredentialResolver`` reads
+            ``$NEXUS_SSPM_M365_CLIENT_ID`` / ``_SECRET`` per call (never persisted).
+        m365_graph: Injectable Microsoft Graph seam for the M365 connector (tests pass a
+            fake ``GraphClient``). Default None → the live httpx-backed client.
         semantic_store: opt-in fleet-graph sink (default None inert) consumed by the PR5
             ``kg_writer``; threaded now so the signature is stable.
 
@@ -128,6 +140,23 @@ async def run(
             )
             for finding in evaluate_github_org(
                 inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        # Connector: Microsoft 365 (PR3). Same charter-proxy routing + secret safety.
+        if m365_tenant is not None:
+            resolver = SaaSCredentialResolver(
+                provider="m365",
+                env={"client_id": _M365_CLIENT_ID_ENV, "client_secret": _M365_CLIENT_SECRET_ENV},
+            )
+            graph = (
+                m365_graph if m365_graph is not None else build_graph_client(resolver, m365_tenant)
+            )
+            m365_inventory = await ctx.call_tool(
+                "read_m365_tenant", tenant_id=m365_tenant, graph=graph
+            )
+            for finding in evaluate_m365_tenant(
+                m365_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
 

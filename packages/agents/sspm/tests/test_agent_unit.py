@@ -30,7 +30,7 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["read_github_org"],
+        permitted_tools=["read_github_org", "read_m365_tenant"],
         completion_condition="findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),
@@ -63,6 +63,37 @@ async def test_no_connector_writes_empty_artifacts(tmp_path: Path) -> None:
     doc = json.loads((tmp_path / "ws" / "findings.json").read_text())
     assert doc["findings"] == []
     assert "SaaS Security Posture" in (tmp_path / "ws" / "summary.md").read_text()
+
+
+class _FakeGraph:
+    def __init__(
+        self,
+        collections: dict[str, list[dict[str, Any]]],
+        objects: dict[str, dict[str, Any]],
+    ) -> None:
+        self._c = collections
+        self._o = objects
+
+    async def get_all(self, resource: str, *, select: str | None = None) -> list[dict[str, Any]]:
+        return self._c.get(resource, [])
+
+    async def get_one(self, resource: str) -> dict[str, Any]:
+        return self._o.get(resource, {})
+
+
+@pytest.mark.asyncio
+async def test_m365_connector_emits_findings(tmp_path: Path) -> None:
+    graph = _FakeGraph(
+        collections={"identity/conditionalAccessPolicies": []},
+        objects={"policies/identitySecurityDefaultsEnforcementPolicy": {"isEnabled": False}},
+    )
+    report = await run(_contract(tmp_path), m365_tenant="contoso", m365_graph=graph)
+    # security defaults disabled + zero conditional access = 2 findings.
+    assert report.total == 2
+    doc = json.loads((tmp_path / "ws" / "findings.json").read_text())
+    types = {f["finding_info"]["types"][0] for f in doc["findings"]}
+    assert "sspm_m365_security_defaults_disabled" in types
+    assert "sspm_m365_no_conditional_access" in types
 
 
 @pytest.mark.asyncio
