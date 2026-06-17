@@ -56,6 +56,7 @@ from data_security.correlate import (
     correlate_with_f3,
     read_f3_findings,
 )
+from data_security.db_classify import dynamodb_to_findings, rds_to_findings
 from data_security.detectors import (
     detect_oversharing_iam,
     detect_public_bucket,
@@ -79,6 +80,8 @@ from data_security.tools import (
     read_s3_inventory,
     read_s3_objects,
 )
+from data_security.tools.dynamodb_scan import scan_dynamodb
+from data_security.tools.rds_scan import scan_rds_posture
 from data_security.tools.s3_live_scan import scan_s3_live
 
 DEFAULT_NLAH_VERSION = "0.1.0"
@@ -97,6 +100,9 @@ def build_registry() -> ToolRegistry:
     reg.register("read_s3_objects", read_s3_objects, version="0.1.0", cloud_calls=0)
     reg.register("read_f3_findings", read_f3_findings, version="0.1.0", cloud_calls=0)
     reg.register("scan_s3_live", scan_s3_live, version="0.2.0", cloud_calls=1)
+    # v0.4 Stage 1.2: live DynamoDB content classification + RDS posture (boto3).
+    reg.register("scan_dynamodb", scan_dynamodb, version="0.4.0", cloud_calls=1)
+    reg.register("scan_rds_posture", scan_rds_posture, version="0.4.0", cloud_calls=1)
     return reg
 
 
@@ -123,6 +129,8 @@ async def run(
     s3_inventory_feed: Path | str | None = None,
     s3_objects_feed: Path | str | None = None,
     live_s3_account_id: str | None = None,
+    live_dynamodb_account_id: str | None = None,
+    live_rds_account_id: str | None = None,
     aws_profile: str | None = None,
     aws_region: str | None = None,
     cloud_posture_workspace: Path | str | None = None,
@@ -230,6 +238,32 @@ async def run(
                 detected_at=scan_started,
             ),
         ]
+
+        # Stage 3c — v0.4 Stage 1.2: live DynamoDB content classification + RDS
+        # posture, each behind a guarded account-id flag (default None → skipped →
+        # byte-identical). Tools route through the charter proxy (ADR-016).
+        if live_dynamodb_account_id is not None:
+            dynamo_hits = await ctx.call_tool(
+                "scan_dynamodb",
+                account_id=live_dynamodb_account_id,
+                profile=aws_profile,
+                region=aws_region,
+            )
+            d5_findings = [
+                *d5_findings,
+                *dynamodb_to_findings(dynamo_hits, envelope=envelope, detected_at=scan_started),
+            ]
+        if live_rds_account_id is not None:
+            rds_records = await ctx.call_tool(
+                "scan_rds_posture",
+                account_id=live_rds_account_id,
+                profile=aws_profile,
+                region=aws_region,
+            )
+            d5_findings = [
+                *d5_findings,
+                *rds_to_findings(rds_records, envelope=envelope, detected_at=scan_started),
+            ]
 
         # Stage 4 — CORRELATE: optional F.3 sibling-workspace read.
         correlation = await _correlate(

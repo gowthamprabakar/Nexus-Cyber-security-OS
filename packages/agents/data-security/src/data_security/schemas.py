@@ -80,6 +80,12 @@ class DataSecurityFindingType(StrEnum):
     # v0.3 B-1 (ADR-015 §Rationale-3): secrets-in-CODE — AppSec (D.14) SCANS
     # (gitleaks), DSPM EMITS. Same unified OCSF 2003 emission point as runtime.
     SECRET_EXPOSED_IN_CODE = "data_security_secret_exposed_in_code"  # noqa: S105  # enum label, not a credential
+    # v0.4 Stage 1.2: sensitive data classified inside a DynamoDB table (content
+    # scan). Appended additively → existing discriminators + offline eval unchanged.
+    SENSITIVE_DATA_IN_DYNAMODB = "data_security_sensitive_data_in_dynamodb"
+    # v0.4 Stage 1.2: RDS instance/cluster posture violation (encryption / public /
+    # deletion-protection — metadata only, not row content).
+    RDS_POSTURE_VIOLATION = "data_security_rds_posture_violation"
 
 
 class ClassifierLabel(StrEnum):
@@ -126,6 +132,8 @@ _FT_SOURCE_TOKEN: dict[DataSecurityFindingType, str] = {
     DataSecurityFindingType.S3_OVERSHARING_IAM: "OVERSHARE",
     DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME: "SECRET",
     DataSecurityFindingType.SECRET_EXPOSED_IN_CODE: "SECRET",
+    DataSecurityFindingType.SENSITIVE_DATA_IN_DYNAMODB: "DYNAMODB",
+    DataSecurityFindingType.RDS_POSTURE_VIOLATION: "RDS",
 }
 
 
