@@ -23,6 +23,7 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from aispm import __version__ as agent_version
+from aispm.kg_writer import KnowledgeGraphWriter
 from aispm.posture.aws import evaluate_aws_ai
 from aispm.posture.azure import evaluate_azure_ai
 from aispm.posture.gcp import evaluate_gcp_ai
@@ -107,11 +108,11 @@ async def run(
         aws_profile: Optional boto3 profile for the live discovery.
         aws_reader: Injectable AWS-AI reader seam (tests pass a deterministic fake). Default
             None → the live boto3-backed reader.
-        semantic_store: opt-in fleet-graph sink (default None inert) consumed by the PR5
-            ``kg_writer``; threaded now so the signature is stable.
+        semantic_store: opt-in fleet-graph sink. When set, each cloud inventory is written
+            to the AI spine (AI_SERVICE/AI_MODEL + SERVES_MODEL/EXPOSES_MODEL/HOSTS_AI) via
+            ``KnowledgeGraphWriter``. Default None is inert → byte-identical offline.
     """
     del llm_provider  # reserved
-    del semantic_store  # PR5 kg_writer consumes this; threaded for signature stability
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -130,6 +131,10 @@ async def run(
             scan_completed_at=datetime.now(UTC),
         )
 
+        # v0.4 PR5: opt-in fleet-graph sink. Inert when semantic_store is None (base-class
+        # no-op), so the offline default stays byte-identical. Reads typed inventories.
+        kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+
         # Connector: AWS AI discovery (PR2). Routed through the charter proxy (budget + audit;
         # call_tool audits only kwarg KEY names, so the reader object never enters the log).
         if aws_account_id is not None:
@@ -144,6 +149,7 @@ async def run(
                 aws_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_aws(aws_inventory)
 
         # Connector: Azure OpenAI discovery (PR3).
         if azure_subscription_id is not None:
@@ -156,6 +162,7 @@ async def run(
                 azure_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_azure(azure_inventory)
 
         # Connector: GCP Vertex AI discovery (PR3).
         if gcp_project_id is not None:
@@ -169,6 +176,7 @@ async def run(
                 gcp_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_gcp(gcp_inventory)
 
         # (b) Prompt-injection (PR4): active Garak red-team. GATED — runs only when a target
         # is set AND NEXUS_LIVE_AISPM_PROBE=1 (or a test runner is injected). Default-off →
