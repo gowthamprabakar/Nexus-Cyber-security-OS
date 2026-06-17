@@ -46,6 +46,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -63,6 +64,7 @@ from data_security.detectors import (
     detect_sensitive_location,
     detect_unencrypted,
 )
+from data_security.kg_writer import KnowledgeGraphWriter
 from data_security.schemas import (
     ClassifierLabel,
     CloudPostureFinding,
@@ -137,6 +139,7 @@ async def run(
     vulnerability_workspace: Path | str | None = None,
     appsec_workspace: Path | str | None = None,
     trusted_sensitivity_tag: str = "Restricted",
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Data Security Agent end-to-end under the runtime charter.
 
@@ -208,6 +211,13 @@ async def run(
         # Q6 INVARIANT: only labels are kept; sample bytes are released
         # after the classifier returns its enum value.
         classifier_hits_by_bucket = _classify(samples)
+
+        # v0.4 Stage 1.5: write the storage + data-classification inventory to the
+        # fleet graph when a SemanticStore is injected. Opt-in — default None is inert
+        # (no graph writes), so findings.json + report.md stay byte-identical.
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record(buckets, classifier_hits_by_bucket)
 
         # Stage 3 — DETECT: 4 detectors per bucket.
         d5_findings = _detect_all(
