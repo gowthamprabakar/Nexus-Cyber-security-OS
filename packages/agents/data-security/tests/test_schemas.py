@@ -101,18 +101,20 @@ def test_build_finding_callable_is_reexported() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_data_security_finding_type_has_6_values() -> None:
+def test_data_security_finding_type_has_8_values() -> None:
     """4 S3 detector modules (Tasks 5-8) + 2 cross-agent secrets discriminators
-    (v0.3 ADR-015: SECRET_EXPOSED_IN_RUNTIME from D.1 [A-2.4],
-    SECRET_EXPOSED_IN_CODE from D.14 AppSec [B-1]). Appended additively."""
+    (v0.3 ADR-015) + 2 v0.4 Stage 1.2 DB discriminators (SENSITIVE_DATA_IN_DYNAMODB,
+    RDS_POSTURE_VIOLATION). Appended additively."""
     members = set(DataSecurityFindingType)
-    assert len(members) == 6
+    assert len(members) == 8
     assert DataSecurityFindingType.S3_BUCKET_PUBLIC in members
     assert DataSecurityFindingType.S3_BUCKET_UNENCRYPTED in members
     assert DataSecurityFindingType.S3_OBJECT_SENSITIVE_IN_UNTRUSTED_LOCATION in members
     assert DataSecurityFindingType.S3_OVERSHARING_IAM in members
     assert DataSecurityFindingType.SECRET_EXPOSED_IN_RUNTIME in members
     assert DataSecurityFindingType.SECRET_EXPOSED_IN_CODE in members
+    assert DataSecurityFindingType.SENSITIVE_DATA_IN_DYNAMODB in members
+    assert DataSecurityFindingType.RDS_POSTURE_VIOLATION in members
 
 
 def test_data_security_finding_type_wire_strings_have_namespace_prefix() -> None:
