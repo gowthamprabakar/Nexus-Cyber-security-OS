@@ -6,9 +6,10 @@ Task 4 of the KG-loop-closure plan
 Covers four shapes of invariant the writer claims to preserve:
 
 1. **Per-method upsert payload shape** — `upsert_asset` calls
-   `SemanticStore.upsert_entity` with `entity_type="asset"`, `kind`
-   moved from MERGE key (Cypher) to property; `upsert_finding` does
-   the same with `entity_type="finding"`. `tenant_id` propagates from
+   `SemanticStore.upsert_entity` with `entity_type="cloud_resource"`
+   (ADR-018 spine), `kind` moved from MERGE key (Cypher) to property;
+   `upsert_finding` does the same with
+   `entity_type="misconfiguration_finding"`. `tenant_id` propagates from
    the writer's `customer_id` on every substrate call.
 
 2. **AFFECTS-edge dedup per-finding** — the writer's load-bearing
@@ -96,7 +97,7 @@ def _make_semantic_store() -> SemanticStore:
 
 @pytest.mark.asyncio
 async def test_upsert_asset_calls_upsert_entity_with_asset_type() -> None:
-    """`upsert_asset` invokes `SemanticStore.upsert_entity` with `entity_type="asset"`."""
+    """`upsert_asset` invokes `upsert_entity` with `entity_type="cloud_resource"` (ADR-018)."""
     store = _make_semantic_store()
     writer = KnowledgeGraphWriter(semantic_store=store, customer_id="cust_test")
 
@@ -110,7 +111,7 @@ async def test_upsert_asset_calls_upsert_entity_with_asset_type() -> None:
     store_mock.upsert_entity.assert_awaited_once()
     kwargs = store_mock.upsert_entity.call_args.kwargs
     assert kwargs["tenant_id"] == "cust_test"
-    assert kwargs["entity_type"] == "asset"
+    assert kwargs["entity_type"] == "cloud_resource"
     assert kwargs["external_id"] == "arn:aws:s3:::alpha"
 
 
@@ -145,7 +146,7 @@ async def test_upsert_asset_handles_empty_properties_dict() -> None:
 
 @pytest.mark.asyncio
 async def test_upsert_finding_calls_upsert_entity_with_finding_type() -> None:
-    """`upsert_finding` invokes `upsert_entity` with `entity_type="finding"`."""
+    """`upsert_finding` invokes `upsert_entity` with `entity_type="misconfiguration_finding"`."""
     store = _make_semantic_store()
     writer = KnowledgeGraphWriter(semantic_store=store, customer_id="cust_test")
 
@@ -160,7 +161,7 @@ async def test_upsert_finding_calls_upsert_entity_with_finding_type() -> None:
     store_mock.upsert_entity.assert_awaited_once()
     kwargs = store_mock.upsert_entity.call_args.kwargs
     assert kwargs["tenant_id"] == "cust_test"
-    assert kwargs["entity_type"] == "finding"
+    assert kwargs["entity_type"] == "misconfiguration_finding"
     assert kwargs["external_id"] == "CSPM-AWS-S3-001-alpha"
     assert kwargs["properties"] == {"rule_id": "CSPM-AWS-S3-001", "severity": "high"}
 
@@ -232,11 +233,11 @@ async def test_upsert_finding_uses_returned_entity_ids_as_relationship_src_and_d
     )
 
     store_mock = cast(AsyncMock, store)
-    # The mock returns "ent_finding_0" for the first upsert (the finding)
-    # and "ent_asset_1" for the second (the affected S3 bucket).
+    # The mock returns "ent_misconfiguration_finding_0" for the first upsert (the
+    # finding) and "ent_cloud_resource_1" for the second (the affected S3 bucket).
     rel_kwargs = store_mock.add_relationship.await_args_list[0].kwargs
-    assert rel_kwargs["src_entity_id"] == "ent_finding_0"
-    assert rel_kwargs["dst_entity_id"] == "ent_asset_1"
+    assert rel_kwargs["src_entity_id"] == "ent_misconfiguration_finding_0"
+    assert rel_kwargs["dst_entity_id"] == "ent_cloud_resource_1"
 
 
 # ----------------------------- the load-bearing dedup -----------------------
@@ -368,3 +369,61 @@ async def test_tenant_id_propagates_to_every_substrate_call() -> None:
         assert call.kwargs["tenant_id"] == "cust_acme"
     for call in store_mock.add_relationship.await_args_list:
         assert call.kwargs["tenant_id"] == "cust_acme"
+
+
+# --------------------- real-store coherent-spine e2e ------------------------
+
+
+@pytest.mark.asyncio
+async def test_real_store_writes_coherent_cloud_resource_spine() -> None:
+    """Against a real in-memory SemanticStore: resources land as `cloud_resource`
+    (the ADR-018 spine D.1/D.2/D.4/D.5 edges resolve against), misconfigs as
+    `misconfiguration_finding`, joined by traversable AFFECTS edges."""
+    from charter.memory.models import Base
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        store = SemanticStore(async_sessionmaker(engine, expire_on_commit=False))
+        writer = KnowledgeGraphWriter(semantic_store=store, customer_id="cust_test")
+
+        await writer.upsert_asset(
+            kind="aws_s3_bucket",
+            external_id="arn:aws:s3:::alpha",
+            properties={"region": "us-east-1"},
+        )
+        await writer.upsert_finding(
+            finding_id="CSPM-AWS-S3-001-alpha",
+            rule_id="CSPM-AWS-S3-001",
+            severity="high",
+            affected_arns=["arn:aws:s3:::alpha"],
+        )
+        # Repeat — within-run dedup collapses the AFFECTS edge.
+        await writer.upsert_finding(
+            finding_id="CSPM-AWS-S3-001-alpha",
+            rule_id="CSPM-AWS-S3-001",
+            severity="high",
+            affected_arns=["arn:aws:s3:::alpha"],
+        )
+
+        resources = await store.list_entities_by_type(
+            tenant_id="cust_test", entity_type="cloud_resource"
+        )
+        assert [r.external_id for r in resources] == ["arn:aws:s3:::alpha"]
+        assert resources[0].properties["kind"] == "aws_s3_bucket"
+
+        findings = await store.list_entities_by_type(
+            tenant_id="cust_test", entity_type="misconfiguration_finding"
+        )
+        assert [f.external_id for f in findings] == ["CSPM-AWS-S3-001-alpha"]
+
+        # AFFECTS: finding → resource is traversable, exactly once (deduped).
+        neighbors = await store.neighbors(
+            tenant_id="cust_test", entity_id=findings[0].entity_id, depth=1
+        )
+        reached = [n.external_id for n in neighbors]
+        assert reached.count("arn:aws:s3:::alpha") == 1
+    finally:
+        await engine.dispose()
