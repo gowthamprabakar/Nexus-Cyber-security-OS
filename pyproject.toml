@@ -29,6 +29,7 @@ members = [
     "packages/agents/supervisor",
     "packages/agents/appsec",
     "packages/agents/sspm",
+    "packages/agents/aispm",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -103,6 +104,7 @@ files = [
     "packages/agents/curiosity/src",
     "packages/agents/appsec/src",
     "packages/agents/sspm/src",
+    "packages/agents/aispm/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
