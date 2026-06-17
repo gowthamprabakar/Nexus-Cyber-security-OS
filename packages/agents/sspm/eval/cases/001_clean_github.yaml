@@ -1,0 +1,20 @@
+case_id: 001_clean_github
+description: A well-configured GitHub org yields no findings.
+fixture:
+  github:
+    org: acme
+    two_factor_required: true
+    default_repository_permission: read
+    members_can_create_public_repos: false
+    repos:
+      - name: api
+        private: true
+        default_branch: main
+        protected: true
+        security_and_analysis:
+          secret_scanning: { status: enabled }
+          secret_scanning_push_protection: { status: enabled }
+          dependabot_security_updates: { status: enabled }
+expected:
+  finding_count: 0
+  by_type: {}

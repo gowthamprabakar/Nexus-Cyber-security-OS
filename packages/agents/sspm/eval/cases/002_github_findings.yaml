@@ -1,0 +1,28 @@
+case_id: 002_github_findings
+description: A GitHub org with 2FA off + a public repo with secret scanning disabled and an unprotected default branch.
+fixture:
+  github:
+    org: acme
+    two_factor_required: false
+    default_repository_permission: admin
+    members_can_create_public_repos: true
+    repos:
+      - name: web
+        private: false
+        default_branch: main
+        protected: false
+        security_and_analysis:
+          secret_scanning: { status: disabled }
+          secret_scanning_push_protection: { status: disabled }
+          dependabot_security_updates: { status: disabled }
+expected:
+  finding_count: 8
+  by_type:
+    sspm_github_org_2fa_disabled: 1
+    sspm_github_default_permission_permissive: 1
+    sspm_github_public_repo_creation_allowed: 1
+    sspm_github_repo_public: 1
+    sspm_github_secret_scanning_disabled: 1
+    sspm_github_push_protection_disabled: 1
+    sspm_github_dependabot_updates_disabled: 1
+    sspm_github_default_branch_unprotected: 1

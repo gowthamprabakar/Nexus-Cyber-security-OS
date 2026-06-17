@@ -2231,12 +2231,14 @@ source = { editable = "packages/agents/sspm" }
 dependencies = [
     { name = "httpx" },
     { name = "nexus-charter" },
+    { name = "nexus-eval-framework" },
     { name = "nexus-shared" },
     { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2245,8 +2247,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
+    { name = "nexus-eval-framework", editable = "packages/eval-framework" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
