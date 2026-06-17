@@ -1,6 +1,6 @@
 """Per-agent NLAH shim — delegates to `charter.nlah_loader` (ADR-007 v1.2).
 
-D.6 is the 9th agent shipped natively against v1.2 (after D.3 / F.6 /
+D.9 is the 9th agent shipped natively against v1.2 (after D.3 / F.6 /
 D.7 / D.4 / multi-cloud-posture / k8s-posture / D.5 / D.8).
 """
 

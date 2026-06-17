@@ -1,4 +1,4 @@
-"""Tests — D.6 ``ComplianceEvalRunner`` (Task 13).
+"""Tests — D.9 ``ComplianceEvalRunner`` (Task 13).
 
 Loads every YAML case in the package's ``eval/cases/`` directory and
 runs it through the runner. Mirrors D.8's eval-suite test shape:

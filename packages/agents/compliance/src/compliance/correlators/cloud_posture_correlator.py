@@ -39,13 +39,13 @@ emits one ComplianceFinding per (F.3 finding, CIS control) pair --
 the aggregator (Task 8) collapses across F.3 findings to produce a
 single per-control verdict.
 
-**Resource propagation.** D.6 carries forward F.3's ``resources``
+**Resource propagation.** D.9 carries forward F.3's ``resources``
 list verbatim so the compliance finding can be traced back to the
 exact AWS resources that failed the control.
 
 **Q6 reminder.** Descriptions are constructed from the bundled CIS
 control metadata (paraphrased, in-house). The source F.3 finding's
-title / description is NOT reproduced verbatim in D.6's output.
+title / description is NOT reproduced verbatim in D.9's output.
 """
 
 from __future__ import annotations

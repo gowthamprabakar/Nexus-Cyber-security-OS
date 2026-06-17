@@ -78,4 +78,4 @@ resources:
 
 1. Enable an MFA device for IAM user `alice` (console password is configured but MFA is not).
 2. Re-run the F.3 scan to confirm the finding is cleared.
-3. D.6 v0.2 will produce a PASS-finding when the control re-evaluates clean, suitable for auditor attestation export.
+3. D.9 v0.2 will produce a PASS-finding when the control re-evaluates clean, suitable for auditor attestation export.

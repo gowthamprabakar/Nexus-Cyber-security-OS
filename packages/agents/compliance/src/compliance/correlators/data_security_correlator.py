@@ -17,7 +17,7 @@ D.5 emits class_uid 2003 (re-uses F.3's ``build_finding``) with the
 ``s3_bucket_unencrypted``, ``s3_oversharing_iam``,
 ``s3_object_sensitive_in_untrusted_location``). The full
 ``DataSecurityFindingType.value`` lands in
-``evidence.source_finding_type`` but D.6 joins on
+``evidence.source_finding_type`` but D.9 joins on
 ``compliance.control`` for symmetry with Task 6.
 
 **Severity at emit time.** Same canonical
@@ -44,7 +44,7 @@ skipped. Filesystem I/O via ``asyncio.to_thread`` (ADR-005).
 CIS control metadata. Source D.5 finding's title / description NOT
 reproduced verbatim. **Classifier-matched substring posture from
 D.5's Q6**: D.5's findings carry classifier labels but NOT the
-matched substrings; D.6 inherits that posture by reading only
+matched substrings; D.9 inherits that posture by reading only
 structured fields.
 """
 
@@ -234,7 +234,7 @@ def _build_compliance_finding(
 def _project_resources(
     payload: dict[str, Any], *, envelope: NexusEnvelope
 ) -> list[AffectedResource]:
-    """Project D.5's OCSF ``resources`` into the D.6 AffectedResource shape.
+    """Project D.5's OCSF ``resources`` into the D.9 AffectedResource shape.
 
     Identical projection to Task 6's F.3 correlator -- both source
     agents emit the same OCSF v1.3 2003 resource shape because both

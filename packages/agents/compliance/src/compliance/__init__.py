@@ -1,4 +1,4 @@
-"""Nexus Compliance Agent — D.6 / Agent #13 under ADR-007.
+"""Nexus Compliance Agent — D.9 / Agent #13 under ADR-007.
 
 The third of the 7 unbuilt agents shipped under the 2026-05-20 Path-B-
 breadth-first operating rule. Maps sibling-agent findings (F.3 Cloud
@@ -29,12 +29,12 @@ Seven-stage pipeline:
 Additional frameworks (SOC2 / PCI-DSS / HIPAA / NIST 800-53), live
 F.6 audit-chain read, periodic posture deltas, PASS-finding emission
 for attestation export, and multi-tenant production are deferred per
-the 2026-05-20 version-roadmap (D.6 v0.2 through v0.5+).
+the 2026-05-20 version-roadmap (D.9 v0.2 through v0.5+).
 """
 
 from __future__ import annotations
 
-# compliance v0.2 (Cycle 9 — genuine D.6; Group D posture-class consumer #2, inherits the
+# compliance v0.2 (Cycle 9 — genuine D.9; Group D posture-class consumer #2, inherits the
 # k8s-posture Cycle 8 pattern) — Level 1 -> Level 2 INFRASTRUCTURE: full CIS family wiring
 # (CIS-AWS/Azure/GCP/K8s), PASS attestation alongside FAIL, multi-emitter consumption
 # (F.3 + D.5 + k8s-posture), continuous-monitoring infrastructure (scheduler + delta), and

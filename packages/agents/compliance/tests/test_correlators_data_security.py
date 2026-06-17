@@ -3,7 +3,7 @@
 Builds in-memory D.5 ``findings.json`` fixtures using F.3's
 ``build_finding`` (D.5 re-uses F.3's emit shape; ``compliance.control``
 carries the short D.5 rule_id like ``"s3_bucket_public"``). Asserts
-the emitted D.6 ``ComplianceFinding``s + forgiving-read posture.
+the emitted D.9 ``ComplianceFinding``s + forgiving-read posture.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Compliance Agent driver — wires charter + CIS loader + 2 correlators + aggregator + scorer + summarizer.
 
-Task 11 of the D.6 v0.1 plan. Mirrors D.8 Threat Intel's
-:mod:`threat_intel.agent` shape with the D.6-specific 7-stage layout
+Task 11 of the D.9 v0.1 plan. Mirrors D.8 Threat Intel's
+:mod:`threat_intel.agent` shape with the D.9-specific 7-stage layout
 (adds an AGGREGATE stage between CORRELATE and SCORE).
 
 Seven-stage pipeline (per the NLAH README):
@@ -75,7 +75,7 @@ DEFAULT_NLAH_VERSION = "0.1.0"
 
 
 def build_registry() -> ToolRegistry:
-    """Compose the tool universe available to the D.6 agent.
+    """Compose the tool universe available to the D.9 agent.
 
     Only the bundled CIS YAML reader is charter-registered. The two
     correlators (which read sibling workspaces) are called directly
@@ -191,8 +191,8 @@ async def run(
             scan_completed_at=datetime.now(UTC),
         )
         # F.3's FindingsReport.add_finding is typed against
-        # CloudPostureFinding; D.6 wraps the same OCSF dict in
-        # ComplianceFinding (which validates the D.6 regex). Append
+        # CloudPostureFinding; D.9 wraps the same OCSF dict in
+        # ComplianceFinding (which validates the D.9 regex). Append
         # the raw payload dict directly so the FindingsReport pydantic
         # serialisation stays clean.
         for f in scored:

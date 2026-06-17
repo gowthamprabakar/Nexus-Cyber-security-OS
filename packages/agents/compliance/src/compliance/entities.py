@@ -1,6 +1,6 @@
-"""ControlEntity / FrameworkEntity models for the D.6 Compliance SemanticStore writer.
+"""ControlEntity / FrameworkEntity models for the D.9 Compliance SemanticStore writer.
 
-Per Q3/Q5 of the D.6 v0.1 plan, the agent ships two pydantic entity
+Per Q3/Q5 of the D.9 v0.1 plan, the agent ships two pydantic entity
 models that mirror the framework + control structure of the bundled
 YAML:
 

@@ -1,7 +1,7 @@
 """Tests — ``compliance.summarizer`` (Task 10).
 
 Validates the deterministic markdown renderer's layout, severity
-ordering, per-section composition, and -- per Q6 of the D.6 plan --
+ordering, per-section composition, and -- per Q6 of the D.9 plan --
 the CIS Benchmarks® attribution footer is always emitted (including
 on empty reports).
 """
