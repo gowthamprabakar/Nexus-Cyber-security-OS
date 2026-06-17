@@ -4,6 +4,15 @@ Broadens v0.1's ~v1.5 subset to a **v1.8** control catalog: a reference map of k
 control ids → CIS v1.8 metadata (title + profile level + scored flag) so live findings can
 be enriched with the benchmark version + level. **Additive** — a lookup catalog, not a
 change to the v0.1 detectors / eval (WI-K5 byte-identical).
+
+v0.4 Stage 1.3 (CIS v2.0, decision #714b — "via kube-bench mappings"): this catalog +
+``BENCHMARK_VERSION`` are a **reference** for the v1.8 baseline; they are NOT consumed by
+the finding path. The agent's CIS findings are **version-agnostic passthrough** — the
+``kube_bench`` normalizer emits whatever ``control_id`` kube-bench reports, so when an
+operator runs kube-bench's **CIS v2.0** benchmark the v2.0 control ids flow through
+verbatim (no hardcoded v2.0 catalog — avoids transcribing CIS data, Layer 23). The
+passthrough is verified in ``test_normalizers_kube_bench`` (a control id outside this v1.8
+catalog flows through unchanged).
 """
 
 from __future__ import annotations
