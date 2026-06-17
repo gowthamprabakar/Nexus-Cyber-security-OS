@@ -1,9 +1,10 @@
 """SaaS Security Posture Management (SSPM) agent driver — D.10 / Agent under ADR-007.
 
-v0.4 Stage 2, PR1 (skeleton). Discovers SaaS application posture across an org's SaaS
-estate and emits OCSF v1.3 Compliance Findings (class_uid 2003, operator Q2). The
-DEPTH-FIRST connector set (operator Q1: GitHub-org + M365 + Slack) lands in PR2-4; the
-fleet-graph ``kg_writer`` (SaaS inventory on the coherent ADR-018 spine) in PR5.
+v0.4 Stage 2. Discovers SaaS application posture across an org's SaaS estate and emits
+OCSF v1.3 Compliance Findings (class_uid 2003, operator Q2). DEPTH-FIRST connector set
+(operator Q1: GitHub-org + M365 + Slack) — **GitHub-org wired (PR2)**; M365 + Slack land
+in PR3-4; the fleet-graph ``kg_writer`` (SaaS inventory on the coherent ADR-018 spine) in
+PR5.
 
 ADR-007 pattern check: the agent ``run`` signature converges across agents —
 ``(contract, *, llm_provider, ..., semantic_store)``. SSPM follows the reference shape.
@@ -21,18 +22,28 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from sspm import __version__ as agent_version
+from sspm.credentials import SaaSCredentialResolver
+from sspm.posture.github import evaluate_github_org
 from sspm.schemas import FindingsReport
+from sspm.tools.github_org import HttpTransport, httpx_transport, read_github_org
 
 DEFAULT_NLAH_VERSION = "0.1.0"
+
+#: Env var holding the GitHub PAT (resolved per call by SaaSCredentialResolver, never stored).
+_GITHUB_TOKEN_ENV = "NEXUS_SSPM_GITHUB_TOKEN"
 
 
 def build_registry() -> ToolRegistry:
     """Compose the tool universe available to this agent.
 
-    Empty in PR1 — the GitHub-org / M365 / Slack connector tools register here in PR2-4
-    (each ``cloud_calls``-budgeted so the Charter tracks SaaS API usage).
+    Each connector reader is ``cloud_calls``-budgeted so the Charter tracks SaaS API
+    usage. M365 + Slack readers register here in PR3-4.
     """
-    return ToolRegistry()
+    reg = ToolRegistry()
+    # One logical SaaS-org scan (org + repos + per-repo branch protection) → representative
+    # cloud cost (mirrors the k8s read_cluster_inventory single-invocation convention).
+    reg.register("read_github_org", read_github_org, version="0.4.0", cloud_calls=10)
+    return reg
 
 
 def _envelope(contract: ExecutionContract, *, correlation_id: str, model_pin: str) -> NexusEnvelope:
@@ -62,14 +73,22 @@ async def run(
     contract: ExecutionContract,
     *,
     llm_provider: LLMProvider | None = None,  # plumbed; not called in v0.4
+    github_org: str | None = None,
+    github_transport: HttpTransport | None = None,
+    github_max_repos: int = 100,
     semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the SSPM agent end-to-end under the runtime charter.
 
-    PR1 skeleton: no connectors are wired yet, so a run produces an empty (but valid)
-    ``findings.json`` + ``summary.md``. ``semantic_store`` is the opt-in fleet-graph sink
-    (default None inert) consumed by the PR5 ``kg_writer``; threaded now so the signature
-    is stable.
+    Args:
+        github_org: When set, scan this GitHub organization's posture (PR2 connector).
+            None skips the connector. PAT auth via ``SaaSCredentialResolver`` reads
+            ``$NEXUS_SSPM_GITHUB_TOKEN`` per call (never persisted).
+        github_transport: Injectable HTTP seam for the GitHub connector (tests pass a
+            deterministic fake). Default None → the live httpx-backed transport.
+        github_max_repos: Cap on repos enumerated for the GitHub scan.
+        semantic_store: opt-in fleet-graph sink (default None inert) consumed by the PR5
+            ``kg_writer``; threaded now so the signature is stable.
 
     Returns:
         The :class:`FindingsReport`. Side effects: writes ``findings.json`` + ``summary.md``
@@ -84,9 +103,8 @@ async def run(
 
     with correlation_scope(correlation_id), Charter(contract, tools=registry) as ctx:
         scan_started = datetime.now(UTC)
-        _ = _envelope(contract, correlation_id=correlation_id, model_pin=model_pin)
+        envelope = _envelope(contract, correlation_id=correlation_id, model_pin=model_pin)
 
-        # Connectors (PR2-4) ingest + normalize into OCSF 2003 findings here.
         report = FindingsReport(
             agent="sspm",
             agent_version=agent_version,
@@ -96,6 +114,24 @@ async def run(
             scan_completed_at=datetime.now(UTC),
         )
 
+        # Connector: GitHub-org (PR2). Routed through the charter proxy (budget + audit;
+        # call_tool audits only kwarg KEY names, so the resolver/transport objects — and
+        # the PAT resolved inside the connector — never enter the audit log).
+        if github_org is not None:
+            resolver = SaaSCredentialResolver(provider="github", env={"token": _GITHUB_TOKEN_ENV})
+            inventory = await ctx.call_tool(
+                "read_github_org",
+                org=github_org,
+                resolver=resolver,
+                transport=github_transport if github_transport is not None else httpx_transport(),
+                max_repos=github_max_repos,
+            )
+            for finding in evaluate_github_org(
+                inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        report.scan_completed_at = datetime.now(UTC)
         ctx.write_output("findings.json", report.model_dump_json(indent=2).encode("utf-8"))
         ctx.write_output("summary.md", _render_summary(report).encode("utf-8"))
         ctx.assert_complete()

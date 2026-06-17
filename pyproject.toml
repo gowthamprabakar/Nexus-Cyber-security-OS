@@ -69,6 +69,13 @@ ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101"]  # assert allowed in tests
+# SSPM GitHub connector: "secret_scanning" is a GitHub API field name and the token
+# *env-var name* is a source identifier — both trip S105/S106 (hardcoded-secret heuristic)
+# as false positives. The guard stays active on credentials.py (the real secret path).
+"packages/agents/sspm/src/sspm/agent.py" = ["S105"]
+"packages/agents/sspm/src/sspm/posture/github.py" = ["S105"]
+"packages/agents/sspm/tests/test_github_org.py" = ["S105"]
+"packages/agents/sspm/tests/test_github_posture.py" = ["S106"]
 
 [tool.mypy]
 python_version = "3.12"
