@@ -1,0 +1,23 @@
+case_id: 003_azure_vertex_findings
+description: Azure OpenAI public account + Vertex public endpoint.
+fixture:
+  azure:
+    subscription_id: sub-1
+    accounts:
+      - name: oai
+        public_network_access: true
+        network_default_allow: false
+        cmk_encrypted: true
+        local_auth_disabled: true
+  gcp:
+    project_id: proj-1
+    endpoints:
+      - name: ep
+        public: true
+        cmk_encrypted: true
+        psc_enabled: true
+expected:
+  finding_count: 2
+  by_type:
+    aispm_azureopenai_public_network_access: 1
+    aispm_vertex_endpoint_public: 1

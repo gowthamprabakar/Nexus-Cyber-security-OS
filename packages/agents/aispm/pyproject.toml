@@ -24,6 +24,9 @@ dev = [
     "aiosqlite>=0.20.0",
 ]
 
+[project.entry-points."nexus_eval_runners"]
+aispm = "aispm.eval_runner:AISPMEvalRunner"
+
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
