@@ -23,6 +23,7 @@ from shared.fabric.envelope import NexusEnvelope
 
 from sspm import __version__ as agent_version
 from sspm.credentials import SaaSCredentialResolver
+from sspm.kg_writer import KnowledgeGraphWriter
 from sspm.posture.github import evaluate_github_org
 from sspm.posture.m365 import evaluate_m365_tenant
 from sspm.posture.slack import evaluate_slack_workspace
@@ -110,15 +111,15 @@ async def run(
             per call (never persisted). The token identifies the workspace.
         slack_transport: Injectable HTTP seam for the Slack connector (tests pass a fake).
             Default None → the live httpx-backed transport.
-        semantic_store: opt-in fleet-graph sink (default None inert) consumed by the PR5
-            ``kg_writer``; threaded now so the signature is stable.
+        semantic_store: opt-in fleet-graph sink. When set, each connector's typed
+            inventory is written to the SaaS spine (SAAS_TENANT + OAUTH_APP + AUTHORIZED)
+            via ``KnowledgeGraphWriter``. Default None is inert → byte-identical offline.
 
     Returns:
         The :class:`FindingsReport`. Side effects: writes ``findings.json`` + ``summary.md``
         to the charter workspace and a hash-chained audit log.
     """
     del llm_provider  # reserved
-    del semantic_store  # PR5 kg_writer consumes this; threaded for signature stability
 
     registry = build_registry()
     model_pin = "deterministic"
@@ -137,6 +138,10 @@ async def run(
             scan_completed_at=datetime.now(UTC),
         )
 
+        # v0.4 PR5: opt-in fleet-graph sink. Inert when semantic_store is None (base-class
+        # no-op), so the offline default stays byte-identical. Reads typed inventories.
+        kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+
         # Connector: GitHub-org (PR2). Routed through the charter proxy (budget + audit;
         # call_tool audits only kwarg KEY names, so the resolver/transport objects — and
         # the PAT resolved inside the connector — never enter the audit log).
@@ -153,6 +158,7 @@ async def run(
                 inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_github(inventory)
 
         # Connector: Microsoft 365 (PR3). Same charter-proxy routing + secret safety.
         if m365_tenant is not None:
@@ -170,6 +176,7 @@ async def run(
                 m365_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_m365(m365_inventory)
 
         # Connector: Slack (PR4). Same charter-proxy routing + secret safety.
         if slack_workspace:
@@ -183,6 +190,7 @@ async def run(
                 slack_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
+            await kg.record_slack(slack_inventory)
 
         report.scan_completed_at = datetime.now(UTC)
         ctx.write_output("findings.json", report.model_dump_json(indent=2).encode("utf-8"))

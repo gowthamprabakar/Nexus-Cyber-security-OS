@@ -97,6 +97,43 @@ async def test_m365_connector_emits_findings(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_semantic_store_records_saas_spine(tmp_path: Path) -> None:
+    from charter.memory.models import Base
+    from charter.memory.semantic import SemanticStore
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        store = SemanticStore(async_sessionmaker(engine, expire_on_commit=False))
+        graph = _FakeGraph(
+            collections={"identity/conditionalAccessPolicies": []},
+            objects={"policies/identitySecurityDefaultsEnforcementPolicy": {"isEnabled": True}},
+        )
+        await run(
+            _contract(tmp_path), m365_tenant="contoso", m365_graph=graph, semantic_store=store
+        )
+        tenants = await store.list_entities_by_type(
+            tenant_id="cust_test", entity_type="saas_tenant"
+        )
+        assert [t.external_id for t in tenants] == ["m365:contoso"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_no_semantic_store_writes_no_graph(tmp_path: Path) -> None:
+    # Default (no store) is inert — the M365 connector still emits findings, no graph writes.
+    graph = _FakeGraph(
+        collections={"identity/conditionalAccessPolicies": []},
+        objects={"policies/identitySecurityDefaultsEnforcementPolicy": {"isEnabled": True}},
+    )
+    report = await run(_contract(tmp_path), m365_tenant="contoso", m365_graph=graph)
+    assert report.total == 1  # no conditional access; security defaults on
+
+
+@pytest.mark.asyncio
 async def test_slack_connector_emits_findings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
