@@ -25,9 +25,11 @@ from sspm import __version__ as agent_version
 from sspm.credentials import SaaSCredentialResolver
 from sspm.posture.github import evaluate_github_org
 from sspm.posture.m365 import evaluate_m365_tenant
+from sspm.posture.slack import evaluate_slack_workspace
 from sspm.schemas import FindingsReport
 from sspm.tools.github_org import HttpTransport, httpx_transport, read_github_org
 from sspm.tools.m365 import GraphClient, build_graph_client, read_m365_tenant
+from sspm.tools.slack import read_slack_workspace
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -35,6 +37,7 @@ DEFAULT_NLAH_VERSION = "0.1.0"
 _GITHUB_TOKEN_ENV = "NEXUS_SSPM_GITHUB_TOKEN"
 _M365_CLIENT_ID_ENV = "NEXUS_SSPM_M365_CLIENT_ID"
 _M365_CLIENT_SECRET_ENV = "NEXUS_SSPM_M365_CLIENT_SECRET"
+_SLACK_TOKEN_ENV = "NEXUS_SSPM_SLACK_TOKEN"
 
 
 def build_registry() -> ToolRegistry:
@@ -48,6 +51,7 @@ def build_registry() -> ToolRegistry:
     # (mirrors the k8s read_cluster_inventory single-invocation convention).
     reg.register("read_github_org", read_github_org, version="0.4.0", cloud_calls=10)
     reg.register("read_m365_tenant", read_m365_tenant, version="0.4.0", cloud_calls=10)
+    reg.register("read_slack_workspace", read_slack_workspace, version="0.4.0", cloud_calls=10)
     return reg
 
 
@@ -83,6 +87,8 @@ async def run(
     github_max_repos: int = 100,
     m365_tenant: str | None = None,
     m365_graph: GraphClient | None = None,
+    slack_workspace: bool = False,
+    slack_transport: HttpTransport | None = None,
     semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the SSPM agent end-to-end under the runtime charter.
@@ -99,6 +105,11 @@ async def run(
             ``$NEXUS_SSPM_M365_CLIENT_ID`` / ``_SECRET`` per call (never persisted).
         m365_graph: Injectable Microsoft Graph seam for the M365 connector (tests pass a
             fake ``GraphClient``). Default None → the live httpx-backed client.
+        slack_workspace: When True, scan the Slack workspace's posture (PR4 connector).
+            Bearer auth via ``SaaSCredentialResolver`` reads ``$NEXUS_SSPM_SLACK_TOKEN``
+            per call (never persisted). The token identifies the workspace.
+        slack_transport: Injectable HTTP seam for the Slack connector (tests pass a fake).
+            Default None → the live httpx-backed transport.
         semantic_store: opt-in fleet-graph sink (default None inert) consumed by the PR5
             ``kg_writer``; threaded now so the signature is stable.
 
@@ -157,6 +168,19 @@ async def run(
             )
             for finding in evaluate_m365_tenant(
                 m365_inventory, envelope=envelope, detected_at=scan_started
+            ):
+                report.add_finding(finding)
+
+        # Connector: Slack (PR4). Same charter-proxy routing + secret safety.
+        if slack_workspace:
+            resolver = SaaSCredentialResolver(provider="slack", env={"token": _SLACK_TOKEN_ENV})
+            slack_inventory = await ctx.call_tool(
+                "read_slack_workspace",
+                resolver=resolver,
+                transport=slack_transport if slack_transport is not None else httpx_transport(),
+            )
+            for finding in evaluate_slack_workspace(
+                slack_inventory, envelope=envelope, detected_at=scan_started
             ):
                 report.add_finding(finding)
 

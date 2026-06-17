@@ -76,6 +76,7 @@ ignore = ["E501"]  # line length handled by formatter
 "packages/agents/sspm/src/sspm/posture/github.py" = ["S105"]
 "packages/agents/sspm/tests/test_github_org.py" = ["S105"]
 "packages/agents/sspm/tests/test_github_posture.py" = ["S106"]
+"packages/agents/sspm/tests/test_slack.py" = ["S105"]  # token env-var name, not a secret
 
 [tool.mypy]
 python_version = "3.12"

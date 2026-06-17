@@ -30,7 +30,7 @@ def _contract(tmp_path: Path) -> ExecutionContract:
         budget=BudgetSpec(
             llm_calls=1, tokens=1, wall_clock_sec=60.0, cloud_api_calls=100, mb_written=10
         ),
-        permitted_tools=["read_github_org", "read_m365_tenant"],
+        permitted_tools=["read_github_org", "read_m365_tenant", "read_slack_workspace"],
         completion_condition="findings.json AND summary.md exist",
         escalation_rules=[],
         workspace=str(tmp_path / "ws"),
@@ -94,6 +94,41 @@ async def test_m365_connector_emits_findings(tmp_path: Path) -> None:
     types = {f["finding_info"]["types"][0] for f in doc["findings"]}
     assert "sspm_m365_security_defaults_disabled" in types
     assert "sspm_m365_no_conditional_access" in types
+
+
+@pytest.mark.asyncio
+async def test_slack_connector_emits_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("NEXUS_SSPM_SLACK_TOKEN", "xoxb-test")
+    routes = {
+        "https://slack.com/api/team.info": (
+            200,
+            {},
+            {"ok": True, "team": {"id": "T01", "name": "Acme"}},
+        ),
+        "https://slack.com/api/users.list?limit=200": (
+            200,
+            {},
+            {
+                "ok": True,
+                "members": [{"id": "U1", "is_restricted": True, "has_2fa": False}],
+                "response_metadata": {},
+            },
+        ),
+        "https://slack.com/api/admin.apps.approved.list?limit=100": (
+            200,
+            {},
+            {"ok": False, "error": "not_an_enterprise_install"},
+        ),
+    }
+    report = await run(_contract(tmp_path), slack_workspace=True, slack_transport=_FakeHttp(routes))
+    # 1 member without 2FA + 1 guest = 2 findings.
+    assert report.total == 2
+    doc = json.loads((tmp_path / "ws" / "findings.json").read_text())
+    types = {f["finding_info"]["types"][0] for f in doc["findings"]}
+    assert "sspm_slack_members_without_2fa" in types
+    assert "sspm_slack_external_guests" in types
 
 
 @pytest.mark.asyncio
