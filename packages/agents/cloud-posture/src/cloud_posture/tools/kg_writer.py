@@ -2,52 +2,49 @@
 
 Per the KG-loop-closure plan (2026-05-18) and the ADR-009 amendment of the
 same date: Cloud Posture's KG write path targets the platform's Postgres
-`SemanticStore` (the `entities` + `relationships` tables). The pre-existing
-Neo4j-backed writer at `cloud_posture/tools/neo4j_kg.py` is preserved
-DORMANT in the codebase — retained as the labelled door for the future
-Phase-2 Neo4j swap (depth >= 4 + > 1M edges/tenant per ADR-009). This
+``SemanticStore``. The pre-existing Neo4j-backed writer at
+``cloud_posture/tools/neo4j_kg.py`` is preserved DORMANT — the labelled door for
+the future Phase-2 Neo4j swap (depth >= 4 + > 1M edges/tenant per ADR-009). This
 file is the active writer.
 
-Class shape is intentionally identical to the dormant `neo4j_kg`
-`KnowledgeGraphWriter`: same class name, same method names, same parameter
-names. The constructor's first argument is renamed from `driver` to
-`semantic_store` (disclosed rename per ADR-010 condition 6). Callers
-inside the agent reach this writer through the `kg_upsert_asset` and
-`kg_upsert_finding` tool registrations whose action names are preserved
-verbatim — F.6 audit-chain consumers see the same vocabulary.
+v0.4 Stage 1 (operator decision #718-D1 / ADR-019): this writer is reparented
+onto :class:`charter.memory.kg_writer_base.KnowledgeGraphWriterBase` — the shared
+base every agent's ``kg_writer`` now subclasses (tenant scoping, within-run edge
+dedup, opt-in/inert). The node/edge vocabulary moves to the **ADR-018 catalogue**
+so Cloud Posture's resources are the SAME ``CLOUD_RESOURCE`` spine nodes that the
+D.1/D.2/D.4/D.5 writers' edges resolve against (operator decision: coherent spine):
 
-`SemanticStore.add_relationship` is INSERT-only — repeated calls on the
-same `(src_entity_id, dst_entity_id, relationship_type)` triple produce
-duplicate rows. Cypher `MERGE` collapsed those at the database. Here, we
-dedupe inside the writer: each instance keeps a per-finding `set[str]` of
-asset external_ids it has already related to that finding, and skips the
-`add_relationship` call when an arn is seen twice. Scope: this writer
-instance only (a single agent run). The substrate (`charter.memory`) is
-unmodified — we do not change `add_relationship` to upsert-by-tuple,
-which would violate the plan's substrate-sealed watch-item.
+- ``asset`` → :attr:`NodeCategory.CLOUD_RESOURCE` (``kind`` stays a property).
+- ``finding`` → :attr:`NodeCategory.MISCONFIGURATION_FINDING`.
+- ``AFFECTS`` → :attr:`EdgeType.AFFECTS`.
+
+Public method signatures (``upsert_asset`` / ``upsert_finding``) and the agent's
+tool action names (``kg_upsert_asset`` / ``kg_upsert_finding``) are unchanged, so
+F.6 audit-chain consumers see the same vocabulary and ``findings.json`` stays
+byte-identical (the eval back-compat gate). Behaviour is unchanged: the base's
+``(src, dst, edge)`` dedup is exactly the old per-finding ``(finding_id, arn)``
+dedup — same finding_id ⇒ same finding entity_id, same arn ⇒ same asset entity_id,
+so repeats collapse and cross-finding edges to a shared asset both land.
+
+The substrate (``charter.memory``) is unmodified — ``add_relationship`` stays
+INSERT-only; cross-RUN duplicate-edge dedup is the separate Stage 3 PR (#718-D3).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from charter.memory import SemanticStore
+from charter.memory.graph_types import EdgeType, NodeCategory
+from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
 
-class KnowledgeGraphWriter:
-    """Customer-scoped writer for assets, findings, and AFFECTS edges.
+class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
+    """Customer-scoped writer for resources, misconfigurations, and AFFECTS edges.
 
-    Mirrors the dormant `neo4j_kg.KnowledgeGraphWriter` class shape so the
-    agent's tool registry re-points at this class with no caller change.
-    Methods are `async` and side-effect-only; entity ids returned by the
-    underlying `SemanticStore` calls are tracked internally to wire the
-    AFFECTS relationship correctly, but are not exposed to callers.
+    Subclasses :class:`KnowledgeGraphWriterBase` (ADR-019); the constructor
+    (``semantic_store``, ``customer_id``) is inherited. Methods are ``async`` and
+    side-effect-only.
     """
-
-    def __init__(self, semantic_store: SemanticStore, customer_id: str) -> None:
-        self._semantic_store = semantic_store
-        self._customer_id = customer_id
-        self._related_arns_per_finding: dict[str, set[str]] = {}
 
     async def upsert_asset(
         self,
@@ -55,20 +52,16 @@ class KnowledgeGraphWriter:
         external_id: str,
         properties: dict[str, Any],
     ) -> None:
-        """Idempotent upsert of an asset entity.
+        """Idempotent upsert of a cloud-resource (spine) node.
 
-        The dormant Cypher used `kind` as part of the MERGE key. Here, asset
-        identity collapses to `(tenant_id, "asset", external_id)` — `kind`
-        moves from key to property. This preserves the cross-Cloud-Posture-run
-        invariant (one external_id == one asset entity) while staying within
-        the substrate's three-column composite key.
+        Asset identity collapses to ``(tenant_id, "cloud_resource", external_id)``;
+        ``kind`` moves from the dormant-Cypher MERGE key to a property. This is the
+        spine node the cross-agent edges (VULNERABLE_TO, HAS_ACCESS_TO, …) point at.
         """
-        merged: dict[str, Any] = {"kind": kind, **dict(properties)}
-        await self._semantic_store.upsert_entity(
-            tenant_id=self._customer_id,
-            entity_type="asset",
-            external_id=external_id,
-            properties=merged,
+        await self.upsert_node(
+            NodeCategory.CLOUD_RESOURCE,
+            external_id,
+            {"kind": kind, **dict(properties)},
         )
 
     async def upsert_finding(
@@ -78,39 +71,22 @@ class KnowledgeGraphWriter:
         severity: str,
         affected_arns: list[str],
     ) -> None:
-        """Idempotent upsert of a finding entity + AFFECTS edges per arn.
+        """Idempotent upsert of a misconfiguration-finding node + AFFECTS edges.
 
-        For each affected arn: ensures the asset entity exists (idempotent
-        on `(tenant_id, "asset", arn)`), then writes an AFFECTS edge from
-        the finding to the asset — unless this writer instance has already
-        related that arn to this finding, in which case the edge write is
-        skipped. The dedup prevents duplicate AFFECTS rows that would
-        otherwise accumulate when the agent revisits a finding within a
-        scan (or when a fixture replays the same finding twice in tests).
+        For each affected arn: ensures the ``CLOUD_RESOURCE`` spine node exists
+        (idempotent), then writes an ``AFFECTS`` edge from the finding to the
+        resource. The base's within-run ``(src, dst, edge)`` dedup skips a repeat
+        of the same ``(finding, resource)`` pair — preserving the old per-finding
+        dedup semantics that compensate for ``add_relationship`` being INSERT-only.
         """
-        finding_entity_id = await self._semantic_store.upsert_entity(
-            tenant_id=self._customer_id,
-            entity_type="finding",
-            external_id=finding_id,
-            properties={"rule_id": rule_id, "severity": severity},
+        finding_node = await self.upsert_node(
+            NodeCategory.MISCONFIGURATION_FINDING,
+            finding_id,
+            {"rule_id": rule_id, "severity": severity},
         )
-        if not affected_arns:
-            return
-
-        already_related = self._related_arns_per_finding.setdefault(finding_id, set())
         for arn in affected_arns:
-            if arn in already_related:
-                continue
-            asset_entity_id = await self._semantic_store.upsert_entity(
-                tenant_id=self._customer_id,
-                entity_type="asset",
-                external_id=arn,
-                properties={},
-            )
-            await self._semantic_store.add_relationship(
-                tenant_id=self._customer_id,
-                src_entity_id=finding_entity_id,
-                dst_entity_id=asset_entity_id,
-                relationship_type="AFFECTS",
-            )
-            already_related.add(arn)
+            asset_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, arn, {})
+            await self.add_edge(finding_node or "", asset_node or "", EdgeType.AFFECTS)
+
+
+__all__ = ["KnowledgeGraphWriter"]
