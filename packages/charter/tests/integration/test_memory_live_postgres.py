@@ -257,6 +257,88 @@ async def test_crud_round_trip_on_all_four_tables(service: MemoryService) -> Non
         assert {n.external_id for n in neighbors} == {"F-1"}
 
 
+@pytest.mark.asyncio
+async def test_add_relationship_cross_run_dedup_on_real_postgres(
+    service: MemoryService,
+) -> None:
+    """ADR-022 on real Postgres — the `pg_insert(...).on_conflict_do_nothing` path
+    (distinct from sqlite) collapses a re-written edge to one row, first-wins."""
+    async with service.session(tenant_id=_TENANT_A):
+        host_id = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="host", external_id="i-dedupe"
+        )
+        finding_id = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="finding", external_id="F-dedupe"
+        )
+        first = await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host_id,
+            dst_entity_id=finding_id,
+            relationship_type="AFFECTS",
+            properties={"severity": "high"},
+        )
+        # A second write of the same edge (different properties) is a dedup hit.
+        second = await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host_id,
+            dst_entity_id=finding_id,
+            relationship_type="AFFECTS",
+            properties={"severity": "low"},
+        )
+        assert second == first  # same relationship_id; no second row
+
+    async with service.session(tenant_id=_TENANT_A):
+        neighbors = await service.semantic.neighbors(
+            tenant_id=_TENANT_A, entity_id=host_id, depth=1
+        )
+        assert [n.external_id for n in neighbors] == ["F-dedupe"]  # exactly one edge
+
+
+@pytest.mark.asyncio
+async def test_get_relationships_from_on_real_postgres(service: MemoryService) -> None:
+    """ADR-022 edge accessor on real Postgres — outgoing edges, type filter, tenant scope."""
+    async with service.session(tenant_id=_TENANT_A):
+        host = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="host", external_id="i-edges"
+        )
+        finding = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="finding", external_id="F-edges"
+        )
+        cve = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="cve", external_id="CVE-edges"
+        )
+        await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host,
+            dst_entity_id=finding,
+            relationship_type="AFFECTS",
+        )
+        await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host,
+            dst_entity_id=cve,
+            relationship_type="VULNERABLE_TO",
+        )
+
+    async with service.session(tenant_id=_TENANT_A):
+        all_edges = await service.semantic.get_relationships_from(
+            tenant_id=_TENANT_A, src_entity_id=host
+        )
+        assert {(e.dst_entity_id, e.relationship_type) for e in all_edges} == {
+            (finding, "AFFECTS"),
+            (cve, "VULNERABLE_TO"),
+        }
+        affects = await service.semantic.get_relationships_from(
+            tenant_id=_TENANT_A, src_entity_id=host, edge_types=("AFFECTS",)
+        )
+        assert [e.dst_entity_id for e in affects] == [finding]
+
+    # Off-tenant read returns nothing (RLS + explicit tenant filter).
+    async with service.session(tenant_id=_TENANT_B):
+        off = await service.semantic.get_relationships_from(tenant_id=_TENANT_B, src_entity_id=host)
+        assert off == []
+
+
 # ---------------------------- pgvector ANN ----------------------------
 
 

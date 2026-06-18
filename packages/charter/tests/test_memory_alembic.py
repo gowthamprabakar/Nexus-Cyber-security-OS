@@ -174,6 +174,64 @@ def test_upgrade_head_declares_dialect_portable_indexes(sqlite_url: str) -> None
     } <= relationships_idx
 
 
+def test_upgrade_head_declares_relationships_unique_edge_index(sqlite_url: str) -> None:
+    """0004 (ADR-022) — the cross-run dedup UNIQUE index materializes."""
+    from alembic import command
+
+    command.upgrade(_alembic_config_for(sqlite_url), "head")
+
+    engine = create_engine(sqlite_url)
+    insp = inspect(engine)
+    edge_idx = {i["name"]: i for i in insp.get_indexes("relationships")}
+    assert "uq_relationships_edge" in edge_idx
+    idx = edge_idx["uq_relationships_edge"]
+    assert idx["unique"]  # sqlite reports 1, postgres True
+    assert idx["column_names"] == [
+        "tenant_id",
+        "src_entity_id",
+        "dst_entity_id",
+        "relationship_type",
+    ]
+
+
+def test_migration_0004_back_dedups_existing_duplicate_edges(sqlite_url: str) -> None:
+    """0004 step 1 — upgrade to 0003, insert duplicate edges, upgrade to head:
+    the back-dedup keeps the lowest relationship_id and the UNIQUE index applies."""
+    from alembic import command
+    from sqlalchemy import text
+
+    cfg = _alembic_config_for(sqlite_url)
+    command.upgrade(cfg, "0003_audit_events")  # pre-UNIQUE schema
+
+    engine = create_engine(sqlite_url)
+    with engine.begin() as conn:
+        for ext in ("a", "b"):
+            conn.execute(
+                text(
+                    "INSERT INTO entities (entity_id, tenant_id, entity_type, external_id, "
+                    "properties) VALUES (:eid, 't', 'host', :ext, '{}')"
+                ),
+                {"eid": f"E{ext}", "ext": ext},
+            )
+        # Three copies of the SAME edge (the cross-run duplication bug).
+        for _ in range(3):
+            conn.execute(
+                text(
+                    "INSERT INTO relationships (tenant_id, src_entity_id, dst_entity_id, "
+                    "relationship_type, properties) VALUES ('t', 'Ea', 'Eb', 'AFFECTS', '{}')"
+                )
+            )
+        rows_before = conn.execute(text("SELECT COUNT(*) FROM relationships")).scalar_one()
+        min_id = conn.execute(text("SELECT MIN(relationship_id) FROM relationships")).scalar_one()
+    assert rows_before == 3
+
+    command.upgrade(cfg, "head")  # runs the back-dedup + adds the UNIQUE index
+
+    with engine.begin() as conn:
+        remaining = conn.execute(text("SELECT relationship_id FROM relationships")).scalars().all()
+    assert remaining == [min_id]  # exactly one row, the first-written id survives
+
+
 def test_upgrade_head_declares_foreign_keys_with_cascade(sqlite_url: str) -> None:
     from alembic import command
 
