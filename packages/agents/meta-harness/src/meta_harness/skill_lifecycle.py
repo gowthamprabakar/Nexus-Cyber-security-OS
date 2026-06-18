@@ -45,10 +45,13 @@ import traceback
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from charter.audit import AuditLog
 from charter.llm import LLMProvider
+
+if TYPE_CHECKING:
+    from charter.memory.semantic import SemanticStore
 from eval_framework.cases import load_cases
 from eval_framework.runner import EvalRunner
 from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
@@ -88,7 +91,7 @@ from meta_harness.skill_registry import (
     save_skill_class_registry,
 )
 from meta_harness.skill_triggers import SkillTrigger, detect_skill_trigger
-from meta_harness.skill_writer import write_skill_candidate
+from meta_harness.skill_writer import compose_skill_prompt, write_skill_candidate
 
 _LOG = logging.getLogger(__name__)
 
@@ -192,6 +195,41 @@ async def _adjudicate_dspy_candidate(
     return None
 
 
+async def _record_skill_trace(
+    semantic_store: SemanticStore | None,
+    *,
+    customer_id: str,
+    agent_id: str,
+    candidate: SkillCandidate,
+    trigger: SkillTrigger,
+) -> None:
+    """Persist a deployed skill's originating trace (T2 / ADR-021).
+
+    Best-effort: the skill is already deployed, so a store failure must never fail the
+    run — it's logged and swallowed. Inert when no store is injected.
+    """
+    if semantic_store is None:
+        return
+    from charter.memory.skill_trace import SkillTraceStore
+
+    try:
+        _system, trace = compose_skill_prompt(trigger)
+        await SkillTraceStore(semantic_store, customer_id).record_trace(
+            agent_id=agent_id,
+            skill_id=candidate.skill_id,
+            category=candidate.skill.category,
+            trace=trace,
+            audit_hashes=tuple(trigger.audit_entry_hashes),
+        )
+    except Exception:  # best-effort — never crash a successful deploy
+        _LOG.warning(
+            "skill_trace.record_failed agent_id=%s skill_id=%s",
+            agent_id,
+            candidate.skill_id,
+            exc_info=True,
+        )
+
+
 async def run_skill_lifecycle(
     *,
     scorecards: list[Scorecard],
@@ -203,14 +241,18 @@ async def run_skill_lifecycle(
     llm_provider: LLMProvider | None = None,
     eval_runner_loader: EvalRunnerLoader | None = None,
     dspy_candidate_factory: DSPyCandidateFactory | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> SkillLifecycleSummary:
     """Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE.
 
     Returns an empty summary (v0.1-equivalent shape) when any of the
     three lifecycle inputs is None. With all three provided, walks each
     successful scorecard and runs the per-agent lifecycle.
+
+    ``semantic_store`` (T2 / Phase 4a-2): when set, each deployed skill's originating
+    trace is persisted via ``SkillTraceStore`` (ADR-021) so future DSPy compilations
+    assemble multi-example trainsets. None is inert (no graph writes).
     """
-    del customer_id  # currently unused; reserved for per-tenant routing post-SET-LOCAL fix
     if audit_chain_loader is None or llm_provider is None or eval_runner_loader is None:
         return SkillLifecycleSummary()
 
@@ -326,6 +368,15 @@ async def run_skill_lifecycle(
             emit_skill_deployed(audit_log, decision=decision)
             deployments.append(decision)
             save_skill_class_registry(registry, workspace_root=workspace_root)
+            # T2 (Phase 4a-2): persist the originating trace so future DSPy
+            # compilations assemble multi-example trainsets (ADR-021). Best-effort.
+            await _record_skill_trace(
+                semantic_store,
+                customer_id=customer_id,
+                agent_id=scorecard.agent_id,
+                candidate=candidate,
+                trigger=trigger,
+            )
         else:
             # New class — operator approval required. Write notification
             # markdown + record skill_id for the report's pending list.

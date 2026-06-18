@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -565,6 +566,114 @@ async def test_pipeline_ordering_shadow_exists_before_handoff_report(
     # Stage 6 + 7 produced a candidate notification (new class path).
     notifications = list(tmp_path.glob("skill_candidate_*.md"))
     assert len(notifications) == 1
+
+
+@dataclass
+class _Row:
+    properties: dict[str, Any]
+
+
+class _InMemorySemanticStore:
+    """Faithful in-memory ``SemanticStore`` double — just enough for ``SkillTraceStore``.
+
+    ``upsert_entity`` is idempotent on ``(tenant_id, entity_type, external_id)`` and
+    ``list_entities_by_type`` filters by ``(tenant_id, entity_type)`` — the exact contract
+    T2's record-at-deploy + trainset-from-store paths exercise.
+    """
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str, str], _Row] = {}
+
+    async def upsert_entity(
+        self, *, tenant_id: str, entity_type: str, external_id: str, properties: dict[str, Any]
+    ) -> str:
+        key = (tenant_id, entity_type, external_id)
+        self.rows[key] = _Row(properties=dict(properties))
+        return f"{entity_type}:{external_id}"
+
+    async def list_entities_by_type(self, *, tenant_id: str, entity_type: str) -> list[_Row]:
+        return [
+            row for (t, et, _eid), row in self.rows.items() if t == tenant_id and et == entity_type
+        ]
+
+
+@pytest.mark.asyncio
+async def test_run_skill_lifecycle_auto_deploy_records_skill_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T2 (Phase 4a-2): an auto-deployed skill persists its originating trace.
+
+    This is the record-at-deploy half of the GEPA un-starve: the next compilation's
+    ``build_compilation_trainset_from_store`` can read this back as an N-th example.
+    """
+    monkeypatch.setattr("meta_harness.skill_lifecycle.load_cases", lambda _path: _two_pass_cases())
+    registry = register_class(
+        SkillClassRegistry(),
+        agent_id="investigation",
+        category="iam-privesc",
+        skill_id="iam-privesc/seed",
+        tool_sequence_hash="hash_seed",
+        approved_at=_AT,
+    )
+    save_skill_class_registry(registry, workspace_root=tmp_path)
+
+    store = _InMemorySemanticStore()
+    summary = await run_skill_lifecycle(
+        scorecards=[_scorecard()],
+        customer_id="acme",
+        run_id="r1",
+        workspace_root=tmp_path,
+        cases_resolver=_cases_resolver(tmp_path),
+        audit_chain_loader=_trigger_worthy_chain,
+        llm_provider=_fake_llm(),
+        eval_runner_loader=_passing_runner_factory,
+        semantic_store=store,  # type: ignore[arg-type]
+    )
+    assert summary.deployed_count == 1
+    deployed_skill_id = summary.deployments[0].skill_id
+
+    # The deploy path recorded the originating trace, tenant-scoped, keyed (agent, skill).
+    traces = store.rows
+    assert len(traces) == 1
+    ((tenant, entity_type, external_id), row) = next(iter(traces.items()))
+    assert tenant == "acme"
+    assert entity_type == "skill_trace"
+    assert external_id == f"investigation:{deployed_skill_id}"
+    assert row.properties["agent_id"] == "investigation"
+    assert row.properties["category"] == "iam-privesc"
+    assert row.properties["trace"]  # non-empty composed user-prompt
+
+
+@pytest.mark.asyncio
+async def test_run_skill_lifecycle_no_store_records_no_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backwards-compat: without a ``semantic_store`` the deploy path stays byte-identical
+    (inert SkillTraceStore → no persistence, no crash)."""
+    monkeypatch.setattr("meta_harness.skill_lifecycle.load_cases", lambda _path: _two_pass_cases())
+    registry = register_class(
+        SkillClassRegistry(),
+        agent_id="investigation",
+        category="iam-privesc",
+        skill_id="iam-privesc/seed",
+        tool_sequence_hash="hash_seed",
+        approved_at=_AT,
+    )
+    save_skill_class_registry(registry, workspace_root=tmp_path)
+
+    summary = await run_skill_lifecycle(
+        scorecards=[_scorecard()],
+        customer_id="acme",
+        run_id="r1",
+        workspace_root=tmp_path,
+        cases_resolver=_cases_resolver(tmp_path),
+        audit_chain_loader=_trigger_worthy_chain,
+        llm_provider=_fake_llm(),
+        eval_runner_loader=_passing_runner_factory,
+    )
+    assert summary.deployed_count == 1  # deploy still happens; just no trace persisted
 
 
 # Silence asyncio.create_task warnings on slow test infra
