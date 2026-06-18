@@ -70,6 +70,44 @@ class EntityRow:
         self.created_at = created_at
 
 
+class RelationshipRow:
+    """Read-only DTO for a directed edge (`src --type--> dst`).
+
+    Returned by `get_relationships_from` so path consumers (e.g. the meta-harness
+    `kg_query` attack-path reconstruction) can walk edges — `neighbors` returns only
+    reachable *entities* and discards the edges that connect them.
+    """
+
+    __slots__ = (
+        "created_at",
+        "dst_entity_id",
+        "properties",
+        "relationship_id",
+        "relationship_type",
+        "src_entity_id",
+        "tenant_id",
+    )
+
+    def __init__(
+        self,
+        *,
+        relationship_id: int,
+        tenant_id: str,
+        src_entity_id: str,
+        dst_entity_id: str,
+        relationship_type: str,
+        properties: dict[str, Any],
+        created_at: datetime,
+    ) -> None:
+        self.relationship_id = relationship_id
+        self.tenant_id = tenant_id
+        self.src_entity_id = src_entity_id
+        self.dst_entity_id = dst_entity_id
+        self.relationship_type = relationship_type
+        self.properties = properties
+        self.created_at = created_at
+
+
 class SemanticStore:
     """Typed async accessor over `entities` + `relationships`."""
 
@@ -270,6 +308,35 @@ class SemanticStore:
             rows = (await session.execute(entities_stmt)).scalars().all()
             return [self._row(m) for m in rows]
 
+    async def get_relationships_from(
+        self,
+        *,
+        tenant_id: str,
+        src_entity_id: str,
+        edge_types: tuple[str, ...] | None = None,
+    ) -> list[RelationshipRow]:
+        """Return a node's **outgoing edges** (optionally filtered by type).
+
+        The minimal edge accessor path consumers need: `neighbors` returns reachable
+        entities but discards the connecting edges, so attack-path reconstruction
+        (meta-harness `kg_query`, ADR-022) walks edges through this instead. Read-only;
+        tenant-scoped per ADR-007 — never returns another tenant's edges. The traversal
+        logic (BFS / depth cap) stays in the consumer; this is a single-hop accessor.
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id must be a non-empty string")
+        if not src_entity_id:
+            raise ValueError("src_entity_id must be a non-empty string")
+        stmt = select(RelationshipModel).where(
+            RelationshipModel.tenant_id == tenant_id,
+            RelationshipModel.src_entity_id == src_entity_id,
+        )
+        if edge_types is not None:
+            stmt = stmt.where(RelationshipModel.relationship_type.in_(edge_types))
+        async with self._session_factory() as session:
+            models = (await session.execute(stmt)).scalars().all()
+            return [self._edge_row(m) for m in models]
+
     async def list_entities_by_type(
         self,
         *,
@@ -312,5 +379,17 @@ class SemanticStore:
             created_at=model.created_at,
         )
 
+    @staticmethod
+    def _edge_row(model: RelationshipModel) -> RelationshipRow:
+        return RelationshipRow(
+            relationship_id=model.relationship_id,
+            tenant_id=model.tenant_id,
+            src_entity_id=model.src_entity_id,
+            dst_entity_id=model.dst_entity_id,
+            relationship_type=model.relationship_type,
+            properties=dict(model.properties),
+            created_at=model.created_at,
+        )
 
-__all__ = ["MAX_TRAVERSAL_DEPTH", "EntityRow", "SemanticStore"]
+
+__all__ = ["MAX_TRAVERSAL_DEPTH", "EntityRow", "RelationshipRow", "SemanticStore"]

@@ -1,4 +1,4 @@
-# ADR-022 — Cross-run edge dedup: UNIQUE index on `relationships`
+# ADR-022 — Cross-run edge dedup + edge read accessor on `relationships`
 
 - **Status:** **proposed**
 - **Date:** 2026-06-18
@@ -18,9 +18,16 @@ KG-loop debt. `KnowledgeGraphWriterBase`'s own docstring already named a **DB UN
 as the intended cross-run backstop; this ADR lands it. v0.4 Stage 3 (Option A — extend the
 Postgres `SemanticStore`, no new datastore) is the authorized point to touch the substrate.
 
+This ADR also lands the minimal **edge read accessor** the Stage 3 PR2 `kg_query` attack-path
+consumer needs. `SemanticStore.neighbors` returns reachable _entities_ and discards the edges that
+connect them, so path reconstruction has no public surface to walk. Per #718 Q4, a new public read
+method rides this per-PR-review substrate PR (the path-finding _logic_ stays in the meta-harness
+consumer; only the single-hop accessor is substrate).
+
 ## Decision
 
-Add a **cross-run dedup key** on `relationships` and make `add_relationship` idempotent against it.
+Add a **cross-run dedup key** on `relationships`, make `add_relationship` idempotent against it,
+and add a read-only outgoing-edge accessor.
 
 1. **Key (Q2).** Uniqueness is `(tenant_id, src_entity_id, dst_entity_id, relationship_type)`.
    `properties` are **excluded** — exactly the within-run base key `(src, dst, edge)`, tenant-scoped.
@@ -45,6 +52,13 @@ Add a **cross-run dedup key** on `relationships` and make `add_relationship` ide
    first-written edge — matches first-wins), then creates the UNIQUE index. One-time, portable SQL
    (`DELETE … WHERE relationship_id NOT IN (SELECT MIN(...) GROUP BY …)`); lossless except for the
    discarded duplicates' properties.
+
+5. **Edge read accessor (Q4).** `get_relationships_from(*, tenant_id, src_entity_id,
+edge_types=None) -> list[RelationshipRow]` returns a node's **outgoing edges** (optional type
+   filter), tenant-scoped (ADR-007). `RelationshipRow` is a read-only DTO
+   (`relationship_id`, `src`, `dst`, `type`, `properties`, `created_at`). It is a **single-hop**
+   accessor — no traversal, no depth logic; the meta-harness `kg_query` (PR2) does the BFS / path
+   reconstruction over it (and uses `neighbors` for blast-radius). Read-only API, no schema change.
 
 ## Consequences
 
