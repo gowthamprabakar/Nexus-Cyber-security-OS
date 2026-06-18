@@ -1,4 +1,4 @@
-"""Native GCP rule engine — evaluation + OCSF 2003 emission (D.5 v0.2 Task 11).
+"""Native GCP rule engine — evaluation + OCSF 2003 emission (D.15 v0.2 Task 11).
 
 Parallels the Azure engine (Task 10), GCP-native (Q1; the cloud-agnostic engine
 is a D.2 hoist candidate). The existing IAM-binding rules in `tools/gcp_iam.py`

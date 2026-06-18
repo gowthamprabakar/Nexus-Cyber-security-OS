@@ -1,4 +1,4 @@
-"""D.5 GCP credential-resolution seam (v0.2 Task 6).
+"""D.15 GCP credential-resolution seam (v0.2 Task 6).
 
 Mirrors the **contract** of `cloud_posture.CredentialResolver` (Q1 — same shape,
 GCP-native; literal charter hoist deferred to D.2 per ADR-007). The substrate seal

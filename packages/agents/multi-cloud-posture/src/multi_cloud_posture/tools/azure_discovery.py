@@ -1,4 +1,4 @@
-"""D.5 Azure subscription + region discovery (v0.2 Task 3).
+"""D.15 Azure subscription + region discovery (v0.2 Task 3).
 
 Analog to `cloud_posture`'s account/region discovery (Q1 — Azure-native shape).
 **Current-subscription only (Q6** — multi-subscription / management-group /

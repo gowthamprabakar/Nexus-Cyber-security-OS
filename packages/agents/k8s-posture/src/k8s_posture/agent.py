@@ -35,6 +35,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
@@ -44,11 +45,13 @@ from k8s_posture.isolation import (
     assert_single_cluster_context,
     resolve_cluster_context,
 )
+from k8s_posture.kg_writer import KnowledgeGraphWriter
 from k8s_posture.normalizers.kube_bench import normalize_kube_bench
 from k8s_posture.normalizers.manifest import normalize_manifest
 from k8s_posture.normalizers.polaris import normalize_polaris
 from k8s_posture.schemas import FindingsReport
 from k8s_posture.summarizer import render_summary
+from k8s_posture.tools.cluster_inventory import read_cluster_inventory
 from k8s_posture.tools.cluster_workloads import read_cluster_workloads
 from k8s_posture.tools.kube_bench import KubeBenchFinding, read_kube_bench
 from k8s_posture.tools.manifests import ManifestFinding, read_manifests
@@ -67,6 +70,9 @@ def build_registry() -> ToolRegistry:
     # calls so the Charter budget tracks it (kube-bench/polaris/manifests are all
     # filesystem reads).
     reg.register("read_cluster_workloads", read_cluster_workloads, version="0.2.0", cloud_calls=1)
+    # v0.4 Stage 1.3 — live cluster inventory (namespaces + service accounts + RBAC) for
+    # the fleet graph. cloud_calls=1 (one logical tool invocation; several list calls).
+    reg.register("read_cluster_inventory", read_cluster_inventory, version="0.4.0", cloud_calls=1)
     return reg
 
 
@@ -96,6 +102,7 @@ async def run(
     kubeconfig: Path | str | None = None,
     in_cluster: bool = False,
     cluster_namespace: str | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Kubernetes Posture Agent end-to-end under the runtime charter.
 
@@ -116,6 +123,13 @@ async def run(
         cluster_namespace: Optional namespace scope for live-cluster ingest (Q3).
             `None` → cluster-wide list APIs; a string → namespace-scoped APIs.
             Only honoured when `kubeconfig` or `in_cluster` is set.
+        semantic_store: v0.4 Stage 1.3 (D.6) opt-in fleet-graph sink. When set AND a
+            live cluster source (`kubeconfig` / `in_cluster`) is configured, the cluster
+            inventory (namespaces + service accounts + RBAC, plus the IRSA bridge from a
+            ServiceAccount to its assumed IAM role) is discovered via
+            `read_cluster_inventory` and written via `KnowledgeGraphWriter`. Default None
+            is inert — no graph writes, `findings.json` byte-identical. Offline
+            feed/manifest scans have no cluster to enumerate, so nothing is written.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -165,6 +179,23 @@ async def run(
             in_cluster=in_cluster,
             cluster_namespace=cluster_namespace,
         )
+
+        # v0.4 Stage 1.3: discover the live cluster inventory (namespaces + service
+        # accounts + RBAC) and write it to the fleet graph, including the IRSA bridge
+        # (ServiceAccount -> assumed IAM role IDENTITY node — the same node D.2 writes).
+        # Opt-in + live-only: runs only when a SemanticStore is injected AND a live
+        # cluster source is configured (offline feed/manifest scans have no cluster to
+        # enumerate). Default None is inert, so findings.json + report.md stay
+        # byte-identical.
+        if semantic_store is not None and (kubeconfig is not None or in_cluster):
+            inventory = await ctx.call_tool(
+                "read_cluster_inventory",
+                kubeconfig=kubeconfig,
+                in_cluster=in_cluster,
+                cluster_id=_cluster_context,
+            )
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record_inventory(inventory)
 
         # Stage 2/3: NORMALIZE + SCORE.
         kb_findings = normalize_kube_bench(

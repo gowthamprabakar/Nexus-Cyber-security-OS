@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 4 — region-scoping precedence tests (Pattern C, in-package)."""
+"""D.15 v0.2 Task 4 — region-scoping precedence tests (Pattern C, in-package)."""
 
 from __future__ import annotations
 

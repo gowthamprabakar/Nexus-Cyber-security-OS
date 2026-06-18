@@ -1,6 +1,6 @@
 """Stage-4 AGGREGATE — per-control PASS/FAIL roll-up.
 
-Per Q4 of the D.6 v0.1 plan: the Stage-3 correlators (Tasks 6 + 7)
+Per Q4 of the D.9 v0.1 plan: the Stage-3 correlators (Tasks 6 + 7)
 emit one ``ComplianceFinding`` per *(source-finding, CIS-control)*
 pair. The aggregator collapses those into **one finding per
 (control, status-change) tuple** so downstream consumers (Stage 5

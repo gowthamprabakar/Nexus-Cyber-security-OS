@@ -45,10 +45,13 @@ import traceback
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from charter.audit import AuditLog
 from charter.llm import LLMProvider
+
+if TYPE_CHECKING:
+    from charter.memory.semantic import SemanticStore
 from eval_framework.cases import load_cases
 from eval_framework.runner import EvalRunner
 from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
@@ -59,7 +62,6 @@ from meta_harness.audit_emit import (
     emit_skill_eval_gate_completed,
     emit_skill_rejected,
 )
-from meta_harness.dspy_skill_creator import adjudicate_pass_rates
 from meta_harness.eval.batch import CasesRootResolver
 from meta_harness.schemas import (
     DeploymentDecision,
@@ -82,13 +84,18 @@ from meta_harness.skill_eval_gate import (
     cache_eval_gate_result,
     run_skill_eval_gate,
 )
-from meta_harness.skill_format import write_skill_md
+from meta_harness.skill_format import serialize_skill_md, write_skill_md
+from meta_harness.skill_judge import (
+    JudgeVerdict,
+    adjudicate_with_judge,
+    judge_skill_candidates,
+)
 from meta_harness.skill_registry import (
     load_skill_class_registry,
     save_skill_class_registry,
 )
 from meta_harness.skill_triggers import SkillTrigger, detect_skill_trigger
-from meta_harness.skill_writer import write_skill_candidate
+from meta_harness.skill_writer import compose_skill_prompt, write_skill_candidate
 
 _LOG = logging.getLogger(__name__)
 
@@ -138,6 +145,7 @@ async def _adjudicate_dspy_candidate(
     eval_runner_loader: EvalRunnerLoader,
     llm_provider: LLMProvider,
     audit_log: AuditLog,
+    enable_llm_judge: bool = False,
 ) -> tuple[SkillCandidate, EvalGateResult] | None:
     """Eval-gate the DSPy candidate and pick the winner vs the legacy result (Q3).
 
@@ -172,16 +180,31 @@ async def _adjudicate_dspy_candidate(
         agent_id=scorecard.agent_id,
         skill_id=dspy_candidate.skill_id,
     )
-    _, meta = adjudicate_pass_rates(
+    # Phase 2: the LLM-judge is ADDITIVE — consulted only on a pass-rate tie (the region the
+    # deterministic floor leaves ambiguous) and only able to break it toward DSPy. A pass-rate
+    # win/loss is decided without the judge (pass-rate stays the hard floor). Default-OFF.
+    verdict: JudgeVerdict | None = None
+    is_tie = dspy_eval.candidate_pass_rate == legacy_eval_result.candidate_pass_rate
+    if enable_llm_judge and is_tie:
+        verdict = await judge_skill_candidates(
+            llm_provider,
+            legacy_skill_md=serialize_skill_md(legacy_candidate.skill),
+            dspy_skill_md=serialize_skill_md(dspy_candidate.skill),
+            agent_id=scorecard.agent_id,
+            category=legacy_candidate.skill.category,
+        )
+    _, meta = adjudicate_with_judge(
         legacy_eval_result.candidate_pass_rate,
         dspy_eval.candidate_pass_rate,
         legacy_candidate.skill_id,
         dspy_candidate.skill_id,
+        verdict=verdict,
     )
     _LOG.info(
-        "SKILL_CREATE adjudication agent_id=%s winner=%s legacy=%.3f dspy=%.3f delta=%.3f",
+        "SKILL_CREATE adjudication agent_id=%s winner=%s via=%s legacy=%.3f dspy=%.3f delta=%.3f",
         scorecard.agent_id,
         meta["winner"],
+        meta["adjudication"],
         meta["legacy_pass_rate"],
         meta["dspy_pass_rate"],
         meta["delta"],
@@ -190,6 +213,41 @@ async def _adjudicate_dspy_candidate(
         return dspy_candidate, dspy_eval  # DSPy SKILL.md already at canonical path
     _restore_legacy_skill_md(legacy_candidate)  # legacy wins → undo factory overwrite
     return None
+
+
+async def _record_skill_trace(
+    semantic_store: SemanticStore | None,
+    *,
+    customer_id: str,
+    agent_id: str,
+    candidate: SkillCandidate,
+    trigger: SkillTrigger,
+) -> None:
+    """Persist a deployed skill's originating trace (T2 / ADR-021).
+
+    Best-effort: the skill is already deployed, so a store failure must never fail the
+    run — it's logged and swallowed. Inert when no store is injected.
+    """
+    if semantic_store is None:
+        return
+    from charter.memory.skill_trace import SkillTraceStore
+
+    try:
+        _system, trace = compose_skill_prompt(trigger)
+        await SkillTraceStore(semantic_store, customer_id).record_trace(
+            agent_id=agent_id,
+            skill_id=candidate.skill_id,
+            category=candidate.skill.category,
+            trace=trace,
+            audit_hashes=tuple(trigger.audit_entry_hashes),
+        )
+    except Exception:  # best-effort — never crash a successful deploy
+        _LOG.warning(
+            "skill_trace.record_failed agent_id=%s skill_id=%s",
+            agent_id,
+            candidate.skill_id,
+            exc_info=True,
+        )
 
 
 async def run_skill_lifecycle(
@@ -203,14 +261,19 @@ async def run_skill_lifecycle(
     llm_provider: LLMProvider | None = None,
     eval_runner_loader: EvalRunnerLoader | None = None,
     dspy_candidate_factory: DSPyCandidateFactory | None = None,
+    semantic_store: SemanticStore | None = None,
+    enable_llm_judge: bool = False,
 ) -> SkillLifecycleSummary:
     """Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE.
 
     Returns an empty summary (v0.1-equivalent shape) when any of the
     three lifecycle inputs is None. With all three provided, walks each
     successful scorecard and runs the per-agent lifecycle.
+
+    ``semantic_store`` (T2 / Phase 4a-2): when set, each deployed skill's originating
+    trace is persisted via ``SkillTraceStore`` (ADR-021) so future DSPy compilations
+    assemble multi-example trainsets. None is inert (no graph writes).
     """
-    del customer_id  # currently unused; reserved for per-tenant routing post-SET-LOCAL fix
     if audit_chain_loader is None or llm_provider is None or eval_runner_loader is None:
         return SkillLifecycleSummary()
 
@@ -294,6 +357,7 @@ async def run_skill_lifecycle(
                     eval_runner_loader=eval_runner_loader,
                     llm_provider=llm_provider,
                     audit_log=audit_log,
+                    enable_llm_judge=enable_llm_judge,
                 )
                 if won is not None:
                     candidate, eval_result = won  # DSPy candidate is the winner
@@ -326,6 +390,15 @@ async def run_skill_lifecycle(
             emit_skill_deployed(audit_log, decision=decision)
             deployments.append(decision)
             save_skill_class_registry(registry, workspace_root=workspace_root)
+            # T2 (Phase 4a-2): persist the originating trace so future DSPy
+            # compilations assemble multi-example trainsets (ADR-021). Best-effort.
+            await _record_skill_trace(
+                semantic_store,
+                customer_id=customer_id,
+                agent_id=scorecard.agent_id,
+                candidate=candidate,
+                trigger=trigger,
+            )
         else:
             # New class — operator approval required. Write notification
             # markdown + record skill_id for the report's pending list.

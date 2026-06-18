@@ -1,4 +1,4 @@
-"""Region-scoping precedence for D.5 (v0.2 Tasks 4 + 8).
+"""Region-scoping precedence for D.15 (v0.2 Tasks 4 + 8).
 
 Mirrors `cloud_posture`'s Pattern C precedence (Q1 — in-package; the literal
 charter hoist is deferred to D.2). Both the Azure (Task 4) and GCP (Task 8) live

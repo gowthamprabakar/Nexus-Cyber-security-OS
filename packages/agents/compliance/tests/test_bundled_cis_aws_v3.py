@@ -174,7 +174,7 @@ async def test_source_mappings_reference_real_d5_rule_ids() -> None:
     # (see packages/agents/data-security/src/data_security/detectors/).
     # The full `data_security_*` strings are the
     # DataSecurityFindingType discriminator that lands in
-    # `evidence.source_finding_type`; D.6 joins on the short
+    # `evidence.source_finding_type`; D.9 joins on the short
     # `compliance.control` form.
     real_d5_rules = {
         "s3_bucket_public",

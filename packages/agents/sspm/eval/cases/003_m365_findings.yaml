@@ -1,0 +1,21 @@
+case_id: 003_m365_findings
+description: An M365 tenant with security defaults off, no conditional access, and a high-privilege OAuth grant.
+fixture:
+  m365:
+    tenant: contoso
+    security_defaults_enabled: false
+    allow_invites_from: everyone
+    user_consent: true
+    conditional_access_count: 0
+    global_admins: 2
+    oauth_grants:
+      - client_id: app-1
+        scopes: [User.Read, Directory.ReadWrite.All]
+expected:
+  finding_count: 5
+  by_type:
+    sspm_m365_security_defaults_disabled: 1
+    sspm_m365_no_conditional_access: 1
+    sspm_m365_guest_invites_unrestricted: 1
+    sspm_m365_user_consent_allowed: 1
+    sspm_m365_high_privilege_oauth_grant: 1

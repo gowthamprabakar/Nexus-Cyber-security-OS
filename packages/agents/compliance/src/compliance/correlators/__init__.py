@@ -1,4 +1,4 @@
-"""Compliance correlators (D.6 v0.1, Stage 3 CORRELATE).
+"""Compliance correlators (D.9 v0.1, Stage 3 CORRELATE).
 
 Two correlators ship in v0.1, one per sibling-agent integration:
 

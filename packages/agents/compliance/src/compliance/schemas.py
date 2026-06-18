@@ -1,23 +1,23 @@
 """Compliance schemas — re-export F.3's OCSF v1.3 Compliance Finding (class_uid 2003).
 
-**Q1 resolution (per the D.6 plan).** D.6 emits the **identical wire shape** as
-F.3 Cloud Posture (`class_uid 2003 Compliance Finding`). D.6 is the **3rd
+**Q1 resolution (per the D.9 plan).** D.9 emits the **identical wire shape** as
+F.3 Cloud Posture (`class_uid 2003 Compliance Finding`). D.9 is the **3rd
 re-exporter of F.3's 2003 schema** (after D.5 + multi-cloud-posture + k8s-
 posture; F.3 itself is the original producer). The OCSF constants +
 `Severity` enum + `AffectedResource` + `FindingsReport` are re-exported
-verbatim; D.6 introduces its own `COMPLIANCE_FINDING_ID_RE` (CIS-namespaced)
+verbatim; D.9 introduces its own `COMPLIANCE_FINDING_ID_RE` (CIS-namespaced)
 and its own `build_finding` because F.3's regex is locked to CSPM-prefixed
 finding ids.
 
-Cross-agent OCSF inventory after D.6 (Compliance Finding family):
+Cross-agent OCSF inventory after D.9 (Compliance Finding family):
 
 | Agent                | OCSF class_uid | Discriminator                            |
 | -------------------- | -------------- | ---------------------------------------- |
 | Cloud Posture (F.3)  | 2003           | rule_id (CSPM rule string)               |
 | Data Security (D.5)  | 2003           | DataSecurityFindingType (4 enum buckets) |
 | Multi-cloud (D.5')   | 2003           | per-cloud rule_id                        |
-| K8s Posture (D.6')   | 2003           | per-control rule_id                      |
-| **Compliance (D.6)** | **2003**       | **compliance_<framework>_<control_id>**  |
+| K8s Posture (D.9')   | 2003           | per-control rule_id                      |
+| **Compliance (D.9)** | **2003**       | **compliance_<framework>_<control_id>**  |
 
 Re-exports from `cloud_posture.schemas`:
 
@@ -25,10 +25,10 @@ Re-exports from `cloud_posture.schemas`:
 - `Severity` enum + `severity_to_id` / `severity_from_id` helpers.
 - `AffectedResource` (same 6-field shape: cloud / account_id / region /
   resource_type / resource_id / arn).
-- `FindingsReport` aggregate (re-exported verbatim; D.6 fills it with
+- `FindingsReport` aggregate (re-exported verbatim; D.9 fills it with
   ComplianceFinding-wrapped payloads).
 
-D.6-specific additions:
+D.9-specific additions:
 
 - `COMPLIANCE_FINDING_ID_RE` — validates `COMPLIANCE-CIS_AWS_V3-<control_id>-NNN-<context>`.
 - `ComplianceFramework` enum — v0.1 ships only `CIS_AWS_V3`; v0.2 adds
@@ -39,7 +39,7 @@ D.6-specific additions:
 - `compliance_type_token(framework)` — finding-id source-token helper.
 - `severity_for_level(level, required=...)` — CIS Level x required-flag
   to Severity (the canonical table that Task 9's scorer enforces).
-- `build_finding(...)` — D.6 OCSF 2003 constructor (D.6 regex).
+- `build_finding(...)` — D.9 OCSF 2003 constructor (D.9 regex).
 - `ComplianceFinding` — typed wrapper over the wrapped OCSF dict.
 
 Q6 reminder: this module carries no verbatim CIS Benchmark text. The
@@ -85,7 +85,7 @@ COMPLIANCE_FINDING_ID_RE = re.compile(r"^COMPLIANCE-[A-Z0-9_]+-[A-Z0-9_.]+-\d{3}
 
 
 class ComplianceFramework(StrEnum):
-    """The compliance frameworks D.6 can map findings against.
+    """The compliance frameworks D.9 can map findings against.
 
     v0.1 ships only CIS_AWS_V3. v0.2 adds the rest per the plan §Q2.
     Renaming a value is a coordinated wire-shape change (downstream
@@ -134,7 +134,7 @@ def compliance_finding_type(framework: ComplianceFramework, control_id: str) -> 
     Example: ``compliance_cis_aws_v3_1_1``. Downstream consumers (D.7
     Investigation, Meta-Harness, auditor-export pipelines) filter on
     ``class_uid == 2003`` first then on this string to disambiguate
-    D.6 emits from F.3 / D.5 / multi-cloud / k8s posture emits.
+    D.9 emits from F.3 / D.5 / multi-cloud / k8s posture emits.
     """
     return f"compliance_{framework.value}_{_normalise_control_id(control_id)}"
 
@@ -161,7 +161,7 @@ def severity_for_level(level: ControlLevel, *, required: bool) -> Severity:
 
 
 class ComplianceFinding:
-    """Typed wrapper over a wrapped OCSF v1.3 Compliance Finding dict (D.6 flavor).
+    """Typed wrapper over a wrapped OCSF v1.3 Compliance Finding dict (D.9 flavor).
 
     Construction validates that the payload is class_uid 2003, has a valid
     ``finding_info.uid`` matching ``COMPLIANCE_FINDING_ID_RE``, and carries a
@@ -314,9 +314,9 @@ def build_finding(
     envelope: NexusEnvelope,
     evidence: dict[str, Any] | None = None,
 ) -> ComplianceFinding:
-    """Build a Nexus OCSF v1.3 Compliance Finding (D.6 flavor) wrapped with NexusEnvelope.
+    """Build a Nexus OCSF v1.3 Compliance Finding (D.9 flavor) wrapped with NexusEnvelope.
 
-    Mirrors F.3's ``build_finding`` shape but uses D.6's regex,
+    Mirrors F.3's ``build_finding`` shape but uses D.9's regex,
     ``finding_info.types[0] = compliance_finding_type(framework,
     control_id)``, and ``compliance.control = "<framework>:<control_id>"``.
     """

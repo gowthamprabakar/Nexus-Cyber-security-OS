@@ -1,6 +1,6 @@
 """Render a Compliance ``FindingsReport`` as operator-readable markdown.
 
-Stage-6 SUMMARIZE per the D.6 v0.1 plan. Deterministic, no LLM in
+Stage-6 SUMMARIZE per the D.9 v0.1 plan. Deterministic, no LLM in
 loop -- the agent driver (Task 11) writes the rendered string to
 ``report.md`` in the charter workspace.
 
@@ -47,7 +47,7 @@ _SEVERITY_ORDER: tuple[Severity, ...] = (
     Severity.INFO,
 )
 
-# Attribution footer. Required by Q6 of the D.6 plan — CIS Benchmarks®
+# Attribution footer. Required by Q6 of the D.9 plan — CIS Benchmarks®
 # is governed by the CIS Securesuite licence; redistribution of
 # verbatim text is restricted. v0.1 ships paraphrased control names +
 # public control IDs only; the footer points operators to the
@@ -68,7 +68,7 @@ _ATTRIBUTION_FOOTER = (
 
 
 def render_summary(report: FindingsReport) -> str:
-    """Render the full markdown report for a D.6 ``FindingsReport``."""
+    """Render the full markdown report for a D.9 ``FindingsReport``."""
     lines: list[str] = [
         _HEADER,
         "",

@@ -1,8 +1,8 @@
-"""D.5 v0.2 Task 15 — live-Azure integration tests (read-only).
+"""D.15 v0.2 Task 15 — live-Azure integration tests (read-only).
 
 Gated by the `azure_live_subscription` fixture (`NEXUS_LIVE_AZURE=1` + reachable);
 **skips cleanly** otherwise, so CI never touches Azure. Read-only, single
-subscription (Q6). Exercises the live seams D.5 v0.2 built — credential
+subscription (Q6). Exercises the live seams D.15 v0.2 built — credential
 resolution + subscription/region discovery — and the agent's OCSF 2003 output +
 audit chain. Operator-run.
 """

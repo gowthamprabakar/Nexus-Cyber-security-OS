@@ -57,6 +57,24 @@ def test_no_inputs_returns_empty() -> None:
     assert normalize_kube_bench([], envelope=_envelope(), scan_time=NOW) == ()
 
 
+# ------------------------- CIS version-agnostic passthrough (v0.4 1.3) -------
+
+
+def test_control_id_outside_v1_8_catalog_passes_through_verbatim() -> None:
+    """v0.4 Stage 1.3 / #714b: the agent does not enforce a CIS benchmark version —
+    it emits whatever ``control_id`` kube-bench reports. A control id outside the v1.8
+    reference catalog (e.g. from kube-bench's CIS v2.0 benchmark) flows through unchanged,
+    so v2.0 is supported with no hardcoded v2.0 catalog."""
+    finding = normalize_kube_bench(
+        [_kb(control_id="5.7.4", section_id="5.7", section_desc="Pod Security Standards")],
+        envelope=_envelope(),
+        scan_time=NOW,
+    )[0]
+    payload = finding.to_dict()
+    assert payload["compliance"]["control"] == "5.7.4"
+    assert payload["evidences"][0]["control_id"] == "5.7.4"
+
+
 # ---------------------------- severity mapping -----------------------------
 
 

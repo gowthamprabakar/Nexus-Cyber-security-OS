@@ -20,7 +20,7 @@ Joins F.3 Cloud Posture findings (read from operator-pinned `--cloud-posture-wor
 
 - Per-mapping emit; aggregator (Stage 4) collapses to per-control roll-up.
 - Severity at emit time = `severity_for_level(mapping.level, required=mapping.required)`.
-- Resources: F.3's OCSF `resources[]` projected back into D.6's `AffectedResource` shape (preserving AWS `owner.account_uid` over envelope tenant when present).
+- Resources: F.3's OCSF `resources[]` projected back into D.9's `AffectedResource` shape (preserving AWS `owner.account_uid` over envelope tenant when present).
 - Forgiving on every failure (missing workspace / missing/malformed findings.json / non-2003 entries / missing compliance block silently skipped).
 - Finding-id: `COMPLIANCE-CIS_AWS_V3-<control_token>-NNN-f3_<hash>` (8-char SHA-256 of the source F.3 finding-id).
 - Evidence: `source_finding` block (agent=cloud_posture / finding_id / rule_id) + `control` block (framework / control_id / level / required) for D.7 cross-reference.
@@ -34,7 +34,7 @@ Mirrors `correlate_cloud_posture` exactly, with the following deltas:
 - Finding-id context: `d5_<hash>` (vs `f3_<hash>`).
 - Evidence `source_finding.agent = "data_security"`.
 
-D.5's `compliance.control` field carries the short rule_id (`s3_bucket_public`, `s3_bucket_unencrypted`, `s3_oversharing_iam`, `s3_object_sensitive_in_untrusted_location`); D.6 joins on that form. The full `DataSecurityFindingType.value` discriminator lives in D.5's `evidence.source_finding_type` but D.6 doesn't read from there in v0.1.
+D.5's `compliance.control` field carries the short rule_id (`s3_bucket_public`, `s3_bucket_unencrypted`, `s3_oversharing_iam`, `s3_object_sensitive_in_untrusted_location`); D.9 joins on that form. The full `DataSecurityFindingType.value` discriminator lives in D.5's `evidence.source_finding_type` but D.9 doesn't read from there in v0.1.
 
 ## Stage 4: AGGREGATE
 

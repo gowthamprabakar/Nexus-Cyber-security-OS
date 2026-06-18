@@ -1,4 +1,4 @@
-"""Native Azure rule engine (D.5 v0.2 Task 10).
+"""Native Azure rule engine (D.15 v0.2 Task 10).
 
 Nexus DETECTS Azure misconfigurations natively (vs the Defender passthrough),
 emitting OCSF 2003 findings tagged `Source: Nexus-native`

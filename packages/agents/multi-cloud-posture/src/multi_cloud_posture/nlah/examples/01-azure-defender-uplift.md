@@ -62,10 +62,10 @@
   Cloud: azure · Caller: bob@external.com
 ```
 
-**Why two findings, not one?** D.5 doesn't correlate Defender + Activity Log in v0.1 — that's D.7 Investigation's job. The operator sees both raw signals; D.7 stitches them into one incident.
+**Why two findings, not one?** D.15 doesn't correlate Defender + Activity Log in v0.1 — that's D.7 Investigation's job. The operator sees both raw signals; D.7 stitches them into one incident.
 
 **Operator next steps** (we do NOT take these autonomously in v0.1):
 
 1. Verify the storage account's network rules (Defender assessment evidence has `unmapped.remediationSteps`).
 2. Audit the role assignment in Activity Log evidence (`caller: bob@external.com` is on the customer domain allowlist? if not, flag separately).
-3. Hand off to D.7 Investigation Agent — D.5's `findings.json` is a sibling-workspace input.
+3. Hand off to D.7 Investigation Agent — D.15's `findings.json` is a sibling-workspace input.

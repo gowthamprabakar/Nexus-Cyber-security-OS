@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 2 — Azure CredentialResolver tests (no live Azure)."""
+"""D.15 v0.2 Task 2 — Azure CredentialResolver tests (no live Azure)."""
 
 from __future__ import annotations
 

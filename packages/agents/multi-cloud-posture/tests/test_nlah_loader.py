@@ -1,6 +1,6 @@
-"""Tests for `multi_cloud_posture.nlah_loader` — D.5's ADR-007 v1.2 shim.
+"""Tests for `multi_cloud_posture.nlah_loader` — D.15's ADR-007 v1.2 shim.
 
-D.5 is the fifth agent shipped natively against v1.2 (D.3 + F.6 + D.7 + D.4 + D.5).
+D.15 is the fifth agent shipped natively against v1.2 (D.3 + F.6 + D.7 + D.4 + D.15).
 """
 
 from __future__ import annotations

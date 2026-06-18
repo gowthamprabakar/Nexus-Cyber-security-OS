@@ -38,6 +38,7 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from nexus_runtime.realtime import EventStream, bounded_drain
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
@@ -51,6 +52,7 @@ from network_threat.detectors.beacon import detect_beacon
 from network_threat.detectors.dga import detect_dga
 from network_threat.detectors.port_scan import detect_port_scan
 from network_threat.enrichment import enrich_with_intel
+from network_threat.kg_writer import KnowledgeGraphWriter
 from network_threat.schemas import (
     AffectedNetwork,
     Detection,
@@ -148,6 +150,7 @@ async def run(
     suricata_stream: EventStream | None = None,
     zeek_stream: EventStream | None = None,
     realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Network Threat Agent end-to-end under the runtime charter.
 
@@ -177,6 +180,10 @@ async def run(
             the offline DNS shape. Mutually exclusive with ``dns_feed``.
         realtime_max_events: Count bound for the live drains (default
             ``DEFAULT_REALTIME_MAX_EVENTS``) so an infinite stream terminates.
+        semantic_store: v0.4 Stage 1.4 (D.4) opt-in fleet-graph sink. When set,
+            the observed network topology (flow endpoints + ``COMMUNICATES_WITH``
+            edges) is written via ``KnowledgeGraphWriter`` after INGEST. Default
+            None is inert — no graph writes, ``findings.json`` byte-identical.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -223,6 +230,15 @@ async def run(
             realtime_max_events=realtime_max_events,
             received_at=scan_started,
         )
+
+        # v0.4 Stage 1.4: write the observed network topology (flow endpoints +
+        # COMMUNICATES_WITH edges) to the fleet graph when a SemanticStore is
+        # injected. Opt-in — default None is inert (no graph writes), so
+        # findings.json + report.md stay byte-identical. Computed reachability
+        # (CAN_REACH) stays Stage 3 correlation (#715a).
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record_flows(flow_records)
 
         # Stage 2: PATTERN_DETECT — three deterministic detectors over the parsed feeds.
         detections = _detect(

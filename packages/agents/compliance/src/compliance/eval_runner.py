@@ -1,4 +1,4 @@
-"""`ComplianceEvalRunner` — the canonical `EvalRunner` for D.6.
+"""`ComplianceEvalRunner` — the canonical `EvalRunner` for D.9.
 
 Mirrors D.8's
 [`eval_runner.py`](../../../threat-intel/src/threat_intel/eval_runner.py)
@@ -66,7 +66,7 @@ from compliance.tools.cis_aws_benchmark import CisControl
 
 
 class ComplianceEvalRunner:
-    """Reference ``EvalRunner`` for the Compliance Agent (D.6)."""
+    """Reference ``EvalRunner`` for the Compliance Agent (D.9)."""
 
     @property
     def agent_name(self) -> str:

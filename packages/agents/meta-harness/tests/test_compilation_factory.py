@@ -297,6 +297,11 @@ class _FakeStore:
         )
         return external_id
 
+    async def list_entities_by_type(self, *, tenant_id: str, entity_type: str) -> list[Any]:
+        # T2 (Phase 4a-2): the SkillTraceStore reads history through this; no persisted
+        # traces in this double → empty history (the current trigger's example carries the run).
+        return []
+
 
 @pytest.mark.asyncio
 async def test_success_records_compilation_to_semantic_store(

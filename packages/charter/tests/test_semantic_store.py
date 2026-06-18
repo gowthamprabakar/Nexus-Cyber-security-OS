@@ -104,6 +104,147 @@ async def test_add_relationship_returns_positive_id(store: SemanticStore) -> Non
     assert isinstance(rid, int) and rid > 0
 
 
+# ---------------------------- cross-run edge dedup (ADR-022) -------------
+
+
+@pytest.mark.asyncio
+async def test_add_relationship_is_idempotent_on_edge_key(store: SemanticStore) -> None:
+    """Re-writing the same edge (cross-run) collapses to one row and returns the
+    first-written id (ON CONFLICT DO NOTHING, first-wins)."""
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    first = await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    second = await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    assert second == first  # same id, no second row
+
+    # The graph carries exactly one edge → b (external_id "F-1") appears once.
+    rows = await store.neighbors(tenant_id=_TENANT, entity_id=a, depth=1)
+    assert [r.external_id for r in rows] == ["F-1"]
+
+
+@pytest.mark.asyncio
+async def test_add_relationship_dedup_ignores_properties(store: SemanticStore) -> None:
+    """Properties are not part of the key — a re-write with different properties is
+    still a dedup hit (first-wins; properties not overwritten)."""
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    first = await store.add_relationship(
+        tenant_id=_TENANT,
+        src_entity_id=a,
+        dst_entity_id=b,
+        relationship_type="AFFECTS",
+        properties={"severity": "high"},
+    )
+    second = await store.add_relationship(
+        tenant_id=_TENANT,
+        src_entity_id=a,
+        dst_entity_id=b,
+        relationship_type="AFFECTS",
+        properties={"severity": "low"},
+    )
+    assert second == first
+
+
+@pytest.mark.asyncio
+async def test_add_relationship_distinguishes_edge_type(store: SemanticStore) -> None:
+    """Different relationship_type between the same endpoints is a distinct edge."""
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    one = await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    two = await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="HAS_FINDING"
+    )
+    assert one != two
+
+
+@pytest.mark.asyncio
+async def test_add_relationship_dedup_is_tenant_scoped(store: SemanticStore) -> None:
+    """The same edge under two tenants is two distinct rows (tenant in the key)."""
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    other = await store.upsert_entity(tenant_id=_OTHER, entity_type="host", external_id="a")
+    other_b = await store.upsert_entity(tenant_id=_OTHER, entity_type="finding", external_id="F-1")
+    rid1 = await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    rid2 = await store.add_relationship(
+        tenant_id=_OTHER,
+        src_entity_id=other,
+        dst_entity_id=other_b,
+        relationship_type="AFFECTS",
+    )
+    assert rid1 != rid2
+
+
+# ---------------------------- get_relationships_from (edge accessor) ------
+
+
+@pytest.mark.asyncio
+async def test_get_relationships_from_returns_outgoing_edges(store: SemanticStore) -> None:
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    c = await store.upsert_entity(tenant_id=_TENANT, entity_type="cve", external_id="CVE-1")
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=c, relationship_type="VULNERABLE_TO"
+    )
+    # An inbound edge to `a` must NOT appear (outgoing-only).
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=b, dst_entity_id=a, relationship_type="AFFECTS"
+    )
+
+    edges = await store.get_relationships_from(tenant_id=_TENANT, src_entity_id=a)
+    assert {(e.src_entity_id, e.dst_entity_id, e.relationship_type) for e in edges} == {
+        (a, b, "AFFECTS"),
+        (a, c, "VULNERABLE_TO"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_relationships_from_filters_by_edge_type(store: SemanticStore) -> None:
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    c = await store.upsert_entity(tenant_id=_TENANT, entity_type="cve", external_id="CVE-1")
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=c, relationship_type="VULNERABLE_TO"
+    )
+    edges = await store.get_relationships_from(
+        tenant_id=_TENANT, src_entity_id=a, edge_types=("AFFECTS",)
+    )
+    assert [e.dst_entity_id for e in edges] == [b]
+
+
+@pytest.mark.asyncio
+async def test_get_relationships_from_is_tenant_scoped(store: SemanticStore) -> None:
+    a = await store.upsert_entity(tenant_id=_TENANT, entity_type="host", external_id="a")
+    b = await store.upsert_entity(tenant_id=_TENANT, entity_type="finding", external_id="F-1")
+    await store.add_relationship(
+        tenant_id=_TENANT, src_entity_id=a, dst_entity_id=b, relationship_type="AFFECTS"
+    )
+    # Same src ULID queried under another tenant returns nothing (tenant in the filter).
+    edges = await store.get_relationships_from(tenant_id=_OTHER, src_entity_id=a)
+    assert edges == []
+
+
+@pytest.mark.asyncio
+async def test_get_relationships_from_rejects_empty_args(store: SemanticStore) -> None:
+    with pytest.raises(ValueError, match="tenant_id"):
+        await store.get_relationships_from(tenant_id="", src_entity_id="x")
+    with pytest.raises(ValueError, match="src_entity_id"):
+        await store.get_relationships_from(tenant_id=_TENANT, src_entity_id="")
+
+
 # ---------------------------- neighbors at depth 1 / 2 / 3 ---------------
 
 

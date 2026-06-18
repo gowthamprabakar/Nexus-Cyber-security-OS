@@ -1,0 +1,25 @@
+case_id: 002_aws_findings
+description: AWS account with SageMaker endpoint + notebook + Bedrock misconfigurations.
+fixture:
+  aws:
+    account_id: '111122223333'
+    sagemaker_endpoints:
+      - name: web
+        data_capture_enabled: false
+        kms_encrypted: false
+        network_isolated: false
+        model_name: m1
+    sagemaker_notebooks:
+      - name: nb1
+        direct_internet_access: true
+    bedrock_logging_enabled: false
+    bedrock_guardrails: 0
+expected:
+  finding_count: 6
+  by_type:
+    aispm_sagemaker_inference_logging_disabled: 1
+    aispm_sagemaker_endpoint_no_cmk: 1
+    aispm_sagemaker_model_no_network_isolation: 1
+    aispm_sagemaker_notebook_direct_internet: 1
+    aispm_bedrock_invocation_logging_disabled: 1
+    aispm_bedrock_no_guardrails: 1

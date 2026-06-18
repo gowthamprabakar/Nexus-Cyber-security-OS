@@ -1,4 +1,4 @@
-"""Starting CIS Google Cloud Platform Foundation Benchmark rule subset (D.5 v0.2 Task 11).
+"""Starting CIS Google Cloud Platform Foundation Benchmark rule subset (D.15 v0.2 Task 11).
 
 **10 new non-IAM native rules** across 6 resource types — added to the existing
 ~5 IAM-binding rules (`tools/gcp_iam.py`, tagged `GCP_IAM`) for **~15 native GCP

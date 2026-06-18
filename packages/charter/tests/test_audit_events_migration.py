@@ -64,11 +64,14 @@ def test_audit_events_migration_chains_from_rls() -> None:
 
 
 def test_audit_events_migration_is_the_unique_head() -> None:
+    # The chain stays single-headed. 0004_relationships_unique (ADR-022) chains on
+    # 0003_audit_events, so the head advanced to 0004 — the invariant under test is
+    # "exactly one head", not the specific revision.
     cfg = Config(str(_INI))
     cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert list(heads) == ["0003_audit_events"]
+    assert list(heads) == ["0004_relationships_unique"]
 
 
 # ---------------------------- body declarations -------------------------

@@ -1,4 +1,4 @@
-"""Unit tests — D.6 Compliance agent driver (Task 11).
+"""Unit tests — D.9 Compliance agent driver (Task 11).
 
 The bundled CIS YAML reader is monkeypatched at the agent module's
 import scope when we need to inject a tighter fixture; most tests

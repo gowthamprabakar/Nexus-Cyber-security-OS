@@ -1,7 +1,7 @@
 [project]
 name = "nexus-compliance-agent"
 version = "0.2.0"
-description = "Nexus Compliance Agent — maps sibling-agent findings to CIS AWS Foundations v3 controls (D.6 / Agent #13 under ADR-007)"
+description = "Nexus Compliance Agent — maps sibling-agent findings to CIS AWS Foundations v3 controls (D.9 / Agent #13 under ADR-007)"
 requires-python = ">=3.12,<3.13"
 license = { file = "../../../LICENSE-BSL" }
 dependencies = [

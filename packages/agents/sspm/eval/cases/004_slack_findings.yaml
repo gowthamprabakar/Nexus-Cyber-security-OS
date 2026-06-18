@@ -1,0 +1,17 @@
+case_id: 004_slack_findings
+description: A Slack workspace with a member missing 2FA, an external guest, and a high-privilege approved app.
+fixture:
+  slack:
+    team_id: T01
+    team_name: Acme
+    members:
+      - { id: U1, is_admin: true, has_2fa: false }
+      - { id: U2, is_restricted: true, has_2fa: true }
+    approved_apps:
+      - { id: A1, name: Risky, scopes: [admin, chat:write] }
+expected:
+  finding_count: 3
+  by_type:
+    sspm_slack_members_without_2fa: 1
+    sspm_slack_external_guests: 1
+    sspm_slack_high_privilege_oauth_app: 1

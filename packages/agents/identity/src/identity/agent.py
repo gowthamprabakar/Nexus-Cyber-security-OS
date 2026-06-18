@@ -27,14 +27,17 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider  # canonical Protocol lives in charter.llm
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from identity import __version__ as agent_version
+from identity.kg_writer import KnowledgeGraphWriter
 from identity.normalizer import federation_to_findings, normalize_to_findings
 from identity.schemas import FindingsReport, IdentityFinding
 from identity.summarizer import render_summary
@@ -137,6 +140,7 @@ async def run(
     detect_federation: bool = False,
     azure_credential_source: str | None = None,
     assess_effective_perms: bool = False,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -167,6 +171,11 @@ async def run(
             effective grants. Refines OVERPRIVILEGE with real per-action grants
             (no new OCSF class). Requires live AWS; default False keeps the
             attached-policy path byte-identical to pre-A-4 (offline eval intact).
+        semantic_store: v0.4 Stage 1.2 (D.2) opt-in fleet-graph sink. When set,
+            the IAM principal inventory (users/roles/groups + managed policies,
+            ATTACHED_TO / MEMBER_OF edges) is written via ``KnowledgeGraphWriter``
+            after the listing fetch. ``HAS_ACCESS_TO`` stays Stage 3 correlation.
+            Default None is inert — no graph writes, ``findings.json`` byte-identical.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -190,6 +199,14 @@ async def run(
         listing, aa_findings = await _fetch_inventory(
             ctx, aws_region=aws_region, profile=profile, analyzer_arn=analyzer_arn
         )
+
+        # v0.4 Stage 1.2: write the IAM principal inventory to the fleet graph when a
+        # SemanticStore is injected. Opt-in — default None is inert (no graph writes),
+        # so findings.json + summary.md stay byte-identical. HAS_ACCESS_TO (principal →
+        # resource) stays Stage 3 cross-agent correlation.
+        if semantic_store is not None:
+            kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+            await kg.record_listing(listing)
 
         # A-4 (v0.3): drive the effective-perms simulator when enabled (live AWS),
         # else fall back to the v0.1 attached-policy pattern-match (byte-identical).
@@ -361,41 +378,77 @@ async def _detect_federation(
     )
 
 
+def _statement_grants_admin(statement: dict[str, Any]) -> bool:
+    """True when an IAM policy statement is a full wildcard-admin allow (Action ``*``
+    on Resource ``*``, Effect Allow) — the inline equivalent of AdministratorAccess."""
+    if str(statement.get("Effect", "")) != "Allow":
+        return False
+
+    def _has_star(value: Any) -> bool:
+        if isinstance(value, str):
+            return value == "*"
+        if isinstance(value, (list, tuple)):
+            return "*" in value
+        return False
+
+    return _has_star(statement.get("Action")) and _has_star(statement.get("Resource"))
+
+
+def _inline_admin_sources(
+    inline_policies: tuple[tuple[str, dict[str, Any]], ...],
+) -> tuple[str, ...]:
+    """v0.4 Stage 1.5 per-role inline-grant evaluation — inspect inline policy
+    *documents* (fetched in #723) for wildcard-admin statements. Returns
+    ``inline:<name>`` source tokens for each inline policy granting admin. Previously
+    inline policies were enumerated by name only, so inline-only admins were missed."""
+    sources: list[str] = []
+    for name, document in inline_policies:
+        statements = document.get("Statement", [])
+        if isinstance(statements, dict):
+            statements = [statements]
+        if any(_statement_grants_admin(s) for s in statements if isinstance(s, dict)):
+            sources.append(f"inline:{name}")
+    return tuple(sources)
+
+
 def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
-    """Emit one `EffectiveGrant(is_admin=True)` per principal with an admin policy.
+    """Emit one `EffectiveGrant(is_admin=True)` per principal with an admin grant.
 
-    Phase 1 v0.1 derives admin grants directly from the listing's attached
-    policy ARNs (matching AdministratorAccess or any `*/AdministratorAccess`)
-    instead of running the IAM simulator per principal — the simulator wrapper
-    is exercised by its own tests and reserved for Phase 2 finer-grained scans.
+    Phase 1 v0.1 derived admin grants from attached policy ARNs (AdministratorAccess
+    or `*/AdministratorAccess`). v0.4 Stage 1.5 adds **inline-grant evaluation**: the
+    inline policy documents (#723) are inspected for wildcard-admin statements, so a
+    principal that is admin via an inline policy — with no attached admin policy — is
+    now caught. The simulator (`_simulate_effective_grants`) remains the gated finer
+    path for per-action/per-resource scans.
 
-    Group transitivity is honored: a user inheriting admin via group
-    membership gets a grant attributed to the group's admin policy ARN.
+    Group transitivity is honored for both attached and inline group admin.
     """
     grants: list[EffectiveGrant] = []
 
     group_admin: dict[str, tuple[str, ...]] = {}
     for grp in listing.groups:
-        admin_arns = tuple(a for a in grp.attached_policy_arns if _is_admin_policy(a))
-        if admin_arns:
-            group_admin[grp.name] = admin_arns
+        admin_sources = tuple(a for a in grp.attached_policy_arns if _is_admin_policy(a))
+        admin_sources += _inline_admin_sources(grp.inline_policies)
+        if admin_sources:
+            group_admin[grp.name] = admin_sources
 
     for user in listing.users:
         direct = [a for a in user.attached_policy_arns if _is_admin_policy(a)]
         inherited: list[str] = []
         for grp_name in user.group_memberships:
             inherited.extend(group_admin.get(grp_name, ()))
-        sources = tuple(direct) + tuple(inherited)
+        sources = tuple(direct) + tuple(inherited) + _inline_admin_sources(user.inline_policies)
         if sources:
             grants.append(_admin_grant(user.arn, sources))
 
     for role in listing.roles:
         admin = tuple(a for a in role.attached_policy_arns if _is_admin_policy(a))
+        admin += _inline_admin_sources(role.inline_policies)
         if admin:
             grants.append(_admin_grant(role.arn, admin))
 
     for grp in listing.groups:
-        admin = tuple(a for a in grp.attached_policy_arns if _is_admin_policy(a))
+        admin = group_admin.get(grp.name, ())
         if admin:
             grants.append(_admin_grant(grp.arn, admin))
 

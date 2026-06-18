@@ -1,4 +1,4 @@
-"""Fixtures for D.5 live integration tests (Azure + GCP lanes).
+"""Fixtures for D.15 live integration tests (Azure + GCP lanes).
 
 Two DISTINCT, independent gates (mirrors F.3's lane-independence contract):
 

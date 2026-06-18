@@ -1,4 +1,4 @@
-"""D.5 v0.2 Task 14 — NEXUS_LIVE_GCP gated-lane tests + lane independence.
+"""D.15 v0.2 Task 14 — NEXUS_LIVE_GCP gated-lane tests + lane independence.
 
 Exercise the lane's env-gating + reachability + skip-message helpers
 (`multi_cloud_posture.live_lane_gcp`) and confirm the Azure + GCP lanes are

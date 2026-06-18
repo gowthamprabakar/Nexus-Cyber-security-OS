@@ -1,9 +1,9 @@
 """Stage-5 SCORE — canonical severity scorer for ComplianceFindings.
 
-Per Q9 of the D.6 v0.1 plan: a deterministic, table-driven severity
+Per Q9 of the D.9 v0.1 plan: a deterministic, table-driven severity
 re-stamp that runs after the Stage-4 aggregator. Stages 6 + 7 (Stage
 5 SUMMARIZE + Stage 7 HANDOFF) operate on the scored output -- the
-scorer is the **single canonical source of truth** for D.6 v0.1
+scorer is the **single canonical source of truth** for D.9 v0.1
 severity. Correlators (Tasks 6 + 7) and the aggregator (Task 8) emit
 at their natural defaults; the scorer is what downstream consumers
 see.

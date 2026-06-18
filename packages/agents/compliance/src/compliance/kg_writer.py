@@ -1,6 +1,6 @@
-"""Knowledge-graph writer for the D.6 Compliance agent (Postgres SemanticStore-backed).
+"""Knowledge-graph writer for the D.9 Compliance agent (Postgres SemanticStore-backed).
 
-Per Q3 / Q5 of the D.6 v0.1 plan, compliance entities (framework / control)
+Per Q3 / Q5 of the D.9 v0.1 plan, compliance entities (framework / control)
 are persisted to the platform's Postgres ``SemanticStore`` using the same
 pattern proven in F.3 v0.1.5 (KG-loop closure) and re-used in D.5 / D.8.
 

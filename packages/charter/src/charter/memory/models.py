@@ -296,6 +296,19 @@ class RelationshipModel(Base):
         Index("ix_relationships_src_type", "src_entity_id", "relationship_type"),
         Index("ix_relationships_dst_type", "dst_entity_id", "relationship_type"),
         Index("ix_relationships_tenant", "tenant_id"),
+        # Cross-run edge dedup (ADR-022): an edge is unique by
+        # (tenant, src, dst, type) — properties are excluded, so a repeated
+        # write of the same edge collapses to one row. Enforced as a UNIQUE
+        # INDEX (portable to sqlite, which cannot ALTER TABLE ADD CONSTRAINT)
+        # and used as the ON CONFLICT target by `add_relationship`.
+        Index(
+            "uq_relationships_edge",
+            "tenant_id",
+            "src_entity_id",
+            "dst_entity_id",
+            "relationship_type",
+            unique=True,
+        ),
     )
 
 

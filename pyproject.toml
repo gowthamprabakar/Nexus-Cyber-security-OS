@@ -28,6 +28,8 @@ members = [
     "packages/agents/meta-harness",
     "packages/agents/supervisor",
     "packages/agents/appsec",
+    "packages/agents/sspm",
+    "packages/agents/aispm",
     "packages/control-plane",
     "packages/shared",
 ]
@@ -68,6 +70,14 @@ ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101"]  # assert allowed in tests
+# SSPM GitHub connector: "secret_scanning" is a GitHub API field name and the token
+# *env-var name* is a source identifier — both trip S105/S106 (hardcoded-secret heuristic)
+# as false positives. The guard stays active on credentials.py (the real secret path).
+"packages/agents/sspm/src/sspm/agent.py" = ["S105"]
+"packages/agents/sspm/src/sspm/posture/github.py" = ["S105"]
+"packages/agents/sspm/tests/test_github_org.py" = ["S105"]
+"packages/agents/sspm/tests/test_github_posture.py" = ["S106"]
+"packages/agents/sspm/tests/test_slack.py" = ["S105"]  # token env-var name, not a secret
 
 [tool.mypy]
 python_version = "3.12"
@@ -93,6 +103,8 @@ files = [
     "packages/agents/synthesis/src",
     "packages/agents/curiosity/src",
     "packages/agents/appsec/src",
+    "packages/agents/sspm/src",
+    "packages/agents/aispm/src",
     "packages/control-plane/src",
     "packages/shared/src",
 ]
@@ -107,6 +119,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["kubernetes", "kubernetes.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["azure", "azure.*", "google", "google.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
