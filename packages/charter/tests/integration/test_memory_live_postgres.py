@@ -257,6 +257,43 @@ async def test_crud_round_trip_on_all_four_tables(service: MemoryService) -> Non
         assert {n.external_id for n in neighbors} == {"F-1"}
 
 
+@pytest.mark.asyncio
+async def test_add_relationship_cross_run_dedup_on_real_postgres(
+    service: MemoryService,
+) -> None:
+    """ADR-022 on real Postgres — the `pg_insert(...).on_conflict_do_nothing` path
+    (distinct from sqlite) collapses a re-written edge to one row, first-wins."""
+    async with service.session(tenant_id=_TENANT_A):
+        host_id = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="host", external_id="i-dedupe"
+        )
+        finding_id = await service.semantic.upsert_entity(
+            tenant_id=_TENANT_A, entity_type="finding", external_id="F-dedupe"
+        )
+        first = await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host_id,
+            dst_entity_id=finding_id,
+            relationship_type="AFFECTS",
+            properties={"severity": "high"},
+        )
+        # A second write of the same edge (different properties) is a dedup hit.
+        second = await service.semantic.add_relationship(
+            tenant_id=_TENANT_A,
+            src_entity_id=host_id,
+            dst_entity_id=finding_id,
+            relationship_type="AFFECTS",
+            properties={"severity": "low"},
+        )
+        assert second == first  # same relationship_id; no second row
+
+    async with service.session(tenant_id=_TENANT_A):
+        neighbors = await service.semantic.neighbors(
+            tenant_id=_TENANT_A, entity_id=host_id, depth=1
+        )
+        assert [n.external_id for n in neighbors] == ["F-dedupe"]  # exactly one edge
+
+
 # ---------------------------- pgvector ANN ----------------------------
 
 
