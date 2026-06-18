@@ -62,7 +62,6 @@ from meta_harness.audit_emit import (
     emit_skill_eval_gate_completed,
     emit_skill_rejected,
 )
-from meta_harness.dspy_skill_creator import adjudicate_pass_rates
 from meta_harness.eval.batch import CasesRootResolver
 from meta_harness.schemas import (
     DeploymentDecision,
@@ -85,7 +84,12 @@ from meta_harness.skill_eval_gate import (
     cache_eval_gate_result,
     run_skill_eval_gate,
 )
-from meta_harness.skill_format import write_skill_md
+from meta_harness.skill_format import serialize_skill_md, write_skill_md
+from meta_harness.skill_judge import (
+    JudgeVerdict,
+    adjudicate_with_judge,
+    judge_skill_candidates,
+)
 from meta_harness.skill_registry import (
     load_skill_class_registry,
     save_skill_class_registry,
@@ -141,6 +145,7 @@ async def _adjudicate_dspy_candidate(
     eval_runner_loader: EvalRunnerLoader,
     llm_provider: LLMProvider,
     audit_log: AuditLog,
+    enable_llm_judge: bool = False,
 ) -> tuple[SkillCandidate, EvalGateResult] | None:
     """Eval-gate the DSPy candidate and pick the winner vs the legacy result (Q3).
 
@@ -175,16 +180,31 @@ async def _adjudicate_dspy_candidate(
         agent_id=scorecard.agent_id,
         skill_id=dspy_candidate.skill_id,
     )
-    _, meta = adjudicate_pass_rates(
+    # Phase 2: the LLM-judge is ADDITIVE — consulted only on a pass-rate tie (the region the
+    # deterministic floor leaves ambiguous) and only able to break it toward DSPy. A pass-rate
+    # win/loss is decided without the judge (pass-rate stays the hard floor). Default-OFF.
+    verdict: JudgeVerdict | None = None
+    is_tie = dspy_eval.candidate_pass_rate == legacy_eval_result.candidate_pass_rate
+    if enable_llm_judge and is_tie:
+        verdict = await judge_skill_candidates(
+            llm_provider,
+            legacy_skill_md=serialize_skill_md(legacy_candidate.skill),
+            dspy_skill_md=serialize_skill_md(dspy_candidate.skill),
+            agent_id=scorecard.agent_id,
+            category=legacy_candidate.skill.category,
+        )
+    _, meta = adjudicate_with_judge(
         legacy_eval_result.candidate_pass_rate,
         dspy_eval.candidate_pass_rate,
         legacy_candidate.skill_id,
         dspy_candidate.skill_id,
+        verdict=verdict,
     )
     _LOG.info(
-        "SKILL_CREATE adjudication agent_id=%s winner=%s legacy=%.3f dspy=%.3f delta=%.3f",
+        "SKILL_CREATE adjudication agent_id=%s winner=%s via=%s legacy=%.3f dspy=%.3f delta=%.3f",
         scorecard.agent_id,
         meta["winner"],
+        meta["adjudication"],
         meta["legacy_pass_rate"],
         meta["dspy_pass_rate"],
         meta["delta"],
@@ -242,6 +262,7 @@ async def run_skill_lifecycle(
     eval_runner_loader: EvalRunnerLoader | None = None,
     dspy_candidate_factory: DSPyCandidateFactory | None = None,
     semantic_store: SemanticStore | None = None,
+    enable_llm_judge: bool = False,
 ) -> SkillLifecycleSummary:
     """Stage 6 SKILL_TRIGGER + Stage 7 SKILL_CREATE.
 
@@ -336,6 +357,7 @@ async def run_skill_lifecycle(
                     eval_runner_loader=eval_runner_loader,
                     llm_provider=llm_provider,
                     audit_log=audit_log,
+                    enable_llm_judge=enable_llm_judge,
                 )
                 if won is not None:
                     candidate, eval_result = won  # DSPy candidate is the winner

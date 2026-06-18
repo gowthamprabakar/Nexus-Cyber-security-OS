@@ -53,6 +53,7 @@ guards what those writes are allowed to consume.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -79,6 +80,7 @@ from meta_harness.schemas import (
     ScorecardDelta,
     SkillLifecycleSummary,
 )
+from meta_harness.skill_judge import ENV_LLM_JUDGE
 from meta_harness.skill_lifecycle import (
     AuditChainLoader,
     EvalRunnerLoader,
@@ -216,6 +218,9 @@ async def run(
         eval_runner_loader=eval_runner_loader,
         dspy_candidate_factory=dspy_candidate_factory,
         semantic_store=semantic_store,
+        # Phase 2: LLM-judge breaks pass-rate ties toward DSPy (additive; default-OFF). No-op
+        # unless NEXUS_DSPY_LLM_JUDGE=1 AND the DSPy path itself is enabled.
+        enable_llm_judge=os.environ.get(ENV_LLM_JUDGE) == "1",
     )
 
     completed_at = datetime.now(UTC)
