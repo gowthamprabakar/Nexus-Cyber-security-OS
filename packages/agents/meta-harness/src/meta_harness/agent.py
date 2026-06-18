@@ -215,6 +215,7 @@ async def run(
         llm_provider=llm_provider,
         eval_runner_loader=eval_runner_loader,
         dspy_candidate_factory=dspy_candidate_factory,
+        semantic_store=semantic_store,
     )
 
     completed_at = datetime.now(UTC)

@@ -299,3 +299,40 @@ def test_agent_id_propagates_to_dspy_call(tmp_path: Path, monkeypatch: pytest.Mo
         trainset=[object()],
     )
     assert seen == {"trace": "the-trace", "agent_id": "data_security"}
+
+
+@pytest.mark.asyncio
+async def test_trainset_from_store_assembles_multi_example(tmp_path: Path) -> None:
+    """T2 / Phase 4a-2: build_compilation_trainset_from_store assembles N scored
+    examples from persisted traces (un-starves GEPA), applying the Q5-a pre-filter."""
+    from charter.memory.models import Base
+    from charter.memory.semantic import SemanticStore
+    from charter.memory.skill_trace import SkillTraceStore
+    from meta_harness.dspy_skill_creator import build_compilation_trainset_from_store
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    agent_id = "synthesis"
+    _write_effectiveness_sidecar(tmp_path, agent_id, "narrate/a", global_score=0.8, confidence=0.9)
+    _write_effectiveness_sidecar(tmp_path, agent_id, "narrate/b", global_score=0.7, confidence=0.9)
+    _write_effectiveness_sidecar(tmp_path, agent_id, "narrate/c", global_score=None, confidence=0.0)
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        store = SkillTraceStore(
+            SemanticStore(async_sessionmaker(engine, expire_on_commit=False)), "default"
+        )
+        for sid in ("narrate/a", "narrate/b", "narrate/c"):
+            await store.record_trace(
+                agent_id=agent_id, skill_id=sid, category="narrate", trace=f"trace {sid}"
+            )
+        result = await build_compilation_trainset_from_store(
+            store, agent_id, "narrate", workspace_root=tmp_path
+        )
+        # a + b scored → included (multi-example); c unscored → Q5-a pre-filter drops it.
+        assert set(result.included_skill_ids) == {"narrate/a", "narrate/b"}
+        assert "narrate/c" in result.skipped_skill_ids
+        assert len(result.trainset) == 2
+    finally:
+        await engine.dispose()

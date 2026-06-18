@@ -38,7 +38,10 @@ import logging
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from charter.memory.skill_trace import SkillTraceStore
 
 from charter.audit import AuditLog
 from charter.dspy_compiler import DEFAULT_GEPA_AUTO, DSPyCompiler
@@ -144,6 +147,36 @@ def build_compilation_trainset(
         trainset=trainset,
         included_skill_ids=tuple(included),
         skipped_skill_ids=tuple(skipped),
+    )
+
+
+async def build_compilation_trainset_from_store(
+    store: SkillTraceStore,
+    agent_id: str,
+    category: str,
+    *,
+    workspace_root: Path,
+    tenant_id: str = "default",
+    current_example: tuple[str, str] | None = None,
+) -> TrainsetBuildResult:
+    """Assemble a **multi-example** trainset from persisted skill traces (T2 / Phase 4a-2).
+
+    Pulls every persisted ``(skill_id, trace)`` for ``agent_id`` + ``category`` from the
+    ``SkillTraceStore`` (ADR-021), optionally appends the current trigger's example, dedups
+    by ``skill_id`` (newest trace wins), then runs the **same Q5-a effectiveness pre-filter**
+    as :func:`build_compilation_trainset`. This is what un-starves GEPA — N scored examples
+    instead of the single current-trigger skill (which the pre-filter always dropped).
+    """
+    by_skill: dict[str, str] = {}
+    for example in await store.list_traces(agent_id=agent_id, category=category):
+        if example.trace:
+            by_skill[example.skill_id] = example.trace
+    if current_example is not None:
+        skill_id, trace = current_example
+        if trace:
+            by_skill[skill_id] = trace
+    return build_compilation_trainset(
+        list(by_skill.items()), agent_id, workspace_root=workspace_root, tenant_id=tenant_id
     )
 
 

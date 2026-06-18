@@ -44,11 +44,13 @@ from pathlib import Path
 from charter.audit import AuditLog
 from charter.llm import LLMProvider
 from charter.memory.semantic import SemanticStore
+from charter.memory.skill_trace import SkillTraceStore
 from shared.skill_telemetry import ACTION_META_HARNESS_SKILL_EFFECTIVENESS_ERROR
 
 from meta_harness.compilation_cadence import CompilationCadenceController
 from meta_harness.dspy_skill_creator import (
     build_compilation_trainset,
+    build_compilation_trainset_from_store,
     create_compiled_composer,
 )
 from meta_harness.schemas import (
@@ -149,16 +151,27 @@ def make_dspy_candidate_factory(
             # the legacy composer uses (SkillTrigger carries no raw trace).
             _system, user_prompt = compose_skill_prompt(trigger)
 
-            # T2: assemble the trainset from the current trigger's skill. In
-            # production this is empty (the new skill is unscored and the Q5-a
-            # pre-filter drops unscored skills) → graceful no-op. See module
-            # docstring; the live test seeds a scored skill to exercise compile.
-            build = build_compilation_trainset(
-                [(legacy_candidate.skill_id, user_prompt)],
-                agent_id,
-                workspace_root=workspace_root,
-                tenant_id=tenant_id,
-            )
+            # T2 (Phase 4a-2): assemble a MULTI-example trainset from persisted skill
+            # traces (ADR-021 SkillTraceStore) + the current trigger. This un-starves
+            # GEPA — historical scored skills become real training examples instead of
+            # the single (always-unscored, always-filtered) current skill. Without a
+            # store (offline / pre-T2) we fall back to the single-example path.
+            if semantic_store is not None:
+                build = await build_compilation_trainset_from_store(
+                    SkillTraceStore(semantic_store, tenant_id),
+                    agent_id,
+                    legacy_candidate.skill.category,
+                    workspace_root=workspace_root,
+                    tenant_id=tenant_id,
+                    current_example=(legacy_candidate.skill_id, user_prompt),
+                )
+            else:
+                build = build_compilation_trainset(
+                    [(legacy_candidate.skill_id, user_prompt)],
+                    agent_id,
+                    workspace_root=workspace_root,
+                    tenant_id=tenant_id,
+                )
             if not build.trainset:
                 _LOG.warning(
                     "compilation_factory.empty_trainset agent_id=%s "
