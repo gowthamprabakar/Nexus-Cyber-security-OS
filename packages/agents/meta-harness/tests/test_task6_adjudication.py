@@ -49,15 +49,15 @@ def _scorecard() -> Any:
 
 
 def _dspy_candidate(skill_id: str = "iam/dspy") -> Any:
-    # The helper only reads ``.skill_id`` off the DSPy candidate.
-    return SimpleNamespace(skill_id=skill_id)
+    # The helper reads ``.skill_id`` and (judge path) ``.skill`` off the DSPy candidate.
+    return SimpleNamespace(skill_id=skill_id, skill=SimpleNamespace(category="iam-privesc"))
 
 
 def _legacy_candidate(skill_id: str = "iam/legacy") -> Any:
     # The helper reads ``.skill_id`` and (for restore) ``.skill`` + ``.shadow_path``.
     return SimpleNamespace(
         skill_id=skill_id,
-        skill=SimpleNamespace(name="legacy"),
+        skill=SimpleNamespace(name="legacy", category="iam-privesc"),
         shadow_path="shadow/legacy/SKILL.md",
     )
 
@@ -134,6 +134,97 @@ async def test_tie_restores_legacy_skill_md(
     won = await _adjudicate(tmp_path, 0.80, _audit(tmp_path))
     assert won is None  # tie → legacy (Q3 safety default)
     assert len(restored) == 1  # legacy restored
+
+
+@pytest.mark.asyncio
+async def test_tie_llm_judge_promotes_dspy_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 2: on a pass-rate tie, an enabled judge preferring DSPy promotes it."""
+    from meta_harness.skill_judge import JudgeVerdict
+
+    restored = _patch_gate_and_restore(monkeypatch, _eval_result(0.80, skill_id="iam/dspy"))
+    monkeypatch.setattr(lc, "serialize_skill_md", lambda skill: "MD")
+
+    async def _prefer_dspy(*_a: Any, **_kw: Any) -> JudgeVerdict:
+        return JudgeVerdict.PREFER_DSPY
+
+    monkeypatch.setattr(lc, "judge_skill_candidates", _prefer_dspy)
+    won = await lc._adjudicate_dspy_candidate(
+        legacy_eval_result=_eval_result(0.80, skill_id="iam/legacy"),
+        legacy_candidate=_legacy_candidate(),
+        dspy_candidate=_dspy_candidate(),
+        scorecard=_scorecard(),
+        workspace_root=tmp_path,
+        cases_resolver=_ANY,
+        eval_runner_loader=_ANY,
+        llm_provider=_ANY,
+        audit_log=_audit(tmp_path),
+        enable_llm_judge=True,
+    )
+    assert won is not None  # judge broke the tie toward DSPy
+    assert won[0].skill_id == "iam/dspy"
+    assert restored == []  # DSPy won → no legacy restore
+
+
+@pytest.mark.asyncio
+async def test_tie_llm_judge_abstain_keeps_legacy_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 2: an enabled judge that abstains leaves the legacy safety default intact."""
+    from meta_harness.skill_judge import JudgeVerdict
+
+    restored = _patch_gate_and_restore(monkeypatch, _eval_result(0.80, skill_id="iam/dspy"))
+    monkeypatch.setattr(lc, "serialize_skill_md", lambda skill: "MD")
+
+    async def _abstain(*_a: Any, **_kw: Any) -> JudgeVerdict:
+        return JudgeVerdict.TIE
+
+    monkeypatch.setattr(lc, "judge_skill_candidates", _abstain)
+    won = await lc._adjudicate_dspy_candidate(
+        legacy_eval_result=_eval_result(0.80, skill_id="iam/legacy"),
+        legacy_candidate=_legacy_candidate(),
+        dspy_candidate=_dspy_candidate(),
+        scorecard=_scorecard(),
+        workspace_root=tmp_path,
+        cases_resolver=_ANY,
+        eval_runner_loader=_ANY,
+        llm_provider=_ANY,
+        audit_log=_audit(tmp_path),
+        enable_llm_judge=True,
+    )
+    assert won is None  # abstain → legacy
+    assert len(restored) == 1
+
+
+@pytest.mark.asyncio
+async def test_regression_never_consults_judge_even_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hard floor: a DSPy pass-rate regression is decided without ever calling the judge."""
+    _patch_gate_and_restore(monkeypatch, _eval_result(0.60, skill_id="iam/dspy"))
+    monkeypatch.setattr(lc, "serialize_skill_md", lambda skill: "MD")
+    called = {"judge": False}
+
+    async def _boom(*_a: Any, **_kw: Any) -> Any:
+        called["judge"] = True
+        raise AssertionError("judge must not be consulted on a pass-rate decision")
+
+    monkeypatch.setattr(lc, "judge_skill_candidates", _boom)
+    won = await lc._adjudicate_dspy_candidate(
+        legacy_eval_result=_eval_result(0.80, skill_id="iam/legacy"),
+        legacy_candidate=_legacy_candidate(),
+        dspy_candidate=_dspy_candidate(),
+        scorecard=_scorecard(),
+        workspace_root=tmp_path,
+        cases_resolver=_ANY,
+        eval_runner_loader=_ANY,
+        llm_provider=_ANY,
+        audit_log=_audit(tmp_path),
+        enable_llm_judge=True,
+    )
+    assert won is None  # legacy wins on the floor
+    assert called["judge"] is False
 
 
 @pytest.mark.asyncio
