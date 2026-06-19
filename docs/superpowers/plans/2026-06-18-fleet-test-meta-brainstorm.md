@@ -114,13 +114,49 @@ Red-team/pentest, analyst-UX measurement, sandboxed cloud accounts, Wiz/Orca ben
 production-load stress (1M+ entities / 10K tenants), the DSPy production-flag flip (Gate-3 gated,
 separate operator go), and the v0.5 readiness audit — all v0.5+.
 
-## 7. Open for operator at review
+## 7. R-item resolutions (operator, 2026-06-20)
 
-1. Confirm Q2–Q7 + Q9 recs above (or amend).
-2. **R-1**: T1 covers all 20 packages (rec) or a specific 18?
-3. **R-2**: is the D.15 multi-cloud-posture graph-writer gap in-scope for this harness work
-   (add the writer) or routed around (scenarios go through cloud-posture)?
-4. **R-4**: confirm the directive's bridge names map to real `EdgeType` members (esp.
-   `STORES_DATA` → `EXPOSES_DATA`/`CLASSIFIED_AS`).
+- **R-1 — RESOLVED: 20 harnesses, one per package, all in T1 scope.** meta-harness gets a _thin_
+  T1 harness; T3 covers it in depth (it's the Hermes owner, not a detection target).
+- **R-2 — RESOLVED: build the D.15 multi-cloud-posture kg_writer as a prerequisite to T1
+  ("Stage 1.7").** Small (~3–5 days), pattern matches the cloud-posture #733 refactor: subclass
+  `KnowledgeGraphWriterBase` + ADR-018 `NodeCategory.CLOUD_RESOURCE` (kind = Azure/GCP resource
+  types). Real e2e test; **charter untouched** (consumer-only). **This does NOT reverse the "D.15
+  fixture-mode" decision** — that decision was about _live connectors_ (still v0.5). Inventory
+  writes from _fixture-mode prowler results_ are a different scope; the fixture-mode decision
+  survives intact. Ships as a standalone PR before T1 starts.
+- **R-3 — RESOLVED: T3 covers the 14 detection agents + 3 LLM agents (investigation, curiosity,
+  synthesis) + cloud-posture (NLAH skill emission).** NOT in T3: audit, supervisor, remediation,
+  meta-harness itself. Exact list enumerated at T3-brainstorm time.
+- **R-4 — RESOLVED: `STORES_DATA` was a directive typo → use `EXPOSES_DATA`** (real ADR-018
+  member, emitted by data-security). Every other directive edge name verified real against main
+  (see Appendix A). **Layer 36 banked: verify edge names against main before asserting them** in
+  any T2/T5 assertion.
 
-On approval: T1 brainstorm next, then the cascade.
+## 8. Open for operator at review
+
+1. Confirm Q2–Q7 + Q9 recs in §3 (or amend).
+2. R-1..R-4 resolutions above are recorded as locked; flag if any need revisiting.
+
+On approval: ship the D.15 kg_writer (Stage 1.7) → then T1 brainstorm + cascade.
+
+---
+
+## Appendix A — directive edge-name → ADR-018 `EdgeType` mapping (verified against main 2026-06-20)
+
+Every edge name the directive's T2/T5 assertions reference, checked against
+`charter/memory/graph_types.py` `EdgeType` + the emitting agent's `kg_writer` (Layer 36):
+
+| Directive name      | ADR-018 `EdgeType`  | Emitter              | Status                                    |
+| ------------------- | ------------------- | -------------------- | ----------------------------------------- |
+| `HOSTS_AI`          | `HOSTS_AI`          | aispm (D.11)         | ✓ real                                    |
+| `IRSA_MAPPING`      | `IRSA_MAPPING`      | k8s-posture (D.6)    | ✓ real                                    |
+| `AUTHORIZED`        | `AUTHORIZED`        | sspm (D.10)          | ✓ real                                    |
+| `SSO_INTO`          | `SSO_INTO`          | sspm (D.10)          | ✓ real (live = v0.5; fixture writes OK)   |
+| `DEFINED_IN`        | `DEFINED_IN`        | appsec (D.14)        | ✓ real                                    |
+| `COMMUNICATES_WITH` | `COMMUNICATES_WITH` | network-threat (D.4) | ✓ real (was suspected; confirmed real)    |
+| `STORES_DATA`       | **`EXPOSES_DATA`**  | data-security (D.4)  | ✗ directive typo → **use `EXPOSES_DATA`** |
+
+Note: `AUTHORIZED` (D.10) and `AUTHORIZED_BY` are distinct members — T2/T5 must use the one the
+emitter actually writes. Bridge names beyond this table that surface during T2/T5 scenario design
+get the same verify-against-main treatment before any assertion is written.
