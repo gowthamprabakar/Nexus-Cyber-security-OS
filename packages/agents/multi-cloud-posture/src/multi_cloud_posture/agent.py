@@ -35,13 +35,14 @@ from pathlib import Path
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider
+from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from multi_cloud_posture import __version__ as agent_version
 from multi_cloud_posture.normalizers.azure import normalize_azure
 from multi_cloud_posture.normalizers.gcp import normalize_gcp
-from multi_cloud_posture.schemas import FindingsReport
+from multi_cloud_posture.schemas import CloudPostureFinding, FindingsReport
 from multi_cloud_posture.summarizer import render_summary
 from multi_cloud_posture.tools.azure_activity import (
     AzureActivityRecord,
@@ -58,11 +59,15 @@ from multi_cloud_posture.tools.azure_discovery import (
 from multi_cloud_posture.tools.gcp_discovery import discover_project_id, discover_regions
 from multi_cloud_posture.tools.gcp_iam import GcpIamFinding, read_gcp_iam_findings
 from multi_cloud_posture.tools.gcp_scc import GcpSccFinding, read_gcp_findings
+from multi_cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
 
-def build_registry() -> ToolRegistry:
+def build_registry(
+    semantic_store: SemanticStore | None = None,
+    customer_id: str = "",
+) -> ToolRegistry:
     """Compose the tool universe available to this agent.
 
     Phase C SS4: the v0.2 live scope-discovery helpers are registered so they dispatch
@@ -86,6 +91,12 @@ def build_registry() -> ToolRegistry:
     reg.register("discover_locations", discover_locations, version="0.2.0", cloud_calls=1)
     reg.register("discover_project_id", discover_project_id, version="0.2.0", cloud_calls=1)
     reg.register("discover_regions", discover_regions, version="0.2.0", cloud_calls=1)
+    # Stage 1.7 (R-2): KG-write tools register only when a SemanticStore is injected — without
+    # it the agent stays byte-identical (findings.json unchanged) and writes nothing.
+    if semantic_store is not None:
+        kg = KnowledgeGraphWriter(semantic_store=semantic_store, customer_id=customer_id)
+        reg.register("kg_upsert_asset", kg.upsert_asset, version="0.1.0", cloud_calls=0)
+        reg.register("kg_upsert_finding", kg.upsert_finding, version="0.1.0", cloud_calls=0)
     return reg
 
 
@@ -118,6 +129,7 @@ async def run(
     azure_regions: list[str] | None = None,
     gcp_project_id: str | None = None,
     gcp_regions: list[str] | None = None,
+    semantic_store: SemanticStore | None = None,
 ) -> FindingsReport:
     """Run the Multi-Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -153,7 +165,7 @@ async def run(
     del gcp_project_id  # reserved for live GCP scanning (consumed later in M3/M4)
     del gcp_regions  # reserved for live GCP scanning (precedence via region_scope)
 
-    registry = build_registry()
+    registry = build_registry(semantic_store, contract.customer_id)
     model_pin = "deterministic"
     correlation_id = new_correlation_id()
 
@@ -202,6 +214,11 @@ async def run(
         for f in (*azure_findings, *gcp_findings):
             report.add_finding(f)
 
+        # Stage 1.7 (R-2): persist resources + findings to the shared spine when a
+        # SemanticStore is injected. Inert (no writes) otherwise — findings.json byte-identical.
+        if semantic_store is not None:
+            await _upsert_findings_to_kg(ctx, [*azure_findings, *gcp_findings])
+
         ctx.write_output(
             "findings.json",
             report.model_dump_json(indent=2).encode("utf-8"),
@@ -214,6 +231,32 @@ async def run(
         ctx.assert_complete()
 
     return report
+
+
+async def _upsert_findings_to_kg(ctx: Charter, findings: list[CloudPostureFinding]) -> None:
+    """Upsert each finding's resources + the finding itself into SemanticStore (Stage 1.7).
+
+    Mirrors the cloud-posture path: D.15 reuses ``CloudPostureFinding``, so each finding's
+    OCSF ``resources`` carry the same ``type`` / ``uid`` / ``region`` / ``owner`` shape.
+    """
+    for finding in findings:
+        for ocsf_resource in finding.resources:
+            await ctx.call_tool(
+                "kg_upsert_asset",
+                kind=str(ocsf_resource.get("type", "unknown")),
+                external_id=str(ocsf_resource.get("uid", "")),
+                properties={
+                    "region": ocsf_resource.get("region"),
+                    "account_uid": (ocsf_resource.get("owner", {}).get("account_uid")),
+                },
+            )
+        await ctx.call_tool(
+            "kg_upsert_finding",
+            finding_id=finding.finding_id,
+            rule_id=finding.rule_id,
+            severity=finding.severity.value,
+            affected_arns=[str(r.get("uid", "")) for r in finding.resources if r.get("uid")],
+        )
 
 
 # ---------------------------- pipeline stages -----------------------------
