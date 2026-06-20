@@ -72,9 +72,10 @@ ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101"]  # assert allowed in tests
-# fleet_testkit is test infrastructure (the L1+ fleet-test assertion helpers); `assert` is its
-# intended mechanism even though it lives under src/ rather than tests/.
+# fleet_testkit is test infrastructure (the L1/L2 fleet-test assertion + capability helpers);
+# `assert` is its intended mechanism even though it lives under src/ rather than tests/.
 "packages/integration/src/fleet_testkit/assertions.py" = ["S101"]
+"packages/integration/src/fleet_testkit/capability.py" = ["S101"]
 # SSPM GitHub connector: "secret_scanning" is a GitHub API field name and the token
 # *env-var name* is a source identifier — both trip S105/S106 (hardcoded-secret heuristic)
 # as false positives. The guard stays active on credentials.py (the real secret path).

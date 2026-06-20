@@ -18,15 +18,35 @@ from fleet_testkit.assertions import (
     assert_ocsf_valid,
     assert_two_tenant_disjoint,
 )
+from fleet_testkit.capability import (
+    CapabilityResult,
+    GroundTruth,
+    NonDetection,
+    PassCriteria,
+    TestCase,
+    detection_timer,
+    evaluate,
+    load_test_case,
+    score,
+)
 from fleet_testkit.contract import wiring_contract
 from fleet_testkit.store import in_memory_semantic_store
 
 __all__ = [
+    "CapabilityResult",
+    "GroundTruth",
+    "NonDetection",
+    "PassCriteria",
+    "TestCase",
     "assert_audit_chain",
     "assert_entity_written",
     "assert_no_entities",
     "assert_ocsf_valid",
     "assert_two_tenant_disjoint",
+    "detection_timer",
+    "evaluate",
     "in_memory_semantic_store",
+    "load_test_case",
+    "score",
     "wiring_contract",
 ]
