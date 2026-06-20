@@ -93,9 +93,13 @@ unmatched gt =FN; a finding matching nothing (or matching an `expected_non_detec
 - **L2-Q3 — bank authorship cadence.** Author banks **in parallel** (independent) but **merge each
   per-PR** (Q9). Confirm that's the intended throughput (parallel author, serial review). _Rec:
   yes._
-- **L2-Q4 — match-key registry.** Capture each agent's match key in the brainstorm appendix (so
-  reviewers check the YAML against an agreed key), or leave per-PR? _Rec: appendix_ — a wrong match
-  key silently inflates precision; agreeing it up front is cheap insurance.
+- **L2-Q4 — match-key registry. RULED (operator 2026-06-20): appendix up front, MANDATORY
+  infrastructure.** The match-key registry (Appendix A) is canonical: one entry per agent
+  (agent → identity match function + rationale). **Every per-bank PR review verifies the bank's
+  `match()` honors the registry**; registry updates require **operator approval** (same discipline
+  as ADR-018 edge-type additions). Rationale: this is the L2 analogue of the Q9 sharpening — Q9
+  catches _wrong ground truth_, Q4 catches _wrong match key_; both silently inflate precision and
+  CI cannot detect either, so both need human review against an agreed reference (see §7).
 - **L2-Q5 — FakeLLMProvider determinism for LLM agents** (curiosity/synthesis): the case's
   expected LLM responses live in the fixture (deterministic), no live calls. _Rec: yes_ (directive
   §3.4: FakeLLMProvider, no detection-logic mocking).
@@ -108,6 +112,19 @@ fake-green via silent skip; **#7** tenant isolation in the bank too (a case can 
 data is not detected — negative space). FakeLLMProvider deterministic; real detection path (no
 mocking the detector). Bare-or-wrapped OCSF validation per the L1 finding-#1 ruling.
 
+**Swiss-bar implication — the three silently-inflated-precision guards.** L2 has three failure
+modes that pass CI while lying, each defused by a human-checked reference (none catchable by an
+assertion):
+
+| Guard             | Failure it prevents   | Reference the reviewer checks against           |
+| ----------------- | --------------------- | ----------------------------------------------- |
+| Swiss-bar **#15** | fabricated edge names | ADR-018 `EdgeType` catalogue                    |
+| **Q9 sharpening** | wrong ground truth    | per-PR review on **every** bank (no self-merge) |
+| **Q4 registry**   | wrong match key       | the **match-key registry** (Appendix A)         |
+
+The match-key registry is the Q4 member of this lineage — same discipline as #15: a canonical
+reference, reviewer-verified, operator-gated to change.
+
 ## 8. Non-goals (L2)
 
 Cross-agent correlation (L3), Hermes-loop quality (L4), pressure (L5), pure-breed (L6). Real
@@ -117,5 +134,44 @@ work — L2 tests around the current behavior honestly.
 
 ## 9. Open for operator
 
-Confirm L2-Q1..Q5. On approval: build the `fleet_testkit` L2 evaluator + the 2 reference banks
-(vulnerability, cloud-posture) per-PR, then the 18-bank per-PR cascade.
+Confirm L2-Q1..Q5. On approval: build the `fleet_testkit` L2 evaluator + the match-key registry
+(Appendix A) + the 2 reference banks (vulnerability, cloud-posture) per-PR, then the 18-bank
+per-PR cascade.
+
+---
+
+## Appendix A — Match-key registry (CANONICAL · operator-gated)
+
+The identity that ties an **emitted finding** to a **`ground_truth_violation`** (a TP), per agent.
+`match(finding, gt)` compares the **key fields** below; an unmatched gt = FN, an unmatched finding
+(or one matching an `expected_non_detection`) = FP. The registry names the **key**; each per-bank
+PR implements `match()` honoring it and the reviewer verifies the impl against this table. **Changes
+require operator approval** (ADR-018-edge-addition discipline). Exact OCSF field paths are pinned
+when each bank is built; the _identity_ is fixed here.
+
+| Agent               | OCSF          | Match key (compared identity)                             | Rationale                                                                         |
+| ------------------- | ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| vulnerability       | 2002          | (cve_id, affected resource/image uid)                     | a CVE is identified by its id on a specific image/resource                        |
+| cloud-posture       | 2003          | (rule/check id, resource uid)                             | a posture check fails against one resource                                        |
+| multi-cloud-posture | 2003          | (rule id, resource uid)                                   | Azure/GCP resource id + check, same shape as F.3                                  |
+| k8s-posture         | 2003          | (CIS check id, cluster-object uid)                        | a CIS control on a specific k8s object                                            |
+| data-security       | 2003          | (classifier label, data-store resource uid)               | a PII/PHI/PCI class found on one data store                                       |
+| identity            | 2003/2004     | (finding type, principal arn/id)                          | an over-perm/exposure on one IAM principal                                        |
+| threat-intel        | 2003          | (indicator or cve id, correlated entity)                  | enrichment matches an IOC/CVE to an entity                                        |
+| sspm                | 2003          | (check id, SaaS resource uid: tenant/oauth-app)           | a SaaS posture check on one tenant/app                                            |
+| aispm               | 2003/2004     | (check or probe id, AI resource uid: service/model)       | a posture/injection finding on one AI asset                                       |
+| runtime-threat      | 2004          | (rule/signature, workload uid: host/container)            | a runtime event on one workload                                                   |
+| network-threat      | 2004          | (signature, flow/endpoint key)                            | a network alert on one flow/endpoint                                              |
+| appsec              | 2003          | (finding type/rule, code location: repo+path or artifact) | a SAST/secret/IaC finding at one code location                                    |
+| curiosity           | 2004          | (gap kind, cited region/entity)                           | a hypothesis is tied to the coverage gap it cites (WI-X11 guard already binds it) |
+| synthesis           | 2004          | (narrative subject, cited source-finding id set)          | a synthesis report is identified by the findings it correlates                    |
+| investigation       | 2005          | (incident subject, correlated entity/finding id set)      | an incident is identified by the entities/findings it ties together               |
+| remediation         | 2007          | (action type, target resource uid)                        | a remediation action on one resource                                              |
+| audit               | 6003          | (integrity/tamper event type, audited entry/source id)    | a tamper/integrity finding on one audited entry                                   |
+| supervisor          | — (routing)   | (trigger key, dispatched agent id)                        | ground truth = expected routing decision for a trigger (no OCSF)                  |
+| meta-harness        | — (scorecard) | (scored agent id, expected grade/score band)              | ground truth = expected scorecard for a seeded eval (no OCSF)                     |
+
+Notes: the two **no-OCSF** agents (supervisor, meta-harness) measure capability against their
+non-finding output (routing correctness / scoring correctness) — the registry key reflects that.
+The bare-OCSF agents (appsec/curiosity/synthesis/investigation/remediation/audit) match on the same
+key whether or not the envelope is present (L1 finding-#1 ruling).
