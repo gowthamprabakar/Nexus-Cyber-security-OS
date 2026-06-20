@@ -51,11 +51,13 @@ YAML test cases, fixtures, scenarios) in per-level brainstorms (Q10).
   `NEXUS_LIVE_*` gating discipline; default CI runs L1–L4).
 - **Q7 — L6 pure-breed gated default-off** (`NEXUS_PURE_BREED=1`, nightly + release branches).
   _Rec: yes._
-- **Q9 — review mode per level:** L1 infra per-PR / cascade self-merge; **L2 banks per-PR**
-  (test-case _quality_ is the whole point) self-merge after the first 2 agents lock the pattern;
-  L3 scenarios per-PR / self-merge; L4 Gate-3-evidence test per-PR; L5 substrate-adjacent per-PR;
-  L6 per-PR (it's THE test). _Rec: as tabled_ — note L2 keeps per-PR longer than L1 because a
-  weak test case is worse than no test case.
+- **Q9 — review mode per level (operator-SHARPENED):** L1 infra per-PR / cascade self-merge;
+  **L2 banks per-PR on EVERY agent bank** (NOT self-merge after the first 2); L3 scenarios per-PR /
+  self-merge; L4 Gate-3-evidence test per-PR; L5 substrate-adjacent per-PR; L6 per-PR (it's THE
+  test). **Locked:** at L2 the test case _is_ the deliverable, and ground-truth correctness ("does
+  the ground-truth file actually match the fixture?") is a **semantic** property CI cannot catch —
+  only human review catches a plausible-but-wrong ground truth. Protecting the 85% PRD claim
+  requires operator eyes on every L2 bank, so L2 stays per-PR throughout (no self-merge cascade).
 
 ## 3. Carry-forward from v1 (no institutional capital lost)
 
@@ -101,7 +103,8 @@ Sandboxed cloud accounts, Wiz/Orca benchmark, 1M+ entity stress, Task-14 Anthrop
 analyst-UX, red-team, D.15 live-connector activation, Hermes-scope expansion to deterministic
 agents — all v0.5+.
 
-## 7. Open for operator
+## 7. Resolution (operator-approved 2026-06-20)
 
-Confirm Q1–Q4, Q6, Q7, Q9 recs (Q5/Q8/Q10 already locked). On approval: the **Level 1 brainstorm**
-(carrying the #765 recon) is next, then the L1 cascade.
+All Q-items locked: Q5(a)/Q8(a)/Q10 (operator); Q1–Q4/Q6/Q7 (§10/§3.6 recs accepted); **Q9
+sharpened** — L2 banks per-PR on **every** agent (no self-merge). Next: the **Level 1 brainstorm**
+(carrying the #765 recon), then the L1 cascade.
