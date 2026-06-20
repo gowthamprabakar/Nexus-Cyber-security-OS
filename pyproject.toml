@@ -32,10 +32,12 @@ members = [
     "packages/agents/aispm",
     "packages/control-plane",
     "packages/shared",
+    "packages/integration",
 ]
 
 [tool.uv.sources]
 nexus-charter = { workspace = true }
+nexus-integration = { workspace = true }
 
 [dependency-groups]
 # Lint, type-check, and test tooling for the whole monorepo. Centralised
@@ -70,6 +72,9 @@ ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101"]  # assert allowed in tests
+# fleet_testkit is test infrastructure (the L1+ fleet-test assertion helpers); `assert` is its
+# intended mechanism even though it lives under src/ rather than tests/.
+"packages/integration/src/fleet_testkit/assertions.py" = ["S101"]
 # SSPM GitHub connector: "secret_scanning" is a GitHub API field name and the token
 # *env-var name* is a source identifier — both trip S105/S106 (hardcoded-secret heuristic)
 # as false positives. The guard stays active on credentials.py (the real secret path).
