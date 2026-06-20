@@ -1498,6 +1498,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1513,6 +1514,7 @@ requires-dist = [
     { name = "google-cloud-aiplatform", specifier = ">=1.60.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -1538,6 +1540,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1546,10 +1550,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -1577,6 +1583,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1590,6 +1597,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -1748,6 +1756,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1757,11 +1767,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-data-security-agent", editable = "packages/agents/data-security" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -1854,6 +1866,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1863,11 +1877,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-compliance-agent", editable = "packages/agents/compliance" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "nexus-synthesis-agent", editable = "packages/agents/synthesis" },
@@ -1933,6 +1949,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1942,11 +1960,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "boto3", specifier = ">=1.35.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2029,7 +2049,9 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "moto" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2039,6 +2061,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "azure-identity", specifier = ">=1.25.3" },
     { name = "boto3", specifier = ">=1.35.0" },
     { name = "botocore", specifier = ">=1.35.0" },
@@ -2047,6 +2070,7 @@ requires-dist = [
     { name = "moto", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2106,6 +2130,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2120,6 +2145,7 @@ requires-dist = [
     { name = "nexus-audit-agent", editable = "packages/agents/audit" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
@@ -2151,6 +2177,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2160,11 +2188,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "kubernetes", specifier = ">=31.0.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2195,6 +2225,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2208,11 +2240,13 @@ dspy = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "dspy", marker = "extra == 'dspy'", specifier = ">=3.2.1,<3.3" },
     { name = "gepa", marker = "extra == 'dspy'", specifier = "==0.0.27" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "nexus-synthesis-agent", editable = "packages/agents/synthesis" },
@@ -2248,6 +2282,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2257,6 +2293,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "azure-identity", specifier = ">=1.25.3" },
     { name = "azure-mgmt-subscription", specifier = ">=3.1.1" },
     { name = "click", specifier = ">=8.1.0" },
@@ -2265,6 +2302,7 @@ requires-dist = [
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2295,6 +2333,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2304,10 +2344,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "boto3", specifier = ">=1.35.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
@@ -2340,6 +2382,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2349,11 +2393,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "kubernetes", specifier = ">=31.0.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-k8s-posture-agent", editable = "packages/agents/k8s-posture" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
@@ -2476,6 +2522,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2488,6 +2535,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2514,6 +2562,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2523,9 +2573,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
@@ -2559,6 +2611,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2568,11 +2622,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-compliance-agent", editable = "packages/agents/compliance" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-investigation-agent", editable = "packages/agents/investigation" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
@@ -2608,6 +2664,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2617,11 +2675,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-cloud-posture", editable = "packages/agents/cloud-posture" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-network-threat-agent", editable = "packages/agents/network-threat" },
     { name = "nexus-runtime-threat", editable = "packages/agents/runtime-threat" },
     { name = "nexus-shared", editable = "packages/shared" },
@@ -2661,6 +2721,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "nexus-integration" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2671,6 +2733,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "azure-containerregistry", specifier = ">=1.2.0" },
     { name = "azure-identity", specifier = ">=1.25.3" },
     { name = "boto3", specifier = ">=1.43.6" },
@@ -2680,6 +2743,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
+    { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },

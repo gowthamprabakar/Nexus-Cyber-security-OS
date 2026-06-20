@@ -26,6 +26,8 @@ dev = [
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",
     "types-PyYAML>=6.0.0",
+    "aiosqlite>=0.20.0",
+    "nexus-integration",
 ]
 
 [project.scripts]
@@ -42,6 +44,7 @@ nexus-network-threat-agent = { workspace = true }
 nexus-cloud-posture = { workspace = true }
 nexus-vulnerability = { workspace = true }
 nexus-runtime-threat = { workspace = true }
+nexus-integration = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
