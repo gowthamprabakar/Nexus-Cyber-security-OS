@@ -24,6 +24,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "types-PyYAML>=6.0.0",
     "aiosqlite>=0.20.0",
+    "nexus-integration",
 ]
 
 [project.scripts]
@@ -38,6 +39,7 @@ nexus-shared = { workspace = true }
 nexus-runtime = { workspace = true }
 nexus-eval-framework = { workspace = true }
 nexus-audit-agent = { workspace = true }
+nexus-integration = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

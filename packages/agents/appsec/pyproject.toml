@@ -20,6 +20,8 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",
+    "aiosqlite>=0.20.0",
+    "nexus-integration",
 ]
 
 [project.scripts]
@@ -32,6 +34,7 @@ appsec = "appsec.eval_runner:AppSecEvalRunner"
 nexus-charter = { workspace = true }
 nexus-shared = { workspace = true }
 nexus-eval-framework = { workspace = true }
+nexus-integration = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
