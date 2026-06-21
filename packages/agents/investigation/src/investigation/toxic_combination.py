@@ -9,12 +9,23 @@ with evidence refs to the contributing findings.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
-from meta_harness.kg_query import ToxicCombination
+from meta_harness.kg_query import KgQuery, ToxicCombination
 
 from investigation.schemas import Hypothesis
+
+if TYPE_CHECKING:
+    from charter.memory.semantic import SemanticStore
+
+    from investigation.tools.related_findings import RelatedFinding
+
+# OCSF wire value of identity's FindingType.OVERPRIVILEGE. D.7 consumes findings by
+# their wire shape, NOT by importing the producer's enum (avoids a cross-package dep).
+_OVERPRIVILEGE = "overprivilege"
 
 
 def _combo_external_id(combo: ToxicCombination) -> str:
@@ -52,4 +63,57 @@ def to_hypothesis(combo: ToxicCombination, *, evidence_refs: tuple[str, ...]) ->
     )
 
 
-__all__ = ["ToxicCombinationWriter", "to_hypothesis"]
+async def detect_toxic_combination_hypotheses(
+    *,
+    semantic_store: SemanticStore,
+    customer_id: str,
+    related_findings: Sequence[RelatedFinding],
+) -> tuple[Hypothesis, ...]:
+    """Turn identity overprivilege findings into toxic-combination hypotheses.
+
+    For each over-permissioned principal, resolve it to its graph node, run the
+    public-data-exposure detector, write the TOXIC_COMBINATION node, and build a
+    Hypothesis citing the identity finding's uid (a `finding:<uid>` ref D.7's
+    Stage 4 validator resolves). Empty tuple when nothing qualifies.
+    """
+    ref_by_principal: dict[str, str] = {}
+    for rf in related_findings:
+        if rf.class_uid != 2004:
+            continue
+        info = rf.payload.get("finding_info") or {}
+        types = info.get("types") or []
+        if _OVERPRIVILEGE not in types:
+            continue
+        finding_uid = str(info.get("uid") or "")
+        if not finding_uid:
+            continue
+        for principal in rf.payload.get("affected_principals", []):
+            arn = str(principal.get("uid", ""))
+            if not arn:
+                continue
+            entity_id = await semantic_store.upsert_entity(
+                tenant_id=customer_id,
+                entity_type=NodeCategory.IDENTITY.value,
+                external_id=arn,
+                properties={},
+            )
+            ref_by_principal.setdefault(entity_id, f"finding:{finding_uid}")
+
+    if not ref_by_principal:
+        return ()
+
+    hits = await KgQuery(semantic_store, customer_id).find_public_data_exposure(
+        over_permissioned_principal_ids=list(ref_by_principal),
+    )
+    writer = ToxicCombinationWriter(semantic_store, customer_id)
+    hypotheses: list[Hypothesis] = []
+    for combo in hits:
+        ref = ref_by_principal.get(combo.principal_id)
+        if ref is None:
+            continue
+        await writer.record(combo)
+        hypotheses.append(to_hypothesis(combo, evidence_refs=(ref,)))
+    return tuple(hypotheses)
+
+
+__all__ = ["ToxicCombinationWriter", "detect_toxic_combination_hypotheses", "to_hypothesis"]
