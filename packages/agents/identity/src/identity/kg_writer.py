@@ -26,6 +26,8 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from identity.tools.aws_iam import IdentityListing
 
 
@@ -83,6 +85,21 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     EdgeType.MEMBER_OF,
                     {},
                 )
+
+    async def record_access(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE edges (cross-agent spine).
+
+        Each grant is ``(principal_arn, resource_arn)``. Both endpoints are upserted
+        idempotently — same ARN ⇒ same spine node cloud-posture/DSPM already own, so
+        the edge lands on the shared graph. ``grants`` is computed by the agent driver
+        from policy resource statements; the writer only persists.
+        """
+        for principal_arn, resource_arn in grants:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {})
+            resource_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, resource_arn, {})
+            await self.add_edge(
+                principal_node or "", resource_node or "", EdgeType.HAS_ACCESS_TO, {}
+            )
 
 
 __all__ = ["KnowledgeGraphWriter"]
