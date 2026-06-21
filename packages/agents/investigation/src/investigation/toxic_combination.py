@@ -82,9 +82,9 @@ async def detect_toxic_combination_hypotheses(
             continue
         info = rf.payload.get("finding_info") or {}
         types = info.get("types") or []
-        if not types or types[0] != _OVERPRIVILEGE:
+        if _OVERPRIVILEGE not in types:
             continue
-        finding_uid = str(info.get("uid", ""))
+        finding_uid = str(info.get("uid") or "")
         if not finding_uid:
             continue
         for principal in rf.payload.get("affected_principals", []):
