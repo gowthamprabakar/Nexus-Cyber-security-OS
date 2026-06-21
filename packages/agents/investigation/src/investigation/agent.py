@@ -179,7 +179,7 @@ async def run(
     since: datetime | None = None,
     until: datetime | None = None,
     publish_events_to_bus: bool = False,
-    detect_toxic_combinations: bool = False,
+    detect_toxic_combinations: bool = True,
 ) -> IncidentReport:
     """Run the 6-stage Orchestrator-Workers pipeline end-to-end.
 
@@ -258,10 +258,11 @@ async def run(
             # have to thread its attempt count through here or trip the bound.
             assert_bounded_retry(1)
 
-            # Cross-agent correlation (opt-in, default OFF → byte-identical). Merge toxic-
-            # combination hypotheses BEFORE Stage 4 so they pass the same evidence-resolution
-            # + invariants as every other hypothesis. They cite the identity overprivilege
-            # finding's uid (in corpus), so they survive validation.
+            # Cross-agent correlation (default ON; pass detect_toxic_combinations=False to
+            # disable). Merge toxic-combination hypotheses BEFORE Stage 4 so they pass the same
+            # evidence-resolution + invariants as every other hypothesis. They cite the identity
+            # overprivilege finding's uid (in corpus), so they survive validation. Inert (empty)
+            # when no overprivilege findings or no toxic graph path exist.
             if detect_toxic_combinations:
                 toxic = await detect_toxic_combination_hypotheses(
                     semantic_store=semantic_store,
