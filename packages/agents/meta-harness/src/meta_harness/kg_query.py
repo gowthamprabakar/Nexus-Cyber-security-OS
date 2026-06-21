@@ -18,8 +18,10 @@ deferred. A.4-only consumer this cycle (#718-D4).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
+from charter.memory.graph_types import EdgeType
 from charter.memory.semantic import (
     MAX_TRAVERSAL_DEPTH,
     EntityRow,
@@ -68,6 +70,17 @@ class AttackPathResult:
     def shortest(self) -> tuple[PathEdge, ...] | None:
         """The fewest-hops path, or ``None`` when no path exists."""
         return min(self.paths, key=len) if self.paths else None
+
+
+@dataclass(frozen=True, slots=True)
+class ToxicCombination:
+    """A public-data-exposure attack path: over-permissioned principal → public
+    bucket → sensitive data. The `path` is the evidence chain (2 edges)."""
+
+    principal_id: str
+    resource_id: str
+    data_classification_id: str
+    path: tuple[PathEdge, PathEdge]
 
 
 def _validate_depth(depth: int) -> int:
@@ -162,6 +175,33 @@ class KgQuery:
 
         return AttackPathResult(src_entity_id, dst_entity_id, max_depth, tuple(paths))
 
+    async def find_public_data_exposure(
+        self, *, over_permissioned_principal_ids: Sequence[str]
+    ) -> list[ToxicCombination]:
+        """Find principal --HAS_ACCESS_TO--> resource --EXPOSES_DATA--> data paths.
+
+        EXPOSES_DATA is only written for public buckets, so its presence proves both
+        the public and sensitive-data legs. Read-only; seeded by the caller with the
+        over-permissioned principals (from identity's OVERPRIVILEGE findings).
+        """
+        hits: list[ToxicCombination] = []
+        for principal_id in over_permissioned_principal_ids:
+            for access in await self._edges_from(principal_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                bucket_id = access.dst_entity_id
+                for expose in await self._edges_from(bucket_id, (EdgeType.EXPOSES_DATA.value,)):
+                    hits.append(
+                        ToxicCombination(
+                            principal_id=principal_id,
+                            resource_id=bucket_id,
+                            data_classification_id=expose.dst_entity_id,
+                            path=(
+                                PathEdge(principal_id, bucket_id, access.relationship_type),
+                                PathEdge(bucket_id, expose.dst_entity_id, expose.relationship_type),
+                            ),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -177,4 +217,5 @@ __all__ = [
     "BlastRadiusResult",
     "KgQuery",
     "PathEdge",
+    "ToxicCombination",
 ]

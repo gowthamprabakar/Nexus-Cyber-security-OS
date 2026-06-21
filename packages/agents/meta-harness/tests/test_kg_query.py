@@ -17,9 +17,16 @@ from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.models import Base
 from charter.memory.semantic import MAX_TRAVERSAL_DEPTH, SemanticStore
-from meta_harness.kg_query import AttackPathResult, BlastRadiusResult, KgQuery, PathEdge
+from fleet_testkit import in_memory_semantic_store
+from meta_harness.kg_query import (
+    AttackPathResult,
+    BlastRadiusResult,
+    KgQuery,
+    PathEdge,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 _TENANT = "01HV0T0000000000000000TEN1"
@@ -223,3 +230,82 @@ async def test_path_edge_is_read_only_dto() -> None:
     edge = PathEdge(src_entity_id="a", dst_entity_id="b", relationship_type="AFFECTS")
     with pytest.raises((AttributeError, TypeError)):
         edge.relationship_type = "X"  # type: ignore[misc]
+
+
+# ----------------------- toxic-combination detector ----------------------
+
+
+async def _seed_toxic(store, *, public: bool, has_access: bool):  # type: ignore[no-untyped-def]
+    """Seed a minimal principal → bucket → data graph for toxic-combo tests."""
+    t = "tenant-1"
+    role = await store.upsert_entity(
+        tenant_id=t,
+        entity_type=NodeCategory.IDENTITY.value,
+        external_id="arn:aws:iam::1:role/app",
+        properties={},
+    )
+    bucket = await store.upsert_entity(
+        tenant_id=t,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id="arn:aws:s3:::acme-pii",
+        properties={},
+    )
+    data = await store.upsert_entity(
+        tenant_id=t,
+        entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+        external_id="acme-pii:SSN",
+        properties={"data_type": "SSN"},
+    )
+    if has_access:
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=role,
+            dst_entity_id=bucket,
+            relationship_type=EdgeType.HAS_ACCESS_TO.value,
+            properties={},
+        )
+    # CONTAINS is always written; EXPOSES_DATA only when public:
+    await store.add_relationship(
+        tenant_id=t,
+        src_entity_id=bucket,
+        dst_entity_id=data,
+        relationship_type=EdgeType.CONTAINS.value,
+        properties={},
+    )
+    if public:
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=bucket,
+            dst_entity_id=data,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
+        )
+    return role, bucket, data
+
+
+@pytest.mark.asyncio
+async def test_detects_public_data_exposure_path() -> None:
+    async with in_memory_semantic_store() as store:
+        role, bucket, data = await _seed_toxic(store, public=True, has_access=True)
+        q = KgQuery(store, "tenant-1")
+        hits = await q.find_public_data_exposure(over_permissioned_principal_ids=[role])
+        assert len(hits) == 1
+        assert hits[0].principal_id == role
+        assert hits[0].resource_id == bucket
+        assert hits[0].data_classification_id == data
+
+
+@pytest.mark.asyncio
+async def test_no_hit_when_bucket_not_public() -> None:
+    async with in_memory_semantic_store() as store:
+        role, _, _ = await _seed_toxic(store, public=False, has_access=True)
+        q = KgQuery(store, "tenant-1")
+        assert await q.find_public_data_exposure(over_permissioned_principal_ids=[role]) == []
+
+
+@pytest.mark.asyncio
+async def test_no_hit_when_principal_has_no_access() -> None:
+    async with in_memory_semantic_store() as store:
+        role, _, _ = await _seed_toxic(store, public=True, has_access=False)
+        q = KgQuery(store, "tenant-1")
+        assert await q.find_public_data_exposure(over_permissioned_principal_ids=[role]) == []
