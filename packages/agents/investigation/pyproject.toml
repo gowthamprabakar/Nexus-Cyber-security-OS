@@ -10,6 +10,7 @@ dependencies = [
     "nexus-runtime",
     "nexus-eval-framework",
     "nexus-audit-agent",
+    "nexus-meta-harness-agent",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
     "click>=8.1.0",
@@ -39,6 +40,7 @@ nexus-shared = { workspace = true }
 nexus-runtime = { workspace = true }
 nexus-eval-framework = { workspace = true }
 nexus-audit-agent = { workspace = true }
+nexus-meta-harness-agent = { workspace = true }
 nexus-integration = { workspace = true }
 
 [build-system]
