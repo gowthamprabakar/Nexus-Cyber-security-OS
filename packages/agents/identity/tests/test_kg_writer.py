@@ -176,3 +176,36 @@ async def test_run_without_store_writes_nothing(
     _patch_listing(monkeypatch, listing)
     await run(_contract(tmp_path))
     assert await store.list_entities_by_type(tenant_id=_TENANT, entity_type="identity") == []
+
+
+async def test_record_access_writes_has_access_to_edge_on_arn_spine() -> None:
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from fleet_testkit import in_memory_semantic_store
+    from identity.kg_writer import KnowledgeGraphWriter
+
+    role_arn = "arn:aws:iam::111122223333:role/app"
+    bucket_arn = "arn:aws:s3:::acme-pii"
+    async with in_memory_semantic_store() as store:
+        w = KnowledgeGraphWriter(store, "tenant-1")
+        await w.record_access([(role_arn, bucket_arn)])
+
+        # the role node, resolved by ARN, has an outgoing HAS_ACCESS_TO to the bucket node.
+        role_id = await store.upsert_entity(
+            tenant_id="tenant-1",
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id=role_arn,
+            properties={},
+        )
+        edges = await store.get_relationships_from(
+            tenant_id="tenant-1",
+            src_entity_id=role_id,
+            edge_types=(EdgeType.HAS_ACCESS_TO.value,),
+        )
+        assert len(edges) == 1
+        bucket_id = await store.upsert_entity(
+            tenant_id="tenant-1",
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=bucket_arn,
+            properties={},
+        )
+        assert edges[0].dst_entity_id == bucket_id
