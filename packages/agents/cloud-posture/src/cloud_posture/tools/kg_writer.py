@@ -51,14 +51,16 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         kind: str,
         external_id: str,
         properties: dict[str, Any],
-    ) -> None:
+    ) -> str | None:
         """Idempotent upsert of a cloud-resource (spine) node.
 
         Asset identity collapses to ``(tenant_id, "cloud_resource", external_id)``;
         ``kind`` moves from the dormant-Cypher MERGE key to a property. This is the
         spine node the cross-agent edges (VULNERABLE_TO, HAS_ACCESS_TO, …) point at.
+
+        Returns the entity_id (for cross-agent correlation), or ``None`` when inert.
         """
-        await self.upsert_node(
+        return await self.upsert_node(
             NodeCategory.CLOUD_RESOURCE,
             external_id,
             {"kind": kind, **dict(properties)},

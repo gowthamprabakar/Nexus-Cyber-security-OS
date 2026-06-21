@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
+from data_security.canonical import s3_bucket_arn
 from data_security.schemas import ClassifierLabel
 
 if TYPE_CHECKING:
@@ -31,6 +32,11 @@ if TYPE_CHECKING:
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
     """Persists storage + data-classification inventory for the fleet graph."""
+
+    @staticmethod
+    def _storage_external_id(bucket_name: str) -> str:
+        """Canonical key for the CLOUD_RESOURCE spine node (ARN = fleet-graph join key)."""
+        return s3_bucket_arn(bucket_name)
 
     async def record(
         self,
@@ -43,12 +49,13 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             encrypted = bucket.encryption.algorithm != "NONE"
             storage_id = await self.upsert_node(
                 NodeCategory.CLOUD_RESOURCE,
-                bucket.name,
+                self._storage_external_id(bucket.name),
                 {
                     "resource_type": "s3-bucket",
                     "region": bucket.region,
                     "is_public": public,
                     "is_encrypted": encrypted,
+                    "source": bucket.name,  # human-readable name as a property
                 },
             )
             seen: set[str] = set()
