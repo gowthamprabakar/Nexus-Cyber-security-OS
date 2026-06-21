@@ -926,12 +926,12 @@ def _tc_identity_workspace(tmp_path: Path, principal_arn: str) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_run_surfaces_toxic_combination_when_opted_in(
+async def test_run_surfaces_toxic_combination_by_default(
     tmp_path: Path,
     audit_store: AuditStore,
     semantic_store: SemanticStore,
 ) -> None:
-    """Flag ON: toxic hypothesis survives Stage 4 and the report is OCSF 2005."""
+    """Default ON (no flag passed): toxic hypothesis survives Stage 4, report is OCSF 2005."""
     principal = "arn:aws:iam::1:role/app"
     bucket = "arn:aws:s3:::acme-pii"
     await _tc_seed_graph(semantic_store, _TENANT_A, principal_arn=principal, bucket_arn=bucket)
@@ -946,7 +946,7 @@ async def test_run_surfaces_toxic_combination_when_opted_in(
         sibling_workspaces=(ws,),
         since=None,
         until=None,
-        detect_toxic_combinations=True,
+        # detect_toxic_combinations now defaults to True — omit to prove the default is ON
     )
 
     statements = [h.statement.lower() for h in report.hypotheses]
@@ -958,12 +958,13 @@ async def test_run_surfaces_toxic_combination_when_opted_in(
 
 
 @pytest.mark.asyncio
-async def test_run_inert_when_flag_off(
+async def test_run_no_toxic_when_explicitly_disabled(
     tmp_path: Path,
     audit_store: AuditStore,
     semantic_store: SemanticStore,
 ) -> None:
-    """Flag OFF (default): no toxic hypothesis; run is byte-identical to pre-seam."""
+    """Explicit OFF: detect_toxic_combinations=False suppresses detection even with a toxic
+    graph + overprivilege finding present — the escape hatch back to pre-seam behaviour."""
     principal = "arn:aws:iam::1:role/app"
     bucket = "arn:aws:s3:::acme-pii"
     await _tc_seed_graph(semantic_store, _TENANT_A, principal_arn=principal, bucket_arn=bucket)
@@ -978,7 +979,7 @@ async def test_run_inert_when_flag_off(
         sibling_workspaces=(ws,),
         since=None,
         until=None,
-        # detect_toxic_combinations defaults to False — omit to prove the default
+        detect_toxic_combinations=False,
     )
 
     statements = [h.statement.lower() for h in report.hypotheses]
