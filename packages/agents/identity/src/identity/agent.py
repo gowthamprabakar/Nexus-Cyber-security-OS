@@ -32,6 +32,7 @@ from typing import Any
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider  # canonical Protocol lives in charter.llm
+from charter.memory.graph_types import NodeCategory
 from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
@@ -216,6 +217,9 @@ async def run(
             )
         else:
             grants = _synthesize_admin_grants(listing)
+
+        if semantic_store is not None:
+            await _write_access_edges(semantic_store, contract.customer_id, grants)
 
         findings = await normalize_to_findings(
             listing,
@@ -469,6 +473,34 @@ def _admin_grant(principal_arn: str, source_policy_arns: tuple[str, ...]) -> Eff
 def _is_admin_policy(arn: str) -> bool:
     """True when the policy ARN is AWS-managed admin or any `*/AdministratorAccess`."""
     return arn == _ADMIN_POLICY_ARN or arn.endswith("/AdministratorAccess")
+
+
+async def _write_access_edges(
+    semantic_store: SemanticStore,
+    customer_id: str,
+    grants: list[EffectiveGrant],
+) -> None:
+    """Write IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE for admin-grade principals.
+
+    Drives the offline admin-grant synthesis: an admin (resource_pattern "*") can reach
+    every resource, so we expand "*" against the tenant's concrete CLOUD_RESOURCE nodes
+    (written by data-security/cloud-posture, keyed by ARN). record_access upserts
+    idempotently -> edges land on the existing resource nodes.
+
+    # Bound (v1): admin-grade only. Fine-grained non-admin access needs concrete
+    # per-statement Resource extraction (not implemented) + the live SimulatePrincipalPolicy
+    # simulator (needs live AWS) -- deferred to a later depth slice.
+    """
+    admins = [g for g in grants if g.is_admin]
+    if not admins:
+        return
+    resources = await semantic_store.list_entities_by_type(
+        tenant_id=customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    if not resources:
+        return
+    kg = KnowledgeGraphWriter(semantic_store, customer_id)
+    await kg.record_access([(g.principal_arn, r.external_id) for g in admins for r in resources])
 
 
 __all__ = ["build_registry", "run"]
