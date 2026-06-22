@@ -121,6 +121,18 @@ class ExternalTrustExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class InternetExposedVulnerableWorkload:
+    """An internet-exposed workload running an image with a known CVE (path 2). The
+    workload --RUNS_IMAGE--> image --VULNERABLE_TO--> CVE chain: a foreign attacker can
+    reach the exposed service and exploit the vulnerable image. `severity` is the CVE's."""
+
+    workload_id: str
+    image_id: str
+    cve_id: str
+    severity: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -336,6 +348,41 @@ class KgQuery:
                     )
         return hits
 
+    async def find_internet_exposed_vulnerable_workload(
+        self,
+    ) -> list[InternetExposedVulnerableWorkload]:
+        """Find internet-exposed workloads running an image with a known CVE (path 2).
+
+        The mechanism-② join: enumerates ``is_public`` CLOUD_RESOURCE workloads (cloud-posture
+        ECS), follows ``RUNS_IMAGE`` to the image node, then ``VULNERABLE_TO`` (written by
+        vulnerability onto the SAME image node, keyed by image ref) to each CVE. One hit per
+        (exposed workload, CVE). Read-only; self-seeded (no caller list)."""
+        hits: list[InternetExposedVulnerableWorkload] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in resources:
+            if workload.properties.get("is_public") is not True:
+                continue
+            for runs in await self._edges_from(workload.entity_id, (EdgeType.RUNS_IMAGE.value,)):
+                for vuln in await self._edges_from(
+                    runs.dst_entity_id, (EdgeType.VULNERABLE_TO.value,)
+                ):
+                    cve = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                    )
+                    if cve is None:
+                        continue
+                    hits.append(
+                        InternetExposedVulnerableWorkload(
+                            workload_id=workload.entity_id,
+                            image_id=runs.dst_entity_id,
+                            cve_id=cve.external_id,
+                            severity=str(cve.properties.get("severity", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -350,6 +397,7 @@ __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
     "ExternalTrustExposure",
+    "InternetExposedVulnerableWorkload",
     "KgQuery",
     "PathEdge",
     "PublicSecretExposure",
