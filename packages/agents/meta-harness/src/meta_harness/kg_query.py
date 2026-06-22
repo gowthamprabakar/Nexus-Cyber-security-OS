@@ -98,6 +98,17 @@ class PublicSecretExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class PublicUnencryptedExposure:
+    """A public resource that EXPOSES_DATA sensitive data AND is unencrypted at rest —
+    publicly-exposed sensitive data that isn't even encrypted (exposure + compliance
+    failure). `data_type` is the exposed data kind (e.g. ``ssn``)."""
+
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -247,6 +258,37 @@ class KgQuery:
                     )
         return hits
 
+    async def find_public_unencrypted_exposure(self) -> list[PublicUnencryptedExposure]:
+        """Find UNENCRYPTED public resources that EXPOSES_DATA sensitive data.
+
+        EXPOSES_DATA is written only for public buckets (the public + has-data legs);
+        we additionally keep only resources explicitly marked ``is_encrypted=False`` —
+        publicly-exposed sensitive data that isn't even encrypted at rest. Read-only;
+        enumerates the tenant's CLOUD_RESOURCE nodes (no seed)."""
+        hits: list[PublicUnencryptedExposure] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for resource in resources:
+            if resource.properties.get("is_encrypted") is not False:
+                continue
+            for expose in await self._edges_from(
+                resource.entity_id, (EdgeType.EXPOSES_DATA.value,)
+            ):
+                dc = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                )
+                if dc is None:
+                    continue
+                hits.append(
+                    PublicUnencryptedExposure(
+                        resource_id=resource.entity_id,
+                        data_classification_id=dc.entity_id,
+                        data_type=str(dc.properties.get("data_type", "")),
+                    )
+                )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -263,5 +305,6 @@ __all__ = [
     "KgQuery",
     "PathEdge",
     "PublicSecretExposure",
+    "PublicUnencryptedExposure",
     "ToxicCombination",
 ]
