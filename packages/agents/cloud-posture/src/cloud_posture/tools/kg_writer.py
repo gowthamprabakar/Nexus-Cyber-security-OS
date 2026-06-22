@@ -32,10 +32,15 @@ INSERT-only; cross-RUN duplicate-edge dedup is the separate Stage 3 PR (#718-D3)
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from cloud_posture.tools.aws_ecs import EcsWorkload
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -87,6 +92,28 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         for arn in affected_arns:
             asset_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, arn, {})
             await self.add_edge(finding_node or "", asset_node or "", EdgeType.AFFECTS)
+
+    async def record_workloads(self, workloads: Iterable[EcsWorkload]) -> None:
+        """Write workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
+
+        The mechanism-② bridge (ADR-023): the image node is the SAME spine node
+        vulnerability writes its CVE ``VULNERABLE_TO`` edges onto (both keyed by the
+        image ref), so an exposed workload's CVEs become reachable in one graph walk —
+        ``workload --RUNS_IMAGE--> image --VULNERABLE_TO--> CVE``. Properties merge, so
+        the image node coexists with vulnerability's ``kind=scan-target`` decoration.
+        """
+        for workload in workloads:
+            service_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.service_arn,
+                {"kind": "ecs-service", "is_public": workload.is_public},
+            )
+            image_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.image_ref,
+                {"kind": "container-image"},
+            )
+            await self.add_edge(service_node or "", image_node or "", EdgeType.RUNS_IMAGE)
 
 
 __all__ = ["KnowledgeGraphWriter"]
