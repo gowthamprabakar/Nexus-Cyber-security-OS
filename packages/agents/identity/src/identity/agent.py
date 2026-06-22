@@ -507,6 +507,69 @@ def _aws_principal_accounts(principal: object) -> list[str]:
     return ["*" if v == "*" else _account_of(v) for v in values]
 
 
+def _as_list(value: object) -> list[Any]:
+    """An IAM ``Action``/``Resource`` field as a list (it may be a bare string)."""
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _grants_s3_read(actions: object) -> bool:
+    """True if any action reads S3 object data (``*``, ``s3:*``, or an ``s3:get*``)."""
+    for action in _as_list(actions):
+        if not isinstance(action, str):
+            continue
+        lowered = action.lower()
+        if lowered in {"*", "s3:*"} or lowered.startswith("s3:get"):
+            return True
+    return False
+
+
+def _concrete_bucket_arns(resources: object) -> list[str]:
+    """Canonical bucket ARNs named by a statement ``Resource`` (object suffix stripped).
+
+    ``arn:aws:s3:::bucket/key/*`` → ``arn:aws:s3:::bucket`` so the grant joins the spine
+    bucket node data-security writes. A bare ``*`` (all buckets) is skipped — that is broad,
+    not fine-grained-to-a-resource.
+    """
+    arns: list[str] = []
+    for resource in _as_list(resources):
+        if not isinstance(resource, str) or not resource.startswith("arn:aws:s3:::"):
+            continue
+        bucket = resource[len("arn:aws:s3:::") :].split("/", 1)[0]
+        if bucket and bucket != "*":
+            arns.append(f"arn:aws:s3:::{bucket}")
+    return arns
+
+
+def _fine_grained_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """Concrete-resource S3 read grants ``(principal_arn, bucket_arn)`` — offline depth.
+
+    Beyond :func:`_synthesize_admin_grants` (admin ``*`` over everything): walks each
+    principal's customer-managed + inline policy documents for ``Allow`` statements that grant
+    an S3 read action on a **concrete** bucket ARN, emitting a fine-grained (principal, bucket)
+    pair. This catches a least-privilege-violating principal — specific access to a sensitive
+    bucket, *not* admin — that the admin-only path (1) is blind to. Deduped; group-inherited
+    grants are deferred (members resolve via MEMBER_OF, a later depth slice).
+    """
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+    grants: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for principal in (*listing.users, *listing.roles):
+        documents = [doc_by_arn[arn] for arn in principal.attached_policy_arns if arn in doc_by_arn]
+        documents += [doc for _name, doc in principal.inline_policies]
+        for document in documents:
+            for stmt in document.get("Statement") or []:
+                if stmt.get("Effect") != "Allow" or not _grants_s3_read(stmt.get("Action")):
+                    continue
+                for bucket_arn in _concrete_bucket_arns(stmt.get("Resource")):
+                    key = (principal.arn, bucket_arn)
+                    if key not in seen:
+                        seen.add(key)
+                        grants.append(key)
+    return grants
+
+
 def _admin_grant(principal_arn: str, source_policy_arns: tuple[str, ...]) -> EffectiveGrant:
     return EffectiveGrant(
         principal_arn=principal_arn,
