@@ -29,7 +29,7 @@
 | 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | **vulnerability** (real trivy), **cloud-posture** (ECS exposure) | ✅ REAL (2026-06-22) — `find_internet_exposed_vulnerable_workload` (mechanism-② bridge) |
 | 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                              | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure`  |
 | 4   | Over-permissioned identity → fine-grained access → sensitive resource                 | **identity** (concrete policy Resources), **data-security** | ✅ REAL (moto-CI, 2026-06-22) — `find_fine_grained_data_exposure`  |
-| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | vulnerability, identity, **data-security**, network      | ⬜                                                                 |
+| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | **vulnerability**, **identity**, **data-security**, **cloud-posture** | ✅ REAL (2026-06-22) — `find_crown_jewel_exposure` (assembles 2 + 4) |
 | 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                                                    |
 | 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                        | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure` |
 | 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**   | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`     |
@@ -49,7 +49,7 @@ Prioritize paths that are high-value AND unlock the most reuse:
 3. **Path 4 — DONE.** identity depth: `_fine_grained_grants` extracts concrete-Resource S3 access offline → fine-grained `HAS_ACCESS_TO` (the non-admin least-privilege violation path 1's admin-only seed misses). moto-REAL.
 4. **Path 6** → stand up **kind**, verify **k8s-posture** REAL. Unlocks 6, 9.
 5. **Paths 3, 7, 8 — DONE** (reuse verified feeders + one new pattern each). **Path 10** → aispm feeder.
-6. **Path 5** → the crown jewel; **2 + 4 feeders are now REAL** (vuln+exposure from 2, identity-depth+data from 4) — next-in-line. Path 9 reuses path-2's `RUNS_IMAGE` bridge.
+6. **Path 5 — DONE.** The crown jewel: assembled paths 2 + 4 on one workload pivot (exposed + vulnerable + `ASSUMES` a role that reaches sensitive data). Added the workload→task-role `ASSUMES` bridge. **7 of 10 paths REAL (1,2,3,4,5,7,8).** Remaining: **9** (registry image→workload, reuses `RUNS_IMAGE`), **6** (kind + k8s-posture), **10** (aispm).
 
 Each path = (verify its new feeder REAL in CI) + (wire the correlation pattern) + (ship it, demoable). ~1 shippable path/week after the first.
 
