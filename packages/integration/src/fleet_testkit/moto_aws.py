@@ -106,6 +106,26 @@ def moto_s3(
 
 
 @contextmanager
+def moto_all_clients(
+    buckets: tuple[MotoBucket, ...],
+    *,
+    region: str = _DEFAULT_REGION,
+) -> Iterator[tuple[object, object, object, object]]:
+    """Context manager yielding ``(s3, iam, ecs, ec2)`` under one moto mock.
+
+    The path-5 crown jewel needs every feeder live together: S3 (data), IAM (identity),
+    ECS (workload) and EC2 (exposure). S3 buckets are seeded; the rest are bare.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, ecs, ec2
+
+
+@contextmanager
 def moto_ecs_clients(*, region: str = _DEFAULT_REGION) -> Iterator[tuple[object, object]]:
     """Context manager yielding ``(ecs_client, ec2_client)`` under one moto mock.
 
@@ -219,6 +239,7 @@ __all__ = [
     "MotoBucket",
     "drive_cloud_workloads",
     "drive_data_security",
+    "moto_all_clients",
     "moto_aws_clients",
     "moto_ecs_clients",
     "moto_s3",
