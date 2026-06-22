@@ -31,11 +31,18 @@ from fleet_testkit.capability import (
     score,
 )
 from fleet_testkit.contract import wiring_contract
+from fleet_testkit.moto_aws import (
+    MotoBucket,
+    drive_data_security,
+    moto_aws_clients,
+    moto_s3,
+)
 from fleet_testkit.store import in_memory_semantic_store
 
 __all__ = [
     "CapabilityResult",
     "GroundTruth",
+    "MotoBucket",
     "NonDetection",
     "PassCriteria",
     "TestCase",
@@ -46,9 +53,12 @@ __all__ = [
     "assert_single_node",
     "assert_two_tenant_disjoint",
     "detection_timer",
+    "drive_data_security",
     "evaluate",
     "in_memory_semantic_store",
     "load_test_case",
+    "moto_aws_clients",
+    "moto_s3",
     "score",
     "wiring_contract",
 ]
