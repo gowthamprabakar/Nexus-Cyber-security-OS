@@ -23,18 +23,18 @@
 
 > Status: ✅ REAL (CI-verified) · 🟡 feeders partly REAL · ⬜ not started. Feeders in **bold** are already REAL-verified.
 
-| #   | Attack path                                                                          | Feeder agents                                            | Status                                    |
-| --- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------- |
-| 1   | Public resource + sensitive data + over-permissioned identity                        | **data-security**, **identity**                          | ✅ path + feeders REAL (moto, 2026-06-22) |
-| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | vulnerability, cloud-posture/network (exposure)          | ⬜                                        |
-| 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets), cloud-posture/appsec        | 🟡                                        |
-| 4   | Over-permissioned identity → privilege-escalation → sensitive resource               | identity (fine-grained effective-perms), cloud-posture   | ⬜ (needs identity depth)                 |
-| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | vulnerability, identity, **data-security**, network      | ⬜                                        |
-| 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                           |
-| 7   | Public + unencrypted storage + sensitive data + compliance violation                 | cloud-posture, **data-security**, compliance             | ⬜                                        |
-| 8   | External/cross-account trust + over-permission → sensitive resource                  | identity (external-access/federation), **data-security** | ⬜                                        |
-| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⬜                                        |
-| 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                        |
+| #   | Attack path                                                                          | Feeder agents                                            | Status                                                            |
+| --- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| 1   | Public resource + sensitive data + over-permissioned identity                        | **data-security**, **identity**                          | ✅ path + feeders REAL (moto, 2026-06-22)                         |
+| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | vulnerability, cloud-posture/network (exposure)          | ⬜                                                                |
+| 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                              | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure` |
+| 4   | Over-permissioned identity → privilege-escalation → sensitive resource               | identity (fine-grained effective-perms), cloud-posture   | ⬜ (needs identity depth)                                         |
+| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | vulnerability, identity, **data-security**, network      | ⬜                                                                |
+| 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                                                   |
+| 7   | Public + unencrypted storage + sensitive data + compliance violation                 | cloud-posture, **data-security**, compliance             | ⬜                                                                |
+| 8   | External/cross-account trust + over-permission → sensitive resource                  | identity (external-access/federation), **data-security** | ⬜                                                                |
+| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⬜                                                                |
+| 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                                                |
 
 **Core feeder set (covers ~all paths): data-security ✅, identity (✅ basic / depth pending), vulnerability, cloud-posture, network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse.**
 
