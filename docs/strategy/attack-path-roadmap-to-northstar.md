@@ -26,7 +26,7 @@
 | #   | Attack path                                                                          | Feeder agents                                            | Status                                                             |
 | --- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------ |
 | 1   | Public resource + sensitive data + over-permissioned identity                        | **data-security**, **identity**                          | ✅ path + feeders REAL (moto, 2026-06-22)                          |
-| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | vulnerability, cloud-posture/network (exposure)          | ⬜                                                                 |
+| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | **vulnerability** (real trivy), **cloud-posture** (ECS exposure) | ✅ REAL (2026-06-22) — `find_internet_exposed_vulnerable_workload` (mechanism-② bridge) |
 | 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                              | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure`  |
 | 4   | Over-permissioned identity → privilege-escalation → sensitive resource               | identity (fine-grained effective-perms), cloud-posture   | ⬜ (needs identity depth)                                          |
 | 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | vulnerability, identity, **data-security**, network      | ⬜                                                                 |
@@ -36,14 +36,16 @@
 | 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⬜                                                                 |
 | 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                                                 |
 
-**Core feeder set (covers ~all paths): data-security ✅, identity (✅ basic / depth pending), vulnerability, cloud-posture, network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse.**
+**Core feeder set (covers ~all paths): data-security ✅, identity ✅ (basic / depth pending), vulnerability ✅ (real trivy, trivy-gated), cloud-posture ✅ (ECS exposure, moto), network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse. 4 of 8 now REAL-verified.**
+
+**Mechanism-② bridge proven (ADR-023):** path 2 closed the first cross-agent join where the two agents do NOT share a canonical key — vulnerability keys images by ref, the spine keys workloads by ARN. `cloud-posture.record_workloads` writes `RUNS_IMAGE` onto the SAME image-ref node vulnerability writes CVEs onto, so a graph walk crosses the gap. This is the template for the remaining misfit joins (network IP→`OWNED_BY`, runtime host→`RUNS_ON`).
 
 ## Verification Order (value × feeder-reuse)
 
 Prioritize paths that are high-value AND unlock the most reuse:
 
 1. **Path 1 — DONE.** Template proven (data-security + identity REAL via moto).
-2. **Path 2** → verify **vulnerability** REAL (Trivy + real test image / moto-ECR). Unlocks 2, 5, 9.
+2. **Path 2 — DONE.** vulnerability REAL (real `trivy fs`) + cloud-posture ECS exposure REAL (moto) + the **mechanism-② `RUNS_IMAGE` bridge** (ADR-023) joining vuln-images↔workloads. Unlocks 5, 9.
 3. **Path 4** → **identity depth** (fine-grained HAS_ACCESS_TO from concrete policy Resources). Unlocks 4, 5, 8.
 4. **Path 6** → stand up **kind**, verify **k8s-posture** REAL. Unlocks 6, 9.
 5. **Paths 3, 7, 8 — DONE** (reuse verified feeders + one new pattern each). **Path 10** → aispm feeder.
