@@ -32,7 +32,7 @@
 | 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | vulnerability, identity, **data-security**, network      | ⬜                                                                 |
 | 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                                                    |
 | 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                        | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure` |
-| 8   | External/cross-account trust + over-permission → sensitive resource                  | identity (external-access/federation), **data-security** | ⬜                                                                 |
+| 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**   | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`     |
 | 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⬜                                                                 |
 | 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                                                 |
 
@@ -46,7 +46,7 @@ Prioritize paths that are high-value AND unlock the most reuse:
 2. **Path 2** → verify **vulnerability** REAL (Trivy + real test image / moto-ECR). Unlocks 2, 5, 9.
 3. **Path 4** → **identity depth** (fine-grained HAS_ACCESS_TO from concrete policy Resources). Unlocks 4, 5, 8.
 4. **Path 6** → stand up **kind**, verify **k8s-posture** REAL. Unlocks 6, 9.
-5. **Paths 3, 7, 8, 10** → mostly reuse verified feeders + one new pattern each.
+5. **Paths 3, 7, 8 — DONE** (reuse verified feeders + one new pattern each). **Path 10** → aispm feeder.
 6. **Path 5** → the crown jewel; lands once 2 + 4 feeders are REAL.
 
 Each path = (verify its new feeder REAL in CI) + (wire the correlation pattern) + (ship it, demoable). ~1 shippable path/week after the first.
@@ -60,6 +60,7 @@ Use the L2 capability banks to score each path's precision/recall against ground
 - DB-level tenant RLS hardening (store-layer GUC + FORCE RLS) — app-level isolation holds; revisit before real customer data. [see truth-audit doc]
 - Azure/GCP-only detection paths — likely **operator-verified**, not CI-REAL (mocks too weak). Labeled honestly.
 - Auto-driven continuous loop; supervisor `del semantic_store` placeholder; pgvector ANN; effective-perms simulator (live-AWS only).
+- Access-Analyzer external-access (online API, not moto-drivable) — **operator-verified only**. Path 8 ships the **offline trust-policy** variant (`_externally_trusted_arns`, CI-REAL); the Access-Analyzer cross-resource findings are a superset that needs live AWS to verify.
 
 ## Honest ceiling
 
