@@ -18,7 +18,10 @@ _CHARTER_ROOT = Path(__file__).resolve().parents[3]  # packages/charter
 
 
 def _alembic_url(dsn: str) -> str:
-    """Alembic runs sync -- swap the asyncpg driver for psycopg2."""
+    """Alembic runs sync -- swap the asyncpg driver for psycopg2.
+
+    Expects an asyncpg DSN (``postgresql+asyncpg://...``); the swap is a no-op otherwise.
+    """
     return dsn.replace("+asyncpg", "+psycopg2")
 
 

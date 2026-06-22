@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ulid import ULID
 
 # permitted_tools per agent: mirror each agent's test contract helper exactly.
+# Source-of-truth files: data-security/tests/test_agent.py,
+# identity/tests/test_agent_unit.py, investigation/tests/test_agent.py.
 _DS_TOOLS: list[str] = [
     "read_s3_inventory",
     "read_s3_objects",
@@ -95,6 +97,12 @@ async def correlation_run(
     Sequence is load-bearing: data-security writes CLOUD_RESOURCE nodes +
     EXPOSES_DATA edges (only for public buckets with classifier hits), identity
     reads those resources and adds HAS_ACCESS_TO edges, investigation correlates.
+
+    Feed contract: ``ds_inventory_feed``/``ds_objects_feed`` = None means
+    data-security uses its LIVE readers (so an OFFLINE caller MUST provide both
+    feeds). BOTH feeds are needed for a toxic combination — the objects feed is
+    what produces the PII ``DATA_CLASSIFICATION`` + ``EXPOSES_DATA`` edge; without
+    it D.7 goes dark.  None is the valid live-readers path; no hard guard is added.
 
     `ds_objects_feed`: optional S3 object-sample JSON (same shape as data-security's
     `s3_objects_feed`). Needed for EXPOSES_DATA edges: without classifier hits there

@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from charter.memory import SemanticStore
+from charter.memory.graph_types import NodeCategory
 from charter.memory.models import Base
 from identity.tools.aws_iam import IamRole, IdentityListing
 from nexus_runtime.correlation import correlation_run
@@ -171,6 +173,14 @@ async def test_correlation_run_surfaces_persisted_toxic_combination(
     )
     assert report.to_ocsf()["class_uid"] == 2005
 
+    # C-1: prove the TOXIC_COMBINATION node was actually persisted (not just returned).
+    store = SemanticStore(session_factory)
+    toxic_nodes = await store.list_entities_by_type(
+        tenant_id=_TENANT,
+        entity_type=NodeCategory.TOXIC_COMBINATION.value,
+    )
+    assert len(toxic_nodes) >= 1, "TOXIC_COMBINATION node must be written to the store"
+
 
 @pytest.mark.asyncio
 async def test_correlation_run_dark_when_no_admin(
@@ -204,3 +214,4 @@ async def test_correlation_run_dark_when_no_admin(
     assert not any("over-permissioned" in s for s in statements), (
         "non-admin role must not produce toxic combination hypothesis"
     )
+    assert report.to_ocsf()["class_uid"] == 2005
