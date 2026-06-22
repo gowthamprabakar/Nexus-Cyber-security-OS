@@ -459,6 +459,54 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
     return grants
 
 
+def _externally_trusted_arns(listing: IdentityListing) -> list[str]:
+    """Roles whose trust policy lets a *foreign account* (or `*`) assume them — offline.
+
+    Path-8 signal, derived purely from each role's ``AssumeRolePolicyDocument`` (already in
+    the listing). External = an ``Allow`` statement whose ``Principal.AWS`` is a wildcard or
+    an ARN/account-id outside the role's own account. Service principals (``Principal.Service``)
+    are trust-to-an-AWS-service, never cross-account, so they are ignored. This is the offline
+    counterpart to Access-Analyzer external-access (online) — no API call, so it is moto/CI
+    verifiable.
+    """
+    flagged: list[str] = []
+    for role in listing.roles:
+        own_account = _account_of(role.arn)
+        statements = role.assume_role_policy_document.get("Statement") or []
+        for stmt in statements:
+            if stmt.get("Effect") != "Allow":
+                continue
+            for account in _aws_principal_accounts(stmt.get("Principal")):
+                if account == "*" or account != own_account:
+                    flagged.append(role.arn)
+                    break
+            else:
+                continue
+            break
+    return flagged
+
+
+def _account_of(arn: str) -> str:
+    """The 12-digit account id from an ARN (`arn:aws:iam::ACCOUNT:role/x`), or "" if absent."""
+    parts = arn.split(":")
+    return parts[4] if len(parts) > 4 else ""
+
+
+def _aws_principal_accounts(principal: object) -> list[str]:
+    """Account ids (or `*`) named by a statement's ``Principal.AWS`` — `[]` for service-only.
+
+    ``Principal`` may be ``"*"``, ``{"AWS": "*"|arn|[arns]}``, or ``{"Service": ...}``.
+    A bare ``"*"`` (public) and an ``arn:aws:iam::ACCT:root`` both reduce to their account token.
+    """
+    if principal == "*":
+        return ["*"]
+    if not isinstance(principal, dict):
+        return []
+    aws = principal.get("AWS")
+    values = [aws] if isinstance(aws, str) else list(aws or [])
+    return ["*" if v == "*" else _account_of(v) for v in values]
+
+
 def _admin_grant(principal_arn: str, source_policy_arns: tuple[str, ...]) -> EffectiveGrant:
     return EffectiveGrant(
         principal_arn=principal_arn,

@@ -101,5 +101,16 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 principal_node or "", resource_node or "", EdgeType.HAS_ACCESS_TO, {}
             )
 
+    async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
+        """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
+
+        Each ARN is upserted with ``external_trust=True`` — properties merge, so this
+        decorates the principal node ``record_listing`` already wrote without dropping
+        its name/type. ``principal_arns`` is computed by the agent driver from the offline
+        trust-policy analysis (``_externally_trusted_arns``); the writer only persists.
+        """
+        for principal_arn in principal_arns:
+            await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {"external_trust": True})
+
 
 __all__ = ["KnowledgeGraphWriter"]

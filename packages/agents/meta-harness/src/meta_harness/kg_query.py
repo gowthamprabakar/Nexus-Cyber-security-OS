@@ -109,6 +109,18 @@ class PublicUnencryptedExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class ExternalTrustExposure:
+    """An externally-trusted principal that HAS_ACCESS_TO a public resource EXPOSING data —
+    a foreign account can assume the role and reach sensitive data (path 8). `data_type` is
+    the exposed data kind (e.g. ``ssn``)."""
+
+    principal_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -289,6 +301,41 @@ class KgQuery:
                 )
         return hits
 
+    async def find_external_trust_exposure(self) -> list[ExternalTrustExposure]:
+        """Find externally-trusted principals with HAS_ACCESS_TO a public resource exposing data.
+
+        Self-seeded (no caller list): enumerates IDENTITY nodes marked ``external_trust=True``
+        (identity's offline trust-policy analysis), follows HAS_ACCESS_TO to a resource, then
+        EXPOSES_DATA (written only for public buckets) to a data classification. A foreign
+        account assuming the role reaches that sensitive data. Read-only."""
+        hits: list[ExternalTrustExposure] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            if principal.properties.get("external_trust") is not True:
+                continue
+            for access in await self._edges_from(
+                principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)
+            ):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        ExternalTrustExposure(
+                            principal_id=principal.entity_id,
+                            resource_id=access.dst_entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -302,6 +349,7 @@ class KgQuery:
 __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
+    "ExternalTrustExposure",
     "KgQuery",
     "PathEdge",
     "PublicSecretExposure",
