@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import boto3
+from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
+from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
 from data_security.canonical import s3_bucket_arn
 from data_security.classifiers import classify
 from data_security.kg_writer import KnowledgeGraphWriter as DataSecurityKgWriter
@@ -104,6 +106,91 @@ def moto_s3(
 
 
 @contextmanager
+def moto_ecs_clients(*, region: str = _DEFAULT_REGION) -> Iterator[tuple[object, object]]:
+    """Context manager yielding ``(ecs_client, ec2_client)`` under one moto mock.
+
+    Path-2 needs ECS (workloads) and EC2 (security groups) live together. Both are bare;
+    the caller seeds workloads via :func:`setup_ecs_workload`.
+    """
+    with mock_aws():
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        yield ecs, ec2
+
+
+def setup_ecs_workload(
+    ecs: object,
+    ec2: object,
+    *,
+    image_ref: str,
+    public: bool,
+    name: str = "websvc",
+) -> str:
+    """Seed a moto ECS service running ``image_ref``; returns its service ARN.
+
+    Builds a real VPC/subnet/security-group + cluster + awsvpc task definition + service.
+    When ``public`` the security group gets a real ``0.0.0.0/0`` ingress and the service
+    assigns a public IP — the exact posture :func:`cloud_posture.tools.aws_ecs` flags as
+    internet-exposed. When not public, the SG is closed and no public IP is assigned.
+    """
+    vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
+    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    sg = ec2.create_security_group(GroupName=f"{name}-sg", Description="sg", VpcId=vpc)[  # type: ignore[attr-defined]
+        "GroupId"
+    ]
+    if public:
+        ec2.authorize_security_group_ingress(  # type: ignore[attr-defined]
+            GroupId=sg,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                }
+            ],
+        )
+    ecs.create_cluster(clusterName=f"{name}-cluster")  # type: ignore[attr-defined]
+    ecs.register_task_definition(  # type: ignore[attr-defined]
+        family=f"{name}-td",
+        networkMode="awsvpc",
+        containerDefinitions=[{"name": "app", "image": image_ref, "memory": 128}],
+    )
+    service = ecs.create_service(  # type: ignore[attr-defined]
+        cluster=f"{name}-cluster",
+        serviceName=name,
+        taskDefinition=f"{name}-td",
+        desiredCount=1,
+        networkConfiguration={
+            "awsvpcConfiguration": {
+                "subnets": [subnet],
+                "securityGroups": [sg],
+                "assignPublicIp": "ENABLED" if public else "DISABLED",
+            }
+        },
+    )
+    return str(service["service"]["serviceArn"])
+
+
+async def drive_cloud_workloads(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    ecs_client: object,
+    ec2_client: object,
+) -> list[EcsWorkload]:
+    """Run cloud-posture's REAL ECS reader + ``record_workloads`` against the clients.
+
+    Reads ECS workloads (``read_ecs_workloads``), persists the workload nodes +
+    ``RUNS_IMAGE`` bridge edges via the real ``KnowledgeGraphWriter.record_workloads``.
+    Returns the read ``EcsWorkload`` rows.
+    """
+    workloads = read_ecs_workloads(ecs_client, ec2_client)
+    await CloudPostureKgWriter(store, tenant_id).record_workloads(workloads)
+    return workloads
+
+
+@contextmanager
 def moto_aws_clients(
     buckets: tuple[MotoBucket, ...],
     *,
@@ -122,8 +209,12 @@ def moto_aws_clients(
 
 
 __all__ = [
+    "EcsWorkload",
     "MotoBucket",
+    "drive_cloud_workloads",
     "drive_data_security",
     "moto_aws_clients",
+    "moto_ecs_clients",
     "moto_s3",
+    "setup_ecs_workload",
 ]
