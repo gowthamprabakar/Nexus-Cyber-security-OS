@@ -16,6 +16,7 @@ from fleet_testkit.assertions import (
     assert_entity_written,
     assert_no_entities,
     assert_ocsf_valid,
+    assert_single_node,
     assert_two_tenant_disjoint,
 )
 from fleet_testkit.capability import (
@@ -42,6 +43,7 @@ __all__ = [
     "assert_entity_written",
     "assert_no_entities",
     "assert_ocsf_valid",
+    "assert_single_node",
     "assert_two_tenant_disjoint",
     "detection_timer",
     "evaluate",
