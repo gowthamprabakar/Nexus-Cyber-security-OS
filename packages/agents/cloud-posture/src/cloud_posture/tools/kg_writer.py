@@ -114,6 +114,15 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 {"kind": "container-image"},
             )
             await self.add_edge(service_node or "", image_node or "", EdgeType.RUNS_IMAGE)
+            # The task role the workload runs as — joins to the IDENTITY spine node identity
+            # writes (same role ARN). An attacker who exploits the workload assumes this role,
+            # so its access (HAS_ACCESS_TO) becomes part of the workload's reachable blast
+            # radius — the crown-jewel 4-hop (path 5).
+            if workload.task_role_arn:
+                role_node = await self.upsert_node(
+                    NodeCategory.IDENTITY, workload.task_role_arn, {}
+                )
+                await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
 
 
 __all__ = ["KnowledgeGraphWriter"]

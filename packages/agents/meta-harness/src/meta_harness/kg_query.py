@@ -145,6 +145,22 @@ class FineGrainedDataExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class CrownJewelExposure:
+    """The crown-jewel 4-hop (path 5): an internet-exposed workload running a vulnerable
+    image whose task role can reach sensitive data. An attacker exploits the exposed +
+    vulnerable workload, assumes its role, and reads the data. The single most dangerous
+    pattern — exposure, exploitability, privilege, and sensitivity all on one workload."""
+
+    workload_id: str
+    image_id: str
+    cve_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -429,6 +445,67 @@ class KgQuery:
                     )
         return hits
 
+    async def find_crown_jewel_exposure(self) -> list[CrownJewelExposure]:
+        """Find the crown-jewel 4-hop: exposed + vulnerable workload whose role reaches data.
+
+        Assembles every leg built for paths 2 and 4 on one pivot — the workload:
+        ``is_public`` workload that ``RUNS_IMAGE`` a ``VULNERABLE_TO`` image AND ``ASSUMES`` a
+        role with ``HAS_ACCESS_TO`` a resource that ``EXPOSES_DATA``. One hit per
+        (CVE, reachable sensitive resource) pair. Read-only; self-seeded."""
+        hits: list[CrownJewelExposure] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in resources:
+            if workload.properties.get("is_public") is not True:
+                continue
+            cves = await self._vulnerable_images(workload.entity_id)
+            if not cves:
+                continue
+            reachable = await self._role_reachable_data(workload.entity_id)
+            for image_id, cve in cves:
+                for role_id, resource_id, dc in reachable:
+                    hits.append(
+                        CrownJewelExposure(
+                            workload_id=workload.entity_id,
+                            image_id=image_id,
+                            cve_id=cve.external_id,
+                            role_id=role_id,
+                            resource_id=resource_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
+    async def _vulnerable_images(self, workload_id: str) -> list[tuple[str, EntityRow]]:
+        """(image_id, CVE row) for each CVE on an image the workload RUNS_IMAGE."""
+        out: list[tuple[str, EntityRow]] = []
+        for runs in await self._edges_from(workload_id, (EdgeType.RUNS_IMAGE.value,)):
+            for vuln in await self._edges_from(runs.dst_entity_id, (EdgeType.VULNERABLE_TO.value,)):
+                cve = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                )
+                if cve is not None:
+                    out.append((runs.dst_entity_id, cve))
+        return out
+
+    async def _role_reachable_data(self, workload_id: str) -> list[tuple[str, str, EntityRow]]:
+        """(role_id, resource_id, data row) the workload's ASSUMES-role can reach via data."""
+        out: list[tuple[str, str, EntityRow]] = []
+        for assumes in await self._edges_from(workload_id, (EdgeType.ASSUMES.value,)):
+            role_id = assumes.dst_entity_id
+            for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is not None:
+                        out.append((role_id, access.dst_entity_id, dc))
+        return out
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -442,6 +519,7 @@ class KgQuery:
 __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
+    "CrownJewelExposure",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",

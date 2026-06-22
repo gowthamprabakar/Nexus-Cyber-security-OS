@@ -25,11 +25,12 @@ _DESCRIBE_BATCH = 10
 
 @dataclass(frozen=True, slots=True)
 class EcsWorkload:
-    """An ECS service resolved to its image ref + internet-exposure posture."""
+    """An ECS service resolved to its image ref + internet-exposure posture + task role."""
 
     service_arn: str
     image_ref: str
     is_public: bool
+    task_role_arn: str = ""
 
 
 def _sg_allows_public(ec2: object, sg_ids: list[str]) -> bool:
@@ -48,11 +49,12 @@ def _sg_allows_public(ec2: object, sg_ids: list[str]) -> bool:
     return False
 
 
-def _service_image(ecs: object, task_def_arn: str) -> str:
-    """The first container image ref in a service's task definition ("" if none)."""
+def _task_def_image_and_role(ecs: object, task_def_arn: str) -> tuple[str, str]:
+    """A service's task definition → (first container image ref, taskRoleArn). "" when absent."""
     task_def = ecs.describe_task_definition(taskDefinition=task_def_arn)["taskDefinition"]  # type: ignore[attr-defined]
     containers = task_def.get("containerDefinitions") or []
-    return str(containers[0].get("image", "")) if containers else ""
+    image = str(containers[0].get("image", "")) if containers else ""
+    return image, str(task_def.get("taskRoleArn", ""))
 
 
 def _service_is_public(ec2: object, service: dict) -> bool:
@@ -82,7 +84,7 @@ def read_ecs_workloads(ecs: object, ec2: object) -> list[EcsWorkload]:
                 "services", []
             )
             for svc in services:
-                image_ref = _service_image(ecs, svc["taskDefinition"])
+                image_ref, task_role_arn = _task_def_image_and_role(ecs, svc["taskDefinition"])
                 if not image_ref:
                     continue
                 workloads.append(
@@ -90,6 +92,7 @@ def read_ecs_workloads(ecs: object, ec2: object) -> list[EcsWorkload]:
                         service_arn=svc["serviceArn"],
                         image_ref=image_ref,
                         is_public=_service_is_public(ec2, svc),
+                        task_role_arn=task_role_arn,
                     )
                 )
     return workloads
