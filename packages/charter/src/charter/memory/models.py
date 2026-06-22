@@ -55,7 +55,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON, TypeDecorator
+from sqlalchemy.types import JSON, TypeDecorator, UserDefinedType
 
 # Embedding vector dimensionality. Matches OpenAI's text-embedding-3-small and
 # the FakeEmbeddingProvider (F.5 Task 4). Production deployments can override
@@ -89,6 +89,20 @@ class _PortableVector(TypeDecorator[list[float]]):
         return dialect.type_descriptor(JSON())
 
 
+class _PGLtree(UserDefinedType[str]):
+    """Native Postgres ``ltree`` column type, rendered as ``LTREE`` DDL.
+
+    SQLAlchemy core exposes no ``postgresql.LTREE`` (SQLAlchemy 2.0.x); the
+    ``ltree`` type is provided by the ``ltree`` extension (enabled in migration
+    0001). Rendering the DDL directly avoids a ``sqlalchemy_utils`` dependency.
+    """
+
+    cache_ok = True
+
+    def get_col_spec(self, **_: Any) -> str:
+        return "LTREE"
+
+
 class _PortableLtree(TypeDecorator[str]):
     """Dialect-portable LTREE — Postgres-native LTREE, String fallback elsewhere.
 
@@ -103,7 +117,7 @@ class _PortableLtree(TypeDecorator[str]):
 
     def load_dialect_impl(self, dialect: Any) -> Any:
         if dialect.name == "postgresql":
-            return dialect.type_descriptor(postgresql.LTREE())  # type: ignore[attr-defined]
+            return dialect.type_descriptor(_PGLtree())
         return dialect.type_descriptor(String(512))
 
 
