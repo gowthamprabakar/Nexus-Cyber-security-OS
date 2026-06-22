@@ -133,6 +133,18 @@ class InternetExposedVulnerableWorkload:
     severity: str
 
 
+@dataclass(frozen=True, slots=True)
+class FineGrainedDataExposure:
+    """A principal with a CONCRETE (non-admin) grant to a public resource exposing data —
+    a least-privilege violation the admin-only seed (path 1) misses (path 4). `data_type`
+    is the exposed data kind (e.g. ``ssn``)."""
+
+    principal_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -383,6 +395,40 @@ class KgQuery:
                     )
         return hits
 
+    async def find_fine_grained_data_exposure(self) -> list[FineGrainedDataExposure]:
+        """Find principals with a HAS_ACCESS_TO grant to a public resource exposing data.
+
+        Self-seeded (no caller list): enumerates IDENTITY nodes, follows HAS_ACCESS_TO to a
+        resource, then EXPOSES_DATA (written only for public buckets) to a data classification.
+        Unlike :meth:`find_public_data_exposure` (caller-seeded with admin principals), this
+        surfaces fine-grained least-privilege violations — a non-admin principal with specific
+        access to sensitive public data (path 4). Read-only."""
+        hits: list[FineGrainedDataExposure] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            for access in await self._edges_from(
+                principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)
+            ):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        FineGrainedDataExposure(
+                            principal_id=principal.entity_id,
+                            resource_id=access.dst_entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -397,6 +443,7 @@ __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
     "ExternalTrustExposure",
+    "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",
     "KgQuery",
     "PathEdge",
