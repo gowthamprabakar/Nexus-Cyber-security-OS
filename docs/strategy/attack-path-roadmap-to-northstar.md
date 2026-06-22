@@ -33,7 +33,7 @@
 | 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                                                    |
 | 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                        | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure` |
 | 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**   | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`     |
-| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⬜                                                                 |
+| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⤳ subsumed by path 2 (same `RUNS_IMAGE→VULNERABLE_TO→exposed` chain; registry-scan source is operator-verified — trivy can't scan moto-ECR) |
 | 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                                                 |
 
 **Core feeder set (covers ~all paths): data-security ✅, identity ✅ (basic / depth pending), vulnerability ✅ (real trivy, trivy-gated), cloud-posture ✅ (ECS exposure, moto), network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse. 4 of 8 now REAL-verified.**
@@ -52,6 +52,17 @@ Prioritize paths that are high-value AND unlock the most reuse:
 6. **Path 5 — DONE.** The crown jewel: assembled paths 2 + 4 on one workload pivot (exposed + vulnerable + `ASSUMES` a role that reaches sensitive data). Added the workload→task-role `ASSUMES` bridge. **7 of 10 paths REAL (1,2,3,4,5,7,8).** Remaining: **9** (registry image→workload, reuses `RUNS_IMAGE`), **6** (kind + k8s-posture), **10** (aispm).
 
 Each path = (verify its new feeder REAL in CI) + (wire the correlation pattern) + (ship it, demoable). ~1 shippable path/week after the first.
+
+## The product surface — `AttackPathRanker` (the north star, in code)
+
+`meta_harness.attack_paths.AttackPathRanker` is the deliverable: it runs all seven REAL
+detectors over a tenant's graph and returns ONE worst-first ranked `AttackPath` list
+(type + severity + human title + entities) — "connect an account → see your top attack
+paths, prioritized." Severity is the triage judgment: crown_jewel 95 > public_secret 90 >
+internet_exposed_vulnerable 80 > public_unencrypted 75 > external_trust 70 >
+fine_grained_data 60. Pure aggregation over already-REAL detectors; hermetic. This is what a
+demo/API renders. **7 of 10 archetypes REAL feed it (1,2,3,4,5,7,8); 9 subsumed; 6 + 10 are
+the genuinely-new remaining surfaces (K8s via kind — docker/kind present; AI-SPM via aispm).**
 
 ## Measurement (so "50-60% of Wiz" is a fact, not a feeling)
 
