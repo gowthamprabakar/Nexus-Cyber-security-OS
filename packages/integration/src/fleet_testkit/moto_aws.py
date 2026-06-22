@@ -125,6 +125,7 @@ def setup_ecs_workload(
     image_ref: str,
     public: bool,
     name: str = "websvc",
+    task_role_arn: str = "",
 ) -> str:
     """Seed a moto ECS service running ``image_ref``; returns its service ARN.
 
@@ -132,6 +133,8 @@ def setup_ecs_workload(
     When ``public`` the security group gets a real ``0.0.0.0/0`` ingress and the service
     assigns a public IP — the exact posture :func:`cloud_posture.tools.aws_ecs` flags as
     internet-exposed. When not public, the SG is closed and no public IP is assigned.
+    ``task_role_arn`` (when set) is attached to the task definition (path-5 crown jewel:
+    the role the workload runs as).
     """
     vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
     subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
@@ -151,11 +154,14 @@ def setup_ecs_workload(
             ],
         )
     ecs.create_cluster(clusterName=f"{name}-cluster")  # type: ignore[attr-defined]
-    ecs.register_task_definition(  # type: ignore[attr-defined]
-        family=f"{name}-td",
-        networkMode="awsvpc",
-        containerDefinitions=[{"name": "app", "image": image_ref, "memory": 128}],
-    )
+    task_def_kwargs: dict[str, object] = {
+        "family": f"{name}-td",
+        "networkMode": "awsvpc",
+        "containerDefinitions": [{"name": "app", "image": image_ref, "memory": 128}],
+    }
+    if task_role_arn:
+        task_def_kwargs["taskRoleArn"] = task_role_arn
+    ecs.register_task_definition(**task_def_kwargs)  # type: ignore[attr-defined]
     service = ecs.create_service(  # type: ignore[attr-defined]
         cluster=f"{name}-cluster",
         serviceName=name,
