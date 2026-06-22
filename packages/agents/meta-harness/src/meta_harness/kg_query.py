@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from charter.memory.graph_types import EdgeType
+from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.semantic import (
     MAX_TRAVERSAL_DEPTH,
     EntityRow,
@@ -81,6 +81,21 @@ class ToxicCombination:
     resource_id: str
     data_classification_id: str
     path: tuple[PathEdge, PathEdge]
+
+
+# Secret-type data classifications (data-security ClassifierLabel secret labels). A public
+# resource exposing one of these is a publicly-readable credential — path 3 (ADR-023).
+_SECRET_DATA_TYPES = frozenset({"aws_access_key", "jwt", "generic_api_token"})
+
+
+@dataclass(frozen=True, slots=True)
+class PublicSecretExposure:
+    """A public resource that EXPOSES_DATA a secret-type classification (a publicly-
+    readable credential). `data_type` is the secret kind (e.g. ``aws_access_key``)."""
+
+    resource_id: str
+    data_classification_id: str
+    data_type: str
 
 
 def _validate_depth(depth: int) -> int:
@@ -202,6 +217,36 @@ class KgQuery:
                     )
         return hits
 
+    async def find_public_secret_exposure(self) -> list[PublicSecretExposure]:
+        """Find public resources that EXPOSES_DATA a secret-type classification.
+
+        EXPOSES_DATA is written only for public buckets, so its presence proves the
+        resource is public; we keep only edges to a SECRET data-type — a publicly-readable
+        credential. Read-only; enumerates the tenant's CLOUD_RESOURCE nodes (no seed)."""
+        hits: list[PublicSecretExposure] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for resource in resources:
+            for expose in await self._edges_from(
+                resource.entity_id, (EdgeType.EXPOSES_DATA.value,)
+            ):
+                dc = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                )
+                if dc is None:
+                    continue
+                data_type = str(dc.properties.get("data_type", ""))
+                if data_type in _SECRET_DATA_TYPES:
+                    hits.append(
+                        PublicSecretExposure(
+                            resource_id=resource.entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=data_type,
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -217,5 +262,6 @@ __all__ = [
     "BlastRadiusResult",
     "KgQuery",
     "PathEdge",
+    "PublicSecretExposure",
     "ToxicCombination",
 ]
