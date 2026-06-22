@@ -209,3 +209,72 @@ async def test_record_access_writes_has_access_to_edge_on_arn_spine() -> None:
             properties={},
         )
         assert edges[0].dst_entity_id == bucket_id
+
+
+@pytest.mark.asyncio
+async def test_write_access_edges_expands_admin_over_tenant_resources():
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from fleet_testkit import in_memory_semantic_store
+    from identity.agent import _write_access_edges  # new helper
+    from identity.tools.permission_paths import EffectiveGrant
+
+    async with in_memory_semantic_store() as store:
+        # a resource node already in the tenant graph (as data-security would have written):
+        bucket = await store.upsert_entity(
+            tenant_id="t1",
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:aws:s3:::acme-pii",
+            properties={},
+        )
+        grants = [
+            EffectiveGrant(
+                principal_arn="arn:aws:iam::1:role/admin",
+                action="*:*",
+                resource_pattern="*",
+                effect="Allow",
+                source_policy_arns=(),
+                is_admin=True,
+            )
+        ]
+
+        await _write_access_edges(store, "t1", grants)
+
+        role = await store.upsert_entity(
+            tenant_id="t1",
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id="arn:aws:iam::1:role/admin",
+            properties={},
+        )
+        edges = await store.get_relationships_from(
+            tenant_id="t1", src_entity_id=role, edge_types=(EdgeType.HAS_ACCESS_TO.value,)
+        )
+        assert len(edges) == 1
+        assert edges[0].dst_entity_id == bucket
+
+
+@pytest.mark.asyncio
+async def test_write_access_edges_noop_when_no_admin_or_no_resources():
+    from charter.memory.graph_types import NodeCategory
+    from fleet_testkit import in_memory_semantic_store
+    from identity.agent import _write_access_edges  # new helper
+    from identity.tools.permission_paths import EffectiveGrant
+
+    async with in_memory_semantic_store() as store:
+        # non-admin grant → nothing
+        non_admin = [
+            EffectiveGrant(
+                principal_arn="arn:aws:iam::1:role/x",
+                action="s3:Get",
+                resource_pattern="arn:aws:s3:::b",
+                effect="Allow",
+                source_policy_arns=(),
+                is_admin=False,
+            )
+        ]
+        await _write_access_edges(store, "t1", non_admin)
+        assert (
+            await store.list_entities_by_type(
+                tenant_id="t1", entity_type=NodeCategory.IDENTITY.value
+            )
+            == []
+        )
