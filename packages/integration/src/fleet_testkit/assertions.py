@@ -136,6 +136,29 @@ async def assert_two_tenant_disjoint(
     assert not overlap, f"cross-tenant entity leak between {tenant_a!r} and {tenant_b!r}: {overlap}"
 
 
+async def assert_single_node(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    entity_type: NodeCategory | str,
+    external_id: str,
+) -> None:
+    """Assert exactly ONE node of ``entity_type`` exists for the tenant and it carries
+    ``external_id`` — i.e. all agents converged on the same canonical key (no duplicates,
+    no divergent-key nodes). The reusable cross-agent-join check (ADR-023)."""
+    etype = _entity_type(entity_type)
+    nodes = await store.list_entities_by_type(tenant_id=tenant_id, entity_type=etype)
+    matching = [n for n in nodes if n.external_id == external_id]
+    assert len(matching) == 1, (
+        f"expected exactly one {etype} node with external_id={external_id!r}, "
+        f"got {len(matching)} (all {etype} external_ids: {[n.external_id for n in nodes]})"
+    )
+    assert len(nodes) == 1, (
+        f"convergence failure: {len(nodes)} {etype} nodes exist (expected the single "
+        f"canonical node). external_ids: {[n.external_id for n in nodes]}"
+    )
+
+
 def assert_audit_chain(audit_path: Path) -> int:
     """Hash-verify the F.6 audit chain at ``audit_path`` (one JSON entry per line).
 
