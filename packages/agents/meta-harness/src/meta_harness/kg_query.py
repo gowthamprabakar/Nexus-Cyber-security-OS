@@ -159,6 +159,7 @@ class CrownJewelExposure:
     resource_id: str
     data_classification_id: str
     data_type: str
+    severity: str = ""  # the CVE's severity label (CRITICAL/HIGH/…), for worst-CVE rollup
 
 
 @dataclass(frozen=True, slots=True)
@@ -510,6 +511,7 @@ class KgQuery:
                             resource_id=resource_id,
                             data_classification_id=dc.entity_id,
                             data_type=str(dc.properties.get("data_type", "")),
+                            severity=str(cve.properties.get("severity", "")),
                         )
                     )
         return hits

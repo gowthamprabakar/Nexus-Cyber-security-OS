@@ -19,6 +19,13 @@ Severity is the product judgment — what a security team triages first:
 ``find_public_data_exposure`` (path 1, admin-seeded) is intentionally not run here: its hits are
 a subset of ``find_fine_grained_data_exposure`` (self-seeded over every HAS_ACCESS_TO principal),
 so running both would double-count.
+
+Two layers of de-duplication keep the list to "top ~10 prioritized", not raw detector hits:
+1. **Grouping** — one structural subject with N pieces of evidence (CVEs / data types) collapses
+   to ONE path with ``count=N`` (a workload with nine CVEs is one crown jewel, not nine rows).
+2. **Subsumption** — a crown jewel is the most complete framing of its workload, so it folds in the
+   constituent legs that would otherwise surface for the SAME subject (that workload's own
+   internet-exposed-vulnerable path, and its role's fine-grained access to the same data).
 """
 
 from __future__ import annotations
@@ -148,13 +155,25 @@ class AttackPathRanker:
         def g(path_type: str, subject: tuple[str, ...]) -> _Group:
             return groups.setdefault((path_type, subject), _Group())
 
+        # A crown jewel is the most complete framing of its workload, so it SUBSUMES the
+        # constituent legs that would otherwise also surface for the SAME subject: the workload's
+        # own internet-exposed-vulnerable path, and the fine-grained access of its role to the same
+        # data. Those are folded into the crown jewel, not shown as separate rows (no double-count).
+        subsumed_workloads: set[str] = set()
+        subsumed_access: set[tuple[str, str]] = set()
         for h in await self._kg.find_crown_jewel_exposure():
             g("crown_jewel", (h.workload_id, h.role_id, h.resource_id)).add(
                 (h.workload_id, h.image_id, h.role_id, h.resource_id),
                 h.cve_id,
+                cve_severity=h.severity,
                 data_type=h.data_type,
             )
+            subsumed_workloads.add(h.workload_id)
+            subsumed_access.add((h.role_id, h.resource_id))
+
         for v in await self._kg.find_internet_exposed_vulnerable_workload():
+            if v.workload_id in subsumed_workloads:
+                continue  # subsumed by the crown jewel for this workload
             g("internet_exposed_vulnerable", (v.workload_id, v.image_id)).add(
                 (v.workload_id, v.image_id), v.cve_id, cve_severity=v.severity
             )
@@ -183,6 +202,8 @@ class AttackPathRanker:
                 (rb.resource_id,), rb.data_type, principal=rb.principal_arn
             )
         for f in await self._kg.find_fine_grained_data_exposure():
+            if (f.principal_id, f.resource_id) in subsumed_access:
+                continue  # this role→data access is the crown jewel's own access leg
             g("fine_grained_data", (f.principal_id, f.resource_id)).add(
                 (f.principal_id, f.resource_id, f.data_classification_id), f.data_type
             )

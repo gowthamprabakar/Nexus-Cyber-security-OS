@@ -26,9 +26,10 @@ async def _edge(store, t, src, dst, rel):
 
 
 @pytest.mark.asyncio
-async def test_crown_jewel_graph_ranks_worst_first():
-    """One workload that is exposed + vulnerable + assumes a role reaching SSN data lights up
-    several detectors; the ranker returns them once each, crown jewel first."""
+async def test_crown_jewel_subsumes_its_constituent_legs():
+    """One workload that is exposed + vulnerable + assumes a role reaching SSN data is reported as
+    ONE crown jewel — its constituent legs (the workload's own internet-exposed-vulnerable path and
+    its role's fine-grained access to the same data) are folded in, not shown as separate rows."""
     t = "t"
     async with in_memory_semantic_store() as store:
         workload = await _node(
@@ -47,12 +48,35 @@ async def test_crown_jewel_graph_ranks_worst_first():
 
         paths = await AttackPathRanker(KgQuery(store, t)).find_all()
         types = [p.path_type for p in paths]
-        # Crown jewel (95) first; the constituent legs also surface; severities non-increasing.
-        assert types[0] == "crown_jewel"
-        assert "internet_exposed_vulnerable" in types
-        assert "fine_grained_data" in types
-        assert [p.severity for p in paths] == sorted((p.severity for p in paths), reverse=True)
-        assert all(p.title and p.entities for p in paths)
+        # Just the crown jewel — the same-subject legs are subsumed, not duplicated.
+        assert types == ["crown_jewel"]
+        assert "worst CRITICAL" in paths[0].title or "CRITICAL" in paths[0].title
+        assert paths[0].title and paths[0].entities
+
+
+@pytest.mark.asyncio
+async def test_independent_legs_are_not_subsumed():
+    """Subsumption is subject-scoped: an exposed-vuln workload and a fine-grained grant that are NOT
+    part of any crown jewel still surface as their own paths."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # An exposed + vulnerable workload with NO data-reaching role → internet_exposed only.
+        wl = await _node(
+            store, t, _R, "arn:ecs:svc/plain", {"kind": "ecs-service", "is_public": True}
+        )
+        img = await _node(store, t, _R, "myreg/plain:1.0", {"kind": "container-image"})
+        cve = await _node(store, t, _CVE, "CVE-2020-7471", {"severity": "CRITICAL"})
+        await _edge(store, t, wl, img, EdgeType.RUNS_IMAGE.value)
+        await _edge(store, t, img, cve, EdgeType.VULNERABLE_TO.value)
+        # A separate fine-grained grant (no workload) → fine_grained only.
+        role = await _node(store, t, _ID, "arn:iam:role/reader", {})
+        bucket = await _node(store, t, _R, "arn:aws:s3:::pii", {"is_public": True})
+        dc = await _node(store, t, _DC, "arn:aws:s3:::pii:ssn", {"data_type": "ssn"})
+        await _edge(store, t, role, bucket, EdgeType.HAS_ACCESS_TO.value)
+        await _edge(store, t, bucket, dc, EdgeType.EXPOSES_DATA.value)
+
+        types = {p.path_type for p in await AttackPathRanker(KgQuery(store, t)).find_all()}
+        assert types == {"internet_exposed_vulnerable", "fine_grained_data"}
 
 
 @pytest.mark.asyncio

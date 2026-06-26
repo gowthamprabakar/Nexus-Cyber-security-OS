@@ -250,10 +250,13 @@ async def test_full_fleet_scene_all_nine_archetypes_across_three_clouds(tmp_path
             )
             await drive_aispm(store, tenant_id=_TENANT, sm_client=sm)
 
-            # workload (paths 2 + 5): exposed ECS running the vuln image, assuming the crown role
+            # workload (path 5): exposed ECS running the vuln image, assuming the crown role.
             setup_ecs_workload(
-                ecs, ec2, image_ref=_ECS_IMAGE, public=True, task_role_arn=crown_role
+                ecs, ec2, image_ref=_ECS_IMAGE, public=True, name="crown", task_role_arn=crown_role
             )
+            # workload (path 2): a SEPARATE exposed + vulnerable workload with no data-reaching role,
+            # so internet_exposed_vulnerable surfaces on its own (the crown workload's is subsumed).
+            setup_ecs_workload(ecs, ec2, image_ref=_ECS_IMAGE, public=True, name="plain")
             await drive_cloud_workloads(store, tenant_id=_TENANT, ecs_client=ecs, ec2_client=ec2)
 
         # vulnerability (real trivy) — CVEs on the ECS image AND the K8s image
