@@ -162,9 +162,25 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
     unchanged; (3) CI-REAL substrate via the readers' own injectable Protocols (`fleet_testkit.azure_blob`
     / `gcs_blob` — no `moto` needed) driving the REAL readers + classifier + writer; **6 e2e tests prove
     path-3 (public-secret) + path-7 (public-unencrypted) light up on Azure Blob AND GCS, private-is-dark.**
-    **REMAINING sub-slices (own days):** (4) cross-cloud identity (Azure AD / GCP IAM) for the access-leg
-    paths (4/8); non-storage Azure/GCP resource types (compute, AI). Storage is the proof the engine is
-    genuinely multi-cloud; identity is the next leg.
+    **DONE (slice 2 — access leg, commit 96a0363):** cross-cloud identity for **path 4**. `record_access`
+    was already cloud-agnostic; only grant _resolution_ was AWS-only. New `identity.tools.azure_rbac`
+    (`blob_read_grants` — container-scoped Storage-Blob-Data-\* assignments → `(principal, azure_blob_uri)`;
+    broad account/sub scopes + control-plane roles skipped = fine-grained by design) +
+    `identity.tools.gcp_iam` (`storage_read_grants` — object-read bindings → `(member, gcs_uri)`; public
+    members dropped). `fleet_testkit.identity_access` drives the REAL resolvers + REAL `record_access` via
+    injectable clients. **4 e2e (Azure/GCP path-4 fires + scoped-elsewhere dark) + 8 resolver units.**
+    **DONE (slice 3 — external trust, commit 797f001):** cross-cloud identity for **path 8**.
+    `azure_ad.AzureAdUser` gained `user_type`/`is_guest` (Graph select fetches `userType` — REAL B2B
+    guest signal); `azure_rbac.external_trust_grants` keeps blob-read grants held by guest principals;
+    `gcp_iam.external_trust_grants` keeps object-read grants held by foreign members (outside
+    `org_domain`) or `allAuthenticatedUsers` (allUsers/project-SA excluded). Drivers call
+    `record_external_trust` + `record_access`. **4 e2e (Azure guest / GCP foreign fire, member/internal
+    dark) + 3 resolver units + guest-parse test.** Cross-cloud identity (paths 4 + 8) COMPLETE.
+    **REMAINING (own days, the last #13 sub-item):** non-storage Azure/GCP resource types — compute
+    (Azure VM / GCP GCE for paths 2/5/6 exposure+workload legs) and AI (Azure OpenAI / Vertex for path
+    10). Each needs a net-new posture reader + the `RUNS_IMAGE`/`ASSUMES`/`EXPOSES_MODEL` bridges built
+    for AWS. Storage + identity legs already prove the engine is genuinely multi-cloud; compute/AI extend
+    breadth, not the core mechanism.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
