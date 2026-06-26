@@ -35,6 +35,7 @@ _SEVERITY: dict[str, int] = {
     "privileged_vulnerable": 78,
     "public_unencrypted": 75,
     "external_trust": 70,
+    "exposed_ai_sensitive_data": 68,
     "fine_grained_data": 60,
 }
 
@@ -106,6 +107,14 @@ class AttackPathRanker:
                     "external_trust",
                     f"Externally-trusted principal can reach {e.data_type} data",
                     (e.principal_id, e.resource_id),
+                )
+            )
+        for a in await self._kg.find_exposed_ai_with_sensitive_data():
+            paths.append(
+                self._make(
+                    "exposed_ai_sensitive_data",
+                    f"Internet-exposed AI service reads {a.data_type} training data",
+                    (a.service_id, a.resource_id),
                 )
             )
         for f in await self._kg.find_fine_grained_data_exposure():

@@ -27,6 +27,13 @@ class AwsAiReader(Protocol):
     def bedrock_guardrail_count(self) -> int: ...
 
 
+def _s3_bucket_of(url: str) -> str:
+    """Bucket name from an ``s3://bucket/key`` URL ("" if not an S3 URL)."""
+    if not url.startswith("s3://"):
+        return ""
+    return url[len("s3://") :].split("/", 1)[0]
+
+
 @dataclass(frozen=True, slots=True)
 class SageMakerEndpoint:
     name: str
@@ -34,6 +41,7 @@ class SageMakerEndpoint:
     kms_encrypted: bool | None
     network_isolated: bool | None
     model_name: str
+    model_data_bucket: str = ""  # S3 bucket of the model artifact (training-data join, path 10)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +70,7 @@ def inventory_from_reader(reader: AwsAiReader, *, account_id: str, region: str) 
             kms_encrypted=e.get("kms_encrypted"),
             network_isolated=e.get("network_isolated"),
             model_name=str(e.get("model_name", "")),
+            model_data_bucket=str(e.get("model_data_bucket", "")),
         )
         for e in reader.sagemaker_endpoints()
         if e.get("name")
@@ -103,9 +112,12 @@ class _BotoAwsAiReader:
             variants = cfg.get("ProductionVariants") or []
             model_name = variants[0].get("ModelName", "") if variants else ""
             network_isolated: bool | None = None
+            model_data_bucket = ""
             if model_name:
                 model = self._sm.describe_model(ModelName=model_name)
                 network_isolated = bool(model.get("EnableNetworkIsolation", False))
+                url = (model.get("PrimaryContainer") or {}).get("ModelDataUrl", "")
+                model_data_bucket = _s3_bucket_of(url)
             out.append(
                 {
                     "name": name,
@@ -113,6 +125,7 @@ class _BotoAwsAiReader:
                     "kms_encrypted": bool(cfg.get("KmsKeyId")),
                     "network_isolated": network_isolated,
                     "model_name": model_name,
+                    "model_data_bucket": model_data_bucket,
                 }
             )
         return out
