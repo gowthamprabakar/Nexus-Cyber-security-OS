@@ -27,6 +27,10 @@ class VertexEndpoint:
     public: bool | None  # no VPC network attached → reachable publicly
     cmk_encrypted: bool | None  # encryption_spec.kms_key_name set
     psc_enabled: bool | None  # private service connect
+    #: The GCS bucket holding the deployed model's artifact (``artifactUri`` = ``gs://<bucket>/…``) —
+    #: the model-data link for path 10. HAS_ACCESS_TO joins the endpoint to its training data, keyed
+    #: by the same ``gcs_uri`` data-security's storage writer uses. "" when none.
+    model_data_bucket: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +49,7 @@ def inventory_from_reader(reader: GcpAiReader, *, project_id: str, location: str
             public=e.get("public"),
             cmk_encrypted=e.get("cmk_encrypted"),
             psc_enabled=e.get("psc_enabled"),
+            model_data_bucket=str(e.get("model_data_bucket", "")),
         )
         for e in reader.vertex_endpoints()
         if e.get("name")

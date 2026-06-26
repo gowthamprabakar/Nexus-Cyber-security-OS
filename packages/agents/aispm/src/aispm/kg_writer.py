@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from charter.canonical import azure_blob_uri as _azure_blob_uri
+from charter.canonical import gcs_uri as _gcs_uri
 from charter.canonical import s3_bucket_arn as _s3_bucket_arn
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
@@ -114,6 +116,16 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 await self.add_edge(
                     svc or "", await self._internet_node() or "", EdgeType.EXPOSES_MODEL
                 )
+            if account.model_data_account and account.model_data_container:
+                # The fine-tune / grounding Blob — the same spine node data-security keys by
+                # azure_blob_uri. HAS_ACCESS_TO joins the AI service to its training data, so an
+                # exposed account reaching a sensitive container surfaces in one walk (path 10).
+                container = await self.upsert_node(
+                    NodeCategory.CLOUD_RESOURCE,
+                    _azure_blob_uri(account.model_data_account, account.model_data_container),
+                    {},
+                )
+                await self.add_edge(svc or "", container or "", EdgeType.HAS_ACCESS_TO)
 
     async def record_gcp(self, inventory: GcpAiInventory) -> None:
         """Vertex endpoints → AI_SERVICE nodes + HOSTS_AI/EXPOSES_MODEL."""
@@ -127,6 +139,13 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 await self.add_edge(
                     svc or "", await self._internet_node() or "", EdgeType.EXPOSES_MODEL
                 )
+            if ep.model_data_bucket:
+                # The model-artifact GCS bucket — the same spine node data-security keys by
+                # gcs_uri. HAS_ACCESS_TO joins the endpoint to its training data (path 10).
+                bucket = await self.upsert_node(
+                    NodeCategory.CLOUD_RESOURCE, _gcs_uri(ep.model_data_bucket), {}
+                )
+                await self.add_edge(svc or "", bucket or "", EdgeType.HAS_ACCESS_TO)
 
 
 __all__ = ["KnowledgeGraphWriter"]

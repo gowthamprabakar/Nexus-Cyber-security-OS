@@ -49,6 +49,23 @@ def test_parse_and_tristate() -> None:
     assert inv.accounts[0].public_network_access is True
 
 
+def test_parses_model_data_blob() -> None:
+    # The fine-tune / grounding Blob link for path 10 (gap #13 cross-cloud).
+    reader = _FakeAzureReader(
+        [
+            {
+                "name": "gpt",
+                "public_network_access": True,
+                "model_data_account": "acmestorage",
+                "model_data_container": "training",
+            }
+        ]
+    )
+    inv = inventory_from_reader(reader, subscription_id="sub-1")
+    assert inv.accounts[0].model_data_account == "acmestorage"
+    assert inv.accounts[0].model_data_container == "training"
+
+
 def test_all_four_checks_fire() -> None:
     inv = AzureAiInventory(
         subscription_id="sub-1",
