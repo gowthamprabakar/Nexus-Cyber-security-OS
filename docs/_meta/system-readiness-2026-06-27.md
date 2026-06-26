@@ -135,10 +135,10 @@ Each AWS gap flipped its `test_gap_*` (assert-miss) → `test_fixed_*` (assert-d
 
 ## 8. Bottom Line
 
-- **Built and REAL:** an attack-path detection engine where 20 agents feed a typed graph and **all 10 north-star archetypes fire in CI** — now across **AWS, Azure, and GCP** with no detector change. The product surface (`AttackPathRanker`) exists and returns a ranked, prioritized list.
-- **Closed this cycle:** the entire 13-gap detection ledger, and the multi-cloud thesis (gap #13). Full repo **7840 pass / 0 fail**.
+- **Built and REAL:** an attack-path detection engine where 20 agents feed a typed graph and **all 10 north-star archetypes fire in CI** — now across **AWS, Azure, and GCP** with no detector change. The product surface (`AttackPathRanker`) exists, returns a ranked/grouped/de-duplicated list, and now has a **front door** (`meta-harness attack-paths` CLI + `attack_path_report` render/JSON).
+- **Closed this cycle:** the entire 13-gap detection ledger; the multi-cloud thesis (gap #13); a product-level **whole-environment scene** (all 9 detectors fire in one tenant across 3 clouds, validated end-to-end); ranker **grouping + subsumption** (37 raw rows → ~12 distinct prioritized paths); and the **front door** (the readiness-gap "no entry point" is closed). Full repo **7840+ pass / 0 fail**.
 - **The honest distance to "half of Wiz":** more **patterns** (additive, no ceiling) and **deeper banks** (to turn the felt ~75–80% into a measured number) — plus the eventual generic path engine. None of it requires re-architecture; the foundation is proven.
-- **Next:** grow the measured coverage (more bank cases per vertical), then either (a) more curated patterns or (b) begin the Phase-2 generic path engine. Multi-cloud and the gap ledger are no longer open work.
+- **Next:** (a) **remediation hints** on each path (the North Star's "with a fix"); (b) grow measured coverage (more bank cases per vertical) and/or more curated patterns; (c) eventually the Phase-2 generic path engine. Multi-cloud, the gap ledger, and the product surface/front door are no longer open work.
 
 ---
 
