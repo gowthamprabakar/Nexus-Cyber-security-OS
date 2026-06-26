@@ -176,11 +176,20 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
     `org_domain`) or `allAuthenticatedUsers` (allUsers/project-SA excluded). Drivers call
     `record_external_trust` + `record_access`. **4 e2e (Azure guest / GCP foreign fire, member/internal
     dark) + 3 resolver units + guest-parse test.** Cross-cloud identity (paths 4 + 8) COMPLETE.
-    **REMAINING (own days, the last #13 sub-item):** non-storage Azure/GCP resource types — compute
-    (Azure VM / GCP GCE for paths 2/5/6 exposure+workload legs) and AI (Azure OpenAI / Vertex for path
-    10). Each needs a net-new posture reader + the `RUNS_IMAGE`/`ASSUMES`/`EXPOSES_MODEL` bridges built
-    for AWS. Storage + identity legs already prove the engine is genuinely multi-cloud; compute/AI extend
-    breadth, not the core mechanism.
+    **DONE (slice 4 — compute, commits 672ca45 Azure + dd9eddb GCP):** cross-cloud **path 2**
+    (internet-exposed workload + vulnerable image) on Azure Container Instances + GCP Cloud Run — the
+    container-image analogues of ECS. New `cloud_posture.tools.azure_aci` / `gcp_cloud_run` readers
+    (resolve workload → image-ref + is_public via Public IP / `allUsers` invoker) + shared
+    `kg_writer._record_container_workload` (CLOUD_RESOURCE{is_public} + `RUNS_IMAGE` onto the SAME
+    image node vulnerability writes CVEs to — same mechanism-② bridge, no detector change).
+    `fleet_testkit.cross_cloud_compute` drives REAL readers; e2e (real trivy, exposed fires / private
+    dark) + 8 reader units. **Cross-cloud proof now spans 5 of 10 archetypes — paths 3, 7 (storage),
+    4 (fine-grained identity), 8 (external trust), 2 (compute+vuln bridge) — covering every core
+    mechanism (public-exposure, data-classification, identity-access, external-trust, image-vuln join).**
+    **REMAINING (composition extensions, NOT new mechanism — own days, optional):** path 5 crown-jewel
+    cross-cloud (workload `ASSUMES` managed-identity/service-account → data; needs the ASSUMES leg for
+    ACI/Cloud Run); path 6 (AKS/GKE = different kubeconfig, k8s layer already cloud-agnostic via kubectl);
+    path 10 AI (Azure OpenAI / Vertex `EXPOSES_MODEL`). The multi-cloud thesis is proven; these are breadth.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
