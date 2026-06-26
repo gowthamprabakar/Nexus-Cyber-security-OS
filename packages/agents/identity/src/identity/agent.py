@@ -549,15 +549,25 @@ def _fine_grained_grants(listing: IdentityListing) -> list[tuple[str, str]]:
     principal's customer-managed + inline policy documents for ``Allow`` statements that grant
     an S3 read action on a **concrete** bucket ARN, emitting a fine-grained (principal, bucket)
     pair. This catches a least-privilege-violating principal — specific access to a sensitive
-    bucket, *not* admin — that the admin-only path (1) is blind to. Deduped; group-inherited
-    grants are deferred (members resolve via MEMBER_OF, a later depth slice).
+    bucket, *not* admin — that the admin-only path (1) is blind to. A user's **group-inherited**
+    policies are resolved too (access via group membership). Deduped.
     """
     doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+    group_by_name = {group.name: group for group in listing.groups}
     grants: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for principal in (*listing.users, *listing.roles):
         documents = [doc_by_arn[arn] for arn in principal.attached_policy_arns if arn in doc_by_arn]
         documents += [doc for _name, doc in principal.inline_policies]
+        # Users inherit their groups' attached + inline policies (roles have no groups).
+        for group_name in getattr(principal, "group_memberships", ()):
+            group = group_by_name.get(group_name)
+            if group is None:
+                continue
+            documents += [
+                doc_by_arn[arn] for arn in group.attached_policy_arns if arn in doc_by_arn
+            ]
+            documents += [doc for _name, doc in group.inline_policies]
         for document in documents:
             for stmt in document.get("Statement") or []:
                 if stmt.get("Effect") != "Allow" or not _grants_s3_read(stmt.get("Action")):

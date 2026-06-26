@@ -110,10 +110,10 @@ def _listing_from_moto(iam: object) -> IdentityListing:
     )
 
 
-def test_gap_group_inherited_access_is_missed() -> None:
-    # GAP: _fine_grained_grants resolves a principal's attached + inline policies, but NOT
-    # policies inherited via group membership. A user whose only S3 access is via a group is
-    # invisible to path 4 (and path 8). Documented deferral; here it is measured.
+def test_fixed_group_inherited_access_is_detected() -> None:
+    # FIXED (gap #5): _fine_grained_grants now follows a user's group memberships and resolves
+    # the group's attached + inline policies, so a user whose only S3 access is via a group is
+    # caught (paths 4/8).
     doc = json.dumps(
         {
             "Version": "2012-10-17",
@@ -131,9 +131,9 @@ def test_gap_group_inherited_access_is_missed() -> None:
         iam.add_user_to_group(GroupName="readers", UserName="alice")
         listing = _listing_from_moto(iam)
     assert listing.users[0].group_memberships == ("readers",), "group membership is read"
-    assert _fine_grained_grants(listing) == [], (
-        "group-inherited access now resolved — update the gaps doc"
-    )
+    assert _fine_grained_grants(listing) == [
+        ("arn:aws:iam::123456789012:user/alice", "arn:aws:s3:::acme-pii")
+    ], "group-inherited access should now be resolved"
 
 
 def _federated_role(name: str, provider_arn: str) -> IamRole:
