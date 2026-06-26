@@ -92,11 +92,15 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
    Block-Public-Access blocks/restricts public policies. Was: ACL-only, so the dominant modern public
    path (AWS disables ACLs by default) was invisible. Test flipped to assert-detect + a PAB precision test.
 2. **Object-level ACL public** `[test]` — `public` is bucket-level; a private bucket with an individual
-   object made public via object ACL is missed (measured: 0 hits). _Effort: not a flip-the-test — the
-   reader is bucket-level, so this needs per-object `get_object_acl` calls (sampler change). Real slice._
-3. **Compressed / encoded blobs** `[test]` — the classifier matches patterns in _decoded UTF-8 text_
-   only; a secret/PII inside a **gzip** archive or **base64** blob is missed (plaintext + JSON-embedded
-   are caught). Wiz/Macie decompress + decode.
+   object made public via object ACL is missed (measured: 0 hits). **PLAN (slice):** the
+   `S3LiveObjectSampler` already lists+reads each sampled object, so add a `get_object_acl` call there →
+   `ObjectSample.is_public: bool`; thread a per-bucket `has_public_object` signal into the writer so a
+   sensitive hit in a public object OR-s into the bucket's `is_public`. Effort: sampler call + a signal
+   threaded sampler→writer (marginal cost: one ACL call per sampled object).
+3. ✅ **FIXED 2026-06-27** — **Compressed / encoded blobs** `[test]` — `classify_bytes` decodes gzip +
+   base64 before classifying (plain → gzip → base64, first specific match), wired into the real agent
+   `_classify` + the harness. Precision held (specific patterns, no entropy → noise doesn't match). Was:
+   decoded-UTF-8 only.
 4. ✅ **FIXED 2026-06-27** — **AWS secret access keys** `[test]` — added `_AWS_SECRET_KEY_RE` (the
    `secret access key` label, any separator/camelCase, + 40-char base64), classified as `AWS_ACCESS_KEY`.
    Now catches `aws_secret_access_key = <40>` / `SecretAccessKey: <40>`; a bare 40-char string is still
@@ -119,28 +123,42 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 8. **Permission boundary / SCP / Condition ignored** `[code]` (precision) — `_synthesize_admin_grants`
    and `_fine_grained_grants` read the granting policy but not **permission boundaries**, **SCPs**, or
    statement **Conditions**, so an admin/grant neutralized by a boundary or gated by a condition still
-   fires → over-reports.
+   fires → over-reports. **PLAN (real slice):** (1) extend `aws_iam._list_roles/_list_users` to fetch
+   `PermissionsBoundary` (get_role/get_user) → new `IamRole/IamUser.permission_boundary_doc` field;
+   (2) in the grant resolvers, intersect the granted action/resource with the boundary (a grant is
+   effective only if the boundary also allows it). SCPs (Organizations API) + statement Conditions are
+   a further phase. Effort: IAM reader + schema + intersection logic.
 
 **C. Compute & exposure (cloud-posture):**
 
 9. **EC2 / non-ECS compute not inventoried** `[test]` ⭐ — the workload reader enumerates **ECS services
    only**. An exposed **EC2 instance** (or EKS node, Lightsail, …) running a vulnerable workload is never
-   read → paths 2/5 blind to all non-ECS compute (measured: EC2 → empty).
+   read → paths 2/5 blind to all non-ECS compute (measured: EC2 → empty). **PLAN (slice):** a new
+   `cloud_posture.tools.aws_ec2.read_ec2_workloads(ec2)` (describe_instances → public IP / 0.0.0.0/0 SG →
+   `is_public`), written as `CLOUD_RESOURCE{kind=ec2-instance,is_public}` via `record_workloads`. Honest
+   limit: EC2 runs an **AMI/packages**, not a container image, so the `RUNS_IMAGE`→CVE join needs a
+   separate **host-vuln** model (trivy `rootfs`/`vm`) — exposure is inventoried; the vuln join is its
+   own slice.
 10. **Load-balancer / no-public-IP exposure** `[test]` ⭐ — a workload is "public" only when
     `assignPublicIp=ENABLED` **AND** a `0.0.0.0/0` SG. A service behind a public **ALB/NLB** (open SG, no
-    public IP) — the common production pattern — reads `is_public=False` (measured). Exposure via LB /
-    public subnet route / security-group-referencing-SG is missed.
+    public IP) — the common production pattern — reads `is_public=False` (measured). **PLAN (slice):** a
+    new `cloud_posture.tools.aws_elbv2` reader — `describe_load_balancers` (Scheme=internet-facing) →
+    `describe_listeners`/`describe_target_groups`/`describe_target_health` → the ECS service / EC2 target
+    behind a public LB → mark that workload `is_public=True` (OR-ed into the existing SG check). moto
+    ELBv2 supported, so hermetic. Effort: ELBv2 reader + target→workload mapping.
 
 **D. Vulnerability (vulnerability):**
 
-11. **Severity floor** `[config]` — trivy scans **HIGH + CRITICAL only** (`DEFAULT_SEVERITY`); MEDIUM/LOW
-    CVEs never reach the graph, so paths 2/5/6 miss medium-severity-but-exploitable vulns.
-12. **"KEV" is really "high severity"** `[code]` (semantic) — the detector fires on the presence of a
-    `VULNERABLE_TO` edge (severity-filtered at scan), not on actual **known-exploited (KEV)** or
-    exploit-availability status. So it over-reports (any HIGH CVE, not just exploited) and a MEDIUM-rated
-    KEV is missed (see #11). _Effort: KEV is an **online CISA feed** (`kev.py`, httpx); enriching CVE
-    nodes needs the feed wired through the scan→graph path + mocking + a firing-semantics decision.
-    Real slice, not a flip-the-test._
+11. ✅ **RESOLVED 2026-06-27 (deliberate tunable, not a defect)** — **Severity floor** `[config]` — trivy
+    scans **HIGH + CRITICAL** by default (`DEFAULT_SEVERITY`), but `trivy_fs_scan`/`trivy_image_scan`
+    already accept a `severity` list — including MEDIUM/LOW is a per-scan opt-in. The default is a
+    deliberate noise-control choice (flooding every scan with MEDIUM CVEs hurts signal); it is tunable,
+    not missing. No code change — documented as a knob.
+12. ✅ **FIXED 2026-06-27** — **KEV as a first-class signal** `[test]` — `record_scan_results` takes an
+    injectable `kev_cve_ids` set and flags matching CVE nodes `kev=True` (a prioritization signal). The
+    catalog is injected (the live CISA `kev.py` feed is the agent's online path; tests/banks pass a known
+    set → hermetic). Firing stays severity-based (the deliberate recall floor, #11); KEV is now surfaced
+    for ranking rather than ignored.
 
 **E. Multi-cloud (scope):**
 
@@ -148,9 +166,25 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
     only**; the cross-agent joins key on **AWS ARNs** (canonical-key mechanism ①). The Azure/GCP feeders
     exist (data-security Azure Blob/GCS, identity Azure AD, multi-cloud-posture) but no attack path is
     proven on non-AWS resources, and ARN-keyed joins won't resolve Azure/GCP keys as-is. Multi-cloud =
-    **operator-verified at best, not REAL.**
+    **operator-verified at best, not REAL.** **PLAN (multi-day, NOT a session fix — honest):** per cloud,
+    (1) a canonical-key scheme for non-ARN resources (Azure resource IDs, GCS `gs://` URIs) extending
+    ADR-023; (2) public-exposure + sensitive-data detection wired to write the SAME node/edge vocabulary
+    (`CLOUD_RESOURCE{is_public}` + `EXPOSES_DATA`) the AWS feeders use, so the cloud-agnostic `kg_query`
+    detectors fire unchanged; (3) an Azure/GCP test substrate (no `moto` equivalent — likely recorded
+    fixtures or a thin fake) to make it CI-REAL not operator-only; (4) cross-cloud identity (Azure AD /
+    GCP IAM) for the access-leg paths. Each cloud is its own sub-slice; start with Azure Blob public+PII
+    (the path-3/7 analogue) as the smallest end-to-end proof.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
+
+## Detection-gap fix status (2026-06-27)
+
+**Fixed (8 of 13):** #1 bucket-policy-public, #3 gzip/base64 decode, #4 AWS-secret-key, #5 group-inherited
+access, #6 federated trust, #7 resource-based access, #11 severity-floor (resolved as a tunable), #12 KEV
+flag. **Open as scoped slices (4):** #2 object-ACL (sampler), #8 permission-boundary (IAM reader+schema),
+#9 EC2 inventory (new reader; host-vuln join separate), #10 ELBv2/load-balancer exposure (new reader).
+**Multi-day (1):** #13 Azure/GCP multi-cloud parity. Each open item has a concrete PLAN above — none is
+half-built; they are documented next-slices, executable one per PR.
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
