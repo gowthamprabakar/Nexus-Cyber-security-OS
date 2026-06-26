@@ -35,12 +35,14 @@ async def drive_vulnerability(
     tenant_id: str,
     fixture_dir: str | Path,
     image_ref: str,
+    kev_cve_ids: frozenset[str] | set[str] | None = None,
 ) -> str:
     """Real ``trivy fs`` scan of ``fixture_dir``, recorded under ``image_ref``.
 
     Returns ``image_ref`` — the canonical bridge key the CVE artifact node is written
     under (so a workload's ``RUNS_IMAGE`` edge to the same ref joins them). Raises if
-    Trivy is unavailable; callers gate on :data:`trivy_available`.
+    Trivy is unavailable; callers gate on :data:`trivy_available`. ``kev_cve_ids`` flags
+    Known-Exploited CVE nodes ``kev=True`` (gap #12; the live CISA feed is the agent's).
     """
     with TemporaryDirectory() as out:
         # ponytail: point DOCKER_CONFIG at an empty dir so trivy pulls its vuln DB
@@ -53,7 +55,9 @@ async def drive_vulnerability(
     # `trivy fs` names it after the path. Relabel so the CVE node keys on the image ref.
     for raw in result.raw_findings:
         raw["_artifact_name"] = image_ref
-    await KnowledgeGraphWriter(store, tenant_id).record_scan_results([result])
+    await KnowledgeGraphWriter(store, tenant_id).record_scan_results(
+        [result], kev_cve_ids=kev_cve_ids
+    )
     return image_ref
 
 

@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 
 import boto3
 import pytest
+from charter.memory.graph_types import NodeCategory
 from data_security.classifiers import classify
 from data_security.schemas import ClassifierLabel
 from identity.agent import _externally_trusted_arns, _fine_grained_grants
@@ -33,6 +34,7 @@ from moto import mock_aws
 
 from fleet_testkit import MotoBucket, drive_data_security, in_memory_semantic_store
 from fleet_testkit.moto_aws import moto_s3
+from fleet_testkit.vuln_scan import drive_vulnerability, trivy_available
 
 _SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105  AWS docs example secret
 
@@ -302,6 +304,31 @@ async def test_resource_based_precision_wildcard_and_private() -> None:
         s3.put_object(Bucket="wc-bucket", Key="c", Body=_SSN)  # type: ignore[attr-defined]
 
     assert await _resource_based_hits(wildcard) == [], "wildcard is public, not a named grant"
+
+
+@pytest.mark.skipif(not trivy_available, reason="trivy binary not installed")
+@pytest.mark.asyncio
+async def test_fixed_kev_flag_on_cve_nodes(tmp_path) -> None:
+    # FIXED (gap #12): KEV (Known-Exploited) status is now a first-class CVE-node signal.
+    # The catalog is injected here (the live CISA feed is the agent's online kev.py path).
+    (tmp_path / "requirements.txt").write_text("Django==2.0.0\n")
+    async with in_memory_semantic_store() as store:
+        await drive_vulnerability(
+            store,
+            tenant_id=_TENANT,
+            fixture_dir=tmp_path,
+            image_ref="myreg/app:1.0",
+            kev_cve_ids={"CVE-2019-19844"},
+        )
+        cves = await store.list_entities_by_type(
+            tenant_id=_TENANT, entity_type=NodeCategory.CVE_FINDING.value
+        )
+        by_id = {c.external_id: c for c in cves}
+        assert by_id["CVE-2019-19844"].properties.get("kev") is True
+        others = [c for c in cves if c.external_id != "CVE-2019-19844"]
+        assert others and all(c.properties.get("kev") is False for c in others), (
+            "non-KEV CVEs must be flagged kev=False"
+        )
 
 
 def _vpc_subnet(ec2: object) -> tuple[str, str]:
