@@ -161,6 +161,18 @@ class CrownJewelExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class PrivilegedVulnerableWorkload:
+    """A privileged K8s pod running an image with a known CVE (path 6). The pod
+    --RUNS_IMAGE--> image --VULNERABLE_TO--> CVE chain: exploit the CVE for RCE in the
+    container, then escape to the node via the privileged container. `severity` is the CVE's."""
+
+    workload_id: str
+    image_id: str
+    cve_id: str
+    severity: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -506,6 +518,39 @@ class KgQuery:
                         out.append((role_id, access.dst_entity_id, dc))
         return out
 
+    async def find_privileged_vulnerable_workload(self) -> list[PrivilegedVulnerableWorkload]:
+        """Find privileged K8s pods running an image with a known CVE (path 6).
+
+        Self-seeded: enumerates ``privileged`` K8S_OBJECT pods, follows ``RUNS_IMAGE`` to the
+        image node, then ``VULNERABLE_TO`` (written by vulnerability onto the same image node)
+        to each CVE. A privileged container can escape to the node, so a CVE in its image is a
+        node-compromise path. Read-only."""
+        hits: list[PrivilegedVulnerableWorkload] = []
+        pods = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for pod in pods:
+            if pod.properties.get("privileged") is not True:
+                continue
+            for runs in await self._edges_from(pod.entity_id, (EdgeType.RUNS_IMAGE.value,)):
+                for vuln in await self._edges_from(
+                    runs.dst_entity_id, (EdgeType.VULNERABLE_TO.value,)
+                ):
+                    cve = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                    )
+                    if cve is None:
+                        continue
+                    hits.append(
+                        PrivilegedVulnerableWorkload(
+                            workload_id=pod.entity_id,
+                            image_id=runs.dst_entity_id,
+                            cve_id=cve.external_id,
+                            severity=str(cve.properties.get("severity", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -525,6 +570,7 @@ __all__ = [
     "InternetExposedVulnerableWorkload",
     "KgQuery",
     "PathEdge",
+    "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
     "ToxicCombination",
