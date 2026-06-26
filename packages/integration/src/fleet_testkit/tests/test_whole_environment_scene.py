@@ -34,8 +34,19 @@ from meta_harness.attack_paths import AttackPathRanker
 from meta_harness.kg_query import KgQuery
 
 from fleet_testkit import MotoBucket, drive_data_security, in_memory_semantic_store
-from fleet_testkit.moto_aws import drive_aispm, moto_scene_clients, setup_sagemaker_endpoint
+from fleet_testkit.azure_blob import AzureContainer, drive_azure_data_security
+from fleet_testkit.gcs_blob import PUBLIC_MEMBER, GcsBucketSeed, drive_gcs_data_security
+from fleet_testkit.k8s_workloads import drive_privileged_workloads, managed_cluster_pods
+from fleet_testkit.moto_aws import (
+    drive_aispm,
+    drive_cloud_workloads,
+    moto_full_clients,
+    moto_scene_clients,
+    setup_ecs_workload,
+    setup_sagemaker_endpoint,
+)
 from fleet_testkit.moto_identity import list_moto_identities
+from fleet_testkit.vuln_scan import drive_vulnerability, trivy_available
 
 _TENANT = "tenant-scene"
 _AWS_KEY = b"aws_access_key_id = AKIAIOSFODNN7EXAMPLE\n"
@@ -94,6 +105,16 @@ _FINE_GRAINED_READ = json.dumps(
         ],
     }
 )
+_CROWN_READ = json.dumps(
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {"Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::acme-crown/*"}
+        ],
+    }
+)
+_ECS_IMAGE = "myreg/web:1.0"
+_K8S_IMAGE = "myreg/k8s:1.0"
 
 
 def _seed_fine_grained_role(iam: object) -> None:
@@ -172,3 +193,134 @@ async def test_whole_environment_surfaces_planted_paths_and_no_noise() -> None:
     assert len(noise_ids) == 2, "both noise buckets were recorded"
     flagged = {e for p in paths for e in p.entities}
     assert noise_ids.isdisjoint(flagged), "a benign/noise bucket leaked into an attack path"
+
+
+def _write_vulnerable_fixture(root) -> None:
+    (root / "requirements.txt").write_text("Django==2.0.0\n")
+
+
+async def _external_ids(store: object) -> dict[str, str]:
+    """{entity_id: external_id} across the node types attack paths reference."""
+    out: dict[str, str] = {}
+    for cat in (NodeCategory.CLOUD_RESOURCE, NodeCategory.IDENTITY, NodeCategory.AI_SERVICE):
+        for r in await store.list_entities_by_type(tenant_id=_TENANT, entity_type=cat.value):  # type: ignore[attr-defined]
+            out[r.entity_id] = r.external_id
+    return out
+
+
+@pytest.mark.skipif(not trivy_available, reason="trivy binary not installed")
+@pytest.mark.asyncio
+async def test_full_fleet_scene_all_nine_archetypes_across_three_clouds(tmp_path) -> None:
+    """The flagship: every one of the 9 detectors fires in ONE tenant, spanning AWS + Azure + GCP.
+
+    Extends the hermetic scene with the trivy paths (2 internet-exposed-vuln, 5 crown jewel, 6
+    privileged-pod) and a cross-cloud storage mix (Azure secret, GCS unencrypted), then asserts the
+    single ranked list covers all 9 archetypes and references resources from all three clouds.
+    """
+    _write_vulnerable_fixture(tmp_path)
+    buckets = (
+        *_BUCKETS,
+        MotoBucket("acme-crown", public=True, encrypted=True, objects={"c.csv": _SSN}),
+    )
+    async with in_memory_semantic_store() as store:
+        with moto_full_clients(buckets) as (s3, iam, ecs, ec2, sm):
+            await drive_data_security(store, tenant_id=_TENANT, buckets=buckets, s3_client=s3)
+
+            # identity: fine-grained (path 4) + external trust (path 8) + crown task role (path 5)
+            _seed_fine_grained_role(iam)
+            iam.create_role(RoleName="partner", AssumeRolePolicyDocument=_FOREIGN_TRUST)  # type: ignore[attr-defined]
+            crown_policy = iam.create_policy(  # type: ignore[attr-defined]
+                PolicyName="ReadCrown", PolicyDocument=_CROWN_READ
+            )["Policy"]["Arn"]
+            crown_role = iam.create_role(  # type: ignore[attr-defined]
+                RoleName="crown-task", AssumeRolePolicyDocument=_TRUST_EMPTY
+            )["Role"]["Arn"]
+            iam.attach_role_policy(RoleName="crown-task", PolicyArn=crown_policy)  # type: ignore[attr-defined]
+
+            listing = list_moto_identities(iam)
+            writer = IdentityKgWriter(store, _TENANT)
+            await writer.record_access(_fine_grained_grants(listing))  # analyst + crown-task
+            external = _externally_trusted_arns(listing)
+            await writer.record_external_trust(external)
+            await writer.record_access([(external[0], "arn:aws:s3:::acme-exports")])
+
+            # AI (path 10): exposed endpoint reading the public training bucket + an isolated one
+            setup_sagemaker_endpoint(
+                sm, name="fraud-model", model_data_bucket="acme-training", network_isolated=False
+            )
+            await drive_aispm(store, tenant_id=_TENANT, sm_client=sm)
+
+            # workload (paths 2 + 5): exposed ECS running the vuln image, assuming the crown role
+            setup_ecs_workload(
+                ecs, ec2, image_ref=_ECS_IMAGE, public=True, task_role_arn=crown_role
+            )
+            await drive_cloud_workloads(store, tenant_id=_TENANT, ecs_client=ecs, ec2_client=ec2)
+
+        # vulnerability (real trivy) — CVEs on the ECS image AND the K8s image
+        await drive_vulnerability(
+            store, tenant_id=_TENANT, fixture_dir=tmp_path, image_ref=_ECS_IMAGE
+        )
+        await drive_vulnerability(
+            store, tenant_id=_TENANT, fixture_dir=tmp_path, image_ref=_K8S_IMAGE
+        )
+
+        # K8s (path 6): a privileged pod running the vuln image (managed-cluster payload, hermetic)
+        await drive_privileged_workloads(
+            store,
+            tenant_id=_TENANT,
+            cluster_id="aks-prod",
+            pods_json=managed_cluster_pods(
+                name="web",
+                image=_K8S_IMAGE,
+                privileged=True,
+                node_name="aks-nodepool1-vmss000000",
+                node_labels={"kubernetes.azure.com/cluster": "mc"},
+            ),
+        )
+
+        # cross-cloud mix: an Azure public-secret container + a GCS public-unencrypted bucket
+        await drive_azure_data_security(
+            store,
+            tenant_id=_TENANT,
+            containers=(
+                AzureContainer("az-creds", public_access="container", blobs={"k": _AWS_KEY}),
+            ),
+        )
+        await drive_gcs_data_security(
+            store,
+            tenant_id=_TENANT,
+            buckets=(
+                GcsBucketSeed(
+                    "gcs-logs", iam_members=(PUBLIC_MEMBER,), encrypted=False, blobs={"l": _SSN}
+                ),
+            ),
+        )
+
+        paths = await AttackPathRanker(KgQuery(store, _TENANT)).find_all()
+        ext = await _external_ids(store)
+
+    # All NINE archetypes fire in one tenant.
+    assert {p.path_type for p in paths} == {
+        "crown_jewel",
+        "public_secret",
+        "internet_exposed_vulnerable",
+        "privileged_vulnerable",
+        "public_unencrypted",
+        "external_trust",
+        "exposed_ai_sensitive_data",
+        "resource_based_data",
+        "fine_grained_data",
+    }, f"got {sorted({p.path_type for p in paths})}"
+
+    # Worst-first, crown jewel on top (severity 95).
+    assert [p.severity for p in paths] == sorted((p.severity for p in paths), reverse=True)
+    assert paths[0].path_type == "crown_jewel"
+
+    # ONE ranked list spans all three clouds — flagged resources include an AWS ARN, an Azure
+    # blob URI, and a GCS URI.
+    flagged_ext = {ext[e] for p in paths for e in p.entities if e in ext}
+    assert any(x.startswith("arn:aws:") for x in flagged_ext), "AWS resource in the ranked list"
+    assert any("blob.core.windows.net" in x for x in flagged_ext), (
+        "Azure resource in the ranked list"
+    )
+    assert any(x.startswith("gs://") for x in flagged_ext), "GCP resource in the ranked list"

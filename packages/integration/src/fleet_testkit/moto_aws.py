@@ -235,6 +235,25 @@ def moto_ai_clients(
 
 
 @contextmanager
+def moto_full_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object, object, object, object]]:
+    """Context manager yielding ``(s3, iam, ecs, ec2, sagemaker)`` under one moto mock.
+
+    The full-fleet scene needs every AWS leg live together: data (S3), identity (IAM), workload
+    exposure (ECS+EC2), and AI (SageMaker). S3 buckets are seeded; the rest are bare.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, ecs, ec2, sm
+
+
+@contextmanager
 def moto_scene_clients(
     buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
 ) -> Iterator[tuple[object, object, object]]:
@@ -371,6 +390,7 @@ __all__ = [
     "moto_all_clients",
     "moto_aws_clients",
     "moto_ecs_clients",
+    "moto_full_clients",
     "moto_s3",
     "moto_scene_clients",
     "setup_ecs_workload",
