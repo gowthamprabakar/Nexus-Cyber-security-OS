@@ -181,10 +181,10 @@ async def _secret_hits_custom(setup: object) -> int:
 
 
 @pytest.mark.asyncio
-async def test_gap_bucket_policy_public_is_missed() -> None:
-    # GAP: data-security derives `public` from the bucket ACL (grants_all_users) only. A bucket
-    # made public via a BUCKET POLICY (Principal:*) — the most common modern case, since AWS
-    # disables ACLs by default — is not flagged public, so no EXPOSES_DATA. Wiz evaluates policy.
+async def test_fixed_bucket_policy_public_is_detected() -> None:
+    # FIXED (gap #1): a bucket made public via a BUCKET POLICY (Principal:*) is now flagged
+    # public (kg_writer._bucket_is_public evaluates the policy, respecting Block-Public-Access),
+    # so the secret in it surfaces. (AWS disables ACLs by default → policy is the common case.)
     def setup(s3: object) -> None:
         s3.create_bucket(Bucket="policy-public")  # type: ignore[attr-defined]
         s3.put_bucket_policy(  # type: ignore[attr-defined]
@@ -205,9 +205,42 @@ async def test_gap_bucket_policy_public_is_missed() -> None:
         )
         s3.put_object(Bucket="policy-public", Key="c", Body=_KEY)  # type: ignore[attr-defined]
 
-    assert await _secret_hits_custom(setup) == 0, (
-        "bucket-policy public now detected — update gaps doc"
-    )
+    assert await _secret_hits_custom(setup) == 1, "bucket-policy public should now be detected"
+
+
+@pytest.mark.asyncio
+async def test_block_public_access_neutralizes_policy() -> None:
+    # Precision: a wildcard policy is NOT public when Block-Public-Access restricts public buckets.
+    def setup(s3: object) -> None:
+        s3.create_bucket(Bucket="pab-bucket")  # type: ignore[attr-defined]
+        s3.put_public_access_block(  # type: ignore[attr-defined]
+            Bucket="pab-bucket",
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        )
+        s3.put_bucket_policy(  # type: ignore[attr-defined]
+            Bucket="pab-bucket",
+            Policy=json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "s3:GetObject",
+                            "Resource": "arn:aws:s3:::pab-bucket/*",
+                        }
+                    ],
+                }
+            ),
+        )
+        s3.put_object(Bucket="pab-bucket", Key="c", Body=_KEY)  # type: ignore[attr-defined]
+
+    assert await _secret_hits_custom(setup) == 0, "Block-Public-Access must neutralize the policy"
 
 
 @pytest.mark.asyncio

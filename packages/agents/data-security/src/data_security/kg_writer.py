@@ -16,7 +16,8 @@ nothing → artifacts byte-identical.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import json
+from typing import TYPE_CHECKING, Any
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
@@ -28,6 +29,49 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from data_security.tools.s3_inventory import BucketInventory
+
+
+def _principal_is_wildcard(principal: Any) -> bool:
+    """True when a statement Principal opens access to the whole internet (``*``)."""
+    if principal == "*":
+        return True
+    if isinstance(principal, dict):
+        aws = principal.get("AWS")
+        return aws == "*" or (isinstance(aws, list) and "*" in aws)
+    return False
+
+
+def _policy_grants_public(policy_json: str | None) -> bool:
+    """True if a bucket policy has an ``Allow`` statement to a wildcard principal.
+
+    A bucket policy with ``Principal: *`` is the dominant modern way an S3 bucket is made
+    public (AWS disables ACLs by default). Malformed JSON is treated as non-public.
+    """
+    if not policy_json:
+        return False
+    try:
+        statements = json.loads(policy_json).get("Statement") or []
+    except (json.JSONDecodeError, AttributeError):
+        return False
+    return any(
+        stmt.get("Effect") == "Allow" and _principal_is_wildcard(stmt.get("Principal"))
+        for stmt in statements
+        if isinstance(stmt, dict)
+    )
+
+
+def _bucket_is_public(bucket: BucketInventory) -> bool:
+    """Whether the bucket is internet-public via ACL or bucket policy.
+
+    ACL path: an AllUsers/AuthenticatedUsers grant. Policy path: a wildcard-principal
+    ``Allow`` — but neutralized when Block-Public-Access blocks/restricts public policies.
+    """
+    if bucket.acl.grants_all_users or bucket.acl.grants_authenticated_users:
+        return True
+    pab = bucket.public_access_block
+    if pab.restrict_public_buckets or pab.block_public_policy:
+        return False
+    return _policy_grants_public(bucket.policy_json)
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -45,7 +89,7 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
     ) -> None:
         """Upsert each bucket's storage node + its detected data-classification nodes."""
         for bucket in buckets:
-            public = bool(bucket.acl.grants_all_users or bucket.acl.grants_authenticated_users)
+            public = _bucket_is_public(bucket)
             encrypted = bucket.encryption.algorithm != "NONE"
             storage_id = await self.upsert_node(
                 NodeCategory.CLOUD_RESOURCE,
