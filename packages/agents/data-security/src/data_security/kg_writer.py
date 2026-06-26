@@ -28,6 +28,7 @@ from data_security.schemas import ClassifierLabel
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from data_security.tools.data_source import DataSource
     from data_security.tools.s3_inventory import BucketInventory
 
 
@@ -176,6 +177,47 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 )
                 await self.add_edge(storage_id or "", classification_id or "", EdgeType.CONTAINS)
                 if public:
+                    await self.add_edge(
+                        storage_id or "", classification_id or "", EdgeType.EXPOSES_DATA
+                    )
+
+    async def record_data_sources(
+        self,
+        sources: Sequence[DataSource],
+        classifier_hits_by_identifier: Mapping[str, Sequence[ClassifierLabel]],
+    ) -> None:
+        """Cloud-agnostic graph write for any :class:`DataSource` (S3 / Azure Blob / GCS).
+
+        Multi-cloud parity (gap #13): writes the SAME ``CLOUD_RESOURCE{is_public,is_encrypted}`` +
+        ``DATA_CLASSIFICATION`` + ``CONTAINS``/``EXPOSES_DATA`` vocabulary the S3 ``record`` writes,
+        keyed by each source's ``canonical_key`` (per-cloud ARN/URI), so the cloud-agnostic
+        ``kg_query`` detectors (public-secret, public-unencrypted, …) fire on Azure/GCS resources
+        with no detector change. ``classifier_hits_by_identifier`` is keyed by ``DataSource.identifier``.
+        """
+        for source in sources:
+            storage_id = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                source.canonical_key,
+                {
+                    "resource_type": f"{source.cloud.value}-storage",
+                    "region": source.region,
+                    "is_public": source.is_public,
+                    "is_encrypted": source.is_encrypted,
+                    "source": source.identifier,
+                },
+            )
+            seen: set[str] = set()
+            for label in classifier_hits_by_identifier.get(source.identifier, ()):
+                if label is ClassifierLabel.NONE or label.value in seen:
+                    continue
+                seen.add(label.value)
+                classification_id = await self.upsert_node(
+                    NodeCategory.DATA_CLASSIFICATION,
+                    f"{source.canonical_key}:{label.value}",
+                    {"data_type": label.value, "source": source.identifier},
+                )
+                await self.add_edge(storage_id or "", classification_id or "", EdgeType.CONTAINS)
+                if source.is_public:
                     await self.add_edge(
                         storage_id or "", classification_id or "", EdgeType.EXPOSES_DATA
                     )

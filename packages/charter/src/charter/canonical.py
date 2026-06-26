@@ -14,9 +14,19 @@ from __future__ import annotations
 
 
 def s3_bucket_arn(bucket_name: str) -> str:
-    """Canonical ARN for an S3 bucket: ``arn:aws:s3:::{bucket_name}``.
-
-    # ponytail: S3-only. Other resource ARNs aren't name-derivable — add a
-    # per-service builder here when a second resource type joins the spine.
-    """
+    """Canonical ARN for an S3 bucket: ``arn:aws:s3:::{bucket_name}``."""
     return f"arn:aws:s3:::{bucket_name}"
+
+
+def azure_blob_uri(storage_account: str, container: str) -> str:
+    """Canonical key for an Azure Blob container (multi-cloud spine, gap #13).
+
+    Azure resources have no ARN; the blob-endpoint URL is the stable, globally-unique
+    identifier — the Azure analogue of an S3 ARN.
+    """
+    return f"https://{storage_account}.blob.core.windows.net/{container}"
+
+
+def gcs_uri(bucket_name: str) -> str:
+    """Canonical key for a GCS bucket (multi-cloud spine, gap #13): ``gs://{bucket_name}``."""
+    return f"gs://{bucket_name}"
