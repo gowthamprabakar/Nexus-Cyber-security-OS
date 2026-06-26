@@ -39,11 +39,12 @@ _DEFAULT_REGION = "us-east-1"
 
 @dataclass(frozen=True, slots=True)
 class MotoBucket:
-    """A bucket to seed into moto: name, public posture, and object bodies (key -> bytes)."""
+    """A bucket to seed into moto: name, public posture, object bodies, encryption posture."""
 
     name: str
     public: bool
     objects: dict[str, bytes] = field(default_factory=dict)
+    encrypted: bool = False  # default-SSE (AES256) → data-security reads is_encrypted=True
 
 
 def _seed_buckets(s3: object, buckets: tuple[MotoBucket, ...]) -> None:
@@ -54,6 +55,15 @@ def _seed_buckets(s3: object, buckets: tuple[MotoBucket, ...]) -> None:
             # A real S3 grant to AllUsers — the live inventory reader parses this ACL and
             # marks the bucket public (no fixture flag).
             s3.put_bucket_acl(Bucket=spec.name, ACL="public-read")  # type: ignore[attr-defined]
+        if spec.encrypted:
+            # Real default SSE — the reader's get_bucket_encryption sees AES256, so
+            # data-security records is_encrypted=True (vs "NONE" → False).
+            s3.put_bucket_encryption(  # type: ignore[attr-defined]
+                Bucket=spec.name,
+                ServerSideEncryptionConfiguration={
+                    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
+                },
+            )
         for key, body in spec.objects.items():
             s3.put_object(Bucket=spec.name, Key=key, Body=body)  # type: ignore[attr-defined]
 

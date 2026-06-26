@@ -1,0 +1,23 @@
+test_case_id: path7-c3-clean-baseline
+description: A healthy environment — a public unencrypted bucket with only benign text, and a
+  private unencrypted bucket holding PII. The detector must emit nothing.
+agent: data-security
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: No sensitive data in the public bucket; PII in a PRIVATE bucket gets no
+    EXPOSES_DATA edge, so neither is a public-unencrypted exposure.
+  buckets:
+    - name: acme-public-docs
+      public: true
+      encrypted: false
+      objects:
+        readme.txt: 'Public marketing copy. Lorem ipsum dolor sit amet, no sensitive data here.'
+    - name: acme-private-pii
+      public: false
+      encrypted: false
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0
