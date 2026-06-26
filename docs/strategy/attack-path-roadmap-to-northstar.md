@@ -92,7 +92,8 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
    Block-Public-Access blocks/restricts public policies. Was: ACL-only, so the dominant modern public
    path (AWS disables ACLs by default) was invisible. Test flipped to assert-detect + a PAB precision test.
 2. **Object-level ACL public** `[test]` — `public` is bucket-level; a private bucket with an individual
-   object made public via object ACL is missed (measured: 0 hits).
+   object made public via object ACL is missed (measured: 0 hits). _Effort: not a flip-the-test — the
+   reader is bucket-level, so this needs per-object `get_object_acl` calls (sampler change). Real slice._
 3. **Compressed / encoded blobs** `[test]` — the classifier matches patterns in _decoded UTF-8 text_
    only; a secret/PII inside a **gzip** archive or **base64** blob is missed (plaintext + JSON-embedded
    are caught). Wiz/Macie decompress + decode.
@@ -106,12 +107,14 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 5. ✅ **FIXED 2026-06-27** — **Group-inherited IAM access** `[test]` — `_fine_grained_grants` now follows
    a user's `group_memberships` and resolves the group's attached + inline policies, so a group-only user
    is caught (paths 4/8). Was: attached + inline on the principal only.
-6. **Federated (OIDC/SAML) external trust** `[test]` — `_externally_trusted_arns` flags cross-_account_
-   trust (`Principal.AWS`) only, not roles assumable via an external **OIDC/SAML** provider (GitHub
-   Actions OIDC, external IdP). Path 8 = cross-account, not federation.
+6. ✅ **FIXED 2026-06-27** — **Federated (OIDC/SAML) external trust** `[test]` — `_externally_trusted_arns`
+   now also flags any `Allow` statement with `Principal.Federated` (external OIDC/SAML provider, e.g.
+   GitHub Actions OIDC) alongside cross-account trust. Service principals stay ignored.
 7. **Resource-based access grants** `[code]` — `_fine_grained_grants(listing)` takes only the IAM
    listing; access granted by an **S3 bucket policy** (or KMS/SNS/SQS resource policy) to a principal is
-   invisible (no bucket-policy input). The mirror of gap #1 on the access side.
+   invisible (no bucket-policy input). The mirror of gap #1 on the access side. _Effort: cross-agent —
+   bucket policies live in data-security, so this needs a correlation step + an ownership decision (who
+   writes the resource-based `HAS_ACCESS_TO`). Real slice, not a flip-the-test._
 8. **Permission boundary / SCP / Condition ignored** `[code]` (precision) — `_synthesize_admin_grants`
    and `_fine_grained_grants` read the granting policy but not **permission boundaries**, **SCPs**, or
    statement **Conditions**, so an admin/grant neutralized by a boundary or gated by a condition still
@@ -134,7 +137,9 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 12. **"KEV" is really "high severity"** `[code]` (semantic) — the detector fires on the presence of a
     `VULNERABLE_TO` edge (severity-filtered at scan), not on actual **known-exploited (KEV)** or
     exploit-availability status. So it over-reports (any HIGH CVE, not just exploited) and a MEDIUM-rated
-    KEV is missed (see #11).
+    KEV is missed (see #11). _Effort: KEV is an **online CISA feed** (`kev.py`, httpx); enriching CVE
+    nodes needs the feed wired through the scan→graph path + mocking + a firing-semantics decision.
+    Real slice, not a flip-the-test._
 
 **E. Multi-cloud (scope):**
 
