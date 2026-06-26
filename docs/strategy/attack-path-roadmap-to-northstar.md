@@ -87,26 +87,25 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 
 **A. Data exposure — what counts as "public" + what the classifier reads (data-security):**
 
-1. **Bucket-policy public** `[test]` ⭐ — `public` is derived from the bucket **ACL only**
-   (`acl.grants_all_users`). A bucket made public via a **bucket policy** (`Principal:*`) — the dominant
-   modern case, since AWS disables ACLs by default — is not flagged, so no `EXPOSES_DATA` (measured: 0
-   hits). Wiz evaluates the bucket policy + Block-Public-Access. **Likely the single biggest real-world
-   miss.** Ripples to every data path (1/3/4/5/7/8/10).
+1. ✅ **FIXED 2026-06-27** — **Bucket-policy public** `[test]` ⭐ — `kg_writer._bucket_is_public` now
+   evaluates the (already-fetched) bucket policy for a wildcard-principal `Allow`, neutralized when
+   Block-Public-Access blocks/restricts public policies. Was: ACL-only, so the dominant modern public
+   path (AWS disables ACLs by default) was invisible. Test flipped to assert-detect + a PAB precision test.
 2. **Object-level ACL public** `[test]` — `public` is bucket-level; a private bucket with an individual
    object made public via object ACL is missed (measured: 0 hits).
 3. **Compressed / encoded blobs** `[test]` — the classifier matches patterns in _decoded UTF-8 text_
    only; a secret/PII inside a **gzip** archive or **base64** blob is missed (plaintext + JSON-embedded
    are caught). Wiz/Macie decompress + decode.
-4. **AWS secret access keys** `[test]` — the AKIA access-key _ID_ is detected, but the **secret key**
-   (the real credential) has no dedicated pattern; the generic-token rule needs the keyword
-   (`secret`/`token`/`api_key`) _immediately_ before the value, so `aws_secret_access_key = <40>` and
-   `SecretAccessKey: <40>` miss while `secret = <40>` hits.
+4. ✅ **FIXED 2026-06-27** — **AWS secret access keys** `[test]` — added `_AWS_SECRET_KEY_RE` (the
+   `secret access key` label, any separator/camelCase, + 40-char base64), classified as `AWS_ACCESS_KEY`.
+   Now catches `aws_secret_access_key = <40>` / `SecretAccessKey: <40>`; a bare 40-char string is still
+   not flagged (label required). Was: only the AKIA _ID_ had a pattern; the secret key slipped through.
 
 **B. Identity — what grants/trust we resolve (identity):**
 
-5. **Group-inherited IAM access** `[test]` — `_fine_grained_grants` resolves a principal's attached +
-   inline policies, **not policies inherited via group membership**; a group-only user is invisible to
-   paths 4/8 (membership _is_ read, the grant resolver just doesn't follow it).
+5. ✅ **FIXED 2026-06-27** — **Group-inherited IAM access** `[test]` — `_fine_grained_grants` now follows
+   a user's `group_memberships` and resolves the group's attached + inline policies, so a group-only user
+   is caught (paths 4/8). Was: attached + inline on the principal only.
 6. **Federated (OIDC/SAML) external trust** `[test]` — `_externally_trusted_arns` flags cross-_account_
    trust (`Principal.AWS`) only, not roles assumable via an external **OIDC/SAML** provider (GitHub
    Actions OIDC, external IdP). Path 8 = cross-account, not federation.
