@@ -65,27 +65,27 @@ async def test_boundary_decoded_text_is_detected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gap_gzipped_secret_is_missed() -> None:
-    # GAP: archives are not decompressed before classification. Wiz/Macie scan inside .gz/.zip.
-    assert await _secret_hits(gzip.compress(_KEY)) == 0, (
-        "gzipped-secret gap closed — update docs/strategy/detection-gaps.md"
-    )
+async def test_fixed_gzipped_secret_is_detected() -> None:
+    # FIXED (gap #3): classify_bytes decompresses gzip before classifying.
+    assert await _secret_hits(gzip.compress(_KEY)) == 1
 
 
 @pytest.mark.asyncio
-async def test_gap_base64_secret_is_missed() -> None:
-    # GAP: encoded blobs are not decoded before classification.
-    assert await _secret_hits(base64.b64encode(_KEY)) == 0, (
-        "base64-secret gap closed — update docs/strategy/detection-gaps.md"
-    )
+async def test_fixed_base64_secret_is_detected() -> None:
+    # FIXED (gap #3): classify_bytes decodes base64 before classifying.
+    assert await _secret_hits(base64.b64encode(_KEY)) == 1
 
 
 @pytest.mark.asyncio
-async def test_gap_gzipped_pii_is_missed() -> None:
-    # GAP: same archive blind spot applies to PII (path 7 and every EXPOSES_DATA consumer).
-    assert await _unencrypted_hits(gzip.compress(_SSN)) == 0, (
-        "gzipped-PII gap closed — update docs/strategy/detection-gaps.md"
-    )
+async def test_fixed_gzipped_pii_is_detected() -> None:
+    # FIXED (gap #3): the decode applies to PII too (path 7 + every EXPOSES_DATA consumer).
+    assert await _unencrypted_hits(gzip.compress(_SSN)) == 1
+
+
+@pytest.mark.asyncio
+async def test_decode_precision_plain_noise_is_clean() -> None:
+    # Precision: a benign blob that happens to be base64 must not produce a spurious hit.
+    assert await _secret_hits(base64.b64encode(b"just some harmless configuration text")) == 0
 
 
 def test_fixed_aws_secret_access_key_is_detected() -> None:

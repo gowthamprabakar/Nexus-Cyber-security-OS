@@ -51,7 +51,7 @@ from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
 
 from data_security import __version__ as agent_version
-from data_security.classifiers import classify
+from data_security.classifiers import classify_bytes
 from data_security.correlate import (
     CorrelationResult,
     correlate_with_f3,
@@ -372,7 +372,8 @@ def _classify(samples: Sequence[ObjectSample]) -> dict[str, list[ClassifierLabel
     hits_by_bucket: dict[str, list[ClassifierLabel]] = {}
     for sample in samples:
         # Q6: classify returns label only; matched substring is never returned.
-        label = classify(sample.decoded_text())
+        # classify_bytes transparently decodes gzip/base64 wrappers (gap #3).
+        label = classify_bytes(sample.content_sample)
         if label == ClassifierLabel.NONE:
             continue
         hits_by_bucket.setdefault(sample.bucket, []).append(label)

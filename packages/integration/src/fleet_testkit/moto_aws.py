@@ -21,7 +21,7 @@ import boto3
 from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
 from data_security.canonical import s3_bucket_arn
-from data_security.classifiers import classify
+from data_security.classifiers import classify_bytes
 from data_security.kg_writer import KnowledgeGraphWriter as DataSecurityKgWriter
 from data_security.schemas import ClassifierLabel
 from data_security.tools.s3_inventory_live import S3LiveInventoryReader
@@ -93,7 +93,7 @@ async def drive_data_security(
     for bucket in inventory:
         samples, _basis = sampler.sample(bucket.name)
         for sample in samples:
-            label = classify(sample.decoded_text())
+            label = classify_bytes(sample.content_sample)
             if label is not ClassifierLabel.NONE:
                 hits_by_bucket.setdefault(bucket.name, []).append(label)
 

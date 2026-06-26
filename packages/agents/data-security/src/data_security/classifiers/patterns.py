@@ -76,9 +76,14 @@ Extension notes (deferred to D.5 v0.2)
 
 from __future__ import annotations
 
+import base64
+import binascii
+import gzip
 import re
 
 from data_security.schemas import ClassifierLabel
+
+_BASE64_RE = re.compile(r"^[A-Za-z0-9+/\s]+={0,2}$")
 
 # Patterns ordered by precedence (more specific first). Match returns the
 # first hit's label; the matched substring is NEVER returned.
@@ -213,4 +218,39 @@ def classify(text: str) -> ClassifierLabel:
     return ClassifierLabel.NONE
 
 
-__all__ = ["classify"]
+def classify_bytes(data: bytes) -> ClassifierLabel:
+    """Classify object bytes, transparently decoding **gzip** and **base64** wrappers (gap #3).
+
+    Tries, in order: the UTF-8 text as-is; the gzip-decompressed text (if gzip-framed); the
+    base64-decoded text (if the content looks like base64). Returns the first specific match.
+    ``classify`` patterns are specific (no entropy guesses), so a random blob decoding to noise
+    is overwhelmingly unlikely to match — keeping false positives low. Wiz/Macie do the same.
+    """
+    text = data.decode("utf-8", errors="replace")
+    label = classify(text)
+    if label is not ClassifierLabel.NONE:
+        return label
+
+    if data[:2] == b"\x1f\x8b":  # gzip magic number
+        try:
+            label = classify(gzip.decompress(data).decode("utf-8", errors="replace"))
+        except (OSError, EOFError):
+            label = ClassifierLabel.NONE
+        if label is not ClassifierLabel.NONE:
+            return label
+
+    stripped = text.strip()
+    if len(stripped) >= 16 and _BASE64_RE.match(stripped):
+        try:
+            decoded = base64.b64decode(stripped, validate=True)
+        except (binascii.Error, ValueError):
+            decoded = b""
+        if decoded:
+            label = classify(decoded.decode("utf-8", errors="replace"))
+            if label is not ClassifierLabel.NONE:
+                return label
+
+    return ClassifierLabel.NONE
+
+
+__all__ = ["classify", "classify_bytes"]
