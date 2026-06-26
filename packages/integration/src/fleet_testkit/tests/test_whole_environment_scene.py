@@ -312,9 +312,23 @@ async def test_full_fleet_scene_all_nine_archetypes_across_three_clouds(tmp_path
         "fine_grained_data",
     }, f"got {sorted({p.path_type for p in paths})}"
 
-    # Worst-first, crown jewel on top (severity 95).
-    assert [p.severity for p in paths] == sorted((p.severity for p in paths), reverse=True)
+    # Worst-first: severity desc, then evidence count desc (sort key (-severity, -count)).
+    order = [(-p.severity, -p.count) for p in paths]
+    assert order == sorted(order)
     assert paths[0].path_type == "crown_jewel"
+
+    # Grouping: the vuln-bearing paths roll up ALL the workload's CVEs into ONE path each, not one
+    # row per CVE — the "top ~10 prioritized" promise. The Django==2.0.0 image carries several CVEs.
+    by_type = {p.path_type: p for p in paths}
+    cve_count = by_type["internet_exposed_vulnerable"].count
+    assert cve_count > 1, "the vulnerable image has multiple CVEs rolled into one path"
+    assert by_type["crown_jewel"].count == cve_count
+    assert by_type["privileged_vulnerable"].count == cve_count
+    # Ungrouped, those three paths alone would be 3 * cve_count rows; grouped they are 3.
+    vuln_rows = [
+        p for p in paths if p.path_type.endswith("vulnerable") or p.path_type == "crown_jewel"
+    ]
+    assert len(vuln_rows) == 3, "each vuln-bearing archetype collapses to a single ranked path"
 
     # ONE ranked list spans all three clouds — flagged resources include an AWS ARN, an Azure
     # blob URI, and a GCS URI.

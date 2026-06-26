@@ -76,6 +76,28 @@ async def test_public_secret_outranks_fine_grained():
 
 
 @pytest.mark.asyncio
+async def test_multiple_cves_on_one_workload_group_into_one_path():
+    """A workload with several CVEs is ONE ranked path (count = N), not N rows."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        workload = await _node(
+            store, t, _R, "arn:ecs:svc/web", {"kind": "ecs-service", "is_public": True}
+        )
+        image = await _node(store, t, _R, "myreg/app:1.0", {"kind": "container-image"})
+        await _edge(store, t, workload, image, EdgeType.RUNS_IMAGE.value)
+        for cid, sev in (("CVE-1", "HIGH"), ("CVE-2", "CRITICAL"), ("CVE-3", "LOW")):
+            cve = await _node(store, t, _CVE, cid, {"severity": sev})
+            await _edge(store, t, image, cve, EdgeType.VULNERABLE_TO.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        exposed = [p for p in paths if p.path_type == "internet_exposed_vulnerable"]
+        assert len(exposed) == 1, "the three CVEs collapse to one path"
+        assert exposed[0].count == 3
+        assert set(exposed[0].evidence) == {"CVE-1", "CVE-2", "CVE-3"}
+        assert "worst CRITICAL" in exposed[0].title  # worst CVE severity rolled into the title
+
+
+@pytest.mark.asyncio
 async def test_empty_graph_returns_no_paths():
     async with in_memory_semantic_store() as store:
         assert await AttackPathRanker(KgQuery(store, "t")).find_all() == []
