@@ -85,10 +85,32 @@ def load_bank_case(path: Path | str) -> tuple[TestCase, tuple[MotoBucket, ...]]:
             public=bool(b["public"]),
             encrypted=bool(b.get("encrypted", False)),
             objects={k: str(v).encode() for k, v in (b.get("objects") or {}).items()},
+            policy=(
+                _grant_policy(str(b["name"]), b["policy_readers"])
+                if b.get("policy_readers")
+                else None
+            ),
         )
         for b in specs
     )
     return case, buckets
+
+
+def _grant_policy(bucket: str, readers: list[str]) -> str:
+    """A bucket policy granting the named principals ``s3:GetObject`` (resource-based access)."""
+    return json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": list(readers)},
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket}/*",
+                }
+            ],
+        }
+    )
 
 
 def _match(hit: _Hit, gt: GroundTruth) -> bool:
@@ -131,6 +153,39 @@ async def run_public_unencrypted_case(path: Path | str) -> CapabilityResult:
     return await run_data_security_case(
         path, detect=lambda kg: kg.find_public_unencrypted_exposure()
     )
+
+
+async def run_resource_based_case(path: Path | str) -> CapabilityResult:
+    """Gap #7 — a principal granted by the bucket policy (resource-based) reaches sensitive data.
+
+    Drives the real data-security path (which records `policy_readers` from the bucket policy)
+    and scores `find_resource_based_data_exposure` with a principal-aware match.
+    """
+    case, buckets = load_bank_case(path)
+    async with in_memory_semantic_store() as store:
+        with detection_timer() as timer:
+            with moto_s3(buckets) as s3:
+                await drive_data_security(store, tenant_id=_TENANT, buckets=buckets, s3_client=s3)
+            raw_hits = await KgQuery(store, _TENANT).find_resource_based_data_exposure()
+            hits: list[_PrincipalHit] = []
+            for h in raw_hits:
+                res = await store.get_entity(tenant_id=_TENANT, entity_id=h.resource_id)
+                hits.append(
+                    _PrincipalHit(
+                        principal_arn=h.principal_arn,
+                        resource_arn=res.external_id if res else "",
+                        data_type=h.data_type,
+                    )
+                )
+        return score(
+            hits,
+            case.ground_truth_violations,
+            case.expected_non_detections,
+            match=_match_principal,
+            label=lambda h: f"{h.principal_arn}->{h.resource_arn}:{h.data_type}",
+            detection_time_seconds=timer.seconds,
+            test_case_id=case.test_case_id,
+        )
 
 
 # --- Path 4: fine-grained over-permission (identity + data-security) ----------------------
@@ -606,4 +661,5 @@ __all__ = [
     "run_privileged_vuln_case",
     "run_public_secret_case",
     "run_public_unencrypted_case",
+    "run_resource_based_case",
 ]

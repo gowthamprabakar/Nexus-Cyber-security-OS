@@ -36,6 +36,7 @@ _SEVERITY: dict[str, int] = {
     "public_unencrypted": 75,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
+    "resource_based_data": 62,
     "fine_grained_data": 60,
 }
 
@@ -115,6 +116,14 @@ class AttackPathRanker:
                     "exposed_ai_sensitive_data",
                     f"Internet-exposed AI service reads {a.data_type} training data",
                     (a.service_id, a.resource_id),
+                )
+            )
+        for rb in await self._kg.find_resource_based_data_exposure():
+            paths.append(
+                self._make(
+                    "resource_based_data",
+                    f"{rb.principal_arn} has bucket-policy access to public {rb.data_type} data",
+                    (rb.resource_id,),
                 )
             )
         for f in await self._kg.find_fine_grained_data_exposure():

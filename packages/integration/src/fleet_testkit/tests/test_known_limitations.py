@@ -248,6 +248,62 @@ async def test_gap_object_acl_public_is_missed() -> None:
     assert await _secret_hits_custom(setup) == 0, "object-ACL public now detected — update gaps doc"
 
 
+async def _resource_based_hits(setup: object) -> list:
+    """Run the real data-security path against a moto S3 the caller seeds; return path-7-gap hits."""
+    async with in_memory_semantic_store() as store:
+        with mock_aws():
+            s3 = boto3.client("s3", region_name="us-east-1")
+            setup(s3)
+            await drive_data_security(store, tenant_id=_TENANT, buckets=(), s3_client=s3)
+        return await KgQuery(store, _TENANT).find_resource_based_data_exposure()
+
+
+def _grant_policy(bucket: str, principal_arn: str) -> str:
+    return json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": principal_arn},
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket}/*",
+                }
+            ],
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_fixed_resource_based_access_is_detected() -> None:
+    # FIXED (gap #7): a bucket policy granting a SPECIFIC principal S3 read is recorded as
+    # policy_readers on the bucket node (data-security), and find_resource_based_data_exposure
+    # joins it to the sensitive data — access IAM-side grant resolution can't see.
+    reader = "arn:aws:iam::999999999999:role/partner"
+
+    def setup(s3: object) -> None:
+        s3.create_bucket(Bucket="rb-bucket")  # type: ignore[attr-defined]
+        s3.put_bucket_policy(Bucket="rb-bucket", Policy=_grant_policy("rb-bucket", reader))  # type: ignore[attr-defined]
+        s3.put_object(Bucket="rb-bucket", Key="c", Body=_SSN)  # type: ignore[attr-defined]
+
+    hits = await _resource_based_hits(setup)
+    assert len(hits) == 1
+    assert hits[0].principal_arn == reader
+    assert hits[0].data_type == "ssn"
+
+
+@pytest.mark.asyncio
+async def test_resource_based_precision_wildcard_and_private() -> None:
+    # Precision: a wildcard principal is public (gap #1), NOT a named resource-based grant; and a
+    # named grant on a PRIVATE bucket (no EXPOSES_DATA) yields nothing.
+    def wildcard(s3: object) -> None:
+        s3.create_bucket(Bucket="wc-bucket")  # type: ignore[attr-defined]
+        s3.put_bucket_policy(Bucket="wc-bucket", Policy=_grant_policy("wc-bucket", "*"))  # type: ignore[attr-defined]
+        s3.put_object(Bucket="wc-bucket", Key="c", Body=_SSN)  # type: ignore[attr-defined]
+
+    assert await _resource_based_hits(wildcard) == [], "wildcard is public, not a named grant"
+
+
 def _vpc_subnet(ec2: object) -> tuple[str, str]:
     vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
     subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]

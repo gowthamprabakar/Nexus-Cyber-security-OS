@@ -110,11 +110,12 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 6. ✅ **FIXED 2026-06-27** — **Federated (OIDC/SAML) external trust** `[test]` — `_externally_trusted_arns`
    now also flags any `Allow` statement with `Principal.Federated` (external OIDC/SAML provider, e.g.
    GitHub Actions OIDC) alongside cross-account trust. Service principals stay ignored.
-7. **Resource-based access grants** `[code]` — `_fine_grained_grants(listing)` takes only the IAM
-   listing; access granted by an **S3 bucket policy** (or KMS/SNS/SQS resource policy) to a principal is
-   invisible (no bucket-policy input). The mirror of gap #1 on the access side. _Effort: cross-agent —
-   bucket policies live in data-security, so this needs a correlation step + an ownership decision (who
-   writes the resource-based `HAS_ACCESS_TO`). Real slice, not a flip-the-test._
+7. ✅ **FIXED 2026-06-27** — **Resource-based access grants** `[test]` — data-security records the
+   bucket policy's named (non-wildcard) S3-read principals as a `policy_readers` property on its own
+   bucket node (clean ownership — no IDENTITY/edge crossing), and `kg_query.find_resource_based_data_exposure`
+   joins them to the bucket's sensitive data via `CONTAINS` (works for private-but-shared buckets, not
+   just public). Wired into `AttackPathRanker` (sev 62) + a hermetic bank (3 cases) in the fleet
+   scorecard. Was: IAM-listing-only, so policy-granted access was invisible.
 8. **Permission boundary / SCP / Condition ignored** `[code]` (precision) — `_synthesize_admin_grants`
    and `_fine_grained_grants` read the granting policy but not **permission boundaries**, **SCPs**, or
    statement **Conditions**, so an admin/grant neutralized by a boundary or gated by a condition still

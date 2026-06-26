@@ -23,6 +23,7 @@ from fleet_testkit.bank_runner import (
     run_privileged_vuln_case,
     run_public_secret_case,
     run_public_unencrypted_case,
+    run_resource_based_case,
 )
 from fleet_testkit.capability import CapabilityResult
 from fleet_testkit.vuln_scan import trivy_available
@@ -40,6 +41,7 @@ _PATHS: list[tuple[str, str, _Runner, str | None]] = [
     ("public-secret (3)", "path3_public_secret", run_public_secret_case, None),
     ("public-unencrypted (7)", "path7_public_unencrypted", run_public_unencrypted_case, None),
     ("fine-grained (4)", "path4_fine_grained", run_fine_grained_case, None),
+    ("resource-based (#7)", "path_gap7_resource_based", run_resource_based_case, None),
     ("external-trust (8)", "path8_external_trust", run_external_trust_case, None),
     ("exposed-AI (10)", "path10_exposed_ai", run_exposed_ai_case, None),
     (

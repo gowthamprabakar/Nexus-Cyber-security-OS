@@ -60,6 +60,52 @@ def _policy_grants_public(policy_json: str | None) -> bool:
     )
 
 
+def _grants_s3_read(actions: Any) -> bool:
+    """True if a policy statement grants an S3 read (``*`` / ``s3:*`` / ``s3:get*``)."""
+    values = actions if isinstance(actions, list) else [actions]
+    return any(
+        isinstance(a, str) and (a.lower() in {"*", "s3:*"} or a.lower().startswith("s3:get"))
+        for a in values
+    )
+
+
+def _specific_aws_principals(principal: Any) -> list[str]:
+    """Non-wildcard ``Principal.AWS`` ARNs (a wildcard is public, handled separately)."""
+    if not isinstance(principal, dict):
+        return []
+    aws = principal.get("AWS")
+    values = [aws] if isinstance(aws, str) else list(aws or [])
+    return [v for v in values if isinstance(v, str) and v != "*"]
+
+
+def _policy_reader_principals(policy_json: str | None) -> list[str]:
+    """Specific principal ARNs granted S3 read by the bucket policy (resource-based access).
+
+    The mirror of :func:`_policy_grants_public` for *named* principals: a bucket policy can grant
+    a specific IAM principal read access without any IAM-side policy, so identity's grant
+    resolution can't see it. data-security records these on its own bucket node; the kg_query
+    correlation layer joins them to sensitive data (gap #7). Deduped, order-preserving.
+    """
+    if not policy_json:
+        return []
+    try:
+        statements = json.loads(policy_json).get("Statement") or []
+    except (json.JSONDecodeError, AttributeError):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for stmt in statements:
+        if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+            continue
+        if not _grants_s3_read(stmt.get("Action")):
+            continue
+        for arn in _specific_aws_principals(stmt.get("Principal")):
+            if arn not in seen:
+                seen.add(arn)
+                out.append(arn)
+    return out
+
+
 def _bucket_is_public(bucket: BucketInventory) -> bool:
     """Whether the bucket is internet-public via ACL or bucket policy.
 
@@ -93,16 +139,22 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         for bucket in buckets:
             public = _bucket_is_public(bucket)
             encrypted = bucket.encryption.algorithm != "NONE"
+            storage_props: dict[str, Any] = {
+                "resource_type": "s3-bucket",
+                "region": bucket.region,
+                "is_public": public,
+                "is_encrypted": encrypted,
+                "source": bucket.name,  # human-readable name as a property
+            }
+            # Resource-based access: principals granted S3 read by the bucket policy (gap #7).
+            # Recorded on data-security's own node; the kg_query layer joins them to data.
+            policy_readers = _policy_reader_principals(getattr(bucket, "policy_json", None))
+            if policy_readers:
+                storage_props["policy_readers"] = policy_readers
             storage_id = await self.upsert_node(
                 NodeCategory.CLOUD_RESOURCE,
                 self._storage_external_id(bucket.name),
-                {
-                    "resource_type": "s3-bucket",
-                    "region": bucket.region,
-                    "is_public": public,
-                    "is_encrypted": encrypted,
-                    "source": bucket.name,  # human-readable name as a property
-                },
+                storage_props,
             )
             seen: set[str] = set()
             for label in classifier_hits_by_bucket.get(bucket.name, ()):

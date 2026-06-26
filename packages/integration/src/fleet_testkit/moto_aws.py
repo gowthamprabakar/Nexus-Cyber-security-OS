@@ -45,6 +45,7 @@ class MotoBucket:
     public: bool
     objects: dict[str, bytes] = field(default_factory=dict)
     encrypted: bool = False  # default-SSE (AES256) → data-security reads is_encrypted=True
+    policy: str | None = None  # raw bucket-policy JSON (resource-based grants, path-7 gap fix)
 
 
 def _seed_buckets(s3: object, buckets: tuple[MotoBucket, ...]) -> None:
@@ -64,6 +65,8 @@ def _seed_buckets(s3: object, buckets: tuple[MotoBucket, ...]) -> None:
                     "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
                 },
             )
+        if spec.policy:
+            s3.put_bucket_policy(Bucket=spec.name, Policy=spec.policy)  # type: ignore[attr-defined]
         for key, body in spec.objects.items():
             s3.put_object(Bucket=spec.name, Key=key, Body=body)  # type: ignore[attr-defined]
 

@@ -185,6 +185,18 @@ class ExposedAiWithSensitiveData:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class ResourceBasedDataExposure:
+    """A principal granted access by a resource's OWN policy (an S3 bucket policy) to a public
+    resource exposing sensitive data — access invisible to IAM-side grant resolution (gap #7).
+    `principal_arn` is the named grantee from the bucket policy; `data_type` the exposed kind."""
+
+    principal_arn: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -596,6 +608,40 @@ class KgQuery:
                     )
         return hits
 
+    async def find_resource_based_data_exposure(self) -> list[ResourceBasedDataExposure]:
+        """Find principals granted access by a resource's OWN policy to public sensitive data.
+
+        Self-seeded: enumerates CLOUD_RESOURCE nodes carrying a ``policy_readers`` property
+        (named principals granted S3 read by the bucket policy, written by data-security), and
+        for each sensitive classification the bucket ``CONTAINS`` emits one hit per (principal,
+        data classification). Uses ``CONTAINS`` (written for any sensitive bucket), not
+        ``EXPOSES_DATA`` (public-only) — a resource-based grant exposes data to the named
+        principal whether or not the bucket is internet-public (gap #7). Read-only."""
+        hits: list[ResourceBasedDataExposure] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for resource in resources:
+            readers = resource.properties.get("policy_readers") or []
+            if not readers:
+                continue
+            for expose in await self._edges_from(resource.entity_id, (EdgeType.CONTAINS.value,)):
+                dc = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                )
+                if dc is None:
+                    continue
+                for principal_arn in readers:
+                    hits.append(
+                        ResourceBasedDataExposure(
+                            principal_arn=str(principal_arn),
+                            resource_id=resource.entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -619,5 +665,6 @@ __all__ = [
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
+    "ResourceBasedDataExposure",
     "ToxicCombination",
 ]
