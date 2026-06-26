@@ -86,10 +86,50 @@ def storage_read_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, 
     return out
 
 
+def _is_external(member: str, org_domain: str) -> bool:
+    """True if a member is externally trusted: any-authenticated, or a user/group outside the org.
+
+    ``allAuthenticatedUsers`` = any Google identity (outside the org). A ``user:``/``group:`` whose
+    email domain != ``org_domain`` is a foreign collaborator. ``serviceAccount:`` (cross-project
+    trust = deferred), ``allUsers`` (anonymous public, the storage is_public leg), and ``domain:``
+    (explicit org config) are not flagged here.
+    """
+    if member == "allAuthenticatedUsers":
+        return True
+    prefix, _, principal = member.partition(":")
+    if prefix in {"user", "group"} and "@" in principal:
+        return principal.rsplit("@", 1)[-1].lower() != org_domain.lower()
+    return False
+
+
+def external_trust_grants(
+    bindings: tuple[GcpIamBinding, ...], *, org_domain: str
+) -> list[tuple[str, str]]:
+    """``(member, gcs_uri)`` for object-read bindings held by an **externally-trusted** member (path 8).
+
+    Identifies foreign collaborators (members outside ``org_domain``, plus ``allAuthenticatedUsers``)
+    with object read — the externally-trusted principals path 8 marks. Deduped, order-preserving.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for b in bindings:
+        if b.role not in STORAGE_READ_ROLES:
+            continue
+        for member in b.members:
+            if not _is_external(member, org_domain):
+                continue
+            grant = (member, gcs_uri(b.bucket))
+            if grant not in seen:
+                seen.add(grant)
+                out.append(grant)
+    return out
+
+
 __all__ = [
     "STORAGE_READ_ROLES",
     "GcpIamBinding",
     "GcpIamLiveReader",
     "GcpIamReader",
+    "external_trust_grants",
     "storage_read_grants",
 ]

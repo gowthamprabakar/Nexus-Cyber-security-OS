@@ -1,8 +1,18 @@
 """Unit tests for the cross-cloud grant resolvers (gap #13 access leg) — the parsing teeth."""
 
 from charter.canonical import azure_blob_uri, gcs_uri
-from identity.tools.azure_rbac import AzureRbacLiveReader, AzureRoleAssignment, blob_read_grants
-from identity.tools.gcp_iam import GcpIamBinding, GcpIamLiveReader, storage_read_grants
+from identity.tools.azure_rbac import (
+    AzureRbacLiveReader,
+    AzureRoleAssignment,
+    blob_read_grants,
+    external_trust_grants,
+)
+from identity.tools.gcp_iam import (
+    GcpIamBinding,
+    GcpIamLiveReader,
+    storage_read_grants,
+)
+from identity.tools.gcp_iam import external_trust_grants as gcp_external_trust_grants
 
 _CONTAINER = (
     "/subscriptions/s/resourceGroups/rg/providers/Microsoft.Storage"
@@ -70,3 +80,42 @@ def test_gcp_reader_flattens_and_skips_malformed() -> None:
 
     parsed = GcpIamLiveReader(_C()).read()
     assert parsed == (GcpIamBinding("b", "roles/storage.admin", ("user:a",)),)
+
+
+# --- path 8: external trust ---
+
+
+def test_azure_external_trust_keeps_only_guests() -> None:
+    assignments = (
+        AzureRoleAssignment("guest-1", "Storage Blob Data Reader", _CONTAINER),
+        AzureRoleAssignment("member-1", "Storage Blob Data Reader", _CONTAINER),
+    )
+    grants = external_trust_grants(assignments, frozenset({"guest-1"}))
+    assert grants == [("guest-1", azure_blob_uri("acme", "reports"))]
+
+
+def test_gcp_external_trust_flags_foreign_and_all_authenticated() -> None:
+    bindings = (
+        GcpIamBinding(
+            "reports",
+            "roles/storage.objectViewer",
+            ("user:x@acme.com", "user:y@evil.com", "allAuthenticatedUsers"),
+        ),
+    )
+    grants = gcp_external_trust_grants(bindings, org_domain="acme.com")
+    assert grants == [
+        ("user:y@evil.com", gcs_uri("reports")),
+        ("allAuthenticatedUsers", gcs_uri("reports")),
+    ]
+
+
+def test_gcp_external_trust_ignores_allusers_and_service_accounts() -> None:
+    # allUsers = anonymous public (storage leg); a project SA isn't cross-org external trust here.
+    bindings = (
+        GcpIamBinding(
+            "reports",
+            "roles/storage.objectViewer",
+            ("allUsers", "serviceAccount:svc@proj.iam.gserviceaccount.com"),
+        ),
+    )
+    assert gcp_external_trust_grants(bindings, org_domain="acme.com") == []

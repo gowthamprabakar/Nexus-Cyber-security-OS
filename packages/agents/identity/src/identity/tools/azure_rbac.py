@@ -93,10 +93,23 @@ def blob_read_grants(assignments: tuple[AzureRoleAssignment, ...]) -> list[tuple
     return out
 
 
+def external_trust_grants(
+    assignments: tuple[AzureRoleAssignment, ...], guest_principal_ids: frozenset[str]
+) -> list[tuple[str, str]]:
+    """``(principal_id, azure_blob_uri)`` for blob-read grants held by a **guest** principal (path 8).
+
+    A subset of :func:`blob_read_grants` filtered to principals in ``guest_principal_ids`` — the
+    B2B guests identity's AD listing flags via ``AzureAdUser.is_guest`` (``userType == 'Guest'``).
+    These are the externally-trusted principals path 8 marks.
+    """
+    return [g for g in blob_read_grants(assignments) if g[0] in guest_principal_ids]
+
+
 __all__ = [
     "BLOB_READ_ROLES",
     "AzureRbacLiveReader",
     "AzureRbacReader",
     "AzureRoleAssignment",
     "blob_read_grants",
+    "external_trust_grants",
 ]

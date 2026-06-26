@@ -19,7 +19,9 @@ from fleet_testkit.identity_access import (
     AzureGrant,
     GcpBinding,
     drive_azure_identity_access,
+    drive_azure_identity_external_trust,
     drive_gcp_identity_access,
+    drive_gcp_identity_external_trust,
 )
 
 _TENANT = "tenant-xcloud"
@@ -102,3 +104,64 @@ async def test_gcp_member_on_other_bucket_is_dark() -> None:
         await drive_gcs_data_security(store, tenant_id=_TENANT, buckets=buckets)
         await drive_gcp_identity_access(store, tenant_id=_TENANT, bindings=(binding,))
         assert await KgQuery(store, _TENANT).find_fine_grained_data_exposure() == []
+
+
+@pytest.mark.asyncio
+async def test_azure_guest_with_blob_read_lights_up_path8() -> None:
+    containers = (AzureContainer("reports", public_access="container", blobs={"e.csv": _SSN}),)
+    grant = AzureGrant(
+        "guest-1", "Storage Blob Data Reader", _azure_container_scope(_ACCOUNT, "reports")
+    )
+    async with in_memory_semantic_store() as store:
+        await drive_azure_data_security(
+            store, tenant_id=_TENANT, containers=containers, storage_account=_ACCOUNT
+        )
+        await drive_azure_identity_external_trust(
+            store, tenant_id=_TENANT, grants=(grant,), guest_principal_ids=frozenset({"guest-1"})
+        )
+        hits = await KgQuery(store, _TENANT).find_external_trust_exposure()
+        assert len(hits) == 1
+        assert hits[0].data_type == "ssn"
+
+
+@pytest.mark.asyncio
+async def test_azure_member_not_guest_is_dark_for_path8() -> None:
+    containers = (AzureContainer("reports", public_access="container", blobs={"e.csv": _SSN}),)
+    grant = AzureGrant(
+        "member-1", "Storage Blob Data Reader", _azure_container_scope(_ACCOUNT, "reports")
+    )
+    async with in_memory_semantic_store() as store:
+        await drive_azure_data_security(
+            store, tenant_id=_TENANT, containers=containers, storage_account=_ACCOUNT
+        )
+        # member-1 is NOT in the guest set → no external-trust mark → path 8 stays dark.
+        await drive_azure_identity_external_trust(
+            store, tenant_id=_TENANT, grants=(grant,), guest_principal_ids=frozenset()
+        )
+        assert await KgQuery(store, _TENANT).find_external_trust_exposure() == []
+
+
+@pytest.mark.asyncio
+async def test_gcp_foreign_member_lights_up_path8() -> None:
+    buckets = (GcsBucketSeed("reports", iam_members=(PUBLIC_MEMBER,), blobs={"e.csv": _SSN}),)
+    binding = GcpBinding("reports", "roles/storage.objectViewer", ("user:contractor@external.com",))
+    async with in_memory_semantic_store() as store:
+        await drive_gcs_data_security(store, tenant_id=_TENANT, buckets=buckets)
+        await drive_gcp_identity_external_trust(
+            store, tenant_id=_TENANT, bindings=(binding,), org_domain="acme.com"
+        )
+        hits = await KgQuery(store, _TENANT).find_external_trust_exposure()
+        assert len(hits) == 1
+        assert hits[0].data_type == "ssn"
+
+
+@pytest.mark.asyncio
+async def test_gcp_internal_member_is_dark_for_path8() -> None:
+    buckets = (GcsBucketSeed("reports", iam_members=(PUBLIC_MEMBER,), blobs={"e.csv": _SSN}),)
+    binding = GcpBinding("reports", "roles/storage.objectViewer", ("user:employee@acme.com",))
+    async with in_memory_semantic_store() as store:
+        await drive_gcs_data_security(store, tenant_id=_TENANT, buckets=buckets)
+        await drive_gcp_identity_external_trust(
+            store, tenant_id=_TENANT, bindings=(binding,), org_domain="acme.com"
+        )
+        assert await KgQuery(store, _TENANT).find_external_trust_exposure() == []
