@@ -225,7 +225,7 @@ test assert-miss → assert-detect with a precision guard. **All 13 detection ga
 ## Parked (does NOT block the north star — honest debt, deferred)
 
 - DB-level tenant RLS hardening (store-layer GUC + FORCE RLS) — app-level isolation holds; revisit before real customer data. [see truth-audit doc]
-- Azure/GCP-only detection paths — likely **operator-verified**, not CI-REAL (mocks too weak). Labeled honestly.
+- ~~Azure/GCP-only detection paths — likely operator-verified, not CI-REAL (mocks too weak).~~ **RESOLVED 2026-06-27 (gap #13):** all 10 archetypes now fire CI-REAL on Azure + GCP via the agents' own injectable client Protocols (no `moto` needed); same node/edge vocab → detectors unchanged. Live cloud scans remain operator-verified, but the detection logic is CI-proven multi-cloud.
 - Auto-driven continuous loop; supervisor `del semantic_store` placeholder; pgvector ANN; effective-perms simulator (live-AWS only).
 - Access-Analyzer external-access (online API, not moto-drivable) — **operator-verified only**. Path 8 ships the **offline trust-policy** variant (`_externally_trusted_arns`, CI-REAL); the Access-Analyzer cross-resource findings are a superset that needs live AWS to verify.
 
