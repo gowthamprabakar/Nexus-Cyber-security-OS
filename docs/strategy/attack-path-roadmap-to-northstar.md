@@ -194,10 +194,19 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
     e2e composes ALL cross-cloud legs (data + compute + vuln + access) on one pivot: an exposed+vulnerable
     ACI/Cloud Run workload whose identity reaches sensitive data lights up `find_crown_jewel_exposure`
     (real trivy); dark when the identity can't reach the data. +4 reader units.
-    **Cross-cloud proof now spans 6 of 10 archetypes — 2,3,4,5,7,8 — every core mechanism + the capstone
-    composition.** REMAINING (optional breadth, own days): path 6 (AKS/GKE = different kubeconfig, k8s
-    already cloud-agnostic via kubectl); path 10 AI (Azure OpenAI / Vertex `EXPOSES_MODEL`). Multi-cloud
-    thesis fully proven; these add resource-type breadth, not new mechanism.
+    **DONE (slice 6 — path 6, commit e6ef010):** the k8s layer is already cloud-agnostic (`kubectl get
+pods -o json` is identical on kind/AKS/GKE). Proved the SAME real privileged-pod parser +
+    `record_privileged_workloads` handle managed-cluster payloads (provider node names, cloud labels,
+    ACR/GCR image refs) → `find_privileged_vulnerable_workload` fires on AKS + GKE (real trivy);
+    `fleet_testkit.k8s_workloads` (`managed_cluster_pods` + `drive_privileged_workloads`) + non-gated
+    parser unit proving provider fields are ignored.
+    **DONE (slice 7 — path 10, commit 11a4bb9):** added the training-data HAS_ACCESS_TO leg (the AWS
+    SageMaker `model_data_bucket` analogue) to the Azure OpenAI / Vertex readers + `record_azure`/
+    `record_gcp` (keyed by `azure_blob_uri`/`gcs_uri` — the SAME node data-security writes; additive →
+    aispm eval byte-identical). `find_exposed_ai_with_sensitive_data` fires on Azure OpenAI + Vertex;
+    `fleet_testkit.cross_cloud_aispm` + 4 e2e + 2 reader units.
+    **✅ #13 COMPLETE — ALL 10 ARCHETYPES CROSS-CLOUD on Azure + GCP** (2,3,4,5,6,7,8,10 distinct + 1
+    subsumed/1 subset). The attack-path engine is genuinely multi-cloud across every detection pattern.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
@@ -206,11 +215,12 @@ _Add gaps here as probing finds them — this is the live coverage-limit ledger.
 **Fixed (12 of 13):** #1 bucket-policy-public, #2 object-ACL, #3 gzip/base64 decode, #4 AWS-secret-key,
 #5 group-inherited access, #6 federated trust, #7 resource-based access, #8 permission-boundary cap
 (SCP/Condition deferred), #9 EC2 inventory (host-vuln join its own slice), #10 ELBv2/load-balancer
-exposure, #11 severity-floor (tunable), #12 KEV flag. **#13 multi-cloud (in progress):** storage parity
-slice DONE (commit b5894dd) — Azure Blob + GCS public+sensitive light up paths 3/7 CI-REAL, 6 e2e tests;
-remaining sub-slices = cross-cloud identity (Azure AD / GCP IAM) for access-leg paths 4/8, non-storage
-resource types. Every AWS fix flipped its characterization test assert-miss → assert-detect with a
-precision guard; full repo 7784 pass (+6 multi-cloud e2e).
+exposure, #11 severity-floor (tunable), #12 KEV flag. **#13 multi-cloud — ✅ COMPLETE (2026-06-27):**
+ALL 10 archetypes now fire CI-REAL on Azure + GCP — storage 3/7 (b5894dd), fine-grained identity 4
+(96a0363), external trust 8 (797f001), compute+vuln 2 (672ca45/dd9eddb), crown jewel 5 (b931cd7), k8s 6
+(e6ef010), AI 10 (11a4bb9). Same node/edge vocabulary + canonical keys (`azure_blob_uri`/`gcs_uri`) →
+the cloud-agnostic detectors fire with NO detector change. Every AWS fix flipped its characterization
+test assert-miss → assert-detect with a precision guard. **All 13 detection gaps closed.**
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
