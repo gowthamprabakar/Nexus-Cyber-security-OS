@@ -32,3 +32,32 @@ def test_pod_without_security_context_is_ignored():
 def test_empty_returns_nothing():
     assert privileged_workloads({}) == []
     assert privileged_workloads({"items": []}) == []
+
+
+def test_managed_cluster_provider_fields_are_ignored():
+    # AKS/GKE pods carry provider-specific node names + labels + registry image refs; the
+    # cloud-agnostic parser looks past them (gap #13 cross-cloud path 6).
+    doc = {
+        "items": [
+            {
+                "metadata": {
+                    "name": "web",
+                    "namespace": "default",
+                    "labels": {"cloud.google.com/gke-nodepool": "default-pool"},
+                },
+                "spec": {
+                    "nodeName": "gke-acme-default-pool-abc123-x1y2",
+                    "containers": [
+                        {
+                            "name": "web",
+                            "image": "gcr.io/acme-prod/app:1.0",
+                            "securityContext": {"privileged": True},
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    out = privileged_workloads(doc)
+    assert len(out) == 1
+    assert out[0].image_ref == "gcr.io/acme-prod/app:1.0"
