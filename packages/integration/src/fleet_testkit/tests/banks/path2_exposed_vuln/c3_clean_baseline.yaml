@@ -1,0 +1,17 @@
+test_case_id: path2-c3-clean-baseline
+description: A healthy environment — an internet-exposed workload running a clean (un-vulnerable)
+  image. The detector must emit nothing.
+agent: cloud-posture
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Exposure is real (public IP + 0.0.0.0/0), but the image has no known
+    HIGH/CRITICAL CVE, so there is no exposed-vulnerable path.
+  workloads:
+    - name: web
+      image: 'myreg/web-clean:1.0'
+      public: true
+      vulnerable_requirements: "certifi==2024.2.2\n"
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

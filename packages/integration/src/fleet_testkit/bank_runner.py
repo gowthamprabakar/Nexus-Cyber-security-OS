@@ -13,9 +13,12 @@ one ``match`` covers them. ``detect`` selects the path.
 from __future__ import annotations
 
 import json
+import subprocess
+import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import yaml
@@ -28,6 +31,8 @@ from identity.tools.aws_iam import (
     _list_roles,
     _list_users,
 )
+from k8s_posture.kg_writer import KnowledgeGraphWriter as K8sKgWriter
+from k8s_posture.tools.privileged_pods import kubectl_available, read_privileged_workloads
 from meta_harness.kg_query import KgQuery
 
 from fleet_testkit.capability import (
@@ -41,13 +46,18 @@ from fleet_testkit.capability import (
 from fleet_testkit.moto_aws import (
     MotoBucket,
     drive_aispm,
+    drive_cloud_workloads,
     drive_data_security,
     moto_ai_clients,
+    moto_all_clients,
     moto_aws_clients,
+    moto_ecs_clients,
     moto_s3,
+    setup_ecs_workload,
     setup_sagemaker_endpoint,
 )
 from fleet_testkit.store import in_memory_semantic_store
+from fleet_testkit.vuln_scan import drive_vulnerability
 
 _TENANT = "bank-tenant"
 
@@ -355,12 +365,245 @@ async def run_exposed_ai_case(path: Path | str) -> CapabilityResult:
         )
 
 
+# --- Path 2: internet-exposed workload + vulnerable image (cloud-posture + vulnerability) ---
+# TRIVY-GATED: drives the real trivy binary; tests gate on fleet_testkit.vuln_scan.trivy_available.
+
+
+@dataclass(frozen=True, slots=True)
+class _ImageHit:
+    """A vuln-on-workload hit resolved to its image ref (the stable per-workload key)."""
+
+    image_ref: str
+
+
+def _match_image(hit: _ImageHit, gt: GroundTruth) -> bool:
+    """Match on image ref — each fixture workload runs a distinct image, so the ref is its key.
+
+    Real trivy emits many CVEs per image (many hits, same ref); score() collapses them to one
+    matched ground truth, so CVE-count drift does not change precision/recall.
+    """
+    return hit.image_ref == gt.resource
+
+
+async def _drive_vuln_for(store: object, image_ref: str, requirements: str) -> None:
+    """Write a temp requirements fixture and drive REAL trivy → CVE graph for ``image_ref``."""
+    with TemporaryDirectory() as fixture:
+        (Path(fixture) / "requirements.txt").write_text(requirements)
+        await drive_vulnerability(
+            store, tenant_id=_TENANT, fixture_dir=fixture, image_ref=image_ref
+        )
+
+
+async def _resolve_image_hits(store: object, raw_hits: Sequence[Any]) -> list[_ImageHit]:
+    out: list[_ImageHit] = []
+    for h in raw_hits:
+        image = await store.get_entity(tenant_id=_TENANT, entity_id=h.image_id)  # type: ignore[attr-defined]
+        out.append(_ImageHit(image_ref=image.external_id if image else ""))
+    return out
+
+
+async def run_exposed_vuln_case(path: Path | str) -> CapabilityResult:
+    """Path 2 — an internet-exposed ECS workload running an image with a known CVE.
+
+    cloud-posture's real ECS reader writes the workload + RUNS_IMAGE; vulnerability's real
+    trivy scan writes the CVEs onto the same image node. Scores
+    ``find_internet_exposed_vulnerable_workload`` (TRIVY-GATED).
+    """
+    case, _ = load_bank_case(path)
+    workloads = (yaml.safe_load(Path(path).read_text()).get("environment") or {}).get(
+        "workloads"
+    ) or []
+    async with in_memory_semantic_store() as store:
+        with detection_timer() as timer:
+            with moto_ecs_clients() as (ecs, ec2):
+                for w in workloads:
+                    setup_ecs_workload(
+                        ecs,
+                        ec2,
+                        image_ref=str(w["image"]),
+                        public=bool(w["public"]),
+                        name=str(w["name"]),
+                    )
+                await drive_cloud_workloads(
+                    store, tenant_id=_TENANT, ecs_client=ecs, ec2_client=ec2
+                )
+            for w in workloads:
+                if w.get("vulnerable_requirements"):
+                    await _drive_vuln_for(store, str(w["image"]), str(w["vulnerable_requirements"]))
+            raw_hits = await KgQuery(store, _TENANT).find_internet_exposed_vulnerable_workload()
+            hits = await _resolve_image_hits(store, raw_hits)
+        return score(
+            hits,
+            case.ground_truth_violations,
+            case.expected_non_detections,
+            match=_match_image,
+            label=lambda h: h.image_ref,
+            detection_time_seconds=timer.seconds,
+            test_case_id=case.test_case_id,
+        )
+
+
+# --- Path 5: crown jewel — exposed + vulnerable + privileged + sensitive (all 4 feeders) ----
+# TRIVY-GATED (moto ECS+IAM+S3 + real trivy; no kind).
+
+
+async def _resolve_data_hits(store: object, raw_hits: Sequence[Any]) -> list[_Hit]:
+    """Resolve a hit's ``resource_id`` (the reachable sensitive bucket) → ARN for data matching."""
+    out: list[_Hit] = []
+    for h in raw_hits:
+        res = await store.get_entity(tenant_id=_TENANT, entity_id=h.resource_id)  # type: ignore[attr-defined]
+        out.append(_Hit(bucket_arn=res.external_id if res else "", data_type=h.data_type))
+    return out
+
+
+async def run_crown_jewel_case(path: Path | str) -> CapabilityResult:
+    """Path 5 — an internet-exposed ECS workload runs a vulnerable image AS a role that reaches
+    public sensitive data. Drives ALL four feeders on one moto session + real trivy, scores
+    ``find_crown_jewel_exposure`` on the reachable sensitive bucket (TRIVY-GATED).
+    """
+    case, buckets = load_bank_case(path)
+    workloads = (yaml.safe_load(Path(path).read_text()).get("environment") or {}).get(
+        "workloads"
+    ) or []
+    async with in_memory_semantic_store() as store:
+        with detection_timer() as timer:
+            with moto_all_clients(buckets) as (s3, iam, ecs, ec2):
+                await drive_data_security(store, tenant_id=_TENANT, buckets=buckets, s3_client=s3)
+                for w in workloads:
+                    role_arn = ""
+                    if w.get("task_role"):
+                        _seed_reader_role(iam, str(w["task_role"]), str(w["role_grant_resource"]))
+                        role_arn = f"arn:aws:iam::123456789012:role/{w['task_role']}"
+                    setup_ecs_workload(
+                        ecs,
+                        ec2,
+                        image_ref=str(w["image"]),
+                        public=bool(w["public"]),
+                        name=str(w["name"]),
+                        task_role_arn=role_arn,
+                    )
+                await drive_cloud_workloads(
+                    store, tenant_id=_TENANT, ecs_client=ecs, ec2_client=ec2
+                )
+                await IdentityKgWriter(store, _TENANT).record_access(
+                    _fine_grained_grants(_list_identities(iam))
+                )
+            for w in workloads:
+                if w.get("vulnerable_requirements"):
+                    await _drive_vuln_for(store, str(w["image"]), str(w["vulnerable_requirements"]))
+            raw_hits = await KgQuery(store, _TENANT).find_crown_jewel_exposure()
+            hits = await _resolve_data_hits(store, raw_hits)
+        return score(
+            hits,
+            case.ground_truth_violations,
+            case.expected_non_detections,
+            match=_match,
+            label=lambda h: f"{h.bucket_arn}:{h.data_type}",
+            detection_time_seconds=timer.seconds,
+            test_case_id=case.test_case_id,
+        )
+
+
+# --- Path 6: privileged K8s pod + vulnerable image (k8s-posture + vulnerability) ------------
+# KIND + TRIVY-GATED: applies real pods to a live kind cluster; tests gate on kind_context().
+
+
+def kind_context() -> str | None:
+    """The current kube context iff it is a kind cluster (throwaway). Else None → skip."""
+    if not kubectl_available():
+        return None
+    try:
+        ctx = subprocess.run(
+            ["kubectl", "config", "current-context"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return ctx if ctx.startswith("kind-") else None
+
+
+def _pod_manifest(namespace: str, pod: dict) -> str:
+    # securityContext keys align with name/image (4 spaces under the container list item).
+    sec_ctx = "\n    securityContext:\n      privileged: true" if pod.get("privileged") else ""
+    return (
+        "apiVersion: v1\nkind: Pod\n"
+        f"metadata:\n  name: {pod['name']}\n  namespace: {namespace}\n"
+        f"spec:\n  containers:\n  - name: app\n    image: {pod['image']}{sec_ctx}"
+    )
+
+
+def _kubectl(context: str, *args: str, stdin: str | None = None) -> None:
+    subprocess.run(  # noqa: S603
+        ["kubectl", "--context", context, *args],  # noqa: S607
+        input=stdin,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+
+
+async def run_privileged_vuln_case(path: Path | str, *, context: str) -> CapabilityResult:
+    """Path 6 — a privileged K8s pod running an image with a known CVE.
+
+    Applies the case's pods to a throwaway namespace on the live kind cluster, reads them with
+    k8s-posture's real ``read_privileged_workloads``, drives real trivy for vulnerable images,
+    and scores ``find_privileged_vulnerable_workload`` (KIND + TRIVY-GATED)."""
+    case, _ = load_bank_case(path)
+    pods = (yaml.safe_load(Path(path).read_text()).get("environment") or {}).get("pods") or []
+    # Unique per run — the same case runs twice (per-case + aggregate) and the prior
+    # --wait=false delete may still be terminating, so a fixed name would collide.
+    namespace = f"path6-bank-{uuid.uuid4().hex[:8]}"
+    _kubectl(context, "create", "namespace", namespace)
+    try:
+        _kubectl(
+            context,
+            "apply",
+            "-f",
+            "-",
+            stdin="\n---\n".join(_pod_manifest(namespace, p) for p in pods),
+        )
+        async with in_memory_semantic_store() as store:
+            with detection_timer() as timer:
+                workloads = [
+                    w
+                    for w in read_privileged_workloads(context=context)
+                    if w.namespace == namespace
+                ]
+                await K8sKgWriter(store, _TENANT).record_privileged_workloads(context, workloads)
+                for p in pods:
+                    if p.get("vulnerable_requirements"):
+                        await _drive_vuln_for(
+                            store, str(p["image"]), str(p["vulnerable_requirements"])
+                        )
+                raw_hits = await KgQuery(store, _TENANT).find_privileged_vulnerable_workload()
+                hits = await _resolve_image_hits(store, raw_hits)
+            return score(
+                hits,
+                case.ground_truth_violations,
+                case.expected_non_detections,
+                match=_match_image,
+                label=lambda h: h.image_ref,
+                detection_time_seconds=timer.seconds,
+                test_case_id=case.test_case_id,
+            )
+    finally:
+        _kubectl(context, "delete", "namespace", namespace, "--wait=false")
+
+
 __all__ = [
+    "kind_context",
     "load_bank_case",
+    "run_crown_jewel_case",
     "run_data_security_case",
     "run_exposed_ai_case",
+    "run_exposed_vuln_case",
     "run_external_trust_case",
     "run_fine_grained_case",
+    "run_privileged_vuln_case",
     "run_public_secret_case",
     "run_public_unencrypted_case",
 ]

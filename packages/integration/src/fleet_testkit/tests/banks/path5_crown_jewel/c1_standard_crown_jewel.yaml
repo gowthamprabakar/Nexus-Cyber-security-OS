@@ -1,0 +1,31 @@
+test_case_id: path5-c1-standard-crown-jewel
+description: The full crown jewel — an internet-exposed ECS workload runs a vulnerable image AS a
+  task role that can read a public bucket holding PII.
+agent: cloud-posture
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: All four legs on one workload — exposure (0.0.0.0/0), exploitability (Django
+    2.0.0 CVEs), privilege (the ASSUMES task role), sensitivity (the role reaches public PII).
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  workloads:
+    - name: web
+      image: 'myreg/crown:1.0'
+      public: true
+      task_role: crown-role
+      role_grant_resource: 'arn:aws:s3:::acme-pii/*'
+      vulnerable_requirements: "Django==2.0.0\n"
+ground_truth_violations:
+  - id: gt-crown
+    type: crown_jewel
+    resource: arn:aws:s3:::acme-pii
+    severity: critical
+    data_type: ssn
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

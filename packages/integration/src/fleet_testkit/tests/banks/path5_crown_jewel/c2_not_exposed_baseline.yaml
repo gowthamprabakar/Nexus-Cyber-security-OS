@@ -1,0 +1,24 @@
+test_case_id: path5-c2-not-exposed-baseline
+description: A near-miss — vulnerable workload whose task role reaches public PII, but the
+  workload is NOT internet-exposed. The crown-jewel chain is incomplete; emit nothing.
+agent: cloud-posture
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Three legs present (vuln + privilege + sensitivity) but the exposure leg is
+    missing — a private workload is not the crown jewel.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  workloads:
+    - name: web
+      image: 'myreg/crown:1.0'
+      public: false
+      task_role: crown-role
+      role_grant_resource: 'arn:aws:s3:::acme-pii/*'
+      vulnerable_requirements: "Django==2.0.0\n"
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

@@ -1,0 +1,23 @@
+test_case_id: path6-c1-standard-privileged-vuln
+description: A privileged Kubernetes pod runs an image with known CRITICAL CVEs — exploit the
+  CVE for RCE, then escape to the node via the privileged container.
+agent: k8s-posture
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: securityContext.privileged=true (read by k8s-posture's real kubectl reader) +
+    Django 2.0.0 CVEs from real trivy on the same image node.
+  pods:
+    - name: priv-web
+      image: 'myreg/k8s-vuln:1.0'
+      privileged: true
+      vulnerable_requirements: "Django==2.0.0\n"
+ground_truth_violations:
+  - id: gt-priv-vuln
+    type: privileged_vulnerable
+    resource: 'myreg/k8s-vuln:1.0'
+    severity: critical
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0
