@@ -1,0 +1,20 @@
+test_case_id: path4-c3-clean-baseline
+description: A healthy environment — a public bucket with no sensitive data, and a role with
+  fine-grained access to it. No sensitive data is reachable, so the detector emits nothing.
+agent: identity
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: The role's access is concrete and real, but the bucket holds only benign text —
+    no EXPOSES_DATA edge, so there is no fine-grained sensitive-data exposure.
+  buckets:
+    - name: acme-public-docs
+      public: true
+      objects:
+        readme.txt: 'Public marketing copy, lorem ipsum dolor sit amet — nothing sensitive.'
+  roles:
+    - name: docs-reader
+      grant_resource: 'arn:aws:s3:::acme-public-docs/*'
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0
