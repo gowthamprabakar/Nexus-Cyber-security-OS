@@ -91,12 +91,10 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
    evaluates the (already-fetched) bucket policy for a wildcard-principal `Allow`, neutralized when
    Block-Public-Access blocks/restricts public policies. Was: ACL-only, so the dominant modern public
    path (AWS disables ACLs by default) was invisible. Test flipped to assert-detect + a PAB precision test.
-2. **Object-level ACL public** `[test]` — `public` is bucket-level; a private bucket with an individual
-   object made public via object ACL is missed (measured: 0 hits). **PLAN (slice):** the
-   `S3LiveObjectSampler` already lists+reads each sampled object, so add a `get_object_acl` call there →
-   `ObjectSample.is_public: bool`; thread a per-bucket `has_public_object` signal into the writer so a
-   sensitive hit in a public object OR-s into the bucket's `is_public`. Effort: sampler call + a signal
-   threaded sampler→writer (marginal cost: one ACL call per sampled object).
+2. ✅ **FIXED 2026-06-27** — **Object-level ACL public** `[test]` — `S3LiveObjectSampler` reads each
+   object's ACL (`get_object_acl` → AllUsers/AuthenticatedUsers) → `ObjectSample.is_public`; the agent +
+   harness thread the per-bucket public-object set into `kg_writer.record`, OR-ing it into `is_public`.
+   Wired through the real agent path + a precision test (private object stays dark).
 3. ✅ **FIXED 2026-06-27** — **Compressed / encoded blobs** `[test]` — `classify_bytes` decodes gzip +
    base64 before classifying (plain → gzip → base64, first specific match), wired into the real agent
    `_classify` + the harness. Precision held (specific patterns, no entropy → noise doesn't match). Was:
@@ -120,32 +118,26 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
    joins them to the bucket's sensitive data via `CONTAINS` (works for private-but-shared buckets, not
    just public). Wired into `AttackPathRanker` (sev 62) + a hermetic bank (3 cases) in the fleet
    scorecard. Was: IAM-listing-only, so policy-granted access was invisible.
-8. **Permission boundary / SCP / Condition ignored** `[code]` (precision) — `_synthesize_admin_grants`
-   and `_fine_grained_grants` read the granting policy but not **permission boundaries**, **SCPs**, or
-   statement **Conditions**, so an admin/grant neutralized by a boundary or gated by a condition still
-   fires → over-reports. **PLAN (real slice):** (1) extend `aws_iam._list_roles/_list_users` to fetch
-   `PermissionsBoundary` (get_role/get_user) → new `IamRole/IamUser.permission_boundary_doc` field;
-   (2) in the grant resolvers, intersect the granted action/resource with the boundary (a grant is
-   effective only if the boundary also allows it). SCPs (Organizations API) + statement Conditions are
-   a further phase. Effort: IAM reader + schema + intersection logic.
+8. ✅ **FIXED 2026-06-27 (permission boundary; SCP/Condition deferred)** `[test]` — the IAM reader fetches
+   the boundary (`get_role`/`get_user` → `PermissionsBoundaryArn`) into `IamRole/IamUser`;
+   `_synthesize_admin_grants` + `_fine_grained_grants` suppress a grant only when a **resolvable** boundary
+   unambiguously disallows it. **Conservative — no boundary / unresolvable (AWS-managed) → keep the
+   finding**, so the precision fix can't introduce false negatives (three guard tests). **SCPs (Organizations
+   API) + statement Conditions remain a further phase.**
 
 **C. Compute & exposure (cloud-posture):**
 
-9. **EC2 / non-ECS compute not inventoried** `[test]` ⭐ — the workload reader enumerates **ECS services
-   only**. An exposed **EC2 instance** (or EKS node, Lightsail, …) running a vulnerable workload is never
-   read → paths 2/5 blind to all non-ECS compute (measured: EC2 → empty). **PLAN (slice):** a new
-   `cloud_posture.tools.aws_ec2.read_ec2_workloads(ec2)` (describe_instances → public IP / 0.0.0.0/0 SG →
-   `is_public`), written as `CLOUD_RESOURCE{kind=ec2-instance,is_public}` via `record_workloads`. Honest
-   limit: EC2 runs an **AMI/packages**, not a container image, so the `RUNS_IMAGE`→CVE join needs a
-   separate **host-vuln** model (trivy `rootfs`/`vm`) — exposure is inventoried; the vuln join is its
-   own slice.
-10. **Load-balancer / no-public-IP exposure** `[test]` ⭐ — a workload is "public" only when
-    `assignPublicIp=ENABLED` **AND** a `0.0.0.0/0` SG. A service behind a public **ALB/NLB** (open SG, no
-    public IP) — the common production pattern — reads `is_public=False` (measured). **PLAN (slice):** a
-    new `cloud_posture.tools.aws_elbv2` reader — `describe_load_balancers` (Scheme=internet-facing) →
-    `describe_listeners`/`describe_target_groups`/`describe_target_health` → the ECS service / EC2 target
-    behind a public LB → mark that workload `is_public=True` (OR-ed into the existing SG check). moto
-    ELBv2 supported, so hermetic. Effort: ELBv2 reader + target→workload mapping.
+9. ✅ **FIXED 2026-06-27** — **EC2 / non-ECS compute not inventoried** `[test]` — new
+   `cloud_posture.tools.aws_ec2.read_ec2_workloads(ec2, iam)`: `describe_instances` → public IP **and** a
+   `0.0.0.0/0` SG → `is_public`; resolves the instance-profile → IAM role (the EC2 ASSUMES bridge).
+   `record_ec2_workloads` writes `CLOUD_RESOURCE{kind=ec2-instance,is_public}` + `ASSUMES` → role.
+   **Honest limit: EC2 runs an AMI/packages, not a container image — the `RUNS_IMAGE`→CVE join needs a
+   separate host-vuln model (trivy `rootfs`/`vm`); exposure is inventoried, the vuln join is its own slice.**
+10. ✅ **FIXED 2026-06-27** — **Load-balancer / no-public-IP exposure** `[test]` — new
+    `cloud_posture.tools.aws_elbv2.internet_facing_target_groups(elbv2)` walks internet-facing LBs →
+    listeners → target groups; `read_ecs_workloads(..., lb_exposed_target_groups=)` flags a service whose
+    `loadBalancers` reference an internet-facing target group as `is_public=True` (OR-ed with the SG
+    check). Walks LB→listeners forward (moto leaves `TG.LoadBalancerArns` empty). Precision held.
 
 **D. Vulnerability (vulnerability):**
 
@@ -179,12 +171,12 @@ _Add gaps here as probing finds them — this is the live coverage-limit ledger.
 
 ## Detection-gap fix status (2026-06-27)
 
-**Fixed (8 of 13):** #1 bucket-policy-public, #3 gzip/base64 decode, #4 AWS-secret-key, #5 group-inherited
-access, #6 federated trust, #7 resource-based access, #11 severity-floor (resolved as a tunable), #12 KEV
-flag. **Open as scoped slices (4):** #2 object-ACL (sampler), #8 permission-boundary (IAM reader+schema),
-#9 EC2 inventory (new reader; host-vuln join separate), #10 ELBv2/load-balancer exposure (new reader).
-**Multi-day (1):** #13 Azure/GCP multi-cloud parity. Each open item has a concrete PLAN above — none is
-half-built; they are documented next-slices, executable one per PR.
+**Fixed (12 of 13):** #1 bucket-policy-public, #2 object-ACL, #3 gzip/base64 decode, #4 AWS-secret-key,
+#5 group-inherited access, #6 federated trust, #7 resource-based access, #8 permission-boundary cap
+(SCP/Condition deferred), #9 EC2 inventory (host-vuln join its own slice), #10 ELBv2/load-balancer
+exposure, #11 severity-floor (tunable), #12 KEV flag. **Multi-day (1, the only one left):** #13 Azure/GCP
+multi-cloud parity — concrete plan above, NOT half-built. Every fix flipped its characterization test
+assert-miss → assert-detect and shipped with a precision guard; full repo 7784 pass.
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
