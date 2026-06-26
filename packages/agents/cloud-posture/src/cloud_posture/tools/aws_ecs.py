@@ -57,8 +57,13 @@ def _task_def_image_and_role(ecs: object, task_def_arn: str) -> tuple[str, str]:
     return image, str(task_def.get("taskRoleArn", ""))
 
 
-def _service_is_public(ec2: object, service: dict) -> bool:
-    """Internet-exposed = awsvpc public IP assigned AND a 0.0.0.0/0 security group."""
+def _service_is_public(
+    ec2: object, service: dict, lb_exposed_target_groups: frozenset[str]
+) -> bool:
+    """Internet-exposed = behind a public load balancer, OR awsvpc public IP + a 0.0.0.0/0 SG."""
+    for lb in service.get("loadBalancers") or []:
+        if lb.get("targetGroupArn") in lb_exposed_target_groups:
+            return True
     awsvpc = (service.get("networkConfiguration") or {}).get("awsvpcConfiguration") or {}
     if awsvpc.get("assignPublicIp") != "ENABLED":
         return False
@@ -69,11 +74,15 @@ def _batched(items: list[str], size: int) -> list[list[str]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
-def read_ecs_workloads(ecs: object, ec2: object) -> list[EcsWorkload]:
+def read_ecs_workloads(
+    ecs: object, ec2: object, *, lb_exposed_target_groups: frozenset[str] = frozenset()
+) -> list[EcsWorkload]:
     """Enumerate ECS services across all clusters as ``EcsWorkload`` rows.
 
     Skips services whose task definition has no resolvable container image. ``ecs`` and
-    ``ec2`` are injected boto3 clients (real AWS or moto).
+    ``ec2`` are injected boto3 clients (real AWS or moto). ``lb_exposed_target_groups`` (from
+    :func:`cloud_posture.tools.aws_elbv2.internet_facing_target_groups`) marks a service behind a
+    public load balancer as exposed even without a public IP (gap #10).
     """
     workloads: list[EcsWorkload] = []
     cluster_arns = ecs.list_clusters().get("clusterArns", [])  # type: ignore[attr-defined]
@@ -91,7 +100,7 @@ def read_ecs_workloads(ecs: object, ec2: object) -> list[EcsWorkload]:
                     EcsWorkload(
                         service_arn=svc["serviceArn"],
                         image_ref=image_ref,
-                        is_public=_service_is_public(ec2, svc),
+                        is_public=_service_is_public(ec2, svc, lb_exposed_target_groups),
                         task_role_arn=task_role_arn,
                     )
                 )

@@ -428,17 +428,33 @@ async def test_fixed_ec2_workload_written_to_graph() -> None:
         assert len(edges) == 1
 
 
-def test_gap_load_balancer_exposure_is_missed() -> None:
-    # GAP: a workload is flagged public only when assignPublicIp=ENABLED AND a 0.0.0.0/0 SG. A
-    # service behind a public ALB/NLB (open SG, NO public IP) — the common production pattern — is
-    # internet-reachable but reads is_public=False.
+def test_fixed_load_balancer_exposure_is_detected() -> None:
+    # FIXED (gap #10): an ECS service with NO public IP behind an INTERNET-FACING ALB now reads
+    # is_public=True — the LB-exposed target groups OR into the SG check.
     from cloud_posture.tools.aws_ecs import read_ecs_workloads
+    from cloud_posture.tools.aws_elbv2 import internet_facing_target_groups
 
     with mock_aws():
         ec2 = boto3.client("ec2", region_name="us-east-1")
         ecs = boto3.client("ecs", region_name="us-east-1")
+        elbv2 = boto3.client("elbv2", region_name="us-east-1")
         vpc, subnet = _vpc_subnet(ec2)
+        subnet2 = ec2.create_subnet(
+            VpcId=vpc, CidrBlock="10.0.2.0/24", AvailabilityZone="us-east-1b"
+        )["Subnet"]["SubnetId"]
         sg = _open_sg(ec2, vpc)
+        lb = elbv2.create_load_balancer(
+            Name="alb", Subnets=[subnet, subnet2], Scheme="internet-facing", Type="application"
+        )["LoadBalancers"][0]
+        tg = elbv2.create_target_group(
+            Name="tg", Protocol="HTTP", Port=80, VpcId=vpc, TargetType="ip"
+        )["TargetGroups"][0]
+        elbv2.create_listener(
+            LoadBalancerArn=lb["LoadBalancerArn"],
+            Protocol="HTTP",
+            Port=80,
+            DefaultActions=[{"Type": "forward", "TargetGroupArn": tg["TargetGroupArn"]}],
+        )
         ecs.create_cluster(clusterName="c")
         ecs.register_task_definition(
             family="app",
@@ -450,6 +466,9 @@ def test_gap_load_balancer_exposure_is_missed() -> None:
             serviceName="lb-svc",
             taskDefinition="app",
             desiredCount=1,
+            loadBalancers=[
+                {"targetGroupArn": tg["TargetGroupArn"], "containerName": "a", "containerPort": 80}
+            ],
             networkConfiguration={
                 "awsvpcConfiguration": {
                     "subnets": [subnet],
@@ -458,7 +477,8 @@ def test_gap_load_balancer_exposure_is_missed() -> None:
                 }
             },
         )
-        workloads = read_ecs_workloads(ecs, ec2)
-        assert workloads and all(w.is_public is False for w in workloads), (
-            "load-balancer / no-public-IP exposure now detected — update gaps doc"
-        )
+        exposed_tgs = internet_facing_target_groups(elbv2)
+        workloads = read_ecs_workloads(ecs, ec2, lb_exposed_target_groups=exposed_tgs)
+        assert workloads and all(w.is_public is True for w in workloads)
+        # Precision: without the LB-exposed set, the no-public-IP service reads private.
+        assert all(w.is_public is False for w in read_ecs_workloads(ecs, ec2))
