@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
     from cloud_posture.tools.azure_aci import AciWorkload
+    from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -126,26 +127,39 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 )
                 await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
 
-    async def record_azure_workloads(self, workloads: Iterable[AciWorkload]) -> None:
-        """Write Azure ACI workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
+    async def _record_container_workload(
+        self, resource_id: str, image_ref: str, *, is_public: bool, kind: str
+    ) -> None:
+        """Write a container workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
 
-        The cross-cloud path-2 leg: identical mechanism-② bridge as :meth:`record_workloads`, only
-        the workload is an Azure Container Instance keyed by its resource id. The image node is the
-        SAME spine node vulnerability writes CVE ``VULNERABLE_TO`` edges onto (both keyed by image
-        ref), so an exposed Azure workload's CVEs are reachable in one graph walk — no detector change.
+        The cross-cloud path-2 leg: the same mechanism-② bridge as :meth:`record_workloads`, only
+        the workload is keyed by a non-ARN resource id. The image node is the SAME spine node
+        vulnerability writes CVE ``VULNERABLE_TO`` edges onto (both keyed by image ref), so an
+        exposed workload's CVEs are reachable in one graph walk — no detector change.
         """
-        for workload in workloads:
-            group_node = await self.upsert_node(
-                NodeCategory.CLOUD_RESOURCE,
-                workload.resource_id,
-                {"kind": "azure-container-group", "is_public": workload.is_public},
+        workload_node = await self.upsert_node(
+            NodeCategory.CLOUD_RESOURCE,
+            resource_id,
+            {"kind": kind, "is_public": is_public},
+        )
+        image_node = await self.upsert_node(
+            NodeCategory.CLOUD_RESOURCE, image_ref, {"kind": "container-image"}
+        )
+        await self.add_edge(workload_node or "", image_node or "", EdgeType.RUNS_IMAGE)
+
+    async def record_azure_workloads(self, workloads: Iterable[AciWorkload]) -> None:
+        """Write Azure ACI container-group workloads (cross-cloud path 2)."""
+        for w in workloads:
+            await self._record_container_workload(
+                w.resource_id, w.image_ref, is_public=w.is_public, kind="azure-container-group"
             )
-            image_node = await self.upsert_node(
-                NodeCategory.CLOUD_RESOURCE,
-                workload.image_ref,
-                {"kind": "container-image"},
+
+    async def record_gcp_workloads(self, workloads: Iterable[CloudRunWorkload]) -> None:
+        """Write GCP Cloud Run service workloads (cross-cloud path 2)."""
+        for w in workloads:
+            await self._record_container_workload(
+                w.resource_id, w.image_ref, is_public=w.is_public, kind="gcp-cloud-run-service"
             )
-            await self.add_edge(group_node or "", image_node or "", EdgeType.RUNS_IMAGE)
 
     async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:
         """Write EC2 instance ``CLOUD_RESOURCE{is_public}`` + ``ASSUMES`` → instance-profile role.
