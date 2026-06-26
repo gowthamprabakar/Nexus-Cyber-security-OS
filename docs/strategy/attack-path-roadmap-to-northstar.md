@@ -186,10 +186,18 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
     dark) + 8 reader units. **Cross-cloud proof now spans 5 of 10 archetypes — paths 3, 7 (storage),
     4 (fine-grained identity), 8 (external trust), 2 (compute+vuln bridge) — covering every core
     mechanism (public-exposure, data-classification, identity-access, external-trust, image-vuln join).**
-    **REMAINING (composition extensions, NOT new mechanism — own days, optional):** path 5 crown-jewel
-    cross-cloud (workload `ASSUMES` managed-identity/service-account → data; needs the ASSUMES leg for
-    ACI/Cloud Run); path 6 (AKS/GKE = different kubeconfig, k8s layer already cloud-agnostic via kubectl);
-    path 10 AI (Azure OpenAI / Vertex `EXPOSES_MODEL`). The multi-cloud thesis is proven; these are breadth.
+    **DONE (slice 5 — crown jewel, commit b931cd7):** cross-cloud **path 5** (the 4-hop capstone) on
+    Azure + GCP. Added the ASSUMES leg to the compute readers — `AciWorkload.identity_principal_id`
+    (system-assigned managed identity) / `CloudRunWorkload.service_account` (normalized to
+    `serviceAccount:<email>` = the IAM member key) → `_record_container_workload` writes workload
+    `ASSUMES` IDENTITY(principal), the SAME node the identity access leg grants `HAS_ACCESS_TO`. The
+    e2e composes ALL cross-cloud legs (data + compute + vuln + access) on one pivot: an exposed+vulnerable
+    ACI/Cloud Run workload whose identity reaches sensitive data lights up `find_crown_jewel_exposure`
+    (real trivy); dark when the identity can't reach the data. +4 reader units.
+    **Cross-cloud proof now spans 6 of 10 archetypes — 2,3,4,5,7,8 — every core mechanism + the capstone
+    composition.** REMAINING (optional breadth, own days): path 6 (AKS/GKE = different kubeconfig, k8s
+    already cloud-agnostic via kubectl); path 10 AI (Azure OpenAI / Vertex `EXPOSES_MODEL`). Multi-cloud
+    thesis fully proven; these add resource-type breadth, not new mechanism.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
