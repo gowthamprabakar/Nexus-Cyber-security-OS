@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
+    from cloud_posture.tools.azure_aci import AciWorkload
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -124,6 +125,27 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     NodeCategory.IDENTITY, workload.task_role_arn, {}
                 )
                 await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
+
+    async def record_azure_workloads(self, workloads: Iterable[AciWorkload]) -> None:
+        """Write Azure ACI workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
+
+        The cross-cloud path-2 leg: identical mechanism-② bridge as :meth:`record_workloads`, only
+        the workload is an Azure Container Instance keyed by its resource id. The image node is the
+        SAME spine node vulnerability writes CVE ``VULNERABLE_TO`` edges onto (both keyed by image
+        ref), so an exposed Azure workload's CVEs are reachable in one graph walk — no detector change.
+        """
+        for workload in workloads:
+            group_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.resource_id,
+                {"kind": "azure-container-group", "is_public": workload.is_public},
+            )
+            image_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.image_ref,
+                {"kind": "container-image"},
+            )
+            await self.add_edge(group_node or "", image_node or "", EdgeType.RUNS_IMAGE)
 
     async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:
         """Write EC2 instance ``CLOUD_RESOURCE{is_public}`` + ``ASSUMES`` → instance-profile role.
