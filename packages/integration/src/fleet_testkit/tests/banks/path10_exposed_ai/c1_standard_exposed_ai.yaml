@@ -1,0 +1,29 @@
+test_case_id: path10-c1-standard-exposed-ai
+description: An internet-exposed SageMaker endpoint reads its model artifact from a public bucket
+  holding PII — exposed model plus exposed sensitive training data.
+agent: aispm
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: network_isolated=False → aispm writes EXPOSES_MODEL → internet; the model's
+    ModelDataUrl bucket is the public PII bucket data-security flags.
+  buckets:
+    - name: acme-train
+      public: true
+      objects:
+        train.csv: "name,ssn\nJane Roe,123-45-6789"
+  endpoints:
+    - name: infer
+      model_data_bucket: acme-train
+      network_isolated: false
+ground_truth_violations:
+  - id: gt-exposed-ai
+    type: exposed_ai_sensitive_data
+    resource: arn:aws:s3:::acme-train
+    severity: high
+    data_type: ssn
+    service: sagemaker:123456789012:infer
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

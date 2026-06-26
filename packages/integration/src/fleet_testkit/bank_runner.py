@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from identity.agent import _fine_grained_grants
+from identity.agent import _externally_trusted_arns, _fine_grained_grants
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
 from identity.tools.aws_iam import (
     IdentityListing,
@@ -40,9 +40,12 @@ from fleet_testkit.capability import (
 )
 from fleet_testkit.moto_aws import (
     MotoBucket,
+    drive_aispm,
     drive_data_security,
+    moto_ai_clients,
     moto_aws_clients,
     moto_s3,
+    setup_sagemaker_endpoint,
 )
 from fleet_testkit.store import in_memory_semantic_store
 
@@ -190,17 +193,7 @@ async def run_fine_grained_case(path: Path | str) -> CapabilityResult:
                 grants = _fine_grained_grants(_list_identities(iam))
                 await IdentityKgWriter(store, _TENANT).record_access(grants)
             raw_hits = await KgQuery(store, _TENANT).find_fine_grained_data_exposure()
-            hits: list[_PrincipalHit] = []
-            for h in raw_hits:
-                principal = await store.get_entity(tenant_id=_TENANT, entity_id=h.principal_id)
-                resource = await store.get_entity(tenant_id=_TENANT, entity_id=h.resource_id)
-                hits.append(
-                    _PrincipalHit(
-                        principal_arn=principal.external_id if principal else "",
-                        resource_arn=resource.external_id if resource else "",
-                        data_type=h.data_type,
-                    )
-                )
+            hits = await _resolve_principal_hits(store, raw_hits)
         return score(
             hits,
             case.ground_truth_violations,
@@ -212,9 +205,161 @@ async def run_fine_grained_case(path: Path | str) -> CapabilityResult:
         )
 
 
+# --- Path 8: external cross-account trust (identity + data-security) -----------------------
+
+_FOREIGN_ACCOUNT = "999999999999"
+
+
+def _seed_trust_role(iam: object, name: str, trust: str, grant_resource: str) -> None:
+    """A moto IAM role with a trust policy (``external`` = foreign account, else service) AND a
+    customer-managed policy granting ``s3:GetObject`` on ``grant_resource``."""
+    if trust == "external":
+        principal: dict[str, object] = {"AWS": f"arn:aws:iam::{_FOREIGN_ACCOUNT}:root"}
+    else:
+        principal = {"Service": "ec2.amazonaws.com"}
+    trust_doc = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [{"Effect": "Allow", "Principal": principal, "Action": "sts:AssumeRole"}],
+        }
+    )
+    access_doc = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Action": "s3:GetObject", "Resource": grant_resource}
+            ],
+        }
+    )
+    policy_arn = iam.create_policy(PolicyName=f"{name}-read", PolicyDocument=access_doc)[  # type: ignore[attr-defined]
+        "Policy"
+    ]["Arn"]
+    iam.create_role(RoleName=name, AssumeRolePolicyDocument=trust_doc)  # type: ignore[attr-defined]
+    iam.attach_role_policy(RoleName=name, PolicyArn=policy_arn)  # type: ignore[attr-defined]
+
+
+async def run_external_trust_case(path: Path | str) -> CapabilityResult:
+    """Path 8 — an externally-trusted (cross-account) role that can reach public sensitive data.
+
+    data-security writes the public bucket + EXPOSES_DATA; identity's real
+    ``_externally_trusted_arns`` (offline trust-policy analysis) marks external trust and
+    ``_fine_grained_grants`` writes the access edge. Scores ``find_external_trust_exposure``.
+    """
+    case, buckets = load_bank_case(path)
+    roles = (yaml.safe_load(Path(path).read_text()).get("environment") or {}).get("roles") or []
+    async with in_memory_semantic_store() as store:
+        with detection_timer() as timer:
+            with moto_aws_clients(buckets) as (s3, iam):
+                await drive_data_security(store, tenant_id=_TENANT, buckets=buckets, s3_client=s3)
+                for role in roles:
+                    _seed_trust_role(
+                        iam, str(role["name"]), str(role["trust"]), str(role["grant_resource"])
+                    )
+                listing = _list_identities(iam)
+                writer = IdentityKgWriter(store, _TENANT)
+                await writer.record_external_trust(_externally_trusted_arns(listing))
+                await writer.record_access(_fine_grained_grants(listing))
+            raw_hits = await KgQuery(store, _TENANT).find_external_trust_exposure()
+            hits = await _resolve_principal_hits(store, raw_hits)
+        return score(
+            hits,
+            case.ground_truth_violations,
+            case.expected_non_detections,
+            match=_match_principal,
+            label=lambda h: f"{h.principal_arn}->{h.resource_arn}:{h.data_type}",
+            detection_time_seconds=timer.seconds,
+            test_case_id=case.test_case_id,
+        )
+
+
+async def _resolve_principal_hits(store: object, raw_hits: Sequence[Any]) -> list[_PrincipalHit]:
+    """Resolve (principal_id, resource_id) entity ULIDs → ARNs for principal-based matching."""
+    hits: list[_PrincipalHit] = []
+    for h in raw_hits:
+        principal = await store.get_entity(tenant_id=_TENANT, entity_id=h.principal_id)  # type: ignore[attr-defined]
+        resource = await store.get_entity(tenant_id=_TENANT, entity_id=h.resource_id)  # type: ignore[attr-defined]
+        hits.append(
+            _PrincipalHit(
+                principal_arn=principal.external_id if principal else "",
+                resource_arn=resource.external_id if resource else "",
+                data_type=h.data_type,
+            )
+        )
+    return hits
+
+
+# --- Path 10: exposed AI service + sensitive training data (aispm + data-security) ---------
+
+
+@dataclass(frozen=True, slots=True)
+class _ServiceHit:
+    """An exposed-AI hit resolved to (service id, resource ARN, data type) for scoring."""
+
+    service_id: str
+    resource_arn: str
+    data_type: str
+
+
+def _match_service(hit: _ServiceHit, gt: GroundTruth) -> bool:
+    """Match on AI service + resource + data type."""
+    return (
+        hit.service_id == str(gt.extra.get("service", ""))
+        and hit.resource_arn == gt.resource
+        and hit.data_type == str(gt.extra.get("data_type", ""))
+    )
+
+
+async def run_exposed_ai_case(path: Path | str) -> CapabilityResult:
+    """Path 10 — an internet-exposed SageMaker endpoint whose training bucket is public + sensitive.
+
+    data-security writes the public bucket + EXPOSES_DATA; aispm's real reader extracts the
+    endpoint's exposure + model-data bucket and ``record_aws`` writes EXPOSES_MODEL +
+    HAS_ACCESS_TO. Scores ``find_exposed_ai_with_sensitive_data``.
+    """
+    case, buckets = load_bank_case(path)
+    endpoints = (yaml.safe_load(Path(path).read_text()).get("environment") or {}).get(
+        "endpoints"
+    ) or []
+    async with in_memory_semantic_store() as store:
+        with detection_timer() as timer:
+            with moto_ai_clients(buckets) as (s3, sm):
+                await drive_data_security(store, tenant_id=_TENANT, buckets=buckets, s3_client=s3)
+                for ep in endpoints:
+                    setup_sagemaker_endpoint(
+                        sm,
+                        name=str(ep["name"]),
+                        model_data_bucket=str(ep["model_data_bucket"]),
+                        network_isolated=bool(ep.get("network_isolated", False)),
+                    )
+                await drive_aispm(store, tenant_id=_TENANT, sm_client=sm)
+            raw_hits = await KgQuery(store, _TENANT).find_exposed_ai_with_sensitive_data()
+            hits: list[_ServiceHit] = []
+            for h in raw_hits:
+                svc = await store.get_entity(tenant_id=_TENANT, entity_id=h.service_id)
+                res = await store.get_entity(tenant_id=_TENANT, entity_id=h.resource_id)
+                hits.append(
+                    _ServiceHit(
+                        service_id=svc.external_id if svc else "",
+                        resource_arn=res.external_id if res else "",
+                        data_type=h.data_type,
+                    )
+                )
+        return score(
+            hits,
+            case.ground_truth_violations,
+            case.expected_non_detections,
+            match=_match_service,
+            label=lambda h: f"{h.service_id}->{h.resource_arn}:{h.data_type}",
+            detection_time_seconds=timer.seconds,
+            test_case_id=case.test_case_id,
+        )
+
+
 __all__ = [
     "load_bank_case",
     "run_data_security_case",
+    "run_exposed_ai_case",
+    "run_external_trust_case",
     "run_fine_grained_case",
     "run_public_secret_case",
     "run_public_unencrypted_case",

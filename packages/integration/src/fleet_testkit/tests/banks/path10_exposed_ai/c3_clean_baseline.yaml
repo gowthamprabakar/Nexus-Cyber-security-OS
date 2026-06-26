@@ -1,0 +1,21 @@
+test_case_id: path10-c3-clean-baseline
+description: A healthy environment — an exposed endpoint whose training bucket is public but
+  holds only benign data. The detector must emit nothing.
+agent: aispm
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: The endpoint is internet-exposed and its training bucket is public, but the
+    bucket has no sensitive data, so there is no exposed-AI-with-sensitive-data path.
+  buckets:
+    - name: acme-train-public
+      public: true
+      objects:
+        train.csv: "feature_a,feature_b\n0.1,0.2"
+  endpoints:
+    - name: infer
+      model_data_bucket: acme-train-public
+      network_isolated: false
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0
