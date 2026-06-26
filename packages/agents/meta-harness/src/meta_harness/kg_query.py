@@ -173,6 +173,18 @@ class PrivilegedVulnerableWorkload:
     severity: str
 
 
+@dataclass(frozen=True, slots=True)
+class ExposedAiWithSensitiveData:
+    """An internet-exposed AI service whose training-data bucket is public + sensitive
+    (path 10). The service EXPOSES_MODEL to the internet AND HAS_ACCESS_TO a bucket that
+    EXPOSES_DATA — a leaked model plus exposed training data. `data_type` is the data kind."""
+
+    service_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -551,6 +563,39 @@ class KgQuery:
                     )
         return hits
 
+    async def find_exposed_ai_with_sensitive_data(self) -> list[ExposedAiWithSensitiveData]:
+        """Find internet-exposed AI services whose training-data bucket is public + sensitive.
+
+        Self-seeded: enumerates AI_SERVICE nodes that ``EXPOSES_MODEL`` to the internet sentinel
+        AND ``HAS_ACCESS_TO`` a bucket that ``EXPOSES_DATA`` (written only for public buckets).
+        A leaked/abusable model plus exposed sensitive training data (path 10). Read-only."""
+        hits: list[ExposedAiWithSensitiveData] = []
+        services = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.AI_SERVICE.value
+        )
+        for svc in services:
+            exposed = await self._edges_from(svc.entity_id, (EdgeType.EXPOSES_MODEL.value,))
+            if not exposed:
+                continue
+            for access in await self._edges_from(svc.entity_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        ExposedAiWithSensitiveData(
+                            service_id=svc.entity_id,
+                            resource_id=access.dst_entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -565,6 +610,7 @@ __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
     "CrownJewelExposure",
+    "ExposedAiWithSensitiveData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",

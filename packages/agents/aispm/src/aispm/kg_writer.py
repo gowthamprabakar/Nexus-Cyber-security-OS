@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from charter.canonical import s3_bucket_arn as _s3_bucket_arn
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
@@ -84,6 +85,14 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 await self.add_edge(
                     svc or "", await self._internet_node() or "", EdgeType.EXPOSES_MODEL
                 )
+            if ep.model_data_bucket:
+                # The model artifact's S3 bucket — the same spine node data-security keys by
+                # canonical ARN. HAS_ACCESS_TO joins the AI service to its training data, so an
+                # exposed endpoint reaching a sensitive bucket surfaces in one walk (path 10).
+                bucket = await self.upsert_node(
+                    NodeCategory.CLOUD_RESOURCE, _s3_bucket_arn(ep.model_data_bucket), {}
+                )
+                await self.add_edge(svc or "", bucket or "", EdgeType.HAS_ACCESS_TO)
         if inventory.bedrock_logging_enabled is not None:
             bedrock = await self._service_node(
                 "bedrock", inventory.account_id, "bedrock", {"kind": "service", "name": "bedrock"}

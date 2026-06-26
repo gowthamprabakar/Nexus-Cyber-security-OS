@@ -105,6 +105,81 @@ def moto_s3(
         yield s3
 
 
+def setup_sagemaker_endpoint(
+    sm: object, *, name: str, model_data_bucket: str, network_isolated: bool
+) -> None:
+    """Seed a moto SageMaker endpoint whose model reads from ``model_data_bucket``.
+
+    ``network_isolated=False`` is the exposed posture aispm flags (EXPOSES_MODEL → internet).
+    """
+    sm.create_model(  # type: ignore[attr-defined]
+        ModelName=f"{name}-model",
+        ExecutionRoleArn="arn:aws:iam::123456789012:role/sm",
+        PrimaryContainer={"Image": "img", "ModelDataUrl": f"s3://{model_data_bucket}/model.tar.gz"},
+        EnableNetworkIsolation=network_isolated,
+    )
+    sm.create_endpoint_config(  # type: ignore[attr-defined]
+        EndpointConfigName=f"{name}-cfg",
+        ProductionVariants=[
+            {
+                "VariantName": "v",
+                "ModelName": f"{name}-model",
+                "InitialInstanceCount": 1,
+                "InstanceType": "ml.t2.medium",
+            }
+        ],
+    )
+    sm.create_endpoint(EndpointName=name, EndpointConfigName=f"{name}-cfg")  # type: ignore[attr-defined]
+
+
+async def drive_aispm(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    sm_client: object,
+    account_id: str = _DEFAULT_ACCOUNT_ID,
+) -> None:
+    """Run aispm's REAL SageMaker reader + ``record_aws`` against ``sm_client``.
+
+    Uses aispm's real ``sagemaker_endpoints()`` extraction (exposure + model-data bucket), but
+    defaults the Bedrock fields — moto doesn't implement ``list_guardrails`` and path 10 only
+    needs the SageMaker path. Writes AI_SERVICE + EXPOSES_MODEL + HAS_ACCESS_TO via the real writer.
+    """
+    from aispm.kg_writer import KnowledgeGraphWriter as AispmKgWriter
+    from aispm.tools.aws_ai import AwsAiInventory, SageMakerEndpoint
+
+    raw = _AispmSmReader(sm_client).sagemaker_endpoints()
+    endpoints = tuple(
+        SageMakerEndpoint(
+            name=str(e["name"]),
+            data_capture_enabled=e.get("data_capture_enabled"),
+            kms_encrypted=e.get("kms_encrypted"),
+            network_isolated=e.get("network_isolated"),
+            model_name=str(e.get("model_name", "")),
+            model_data_bucket=str(e.get("model_data_bucket", "")),
+        )
+        for e in raw
+        if e.get("name")
+    )
+    inventory = AwsAiInventory(
+        account_id=account_id, region=_DEFAULT_REGION, sagemaker_endpoints=endpoints
+    )
+    await AispmKgWriter(store, tenant_id).record_aws(inventory)
+
+
+class _AispmSmReader:
+    """aispm's real SageMaker extraction bound to an injected (moto) client."""
+
+    def __init__(self, sm_client: object) -> None:
+        from aispm.tools.aws_ai import _BotoAwsAiReader
+
+        self._reader = _BotoAwsAiReader.__new__(_BotoAwsAiReader)
+        self._reader._sm = sm_client  # type: ignore[attr-defined]
+
+    def sagemaker_endpoints(self) -> list:
+        return self._reader.sagemaker_endpoints()
+
+
 @contextmanager
 def moto_all_clients(
     buckets: tuple[MotoBucket, ...],
@@ -123,6 +198,22 @@ def moto_all_clients(
         ec2 = boto3.client("ec2", region_name=region)
         _seed_buckets(s3, buckets)
         yield s3, iam, ecs, ec2
+
+
+@contextmanager
+def moto_ai_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object]]:
+    """Context manager yielding ``(s3, sagemaker)`` under one moto mock (path 10).
+
+    S3 buckets are seeded (data-security's data leg); the SageMaker client is bare for the
+    caller to populate via :func:`setup_sagemaker_endpoint`.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, sm
 
 
 @contextmanager
@@ -237,11 +328,14 @@ def moto_aws_clients(
 __all__ = [
     "EcsWorkload",
     "MotoBucket",
+    "drive_aispm",
     "drive_cloud_workloads",
     "drive_data_security",
+    "moto_ai_clients",
     "moto_all_clients",
     "moto_aws_clients",
     "moto_ecs_clients",
     "moto_s3",
     "setup_ecs_workload",
+    "setup_sagemaker_endpoint",
 ]
