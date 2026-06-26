@@ -235,6 +235,24 @@ def moto_ai_clients(
 
 
 @contextmanager
+def moto_scene_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object, object]]:
+    """Context manager yielding ``(s3, iam, sagemaker)`` under one moto mock.
+
+    The hermetic whole-environment scene needs the data leg (S3), the identity leg (IAM) and the
+    AI leg (SageMaker) live together. S3 buckets are seeded; IAM + SageMaker are bare for the
+    caller to populate.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, sm
+
+
+@contextmanager
 def moto_ecs_clients(*, region: str = _DEFAULT_REGION) -> Iterator[tuple[object, object]]:
     """Context manager yielding ``(ecs_client, ec2_client)`` under one moto mock.
 
@@ -354,6 +372,7 @@ __all__ = [
     "moto_aws_clients",
     "moto_ecs_clients",
     "moto_s3",
+    "moto_scene_clients",
     "setup_ecs_workload",
     "setup_sagemaker_endpoint",
 ]

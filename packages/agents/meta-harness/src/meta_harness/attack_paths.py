@@ -122,7 +122,7 @@ class AttackPathRanker:
             paths.append(
                 self._make(
                     "resource_based_data",
-                    f"{rb.principal_arn} has bucket-policy access to public {rb.data_type} data",
+                    f"{rb.principal_arn} has bucket-policy access to {rb.data_type} data",
                     (rb.resource_id,),
                 )
             )
