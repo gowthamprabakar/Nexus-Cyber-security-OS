@@ -32,6 +32,7 @@ _SEVERITY: dict[str, int] = {
     "crown_jewel": 95,
     "public_secret": 90,
     "internet_exposed_vulnerable": 80,
+    "privileged_vulnerable": 78,
     "public_unencrypted": 75,
     "external_trust": 70,
     "fine_grained_data": 60,
@@ -81,6 +82,14 @@ class AttackPathRanker:
                     "internet_exposed_vulnerable",
                     f"Internet-exposed workload runs an image with {v.cve_id} ({v.severity})",
                     (v.workload_id, v.image_id),
+                )
+            )
+        for p in await self._kg.find_privileged_vulnerable_workload():
+            paths.append(
+                self._make(
+                    "privileged_vulnerable",
+                    f"Privileged K8s pod runs an image with {p.cve_id} ({p.severity})",
+                    (p.workload_id, p.image_id),
                 )
             )
         for u in await self._kg.find_public_unencrypted_exposure():

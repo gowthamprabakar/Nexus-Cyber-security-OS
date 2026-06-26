@@ -43,7 +43,12 @@ async def drive_vulnerability(
     Trivy is unavailable; callers gate on :data:`trivy_available`.
     """
     with TemporaryDirectory() as out:
-        result = await trivy_fs_scan(str(fixture_dir), output_dir=Path(out))
+        # ponytail: point DOCKER_CONFIG at an empty dir so trivy pulls its vuln DB
+        # anonymously from mirror.gcr.io — a broken docker-credential helper otherwise
+        # blocks the DB download. The dir is empty (no credStore), so it's an anon pull.
+        result = await trivy_fs_scan(
+            str(fixture_dir), output_dir=Path(out), extra_env={"DOCKER_CONFIG": out}
+        )
     # Production parity: `trivy image <ref>` names the artifact after the image ref;
     # `trivy fs` names it after the path. Relabel so the CVE node keys on the image ref.
     for raw in result.raw_findings:
