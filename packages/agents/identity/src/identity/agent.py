@@ -428,6 +428,12 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
     Group transitivity is honored for both attached and inline group admin.
     """
     grants: list[EffectiveGrant] = []
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+
+    def _admin_capped(principal: object) -> bool:
+        # gap #8: a resolvable boundary that does NOT allow full admin caps the admin grant.
+        boundary = _boundary_doc(principal, doc_by_arn)
+        return boundary is not None and not _boundary_allows_admin(boundary)
 
     group_admin: dict[str, tuple[str, ...]] = {}
     for grp in listing.groups:
@@ -442,13 +448,13 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
         for grp_name in user.group_memberships:
             inherited.extend(group_admin.get(grp_name, ()))
         sources = tuple(direct) + tuple(inherited) + _inline_admin_sources(user.inline_policies)
-        if sources:
+        if sources and not _admin_capped(user):
             grants.append(_admin_grant(user.arn, sources))
 
     for role in listing.roles:
         admin = tuple(a for a in role.attached_policy_arns if _is_admin_policy(a))
         admin += _inline_admin_sources(role.inline_policies)
-        if admin:
+        if admin and not _admin_capped(role):
             grants.append(_admin_grant(role.arn, admin))
 
     for grp in listing.groups:
@@ -530,6 +536,47 @@ def _grants_s3_read(actions: object) -> bool:
     return False
 
 
+# --- gap #8: permission-boundary capping (conservative — never suppress on ambiguity) ---
+
+
+def _boundary_doc(
+    principal: object, doc_by_arn: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The principal's resolvable permission-boundary document, or ``None``.
+
+    ``None`` means *no boundary OR unresolvable* (AWS-managed boundary not in the listing) — the
+    callers treat ``None`` as "do not cap", so an unknown boundary never suppresses a finding
+    (no false negatives; we only cap when the boundary is known to disallow).
+    """
+    arn = getattr(principal, "permission_boundary_arn", "")
+    return doc_by_arn.get(arn) if arn else None
+
+
+def _boundary_allows_admin(doc: dict[str, Any]) -> bool:
+    """True if the boundary has an ``Allow`` of ``*`` action on ``*`` resource (full admin)."""
+    for stmt in doc.get("Statement") or []:
+        if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+            continue
+        actions = [a for a in _as_list(stmt.get("Action")) if isinstance(a, str)]
+        resources = [r for r in _as_list(stmt.get("Resource")) if isinstance(r, str)]
+        if "*" in actions and "*" in resources:
+            return True
+    return False
+
+
+def _boundary_allows_s3_read(doc: dict[str, Any], bucket_arn: str) -> bool:
+    """True if the boundary allows an S3 read on ``*`` or the given bucket."""
+    for stmt in doc.get("Statement") or []:
+        if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+            continue
+        if not _grants_s3_read(stmt.get("Action")):
+            continue
+        for resource in _as_list(stmt.get("Resource")):
+            if resource == "*" or bucket_arn in _concrete_bucket_arns([resource]):
+                return True
+    return False
+
+
 def _concrete_bucket_arns(resources: object) -> list[str]:
     """Canonical bucket ARNs named by a statement ``Resource`` (object suffix stripped).
 
@@ -573,11 +620,15 @@ def _fine_grained_grants(listing: IdentityListing) -> list[tuple[str, str]]:
                 doc_by_arn[arn] for arn in group.attached_policy_arns if arn in doc_by_arn
             ]
             documents += [doc for _name, doc in group.inline_policies]
+        boundary = _boundary_doc(principal, doc_by_arn)  # gap #8: caps effective access
         for document in documents:
             for stmt in document.get("Statement") or []:
                 if stmt.get("Effect") != "Allow" or not _grants_s3_read(stmt.get("Action")):
                     continue
                 for bucket_arn in _concrete_bucket_arns(stmt.get("Resource")):
+                    # A permissions boundary that does NOT allow this read caps the grant.
+                    if boundary is not None and not _boundary_allows_s3_read(boundary, bucket_arn):
+                        continue
                     key = (principal.arn, bucket_arn)
                     if key not in seen:
                         seen.add(key)

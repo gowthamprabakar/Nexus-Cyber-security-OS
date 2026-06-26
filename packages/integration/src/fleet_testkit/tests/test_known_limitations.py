@@ -20,8 +20,13 @@ import pytest
 from charter.memory.graph_types import EdgeType, NodeCategory
 from data_security.classifiers import classify
 from data_security.schemas import ClassifierLabel
-from identity.agent import _externally_trusted_arns, _fine_grained_grants
+from identity.agent import (
+    _externally_trusted_arns,
+    _fine_grained_grants,
+    _synthesize_admin_grants,
+)
 from identity.tools.aws_iam import (
+    IamPolicy,
     IamRole,
     IdentityListing,
     _list_groups,
@@ -164,6 +169,97 @@ def test_fixed_federated_external_trust_is_detected() -> None:
     saml = _federated_role("sso", "arn:aws:iam::123456789012:saml-provider/Okta")
     listing = IdentityListing(users=(), roles=(oidc, saml), groups=())
     assert sorted(_externally_trusted_arns(listing)) == [oidc.arn, saml.arn]
+
+
+def _policy(name: str, doc: dict) -> IamPolicy:
+    return IamPolicy(
+        arn=f"arn:aws:iam::123456789012:policy/{name}",
+        name=name,
+        policy_id=f"ANPA{name}",
+        default_version_id="v1",
+        document=doc,
+    )
+
+
+def _role_with(name: str, *, attached: tuple[str, ...] = (), boundary_arn: str = "") -> IamRole:
+    return IamRole(
+        arn=f"arn:aws:iam::123456789012:role/{name}",
+        name=name,
+        role_id=f"AROA{name}",
+        create_date=datetime(2026, 6, 27, tzinfo=UTC),
+        last_used_at=None,
+        assume_role_policy_document={},
+        attached_policy_arns=attached,
+        permission_boundary_arn=boundary_arn,
+    )
+
+
+_ADMIN_DOC = {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}],
+}
+_S3_STAR_DOC = {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Action": "s3:GetObject", "Resource": "*"}],
+}
+
+
+def test_fixed_admin_capped_by_permission_boundary() -> None:
+    # FIXED (gap #8): a role with AdministratorAccess but a boundary that only allows S3 read is
+    # NOT effectively admin → not flagged. Guards below ensure no false negatives.
+    admin = _policy("AdministratorAccess", _ADMIN_DOC)
+    s3_boundary = _policy("s3-only-boundary", _S3_STAR_DOC)
+    capped = _role_with("capped", attached=(admin.arn,), boundary_arn=s3_boundary.arn)
+    listing = IdentityListing(users=(), roles=(capped,), groups=(), policies=(admin, s3_boundary))
+    assert _synthesize_admin_grants(listing) == [], "admin capped by an s3-only boundary"
+
+    # Guard 1: same admin WITHOUT a boundary is still flagged.
+    plain = _role_with("plain", attached=(admin.arn,))
+    assert len(_synthesize_admin_grants(IdentityListing((), (plain,), (), (admin,)))) == 1
+    # Guard 2: a boundary that DOES allow full admin must NOT suppress (no false negative).
+    admin_boundary = _policy("admin-boundary", _ADMIN_DOC)
+    full = _role_with("full", attached=(admin.arn,), boundary_arn=admin_boundary.arn)
+    assert (
+        len(_synthesize_admin_grants(IdentityListing((), (full,), (), (admin, admin_boundary))))
+        == 1
+    )
+    # Guard 3: an unresolvable (AWS-managed) boundary is conservative — keep the finding.
+    unknown = _role_with("unknown", attached=(admin.arn,), boundary_arn="arn:aws:iam::aws:policy/X")
+    assert len(_synthesize_admin_grants(IdentityListing((), (unknown,), (), (admin,)))) == 1
+
+
+def test_fixed_fine_grained_capped_by_permission_boundary() -> None:
+    # FIXED (gap #8): a concrete s3:GetObject grant on `secret` is capped by a boundary that only
+    # allows access to a different bucket.
+    read = _policy(
+        "read-secret",
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::secret/*"}
+            ],
+        },
+    )
+    other_boundary = _policy(
+        "other-boundary",
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::other/*"}
+            ],
+        },
+    )
+    capped = _role_with("r", attached=(read.arn,), boundary_arn=other_boundary.arn)
+    assert _fine_grained_grants(IdentityListing((), (capped,), (), (read, other_boundary))) == [], (
+        "grant capped by a boundary scoped to a different bucket"
+    )
+
+    # A boundary that allows S3 read on `*` keeps the grant.
+    star_boundary = _policy("star-boundary", _S3_STAR_DOC)
+    allowed = _role_with("r2", attached=(read.arn,), boundary_arn=star_boundary.arn)
+    assert _fine_grained_grants(IdentityListing((), (allowed,), (), (read, star_boundary))) == [
+        (allowed.arn, "arn:aws:s3:::secret")
+    ]
 
 
 async def _secret_hits_custom(setup: object) -> int:
