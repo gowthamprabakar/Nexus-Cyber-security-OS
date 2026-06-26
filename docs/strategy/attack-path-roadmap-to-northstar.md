@@ -154,18 +154,17 @@ a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-
 
 **E. Multi-cloud (scope):**
 
-13. **Azure / GCP attack-path coverage UNVERIFIED** `[scope]` — every bank and e2e drives **AWS moto
-    only**; the cross-agent joins key on **AWS ARNs** (canonical-key mechanism ①). The Azure/GCP feeders
-    exist (data-security Azure Blob/GCS, identity Azure AD, multi-cloud-posture) but no attack path is
-    proven on non-AWS resources, and ARN-keyed joins won't resolve Azure/GCP keys as-is. Multi-cloud =
-    **operator-verified at best, not REAL.** **PLAN (multi-day, NOT a session fix — honest):** per cloud,
-    (1) a canonical-key scheme for non-ARN resources (Azure resource IDs, GCS `gs://` URIs) extending
-    ADR-023; (2) public-exposure + sensitive-data detection wired to write the SAME node/edge vocabulary
-    (`CLOUD_RESOURCE{is_public}` + `EXPOSES_DATA`) the AWS feeders use, so the cloud-agnostic `kg_query`
-    detectors fire unchanged; (3) an Azure/GCP test substrate (no `moto` equivalent — likely recorded
-    fixtures or a thin fake) to make it CI-REAL not operator-only; (4) cross-cloud identity (Azure AD /
-    GCP IAM) for the access-leg paths. Each cloud is its own sub-slice; start with Azure Blob public+PII
-    (the path-3/7 analogue) as the smallest end-to-end proof.
+13. **Azure / GCP attack-path coverage — STORAGE PARITY NOW CI-REAL** `[scope]` — _was:_ every bank
+    drove AWS moto only and ARN-keyed joins wouldn't resolve non-AWS keys. **DONE (slice 1, commit
+    b5894dd):** (1) canonical-key scheme extended — `charter.canonical.azure_blob_uri` / `gcs_uri`
+    (ADR-023); (2) `kg_writer.record_data_sources` writes the SAME `CLOUD_RESOURCE{is_public}` +
+    `EXPOSES_DATA` vocabulary for any `DataSource`, so the cloud-agnostic `kg_query` detectors fire
+    unchanged; (3) CI-REAL substrate via the readers' own injectable Protocols (`fleet_testkit.azure_blob`
+    / `gcs_blob` — no `moto` needed) driving the REAL readers + classifier + writer; **6 e2e tests prove
+    path-3 (public-secret) + path-7 (public-unencrypted) light up on Azure Blob AND GCS, private-is-dark.**
+    **REMAINING sub-slices (own days):** (4) cross-cloud identity (Azure AD / GCP IAM) for the access-leg
+    paths (4/8); non-storage Azure/GCP resource types (compute, AI). Storage is the proof the engine is
+    genuinely multi-cloud; identity is the next leg.
 
 _Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
@@ -174,9 +173,11 @@ _Add gaps here as probing finds them — this is the live coverage-limit ledger.
 **Fixed (12 of 13):** #1 bucket-policy-public, #2 object-ACL, #3 gzip/base64 decode, #4 AWS-secret-key,
 #5 group-inherited access, #6 federated trust, #7 resource-based access, #8 permission-boundary cap
 (SCP/Condition deferred), #9 EC2 inventory (host-vuln join its own slice), #10 ELBv2/load-balancer
-exposure, #11 severity-floor (tunable), #12 KEV flag. **Multi-day (1, the only one left):** #13 Azure/GCP
-multi-cloud parity — concrete plan above, NOT half-built. Every fix flipped its characterization test
-assert-miss → assert-detect and shipped with a precision guard; full repo 7784 pass.
+exposure, #11 severity-floor (tunable), #12 KEV flag. **#13 multi-cloud (in progress):** storage parity
+slice DONE (commit b5894dd) — Azure Blob + GCS public+sensitive light up paths 3/7 CI-REAL, 6 e2e tests;
+remaining sub-slices = cross-cloud identity (Azure AD / GCP IAM) for access-leg paths 4/8, non-storage
+resource types. Every AWS fix flipped its characterization test assert-miss → assert-detect with a
+precision guard; full repo 7784 pass (+6 multi-cloud e2e).
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
