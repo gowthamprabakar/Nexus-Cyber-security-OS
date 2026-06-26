@@ -68,10 +68,12 @@ def _bucket_is_public(bucket: BucketInventory) -> bool:
     """
     if bucket.acl.grants_all_users or bucket.acl.grants_authenticated_users:
         return True
-    pab = bucket.public_access_block
-    if pab.restrict_public_buckets or pab.block_public_policy:
+    # Defensive getattr: the real BucketInventory always carries these (pydantic defaults),
+    # but a minimal test double may supply only `acl` → fall back to ACL-only.
+    pab = getattr(bucket, "public_access_block", None)
+    if pab is not None and (pab.restrict_public_buckets or pab.block_public_policy):
         return False
-    return _policy_grants_public(bucket.policy_json)
+    return _policy_grants_public(getattr(bucket, "policy_json", None))
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):

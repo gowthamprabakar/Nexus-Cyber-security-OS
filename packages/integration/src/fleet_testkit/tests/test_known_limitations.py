@@ -88,16 +88,13 @@ async def test_gap_gzipped_pii_is_missed() -> None:
     )
 
 
-def test_gap_aws_secret_access_key_is_missed() -> None:
-    # GAP: the AKIA access-key *ID* is detected, but the AWS secret access key (the actual
-    # credential) has no dedicated pattern; the generic-token rule needs the keyword to
-    # IMMEDIATELY precede the value, so standard labels miss. Wiz/secret scanners use entropy.
-    assert classify(f"aws_secret_access_key = {_SECRET_KEY}") is ClassifierLabel.NONE, (
-        "aws_secret_access_key gap closed — update the gaps doc"
-    )
-    assert classify(f"SecretAccessKey: {_SECRET_KEY}") is ClassifierLabel.NONE
-    # Boundary: with the keyword directly adjacent, the generic-token rule does fire.
-    assert classify(f"secret = {_SECRET_KEY}") is ClassifierLabel.GENERIC_API_TOKEN
+def test_fixed_aws_secret_access_key_is_detected() -> None:
+    # FIXED (gap #4): a dedicated AWS-secret-key pattern matches the standard labels (any
+    # separator / camelCase) + a 40-char value, classified as an AWS credential.
+    assert classify(f"aws_secret_access_key = {_SECRET_KEY}") is ClassifierLabel.AWS_ACCESS_KEY
+    assert classify(f"SecretAccessKey: {_SECRET_KEY}") is ClassifierLabel.AWS_ACCESS_KEY
+    # Precision: the label is required — a bare 40-char string is not flagged.
+    assert classify(_SECRET_KEY) is ClassifierLabel.NONE
 
 
 def _listing_from_moto(iam: object) -> IdentityListing:

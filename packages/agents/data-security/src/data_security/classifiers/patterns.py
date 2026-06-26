@@ -83,6 +83,12 @@ from data_security.schemas import ClassifierLabel
 # Patterns ordered by precedence (more specific first). Match returns the
 # first hit's label; the matched substring is NEVER returned.
 _AWS_ACCESS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+# AWS *secret* access key — no fixed prefix (40-char base64), so require the
+# `secret access key` label (any separator / camelCase) to bound false positives.
+_AWS_SECRET_KEY_RE = re.compile(
+    r"secret[\s_-]?access[\s_-]?key['\"]?\s*[:=]\s*['\"]?[A-Za-z0-9/+]{40}",
+    re.IGNORECASE,
+)
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\b")
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 # Credit card: 13-19 digits, with optional space / hyphen separators.
@@ -171,7 +177,8 @@ def classify(text: str) -> ClassifierLabel:
     Empty / whitespace-only strings return ``NONE``. The implementation
     is pure (no side effects) and deterministic.
     """
-    if _AWS_ACCESS_KEY_RE.search(text):
+    if _AWS_ACCESS_KEY_RE.search(text) or _AWS_SECRET_KEY_RE.search(text):
+        # Both the AKIA access-key ID and the secret access key are AWS credentials.
         return ClassifierLabel.AWS_ACCESS_KEY
     if _JWT_RE.search(text):
         return ClassifierLabel.JWT
