@@ -501,5 +501,46 @@ def rate_skill_cmd(
         click.echo(f"note: {note}")
 
 
+# ---------------------- attack-paths (the North Star surface) ------------
+
+
+@main.command("attack-paths")
+@click.option("--customer-id", required=True, help="Tenant identifier")
+@click.option(
+    "--dsn",
+    envvar="NEXUS_MEMORY_DSN",
+    required=True,
+    help="Postgres DSN for the fleet graph (or set NEXUS_MEMORY_DSN)",
+)
+@click.option("--limit", default=10, show_default=True, help="Max paths to show")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a text report")
+def attack_paths_cmd(customer_id: str, dsn: str, limit: int, as_json: bool) -> None:
+    """Connect to the fleet graph and print a tenant's top attack paths, worst-first.
+
+    The North Star surface: runs :class:`AttackPathRanker` over the tenant's graph and renders the
+    prioritized list. Read-only. Requires a populated graph (the agents' scan writes it).
+    """
+    import asyncio as _asyncio
+    import json as _json
+
+    from charter.memory.provisioning import build_session_factory
+    from charter.memory.semantic import SemanticStore
+
+    from meta_harness.attack_path_report import path_to_dict, render_report
+    from meta_harness.attack_paths import AttackPathRanker
+    from meta_harness.kg_query import KgQuery
+
+    async def _run() -> None:
+        factory = await build_session_factory(dsn)
+        ranker = AttackPathRanker(KgQuery(SemanticStore(factory), customer_id))
+        paths = await ranker.find_all()
+        if as_json:
+            click.echo(_json.dumps([path_to_dict(p) for p in paths[:limit]], indent=2))
+        else:
+            click.echo(render_report(paths, tenant_id=customer_id, limit=limit))
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     main()

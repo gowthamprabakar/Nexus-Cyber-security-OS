@@ -30,6 +30,7 @@ import pytest
 from charter.memory.graph_types import NodeCategory
 from identity.agent import _externally_trusted_arns, _fine_grained_grants
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
+from meta_harness.attack_path_report import render_report
 from meta_harness.attack_paths import AttackPathRanker
 from meta_harness.kg_query import KgQuery
 
@@ -193,6 +194,12 @@ async def test_whole_environment_surfaces_planted_paths_and_no_noise() -> None:
     assert len(noise_ids) == 2, "both noise buckets were recorded"
     flagged = {e for p in paths for e in p.entities}
     assert noise_ids.isdisjoint(flagged), "a benign/noise bucket leaked into an attack path"
+
+    # The front door: the real ranker output renders into a customer-facing report.
+    report = render_report(paths, tenant_id=_TENANT)
+    assert f"Top attack paths for tenant {_TENANT}" in report
+    assert "[CRITICAL 90] Public secret" in report  # worst-first, banded, labeled
+    assert "[MEDIUM 60] Over-permissioned access" in report
 
 
 def _write_vulnerable_fixture(root) -> None:
