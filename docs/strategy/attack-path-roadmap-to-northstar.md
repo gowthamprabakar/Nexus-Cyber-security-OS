@@ -77,30 +77,75 @@ fleet precision 1.000 / recall 1.000** (paths 2/5 trivy-gated, 6 kind+trivy-gate
 exist). The score is the regression floor, not a coverage claim — it is 1.000 **on the bank**, which is
 why the gaps below matter.
 
-### Known detection gaps vs Wiz (honest counter-evidence — `test_known_limitations.py`)
+### Known detection gaps vs Wiz (the complete curated list — honest counter-evidence)
 
-The banks measure what we catch; these characterization tests pin what we MISS, so the scorecard's
-1.000 is read in context. Closing a gap fails its test on purpose (prompting an update here):
+The banks measure what we catch; this is the curated ledger of what we MISS — so the scorecard's
+1.000 is read in context (it is 1.000 _on the bank_). **`[test]`** = a characterization test in
+`test_known_limitations.py` asserts the current miss (closing it fails the test on purpose, forcing
+an update here); **`[code]`** = verified by reading the implementation; **`[config]`/`[scope]`** =
+a tuning/coverage-boundary fact. 13 gaps across 5 categories, all verified 2026-06-26.
 
-- **Compressed / encoded blobs.** The data-security classifier matches patterns in _decoded UTF-8 text_
-  only. A secret or PII inside a **gzip archive** or **base64 blob** is missed (measured: gzipped/base64
-  AKIA key → 0 hits; plaintext and JSON-embedded → detected). Wiz/Macie decompress archives + decode
-  common encodings. Affects paths 3, 7 and every `EXPOSES_DATA` consumer (1, 4, 5, 8, 10). **Biggest
-  single data-coverage gap.**
-- **AWS secret access keys.** The AKIA access-key _ID_ is detected, but the **secret access key** (the
-  actual credential) has no dedicated pattern; the generic-token rule fires only when the keyword
-  (`secret`/`token`/`api_key`) _immediately_ precedes the value. So `secret = <40-char>` is caught but
-  the real-world labels **`aws_secret_access_key = <40-char>`** and **`SecretAccessKey: <40-char>`** are
-  missed (measured). Secret scanners use entropy + the `aws_secret_access_key` context. (path 3, ripples
-  to 1/4/5/8.)
-- **Group-inherited IAM access.** `identity._fine_grained_grants` resolves a principal's attached +
-  inline policies but **not policies inherited via group membership** — a user whose only S3 access is
-  via a group is invisible to path 4 (and path 8). Group membership _is_ read (`group_memberships`); the
-  grant resolution just doesn't follow it. Documented v0.2 deferral, now measured.
-- **Federated (OIDC/SAML) external trust.** `identity._externally_trusted_arns` flags cross-_account_
-  trust (`Principal.AWS`) but not roles assumable via an external **OIDC/SAML provider** (e.g. GitHub
-  Actions OIDC, an external IdP) — a real external-access vector. Path 8 = cross-account, not federation.
-- (add gaps here as probing finds them — this is where real coverage limits get recorded.)
+**A. Data exposure — what counts as "public" + what the classifier reads (data-security):**
+
+1. **Bucket-policy public** `[test]` ⭐ — `public` is derived from the bucket **ACL only**
+   (`acl.grants_all_users`). A bucket made public via a **bucket policy** (`Principal:*`) — the dominant
+   modern case, since AWS disables ACLs by default — is not flagged, so no `EXPOSES_DATA` (measured: 0
+   hits). Wiz evaluates the bucket policy + Block-Public-Access. **Likely the single biggest real-world
+   miss.** Ripples to every data path (1/3/4/5/7/8/10).
+2. **Object-level ACL public** `[test]` — `public` is bucket-level; a private bucket with an individual
+   object made public via object ACL is missed (measured: 0 hits).
+3. **Compressed / encoded blobs** `[test]` — the classifier matches patterns in _decoded UTF-8 text_
+   only; a secret/PII inside a **gzip** archive or **base64** blob is missed (plaintext + JSON-embedded
+   are caught). Wiz/Macie decompress + decode.
+4. **AWS secret access keys** `[test]` — the AKIA access-key _ID_ is detected, but the **secret key**
+   (the real credential) has no dedicated pattern; the generic-token rule needs the keyword
+   (`secret`/`token`/`api_key`) _immediately_ before the value, so `aws_secret_access_key = <40>` and
+   `SecretAccessKey: <40>` miss while `secret = <40>` hits.
+
+**B. Identity — what grants/trust we resolve (identity):**
+
+5. **Group-inherited IAM access** `[test]` — `_fine_grained_grants` resolves a principal's attached +
+   inline policies, **not policies inherited via group membership**; a group-only user is invisible to
+   paths 4/8 (membership _is_ read, the grant resolver just doesn't follow it).
+6. **Federated (OIDC/SAML) external trust** `[test]` — `_externally_trusted_arns` flags cross-_account_
+   trust (`Principal.AWS`) only, not roles assumable via an external **OIDC/SAML** provider (GitHub
+   Actions OIDC, external IdP). Path 8 = cross-account, not federation.
+7. **Resource-based access grants** `[code]` — `_fine_grained_grants(listing)` takes only the IAM
+   listing; access granted by an **S3 bucket policy** (or KMS/SNS/SQS resource policy) to a principal is
+   invisible (no bucket-policy input). The mirror of gap #1 on the access side.
+8. **Permission boundary / SCP / Condition ignored** `[code]` (precision) — `_synthesize_admin_grants`
+   and `_fine_grained_grants` read the granting policy but not **permission boundaries**, **SCPs**, or
+   statement **Conditions**, so an admin/grant neutralized by a boundary or gated by a condition still
+   fires → over-reports.
+
+**C. Compute & exposure (cloud-posture):**
+
+9. **EC2 / non-ECS compute not inventoried** `[test]` ⭐ — the workload reader enumerates **ECS services
+   only**. An exposed **EC2 instance** (or EKS node, Lightsail, …) running a vulnerable workload is never
+   read → paths 2/5 blind to all non-ECS compute (measured: EC2 → empty).
+10. **Load-balancer / no-public-IP exposure** `[test]` ⭐ — a workload is "public" only when
+    `assignPublicIp=ENABLED` **AND** a `0.0.0.0/0` SG. A service behind a public **ALB/NLB** (open SG, no
+    public IP) — the common production pattern — reads `is_public=False` (measured). Exposure via LB /
+    public subnet route / security-group-referencing-SG is missed.
+
+**D. Vulnerability (vulnerability):**
+
+11. **Severity floor** `[config]` — trivy scans **HIGH + CRITICAL only** (`DEFAULT_SEVERITY`); MEDIUM/LOW
+    CVEs never reach the graph, so paths 2/5/6 miss medium-severity-but-exploitable vulns.
+12. **"KEV" is really "high severity"** `[code]` (semantic) — the detector fires on the presence of a
+    `VULNERABLE_TO` edge (severity-filtered at scan), not on actual **known-exploited (KEV)** or
+    exploit-availability status. So it over-reports (any HIGH CVE, not just exploited) and a MEDIUM-rated
+    KEV is missed (see #11).
+
+**E. Multi-cloud (scope):**
+
+13. **Azure / GCP attack-path coverage UNVERIFIED** `[scope]` — every bank and e2e drives **AWS moto
+    only**; the cross-agent joins key on **AWS ARNs** (canonical-key mechanism ①). The Azure/GCP feeders
+    exist (data-security Azure Blob/GCS, identity Azure AD, multi-cloud-posture) but no attack path is
+    proven on non-AWS resources, and ARN-keyed joins won't resolve Azure/GCP keys as-is. Multi-cloud =
+    **operator-verified at best, not REAL.**
+
+_Add gaps here as probing finds them — this is the live coverage-limit ledger._
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
