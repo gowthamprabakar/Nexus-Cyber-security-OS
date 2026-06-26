@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 
 import boto3
 import pytest
-from charter.memory.graph_types import NodeCategory
+from charter.memory.graph_types import EdgeType, NodeCategory
 from data_security.classifiers import classify
 from data_security.schemas import ClassifierLabel
 from identity.agent import _externally_trusted_arns, _fine_grained_grants
@@ -353,20 +353,79 @@ def _open_sg(ec2: object, vpc: str) -> str:
     return sg
 
 
-def test_gap_ec2_compute_not_inventoried() -> None:
-    # GAP: cloud-posture's workload reader enumerates ECS services only. An exposed EC2 instance
-    # (or EKS node, Lightsail, ...) running a workload is not inventoried at all.
-    from cloud_posture.tools.aws_ecs import read_ecs_workloads
+def test_fixed_ec2_compute_is_inventoried() -> None:
+    # FIXED (gap #9): read_ec2_workloads inventories EC2 instances — exposure (public IP + a
+    # 0.0.0.0/0 SG) + the instance-profile role (the EC2 analogue of an ECS task role).
+    from cloud_posture.tools.aws_ec2 import read_ec2_workloads
 
     with mock_aws():
         ec2 = boto3.client("ec2", region_name="us-east-1")
-        ecs = boto3.client("ecs", region_name="us-east-1")
+        iam = boto3.client("iam", region_name="us-east-1")
+        iam.create_role(RoleName="app", AssumeRolePolicyDocument="{}")
+        profile = iam.create_instance_profile(InstanceProfileName="app")["InstanceProfile"]["Arn"]
+        iam.add_role_to_instance_profile(InstanceProfileName="app", RoleName="app")
+        vpc, subnet = _vpc_subnet(ec2)
+        sg = _open_sg(ec2, vpc)
+        ec2.run_instances(
+            ImageId="ami-12345678",
+            MinCount=1,
+            MaxCount=1,
+            NetworkInterfaces=[
+                {
+                    "DeviceIndex": 0,
+                    "SubnetId": subnet,
+                    "Groups": [sg],
+                    "AssociatePublicIpAddress": True,
+                }
+            ],
+            IamInstanceProfile={"Arn": profile},
+        )
+        workloads = read_ec2_workloads(ec2, iam)
+        assert len(workloads) == 1
+        assert workloads[0].is_public is True
+        assert workloads[0].role_arn == "arn:aws:iam::123456789012:role/app"
+
+
+def test_private_ec2_is_not_public() -> None:
+    # Precision: no public IP → not internet-exposed even with an open SG.
+    from cloud_posture.tools.aws_ec2 import read_ec2_workloads
+
+    with mock_aws():
+        ec2 = boto3.client("ec2", region_name="us-east-1")
+        iam = boto3.client("iam", region_name="us-east-1")
         vpc, subnet = _vpc_subnet(ec2)
         sg = _open_sg(ec2, vpc)
         ec2.run_instances(
             ImageId="ami-12345678", MinCount=1, MaxCount=1, SecurityGroupIds=[sg], SubnetId=subnet
         )
-        assert read_ecs_workloads(ecs, ec2) == [], "EC2 compute now inventoried — update gaps doc"
+        workloads = read_ec2_workloads(ec2, iam)
+        assert len(workloads) == 1 and workloads[0].is_public is False
+
+
+@pytest.mark.asyncio
+async def test_fixed_ec2_workload_written_to_graph() -> None:
+    # FIXED (gap #9): record_ec2_workloads writes the EC2 instance as a CLOUD_RESOURCE workload
+    # (is_public) + ASSUMES → its instance-profile role (the exposed-compute bridge).
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+    from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
+
+    workload = Ec2Workload(
+        instance_arn="arn:aws:ec2:us-east-1:111:instance/i-1",
+        is_public=True,
+        role_arn="arn:aws:iam::111:role/app",
+    )
+    async with in_memory_semantic_store() as store:
+        await KnowledgeGraphWriter(store, _TENANT).record_ec2_workloads([workload])
+        rows = await store.list_entities_by_type(
+            tenant_id=_TENANT, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        node = next(r for r in rows if r.external_id == workload.instance_arn)
+        assert node.properties.get("kind") == "ec2-instance"
+        assert node.properties.get("is_public") is True
+        edges = await store.get_relationships_from(
+            tenant_id=_TENANT, src_entity_id=node.entity_id, edge_types=(EdgeType.ASSUMES.value,)
+        )
+        assert len(edges) == 1
 
 
 def test_gap_load_balancer_exposure_is_missed() -> None:

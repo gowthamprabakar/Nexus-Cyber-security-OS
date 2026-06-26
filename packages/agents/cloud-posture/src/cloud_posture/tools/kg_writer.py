@@ -40,6 +40,7 @@ from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
 
 
@@ -123,6 +124,24 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     NodeCategory.IDENTITY, workload.task_role_arn, {}
                 )
                 await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
+
+    async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:
+        """Write EC2 instance ``CLOUD_RESOURCE{is_public}`` + ``ASSUMES`` → instance-profile role.
+
+        Inventories non-ECS compute (gap #9) so an exposed EC2 instance is a first-class workload
+        on the graph. The instance-profile role is the EC2 analogue of an ECS task role — an
+        exposed instance whose role reaches sensitive data is a reachable path. (No ``RUNS_IMAGE``:
+        EC2 runs an AMI, not a container image — host-vuln is a separate slice.)
+        """
+        for workload in workloads:
+            instance_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.instance_arn,
+                {"kind": "ec2-instance", "is_public": workload.is_public},
+            )
+            if workload.role_arn:
+                role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})
+                await self.add_edge(instance_node or "", role_node or "", EdgeType.ASSUMES)
 
 
 __all__ = ["KnowledgeGraphWriter"]
