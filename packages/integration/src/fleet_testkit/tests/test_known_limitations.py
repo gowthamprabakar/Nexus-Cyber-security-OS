@@ -153,18 +153,15 @@ def _federated_role(name: str, provider_arn: str) -> IamRole:
     )
 
 
-def test_gap_federated_external_trust_is_missed() -> None:
-    # GAP: _externally_trusted_arns inspects Principal.AWS (cross-account) only. A role assumable
-    # via an external OIDC/SAML provider (e.g. GitHub Actions OIDC, an external IdP) is a real
-    # external-access vector but is not flagged. Path 8 covers cross-ACCOUNT trust, not federation.
+def test_fixed_federated_external_trust_is_detected() -> None:
+    # FIXED (gap #6): _externally_trusted_arns now flags roles assumable via an external OIDC/SAML
+    # provider (Principal.Federated), e.g. GitHub Actions OIDC, alongside cross-account trust.
     oidc = _federated_role(
         "gha", "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
     )
     saml = _federated_role("sso", "arn:aws:iam::123456789012:saml-provider/Okta")
     listing = IdentityListing(users=(), roles=(oidc, saml), groups=())
-    assert _externally_trusted_arns(listing) == [], (
-        "federated external trust now detected — update the gaps doc"
-    )
+    assert sorted(_externally_trusted_arns(listing)) == [oidc.arn, saml.arn]
 
 
 async def _secret_hits_custom(setup: object) -> int:

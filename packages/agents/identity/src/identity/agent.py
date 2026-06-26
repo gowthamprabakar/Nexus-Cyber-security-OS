@@ -463,11 +463,11 @@ def _externally_trusted_arns(listing: IdentityListing) -> list[str]:
     """Roles whose trust policy lets a *foreign account* (or `*`) assume them — offline.
 
     Path-8 signal, derived purely from each role's ``AssumeRolePolicyDocument`` (already in
-    the listing). External = an ``Allow`` statement whose ``Principal.AWS`` is a wildcard or
-    an ARN/account-id outside the role's own account. Service principals (``Principal.Service``)
-    are trust-to-an-AWS-service, never cross-account, so they are ignored. This is the offline
-    counterpart to Access-Analyzer external-access (online) — no API call, so it is moto/CI
-    verifiable.
+    the listing). External = an ``Allow`` statement whose principal is either (a) ``Principal.AWS``
+    that is a wildcard or an account outside the role's own account, or (b) ``Principal.Federated``
+    — an external OIDC/SAML provider (e.g. GitHub Actions OIDC, an external IdP), assumable by
+    whoever controls that identity. Service principals (``Principal.Service``) are trust-to-an-
+    AWS-service, never external, so they are ignored. Offline counterpart to Access-Analyzer.
     """
     flagged: list[str] = []
     for role in listing.roles:
@@ -476,14 +476,19 @@ def _externally_trusted_arns(listing: IdentityListing) -> list[str]:
         for stmt in statements:
             if stmt.get("Effect") != "Allow":
                 continue
-            for account in _aws_principal_accounts(stmt.get("Principal")):
-                if account == "*" or account != own_account:
-                    flagged.append(role.arn)
-                    break
-            else:
-                continue
-            break
+            principal = stmt.get("Principal")
+            if _principal_is_federated(principal) or any(
+                account == "*" or account != own_account
+                for account in _aws_principal_accounts(principal)
+            ):
+                flagged.append(role.arn)
+                break
     return flagged
+
+
+def _principal_is_federated(principal: object) -> bool:
+    """True when a trust statement allows an external OIDC/SAML federation provider."""
+    return isinstance(principal, dict) and bool(principal.get("Federated"))
 
 
 def _account_of(arn: str) -> str:
