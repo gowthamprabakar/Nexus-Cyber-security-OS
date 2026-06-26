@@ -30,11 +30,11 @@
 | 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                              | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure`  |
 | 4   | Over-permissioned identity → fine-grained access → sensitive resource                 | **identity** (concrete policy Resources), **data-security** | ✅ REAL (moto-CI, 2026-06-22) — `find_fine_grained_data_exposure`  |
 | 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | **vulnerability**, **identity**, **data-security**, **cloud-posture** | ✅ REAL (2026-06-22) — `find_crown_jewel_exposure` (assembles 2 + 4) |
-| 6   | Privileged/host-mounted K8s workload + sensitive data/secret access                  | k8s-posture, **data-security**                           | ⬜ (needs kind)                                                    |
+| 6   | Privileged K8s workload running a vulnerable image                                   | **k8s-posture**, **vulnerability**                        | ✅ REAL (kind + trivy, 2026-06-26) — `find_privileged_vulnerable_workload` |
 | 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                        | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure` |
 | 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**   | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`     |
 | 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⤳ subsumed by path 2 (same `RUNS_IMAGE→VULNERABLE_TO→exposed` chain; registry-scan source is operator-verified — trivy can't scan moto-ECR) |
-| 10  | Exposed AI/ML service + sensitive training data / prompt-injection risk              | aispm, **data-security**                                 | ⬜                                                                 |
+| 10  | Exposed AI/ML service + sensitive training data                                      | **aispm**, **data-security**                             | ✅ REAL (moto, 2026-06-26) — `find_exposed_ai_with_sensitive_data` |
 
 **Core feeder set (covers ~all paths): data-security ✅, identity ✅ (basic / depth pending), vulnerability ✅ (real trivy, trivy-gated), cloud-posture ✅ (ECS exposure, moto), network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse. 4 of 8 now REAL-verified.**
 
@@ -61,8 +61,11 @@ detectors over a tenant's graph and returns ONE worst-first ranked `AttackPath` 
 paths, prioritized." Severity is the triage judgment: crown_jewel 95 > public_secret 90 >
 internet_exposed_vulnerable 80 > public_unencrypted 75 > external_trust 70 >
 fine_grained_data 60. Pure aggregation over already-REAL detectors; hermetic. This is what a
-demo/API renders. **7 of 10 archetypes REAL feed it (1,2,3,4,5,7,8); 9 subsumed; 6 + 10 are
-the genuinely-new remaining surfaces (K8s via kind — docker/kind present; AI-SPM via aispm).**
+demo/API renders. **9 of 10 archetypes REAL feed it (1,2,3,4,5,6,7,8,10); path 9 subsumed by
+path 2 → all 10 covered.** Feeders REAL: data-security, identity, vulnerability, cloud-posture,
+k8s-posture, aispm (6/8). Severity order: crown_jewel 95 > public_secret 90 >
+internet_exposed_vulnerable 80 > privileged_vulnerable 78 > public_unencrypted 75 >
+external_trust 70 > exposed_ai_sensitive_data 68 > fine_grained_data 60.
 
 ## Measurement (so "50-60% of Wiz" is a fact, not a feeling)
 
