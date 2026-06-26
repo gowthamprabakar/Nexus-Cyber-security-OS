@@ -87,6 +87,19 @@ The banks measure what we catch; these characterization tests pin what we MISS, 
   AKIA key → 0 hits; plaintext and JSON-embedded → detected). Wiz/Macie decompress archives + decode
   common encodings. Affects paths 3, 7 and every `EXPOSES_DATA` consumer (1, 4, 5, 8, 10). **Biggest
   single data-coverage gap.**
+- **AWS secret access keys.** The AKIA access-key _ID_ is detected, but the **secret access key** (the
+  actual credential) has no dedicated pattern; the generic-token rule fires only when the keyword
+  (`secret`/`token`/`api_key`) _immediately_ precedes the value. So `secret = <40-char>` is caught but
+  the real-world labels **`aws_secret_access_key = <40-char>`** and **`SecretAccessKey: <40-char>`** are
+  missed (measured). Secret scanners use entropy + the `aws_secret_access_key` context. (path 3, ripples
+  to 1/4/5/8.)
+- **Group-inherited IAM access.** `identity._fine_grained_grants` resolves a principal's attached +
+  inline policies but **not policies inherited via group membership** — a user whose only S3 access is
+  via a group is invisible to path 4 (and path 8). Group membership _is_ read (`group_memberships`); the
+  grant resolution just doesn't follow it. Documented v0.2 deferral, now measured.
+- **Federated (OIDC/SAML) external trust.** `identity._externally_trusted_arns` flags cross-_account_
+  trust (`Principal.AWS`) but not roles assumable via an external **OIDC/SAML provider** (e.g. GitHub
+  Actions OIDC, an external IdP) — a real external-access vector. Path 8 = cross-account, not federation.
 - (add gaps here as probing finds them — this is where real coverage limits get recorded.)
 
 ## Parked (does NOT block the north star — honest debt, deferred)
