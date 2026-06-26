@@ -134,10 +134,18 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         self,
         buckets: Sequence[BucketInventory],
         classifier_hits_by_bucket: Mapping[str, Sequence[ClassifierLabel]],
+        *,
+        public_object_buckets: set[str] | frozenset[str] | None = None,
     ) -> None:
-        """Upsert each bucket's storage node + its detected data-classification nodes."""
+        """Upsert each bucket's storage node + its detected data-classification nodes.
+
+        ``public_object_buckets`` (gap #2) is the set of bucket names that have at least one
+        object made public via its **object ACL**; those buckets are treated as exposing data
+        even when the bucket itself is private.
+        """
+        public_object = public_object_buckets or frozenset()
         for bucket in buckets:
-            public = _bucket_is_public(bucket)
+            public = _bucket_is_public(bucket) or bucket.name in public_object
             encrypted = bucket.encryption.algorithm != "NONE"
             storage_props: dict[str, Any] = {
                 "resource_type": "s3-bucket",

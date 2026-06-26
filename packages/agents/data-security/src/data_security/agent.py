@@ -217,7 +217,12 @@ async def run(
         # (no graph writes), so findings.json + report.md stay byte-identical.
         if semantic_store is not None:
             kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
-            await kg.record(buckets, classifier_hits_by_bucket)
+            # gap #2: buckets with an object made public via its object ACL expose data even
+            # when the bucket itself is private.
+            public_object_buckets = {s.bucket for s in samples if s.is_public}
+            await kg.record(
+                buckets, classifier_hits_by_bucket, public_object_buckets=public_object_buckets
+            )
 
         # Stage 3 — DETECT: 4 detectors per bucket.
         d5_findings = _detect_all(

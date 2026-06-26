@@ -240,14 +240,24 @@ async def test_block_public_access_neutralizes_policy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gap_object_acl_public_is_missed() -> None:
-    # GAP: public is derived at the BUCKET level. A private bucket with an individual object made
-    # public via OBJECT ACL exposes that object, but the bucket reads private → missed.
+async def test_fixed_object_acl_public_is_detected() -> None:
+    # FIXED (gap #2): the sampler reads each object's ACL; a private bucket with an object made
+    # public via object ACL is treated as exposing data.
     def setup(s3: object) -> None:
         s3.create_bucket(Bucket="obj-public")  # type: ignore[attr-defined]
         s3.put_object(Bucket="obj-public", Key="c", Body=_KEY, ACL="public-read")  # type: ignore[attr-defined]
 
-    assert await _secret_hits_custom(setup) == 0, "object-ACL public now detected — update gaps doc"
+    assert await _secret_hits_custom(setup) == 1
+
+
+@pytest.mark.asyncio
+async def test_object_acl_precision_private_object_is_clean() -> None:
+    # Precision: a private object in a private bucket stays dark (no spurious public flag).
+    def setup(s3: object) -> None:
+        s3.create_bucket(Bucket="all-private")  # type: ignore[attr-defined]
+        s3.put_object(Bucket="all-private", Key="c", Body=_KEY)  # type: ignore[attr-defined]
+
+    assert await _secret_hits_custom(setup) == 0
 
 
 async def _resource_based_hits(setup: object) -> list:

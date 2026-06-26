@@ -90,14 +90,19 @@ async def drive_data_security(
     sampler = S3LiveObjectSampler(s3_client, sample_rate=1.0)  # type: ignore[arg-type]
 
     hits_by_bucket: dict[str, list[ClassifierLabel]] = {}
+    public_object_buckets: set[str] = set()
     for bucket in inventory:
         samples, _basis = sampler.sample(bucket.name)
         for sample in samples:
+            if sample.is_public:
+                public_object_buckets.add(bucket.name)
             label = classify_bytes(sample.content_sample)
             if label is not ClassifierLabel.NONE:
                 hits_by_bucket.setdefault(bucket.name, []).append(label)
 
-    await DataSecurityKgWriter(store, tenant_id).record(inventory, hits_by_bucket)
+    await DataSecurityKgWriter(store, tenant_id).record(
+        inventory, hits_by_bucket, public_object_buckets=public_object_buckets
+    )
     return {b.name: s3_bucket_arn(b.name) for b in inventory}
 
 
