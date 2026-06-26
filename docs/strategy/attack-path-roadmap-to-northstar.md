@@ -23,18 +23,18 @@
 
 > Status: ✅ REAL (CI-verified) · 🟡 feeders partly REAL · ⬜ not started. Feeders in **bold** are already REAL-verified.
 
-| #   | Attack path                                                                          | Feeder agents                                            | Status                                                             |
-| --- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1   | Public resource + sensitive data + over-permissioned identity                        | **data-security**, **identity**                          | ✅ path + feeders REAL (moto, 2026-06-22)                          |
-| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | **vulnerability** (real trivy), **cloud-posture** (ECS exposure) | ✅ REAL (2026-06-22) — `find_internet_exposed_vulnerable_workload` (mechanism-② bridge) |
-| 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                              | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure`  |
-| 4   | Over-permissioned identity → fine-grained access → sensitive resource                 | **identity** (concrete policy Resources), **data-security** | ✅ REAL (moto-CI, 2026-06-22) — `find_fine_grained_data_exposure`  |
-| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | **vulnerability**, **identity**, **data-security**, **cloud-posture** | ✅ REAL (2026-06-22) — `find_crown_jewel_exposure` (assembles 2 + 4) |
-| 6   | Privileged K8s workload running a vulnerable image                                   | **k8s-posture**, **vulnerability**                        | ✅ REAL (kind + trivy, 2026-06-26) — `find_privileged_vulnerable_workload` |
-| 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                        | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure` |
-| 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**   | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`     |
-| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network            | ⤳ subsumed by path 2 (same `RUNS_IMAGE→VULNERABLE_TO→exposed` chain; registry-scan source is operator-verified — trivy can't scan moto-ECR) |
-| 10  | Exposed AI/ML service + sensitive training data                                      | **aispm**, **data-security**                             | ✅ REAL (moto, 2026-06-26) — `find_exposed_ai_with_sensitive_data` |
+| #   | Attack path                                                                          | Feeder agents                                                         | Status                                                                                                                                      |
+| --- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Public resource + sensitive data + over-permissioned identity                        | **data-security**, **identity**                                       | ✅ path + feeders REAL (moto, 2026-06-22)                                                                                                   |
+| 2   | Internet-exposed workload + critical/exploitable vulnerability (KEV)                 | **vulnerability** (real trivy), **cloud-posture** (ECS exposure)      | ✅ REAL (2026-06-22) — `find_internet_exposed_vulnerable_workload` (mechanism-② bridge)                                                     |
+| 3   | Public resource + exposed secret/credential                                          | **data-security** (secrets)                                           | ✅ REAL (moto-proven, 2026-06-22) — `find_public_secret_exposure`                                                                           |
+| 4   | Over-permissioned identity → fine-grained access → sensitive resource                | **identity** (concrete policy Resources), **data-security**           | ✅ REAL (moto-CI, 2026-06-22) — `find_fine_grained_data_exposure`                                                                           |
+| 5   | Internet-exposed + vulnerable + high-privilege + sensitive (the "crown jewel" 4-hop) | **vulnerability**, **identity**, **data-security**, **cloud-posture** | ✅ REAL (2026-06-22) — `find_crown_jewel_exposure` (assembles 2 + 4)                                                                        |
+| 6   | Privileged K8s workload running a vulnerable image                                   | **k8s-posture**, **vulnerability**                                    | ✅ REAL (kind + trivy, 2026-06-26) — `find_privileged_vulnerable_workload`                                                                  |
+| 7   | Public + unencrypted storage + sensitive data                                        | **data-security**                                                     | ✅ REAL (moto-CI, 2026-06-22) — `find_public_unencrypted_exposure`                                                                          |
+| 8   | External/cross-account trust + over-permission → sensitive resource                  | **identity** (offline trust-policy), **data-security**                | ✅ REAL (moto-CI, 2026-06-22) — `find_external_trust_exposure`                                                                              |
+| 9   | Vulnerable container image (registry) deployed to internet-facing workload           | vulnerability (registry), k8s-posture/network                         | ⤳ subsumed by path 2 (same `RUNS_IMAGE→VULNERABLE_TO→exposed` chain; registry-scan source is operator-verified — trivy can't scan moto-ECR) |
+| 10  | Exposed AI/ML service + sensitive training data                                      | **aispm**, **data-security**                                          | ✅ REAL (moto, 2026-06-26) — `find_exposed_ai_with_sensitive_data`                                                                          |
 
 **Core feeder set (covers ~all paths): data-security ✅, identity ✅ (basic / depth pending), vulnerability ✅ (real trivy, trivy-gated), cloud-posture ✅ (ECS exposure, moto), network-threat, k8s-posture, compliance, aispm — ~8 agents, heavy reuse. 4 of 8 now REAL-verified.**
 
@@ -69,7 +69,25 @@ external_trust 70 > exposed_ai_sensitive_data 68 > fine_grained_data 60.
 
 ## Measurement (so "50-60% of Wiz" is a fact, not a feeling)
 
-Use the L2 capability banks to score each path's precision/recall against ground-truth fixtures. Coverage becomes a measured number as paths complete.
+The L2 capability banks (`packages/integration/src/fleet_testkit/tests/banks/path{N}_*/`) score each
+path's precision/recall against ground-truth fixtures, driven by `fleet_testkit.bank_runner`. **All 8
+distinct detectors are banked** (path 1 subsumed by 4); the **fleet scorecard** (`test_fleet_scorecard.py`)
+runs them all and prints one number. As of 2026-06-26: **8 paths, 29 cases, 23 TP / 0 FP / 0 FN →
+fleet precision 1.000 / recall 1.000** (paths 2/5 trivy-gated, 6 kind+trivy-gated, run where the tools
+exist). The score is the regression floor, not a coverage claim — it is 1.000 **on the bank**, which is
+why the gaps below matter.
+
+### Known detection gaps vs Wiz (honest counter-evidence — `test_known_limitations.py`)
+
+The banks measure what we catch; these characterization tests pin what we MISS, so the scorecard's
+1.000 is read in context. Closing a gap fails its test on purpose (prompting an update here):
+
+- **Compressed / encoded blobs.** The data-security classifier matches patterns in _decoded UTF-8 text_
+  only. A secret or PII inside a **gzip archive** or **base64 blob** is missed (measured: gzipped/base64
+  AKIA key → 0 hits; plaintext and JSON-embedded → detected). Wiz/Macie decompress archives + decode
+  common encodings. Affects paths 3, 7 and every `EXPOSES_DATA` consumer (1, 4, 5, 8, 10). **Biggest
+  single data-coverage gap.**
+- (add gaps here as probing finds them — this is where real coverage limits get recorded.)
 
 ## Parked (does NOT block the north star — honest debt, deferred)
 
