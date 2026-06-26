@@ -20,11 +20,15 @@ from typing import Any, Protocol
 
 @dataclass(frozen=True, slots=True)
 class AciWorkload:
-    """An ACI container group resolved to its image ref + internet-exposure posture."""
+    """An ACI container group resolved to its image ref + internet-exposure + managed identity."""
 
     resource_id: str
     image_ref: str
     is_public: bool
+    #: The system-assigned managed-identity principal (object id) the group runs as — the Azure
+    #: analogue of an ECS task role, joining to the IDENTITY spine node for the crown-jewel ASSUMES
+    #: leg (path 5). "" when the group has no managed identity.
+    identity_principal_id: str = ""
 
 
 class AzureAciReader(Protocol):
@@ -48,6 +52,12 @@ def _is_public(group: dict[str, Any]) -> bool:
     return isinstance(ip, dict) and ip.get("type") == "Public"
 
 
+def _principal_id(group: dict[str, Any]) -> str:
+    """The system-assigned managed-identity principal (object id). "" when absent."""
+    identity = group.get("identity")
+    return str(identity.get("principalId", "")) if isinstance(identity, dict) else ""
+
+
 def read_aci_workloads(client: AzureAciReader) -> list[AciWorkload]:
     """Enumerate ACI container groups as ``AciWorkload`` rows.
 
@@ -61,7 +71,7 @@ def read_aci_workloads(client: AzureAciReader) -> list[AciWorkload]:
         image_ref = _first_image(group)
         if not (resource_id and image_ref):
             continue
-        out.append(AciWorkload(resource_id, image_ref, _is_public(group)))
+        out.append(AciWorkload(resource_id, image_ref, _is_public(group), _principal_id(group)))
     return out
 
 

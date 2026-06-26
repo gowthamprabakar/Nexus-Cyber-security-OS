@@ -128,7 +128,13 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
 
     async def _record_container_workload(
-        self, resource_id: str, image_ref: str, *, is_public: bool, kind: str
+        self,
+        resource_id: str,
+        image_ref: str,
+        *,
+        is_public: bool,
+        kind: str,
+        assumes_principal: str = "",
     ) -> None:
         """Write a container workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
 
@@ -136,6 +142,11 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         the workload is keyed by a non-ARN resource id. The image node is the SAME spine node
         vulnerability writes CVE ``VULNERABLE_TO`` edges onto (both keyed by image ref), so an
         exposed workload's CVEs are reachable in one graph walk — no detector change.
+
+        ``assumes_principal`` (the managed identity / service account the workload runs as) joins to
+        the IDENTITY spine node identity writes — the crown-jewel ASSUMES leg (path 5): an attacker
+        who exploits the workload assumes this principal, so its ``HAS_ACCESS_TO`` data becomes the
+        workload's reachable blast radius.
         """
         workload_node = await self.upsert_node(
             NodeCategory.CLOUD_RESOURCE,
@@ -146,19 +157,30 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             NodeCategory.CLOUD_RESOURCE, image_ref, {"kind": "container-image"}
         )
         await self.add_edge(workload_node or "", image_node or "", EdgeType.RUNS_IMAGE)
+        if assumes_principal:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, assumes_principal, {})
+            await self.add_edge(workload_node or "", principal_node or "", EdgeType.ASSUMES)
 
     async def record_azure_workloads(self, workloads: Iterable[AciWorkload]) -> None:
-        """Write Azure ACI container-group workloads (cross-cloud path 2)."""
+        """Write Azure ACI container-group workloads (cross-cloud paths 2 + 5)."""
         for w in workloads:
             await self._record_container_workload(
-                w.resource_id, w.image_ref, is_public=w.is_public, kind="azure-container-group"
+                w.resource_id,
+                w.image_ref,
+                is_public=w.is_public,
+                kind="azure-container-group",
+                assumes_principal=w.identity_principal_id,
             )
 
     async def record_gcp_workloads(self, workloads: Iterable[CloudRunWorkload]) -> None:
-        """Write GCP Cloud Run service workloads (cross-cloud path 2)."""
+        """Write GCP Cloud Run service workloads (cross-cloud paths 2 + 5)."""
         for w in workloads:
             await self._record_container_workload(
-                w.resource_id, w.image_ref, is_public=w.is_public, kind="gcp-cloud-run-service"
+                w.resource_id,
+                w.image_ref,
+                is_public=w.is_public,
+                kind="gcp-cloud-run-service",
+                assumes_principal=w.service_account,
             )
 
     async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:

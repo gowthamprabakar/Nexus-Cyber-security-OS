@@ -3,17 +3,20 @@
 from cloud_posture.tools.azure_aci import AciWorkload, read_aci_workloads
 
 
-def _group(name: str, *, image: str | None, public: bool) -> dict:
+def _group(name: str, *, image: str | None, public: bool, principal: str = "") -> dict:
     props: dict = {}
     if public:
         props["ipAddress"] = {"type": "Public", "ip": "20.1.2.3"}
     containers = [{"name": name, "properties": {"image": image}}] if image is not None else []
-    return {
+    group: dict = {
         "id": f"/subscriptions/s/resourceGroups/rg/providers/Microsoft.ContainerInstance"
         f"/containerGroups/{name}",
         "containers": containers,
         "properties": props,
     }
+    if principal:
+        group["identity"] = {"type": "SystemAssigned", "principalId": principal}
+    return group
 
 
 class _Client:
@@ -40,6 +43,18 @@ def test_private_group_is_not_exposed() -> None:
 def test_group_with_no_image_is_skipped() -> None:
     # Nothing to join to a CVE node → not a path-2 workload.
     assert read_aci_workloads(_Client([_group("web", image=None, public=True)])) == []
+
+
+def test_managed_identity_principal_is_resolved() -> None:
+    [w] = read_aci_workloads(
+        _Client([_group("web", image="myreg/app:1.0", public=True, principal="mi-1")])
+    )
+    assert w.identity_principal_id == "mi-1"
+
+
+def test_no_managed_identity_is_blank() -> None:
+    [w] = read_aci_workloads(_Client([_group("web", image="myreg/app:1.0", public=True)]))
+    assert w.identity_principal_id == ""
 
 
 def test_malformed_rows_are_skipped() -> None:

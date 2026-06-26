@@ -3,11 +3,14 @@
 from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload, read_cloud_run_workloads
 
 
-def _service(name: str, *, image: str | None, public: bool) -> dict:
+def _service(name: str, *, image: str | None, public: bool, sa: str = "") -> dict:
     containers = [{"image": image}] if image is not None else []
+    template: dict = {"containers": containers}
+    if sa:
+        template["serviceAccount"] = sa
     return {
         "name": f"projects/p/locations/us-central1/services/{name}",
-        "template": {"containers": containers},
+        "template": template,
         "invokers": ["allUsers"] if public else ["user:dev@acme.com"],
     }
 
@@ -35,6 +38,18 @@ def test_service_without_allusers_invoker_is_not_public() -> None:
 
 def test_service_with_no_image_is_skipped() -> None:
     assert read_cloud_run_workloads(_Client([_service("web", image=None, public=True)])) == []
+
+
+def test_service_account_is_resolved_as_member_key() -> None:
+    [w] = read_cloud_run_workloads(
+        _Client([_service("web", image="myreg/app:1.0", public=True, sa="web@p.iam")])
+    )
+    assert w.service_account == "serviceAccount:web@p.iam"
+
+
+def test_no_service_account_is_blank() -> None:
+    [w] = read_cloud_run_workloads(_Client([_service("web", image="myreg/app:1.0", public=True)]))
+    assert w.service_account == ""
 
 
 def test_malformed_rows_are_skipped() -> None:

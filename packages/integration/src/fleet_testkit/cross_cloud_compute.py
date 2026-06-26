@@ -35,11 +35,12 @@ def _container_group_id(name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class AciGroup:
-    """A container group to seed: name, container image ref, internet-exposure."""
+    """A container group to seed: name, image, internet-exposure, managed-identity principal."""
 
     name: str
     image: str
     public: bool = False
+    identity_principal_id: str = ""  # the managed-identity object id (path-5 ASSUMES leg)
 
 
 class _FakeAciClient:
@@ -54,13 +55,17 @@ class _FakeAciClient:
             properties: dict[str, Any] = {}
             if g.public:
                 properties["ipAddress"] = {"type": "Public", "ip": "20.1.2.3"}
-            out.append(
-                {
-                    "id": _container_group_id(g.name),
-                    "containers": [{"name": g.name, "properties": {"image": g.image}}],
-                    "properties": properties,
+            group: dict[str, Any] = {
+                "id": _container_group_id(g.name),
+                "containers": [{"name": g.name, "properties": {"image": g.image}}],
+                "properties": properties,
+            }
+            if g.identity_principal_id:
+                group["identity"] = {
+                    "type": "SystemAssigned",
+                    "principalId": g.identity_principal_id,
                 }
-            )
+            out.append(group)
         return out
 
 
@@ -79,11 +84,12 @@ def _service_name(name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class CloudRunService:
-    """A Cloud Run service to seed: name, container image ref, public-invoke (allUsers)."""
+    """A Cloud Run service to seed: name, image, public-invoke (allUsers), runtime service account."""
 
     name: str
     image: str
     public: bool = False
+    service_account: str = ""  # SA email (path-5 ASSUMES leg); reader prefixes "serviceAccount:"
 
 
 class _FakeCloudRunClient:
@@ -93,14 +99,19 @@ class _FakeCloudRunClient:
         self._services = services
 
     def list_services(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "name": _service_name(s.name),
-                "template": {"containers": [{"image": s.image}]},
-                "invokers": ["allUsers"] if s.public else [],
-            }
-            for s in self._services
-        ]
+        out: list[dict[str, Any]] = []
+        for s in self._services:
+            template: dict[str, Any] = {"containers": [{"image": s.image}]}
+            if s.service_account:
+                template["serviceAccount"] = s.service_account
+            out.append(
+                {
+                    "name": _service_name(s.name),
+                    "template": template,
+                    "invokers": ["allUsers"] if s.public else [],
+                }
+            )
+        return out
 
 
 async def drive_gcp_compute(

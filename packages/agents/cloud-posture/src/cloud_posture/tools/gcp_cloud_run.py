@@ -22,11 +22,15 @@ _PUBLIC_INVOKER = "allUsers"
 
 @dataclass(frozen=True, slots=True)
 class CloudRunWorkload:
-    """A Cloud Run service resolved to its image ref + public-invoke posture."""
+    """A Cloud Run service resolved to its image ref + public-invoke posture + service account."""
 
     resource_id: str
     image_ref: str
     is_public: bool
+    #: The runtime service account, as the IAM member key (``serviceAccount:<email>``) so it joins
+    #: the same IDENTITY node a bucket IAM binding grants — the crown-jewel ASSUMES leg (path 5).
+    #: "" when the service has no configured service account.
+    service_account: str = ""
 
 
 class GcpCloudRunReader(Protocol):
@@ -49,6 +53,13 @@ def _is_public(service: dict[str, Any]) -> bool:
     return isinstance(invokers, list) and _PUBLIC_INVOKER in invokers
 
 
+def _service_account(service: dict[str, Any]) -> str:
+    """The runtime SA as the IAM member key ``serviceAccount:<email>``. "" when absent."""
+    template = service.get("template")
+    email = template.get("serviceAccount", "") if isinstance(template, dict) else ""
+    return f"serviceAccount:{email}" if email else ""
+
+
 def read_cloud_run_workloads(client: GcpCloudRunReader) -> list[CloudRunWorkload]:
     """Enumerate Cloud Run services as ``CloudRunWorkload`` rows.
 
@@ -62,7 +73,9 @@ def read_cloud_run_workloads(client: GcpCloudRunReader) -> list[CloudRunWorkload
         image_ref = _first_image(service)
         if not (resource_id and image_ref):
             continue
-        out.append(CloudRunWorkload(resource_id, image_ref, _is_public(service)))
+        out.append(
+            CloudRunWorkload(resource_id, image_ref, _is_public(service), _service_account(service))
+        )
     return out
 
 
