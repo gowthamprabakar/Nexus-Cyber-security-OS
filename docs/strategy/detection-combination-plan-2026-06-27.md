@@ -1,6 +1,8 @@
 # Plan: Finishing Detection + the Combination (Tracks A & B)
 
-**Date:** 2026-06-27 · **Status:** PLANNING — no build yet. Facts grounded in repo at `fleet-test-l2-evaluator`.
+**Date:** 2026-06-27 · **Status:** Track A in progress. Facts grounded in repo at `fleet-test-l2-evaluator`.
+
+> **✅ A1 BUILT (commit b41d0d7):** first cross-domain path — "owned resource communicating with a known-malicious IP" (network + threat-intel). The deferred Stage-3 bridge resolvers are now real (`meta_harness.correlation`: `link_ip_ownership` → `OWNED_BY`, `link_threat_indicators` → `MATCHES_INDICATOR`); cloud-posture EC2 captures `private_ips`; new `malicious_destination` archetype (sev 85) with grouping + remediation + render; moto-REAL e2e. **threat-intel wrote its first graph edges; the IP→resource join is built.** This proves the resolver pattern A2/A3 reuse. Next: A2 (runtime `RUNS_ON`) or A3 (code-to-cloud).
 
 Answers the question: _"Have we finished the detection modules and their combination?"_ — **No.** This lays out exactly what's combined, what isn't, why, and the plan to finish it. We discuss and decide before building.
 
