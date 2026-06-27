@@ -196,6 +196,9 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             if workload.private_ips:
                 # The join key for the network-endpoint→instance OWNED_BY bridge (correlation).
                 props["private_ips"] = list(workload.private_ips)
+            if workload.iac_artifact:
+                # The join key for the code-to-cloud DEPLOYED_VIA bridge (correlation).
+                props["iac_artifact"] = workload.iac_artifact
             instance_node = await self.upsert_node(
                 NodeCategory.CLOUD_RESOURCE, workload.instance_arn, props
             )

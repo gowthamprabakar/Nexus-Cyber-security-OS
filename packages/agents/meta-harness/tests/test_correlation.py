@@ -5,6 +5,7 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from fleet_testkit import in_memory_semantic_store
 from meta_harness.correlation import (
     correlate_all,
+    link_deployed_via,
     link_ip_ownership,
     link_runtime_images,
     link_threat_indicators,
@@ -14,6 +15,7 @@ from meta_harness.kg_query import KgQuery
 _R = NodeCategory.CLOUD_RESOURCE.value
 _PE = NodeCategory.PROCESS_EVENT.value
 _CVE = NodeCategory.CVE_FINDING.value
+_IAC = NodeCategory.IAC_ARTIFACT.value
 
 
 async def _node(store, t, etype, ext, props):
@@ -119,3 +121,39 @@ async def test_runtime_image_bridge_skips_unknown_image():
         # A runtime host whose image was never scanned → no image node to link to.
         await _node(store, t, _R, "host-uid-1", {"image_ref": "myreg/unscanned:1.0"})
         assert await link_runtime_images(store, t) == 0
+
+
+@pytest.mark.asyncio
+async def test_deployed_via_bridge_and_detector_fires():
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # A resource tagged with IaC provenance + the matching IAC_ARTIFACT (a misconfigured file).
+        await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-1",
+            {"kind": "ec2-instance", "iac_artifact": "gh/acme/infra:main.tf"},
+        )
+        await _node(store, t, _IAC, "gh/acme/infra:main.tf", {"file": "main.tf"})
+        assert await link_deployed_via(store, t) == 1  # DEPLOYED_VIA: resource → artifact
+
+        hits = await KgQuery(store, t).find_resource_from_misconfigured_iac()
+        assert len(hits) == 1
+        assert hits[0].artifact_ref == "gh/acme/infra:main.tf"
+
+
+@pytest.mark.asyncio
+async def test_deployed_via_requires_matching_artifact():
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # Resource provenance points to an artifact node that doesn't exist (no misconfig there).
+        await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-2",
+            {"kind": "ec2-instance", "iac_artifact": "gh/acme/infra:other.tf"},
+        )
+        await _node(store, t, _IAC, "gh/acme/infra:main.tf", {"file": "main.tf"})
+        assert await link_deployed_via(store, t) == 0

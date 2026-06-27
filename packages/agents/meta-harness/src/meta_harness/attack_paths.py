@@ -47,6 +47,7 @@ _SEVERITY: dict[str, int] = {
     "exposed_ai_sensitive_data": 68,
     "resource_based_data": 62,
     "fine_grained_data": 60,
+    "iac_misconfig_deployed": 58,
 }
 
 
@@ -136,6 +137,8 @@ def _title(path_type: str, grp: _Group) -> str:
             f"{grp.context.get('principal', '')} has bucket-policy access to "
             f"{_types_phrase(grp)} data"
         )
+    if path_type == "iac_misconfig_deployed":
+        return f"Live resource deployed from misconfigured infrastructure-as-code ({_types_phrase(grp)})"
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -220,6 +223,10 @@ class AttackPathRanker:
                 continue  # this role→data access is the crown jewel's own access leg
             g("fine_grained_data", (f.principal_id, f.resource_id)).add(
                 (f.principal_id, f.resource_id, f.data_classification_id), f.data_type
+            )
+        for ic in await self._kg.find_resource_from_misconfigured_iac():
+            g("iac_misconfig_deployed", (ic.resource_id,)).add(
+                (ic.resource_id, ic.artifact_id, ic.repo_id), ic.artifact_ref
             )
 
         paths = [

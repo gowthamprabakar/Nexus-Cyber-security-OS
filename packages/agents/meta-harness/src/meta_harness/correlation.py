@@ -117,15 +117,47 @@ async def link_runtime_images(store: SemanticStore, tenant_id: str) -> int:
     return count
 
 
+async def link_deployed_via(store: SemanticStore, tenant_id: str) -> int:
+    """Write ``DEPLOYED_VIA`` (cloud resource → IaC artifact) where provenance matches. Returns #edges.
+
+    The code-to-cloud bridge, run from the cloud side (the honest direction — appsec knows the code,
+    not the deployed target). A cloud resource carries its IaC provenance as an ``iac_artifact``
+    property (the ``IAC_ARTIFACT`` external_id ``{repo_slug}:{file}``, read from a ``nexus:iac``
+    resource tag); appsec writes the ``IAC_ARTIFACT`` node only when that file has a misconfiguration.
+    Matching them links a live resource to the misconfigured IaC it was deployed from.
+    """
+    resources = await _cloud_resources(store, tenant_id)
+    artifacts = await store.list_entities_by_type(
+        tenant_id=tenant_id, entity_type=NodeCategory.IAC_ARTIFACT.value
+    )
+    artifact_ids = {a.external_id: a.entity_id for a in artifacts}
+
+    count = 0
+    for r in resources:
+        artifact_id = artifact_ids.get(str(r.properties.get("iac_artifact", "")))
+        if artifact_id:
+            await store.add_relationship(
+                tenant_id=tenant_id,
+                src_entity_id=r.entity_id,
+                dst_entity_id=artifact_id,
+                relationship_type=EdgeType.DEPLOYED_VIA.value,
+                properties={},
+            )
+            count += 1
+    return count
+
+
 async def correlate_all(store: SemanticStore, tenant_id: str) -> None:
     """Run every cross-agent bridge resolver for a tenant (call after feeders, before detectors)."""
     await link_ip_ownership(store, tenant_id)
     await link_threat_indicators(store, tenant_id)
     await link_runtime_images(store, tenant_id)
+    await link_deployed_via(store, tenant_id)
 
 
 __all__ = [
     "correlate_all",
+    "link_deployed_via",
     "link_ip_ownership",
     "link_runtime_images",
     "link_threat_indicators",

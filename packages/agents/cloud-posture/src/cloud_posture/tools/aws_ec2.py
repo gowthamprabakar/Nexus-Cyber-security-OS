@@ -32,6 +32,10 @@ class Ec2Workload:
     #: The instance's private IPv4 addresses — the join key the network-endpoint→instance
     #: resolver (``OWNED_BY`` bridge) matches a flow's IP against.
     private_ips: tuple[str, ...] = ()
+    #: IaC provenance — the ``IAC_ARTIFACT`` external_id (``{repo_slug}:{file}``) this resource was
+    #: deployed from, read from a ``nexus:iac`` resource tag; the join key the code-to-cloud
+    #: (``DEPLOYED_VIA``) resolver matches. "" when the resource carries no provenance tag.
+    iac_artifact: str = ""
 
 
 def _instance_arn(instance_id: str, *, account_id: str, region: str) -> str:
@@ -53,6 +57,18 @@ def _instance_private_ips(instance: dict) -> tuple[str, ...]:
         if eni_ip:
             ips.append(str(eni_ip))
     return tuple(dict.fromkeys(ips))  # dedupe, order-preserving
+
+
+#: The resource tag carrying IaC provenance — the IAC_ARTIFACT external_id the resource deployed from.
+_IAC_TAG = "nexus:iac"
+
+
+def _instance_iac_artifact(instance: dict) -> str:
+    """The instance's ``nexus:iac`` provenance tag value (the IAC_ARTIFACT key). "" when absent."""
+    for tag in instance.get("Tags", []):
+        if tag.get("Key") == _IAC_TAG:
+            return str(tag.get("Value", ""))
+    return ""
 
 
 def _instance_sg_ids(instance: dict) -> list[str]:
@@ -97,6 +113,7 @@ def read_ec2_workloads(
                     is_public=is_public,
                     role_arn=_profile_role_arn(iam, instance.get("IamInstanceProfile")),
                     private_ips=_instance_private_ips(instance),
+                    iac_artifact=_instance_iac_artifact(instance),
                 )
             )
     return workloads

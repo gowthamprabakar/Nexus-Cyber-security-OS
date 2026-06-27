@@ -345,21 +345,25 @@ def setup_ecs_workload(
     return str(service["service"]["serviceArn"])
 
 
-def setup_ec2_instance(ec2: object, *, name: str = "vm") -> str:
+def setup_ec2_instance(ec2: object, *, name: str = "vm", iac_artifact: str = "") -> str:
     """Seed one running EC2 instance in a real VPC/subnet; returns its private IP.
 
     The private IP is the join key the network-endpoint→instance ``OWNED_BY`` resolver matches a
-    flow's src IP against (cross-domain path A1).
+    flow's src IP against (cross-domain path A1). ``iac_artifact`` (when set) is written as a
+    ``nexus:iac`` tag — the IaC provenance the code-to-cloud ``DEPLOYED_VIA`` resolver matches (A3).
     """
     vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
     subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    tags = [{"Key": "Name", "Value": name}]
+    if iac_artifact:
+        tags.append({"Key": "nexus:iac", "Value": iac_artifact})
     instance = ec2.run_instances(  # type: ignore[attr-defined]
         ImageId="ami-12345678",
         MinCount=1,
         MaxCount=1,
         SubnetId=subnet,
         InstanceType="t2.micro",
-        TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": name}]}],
+        TagSpecifications=[{"ResourceType": "instance", "Tags": tags}],
     )["Instances"][0]
     return str(instance["PrivateIpAddress"])
 

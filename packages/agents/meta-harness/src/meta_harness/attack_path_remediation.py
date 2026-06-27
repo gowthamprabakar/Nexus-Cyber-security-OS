@@ -87,6 +87,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "resource grant with access to only the objects it needs.",
         auto_fixable=False,
     ),
+    "iac_misconfig_deployed": FixAdvice(
+        "Fix the misconfiguration in the named infrastructure-as-code file and redeploy — the live "
+        "resource inherits the fix from code (the root cause), preventing the drift from recurring.",
+        auto_fixable=False,
+    ),
 }
 
 

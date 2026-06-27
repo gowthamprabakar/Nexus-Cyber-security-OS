@@ -187,6 +187,19 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class IacMisconfigDeployed:
+    """A live cloud resource deployed from infrastructure-as-code that has a misconfiguration
+    (cross-domain: cloud-posture/data-security + appsec). The resource DEPLOYED_VIA an IAC_ARTIFACT
+    (which appsec writes only for a misconfigured IaC file) DEFINED_IN a repo — the code-to-cloud
+    root cause: the live resource's misconfiguration is traceable to the exact repo + file."""
+
+    resource_id: str
+    artifact_id: str
+    artifact_ref: str
+    repo_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeExploitVulnerableWorkload:
     """An active runtime detection firing ON a workload running a vulnerable image (cross-domain:
     runtime + vulnerability). A runtime event EXECUTED_ON a host that RUNS_IMAGE a VULNERABLE_TO
@@ -667,6 +680,35 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_resource_from_misconfigured_iac(self) -> list[IacMisconfigDeployed]:
+        """Find a live cloud resource deployed from infrastructure-as-code with a misconfiguration.
+
+        The mechanism-② cross-domain join (cloud + appsec / code-to-cloud): enumerates CLOUD_RESOURCE
+        nodes, follows ``DEPLOYED_VIA`` (the resolver-written provenance bridge) to an IAC_ARTIFACT
+        node (appsec writes one only for a misconfigured IaC file), then ``DEFINED_IN`` to the repo.
+        The live resource's misconfiguration is traceable to the exact repo + file. Read-only."""
+        hits: list[IacMisconfigDeployed] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for resource in resources:
+            for dep in await self._edges_from(resource.entity_id, (EdgeType.DEPLOYED_VIA.value,)):
+                artifact = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=dep.dst_entity_id
+                )
+                if artifact is None:
+                    continue
+                repos = await self._edges_from(dep.dst_entity_id, (EdgeType.DEFINED_IN.value,))
+                hits.append(
+                    IacMisconfigDeployed(
+                        resource_id=resource.entity_id,
+                        artifact_id=dep.dst_entity_id,
+                        artifact_ref=artifact.external_id,
+                        repo_id=repos[0].dst_entity_id if repos else "",
+                    )
+                )
         return hits
 
     async def find_runtime_exploit_on_vulnerable_workload(

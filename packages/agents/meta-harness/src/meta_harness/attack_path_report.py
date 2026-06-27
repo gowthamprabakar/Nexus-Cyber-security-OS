@@ -32,6 +32,7 @@ _LABELS = {
     "exposed_ai_sensitive_data": "Exposed AI service",
     "resource_based_data": "Resource-based access",
     "fine_grained_data": "Over-permissioned access",
+    "iac_misconfig_deployed": "Misconfigured IaC deployed",
 }
 
 
