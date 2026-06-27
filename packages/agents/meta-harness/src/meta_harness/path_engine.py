@@ -70,6 +70,95 @@ async def find_generic_paths(
     return paths
 
 
+# --- B3/B4: novelty filter + scoring → the candidate tier ----------------------------------------
+
+#: (source_marker, sink_marker) pairs a NAMED archetype already reports. A generic path whose pair
+#: is here is a duplicate of a named detector (which reports it better) → dropped. Everything else is
+#: a NOVEL source→impact combination we have no named detector for — the candidate's reason to exist.
+NAMED_PAIRS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("public_resource", "sensitive_data"),  # public_secret / public_unencrypted / crown_jewel
+        ("public_resource", "known_vulnerability"),  # internet_exposed_vulnerable
+        ("privileged_workload", "known_vulnerability"),  # privileged_vulnerable
+        ("external_identity", "sensitive_data"),  # external_trust
+        ("exposed_ai_service", "sensitive_data"),  # exposed_ai_sensitive_data
+        ("resource_policy_grant", "sensitive_data"),  # resource_based_data
+        ("identity_principal", "sensitive_data"),  # fine_grained_data
+        ("runtime_detection", "known_vulnerability"),  # runtime_exploit_vulnerable
+        ("runtime_detection_file", "known_vulnerability"),  # runtime_exploit (file events)
+    }
+)
+
+#: Candidate scores are capped strictly below the lowest NAMED severity (iac_misconfig=58), so a
+#: confirmed finding always outranks an unverified candidate. Heuristic, not curated.
+CANDIDATE_SCORE_CAP = 50
+
+_SOURCE_WEIGHT = {
+    "public_resource": 1.0,
+    "external_identity": 0.95,
+    "runtime_detection": 0.95,
+    "runtime_detection_file": 0.9,
+    "exposed_ai_service": 0.85,
+    "privileged_workload": 0.85,
+    "resource_policy_grant": 0.75,
+    "identity_principal": 0.6,
+}
+_SINK_WEIGHT = {"sensitive_data": 1.0, "known_vulnerability": 0.85}
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePath:
+    """A NOVEL generic path (no named archetype covers it), with a heuristic candidate score.
+
+    ``confidence`` is always ``"candidate"`` — unverified, heuristically scored, capped below every
+    named archetype. The candidate tier is for review ("what should we name next?"), not the
+    customer-facing confirmed list.
+    """
+
+    path: GenericPath
+    score: int
+    confidence: str = "candidate"
+
+    @property
+    def pair(self) -> tuple[str, str]:
+        return (self.path.source_marker, self.path.sink_marker)
+
+
+def is_novel(path: GenericPath) -> bool:
+    """True when no named archetype covers this path's (source, sink) combination."""
+    return (path.source_marker, path.sink_marker) not in NAMED_PAIRS
+
+
+def score_path(path: GenericPath) -> int:
+    """A heuristic candidate score: source x sink severity, decayed by path length, capped."""
+    source = _SOURCE_WEIGHT.get(path.source_marker, 0.6)
+    sink = _SINK_WEIGHT.get(path.sink_marker, 0.8)
+    decay = 1.0 / (1.0 + 0.25 * (len(path.hops) - 1))  # 1 hop = no decay; longer = more tenuous
+    return max(1, round(CANDIDATE_SCORE_CAP * source * sink * decay))
+
+
+async def find_candidate_paths(
+    store: SemanticStore, tenant_id: str, *, max_depth: int = DEFAULT_MAX_DEPTH, limit: int = 20
+) -> list[CandidatePath]:
+    """Novel source→sink paths (no named archetype covers them), scored, worst-first, top ``limit``.
+
+    Dedups to the shortest (most direct) path per (source, sink) node pair, so N routes between the
+    same two nodes collapse to one candidate. The top-N cap bounds output; callers should surface
+    the cap so a truncated list never reads as complete.
+    """
+    novel = [
+        p for p in await find_generic_paths(store, tenant_id, max_depth=max_depth) if is_novel(p)
+    ]
+    shortest: dict[tuple[str, str], GenericPath] = {}
+    for p in novel:
+        key = (p.source_id, p.sink_id)
+        if key not in shortest or len(p.hops) < len(shortest[key].hops):
+            shortest[key] = p
+    candidates = [CandidatePath(p, score_path(p)) for p in shortest.values()]
+    candidates.sort(key=lambda c: (-c.score, len(c.path.hops), c.path.source_id))
+    return candidates[:limit]
+
+
 async def _source_nodes(store: SemanticStore, tenant_id: str) -> list[tuple[object, str]]:
     """Every node matching a source marker, paired with the marker name."""
     out: list[tuple[object, str]] = []
@@ -118,4 +207,15 @@ async def _walk(
     return results
 
 
-__all__ = ["DEFAULT_MAX_DEPTH", "GenericPath", "PathHop", "find_generic_paths"]
+__all__ = [
+    "CANDIDATE_SCORE_CAP",
+    "DEFAULT_MAX_DEPTH",
+    "NAMED_PAIRS",
+    "CandidatePath",
+    "GenericPath",
+    "PathHop",
+    "find_candidate_paths",
+    "find_generic_paths",
+    "is_novel",
+    "score_path",
+]

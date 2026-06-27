@@ -9,12 +9,21 @@ walker must correctly find them.
 import pytest
 from charter.memory.graph_types import EdgeType, NodeCategory
 from fleet_testkit import in_memory_semantic_store
-from meta_harness.path_engine import find_generic_paths
+from meta_harness.attack_paths import _SEVERITY
+from meta_harness.path_engine import (
+    CANDIDATE_SCORE_CAP,
+    NAMED_PAIRS,
+    find_candidate_paths,
+    find_generic_paths,
+)
+from meta_harness.path_taxonomy import SINK_MARKERS, SOURCE_MARKERS
 
 _R = NodeCategory.CLOUD_RESOURCE.value
 _DC = NodeCategory.DATA_CLASSIFICATION.value
 _CVE = NodeCategory.CVE_FINDING.value
 _ID = NodeCategory.IDENTITY.value
+_PE = NodeCategory.PROCESS_EVENT.value
+_K8S = NodeCategory.K8S_OBJECT.value
 
 
 async def _node(store, t, etype, ext, props):
@@ -104,3 +113,70 @@ async def test_walker_ignores_non_attack_edges():
 async def test_walker_empty_graph():
     async with in_memory_semantic_store() as store:
         assert await find_generic_paths(store, "t") == []
+
+
+# --- B3/B4: novelty filter + scoring -------------------------------------------------------------
+
+
+def test_named_pairs_use_valid_markers():
+    sources = {m.name for m in SOURCE_MARKERS}
+    sinks = {m.name for m in SINK_MARKERS}
+    for src, sink in NAMED_PAIRS:
+        assert src in sources, f"{src} not a source marker"
+        assert sink in sinks, f"{sink} not a sink marker"
+
+
+def test_candidate_cap_is_below_every_named_severity():
+    # A confirmed finding must always outrank an unverified candidate.
+    assert min(_SEVERITY.values()) > CANDIDATE_SCORE_CAP
+
+
+@pytest.mark.asyncio
+async def test_named_covered_path_is_not_a_candidate():
+    """public_resource → sensitive_data is a NAMED pair → dropped (a named detector reports it)."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        b = await _node(store, t, _R, "arn:aws:s3:::pii", {"is_public": True})
+        d = await _node(store, t, _DC, "arn:aws:s3:::pii:ssn", {"data_type": "ssn"})
+        await _edge(store, t, b, d, EdgeType.EXPOSES_DATA.value)
+        assert await find_candidate_paths(store, t) == []
+
+
+@pytest.mark.asyncio
+async def test_novel_combination_surfaces_as_scored_candidate():
+    """runtime_detection → sensitive_data is NOT a named pair → a novel candidate.
+
+    'An active runtime detection on a host that can reach sensitive data' — a real escalation no
+    named detector covers (named runtime only joins to vulnerabilities, not data)."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        event = await _node(store, t, _PE, "RUNTIME-PROCESS-X-001-e", {"finding_type": "process"})
+        host = await _node(store, t, _R, "host-1", {})
+        data = await _node(store, t, _DC, "host-1:ssn", {"data_type": "ssn"})
+        await _edge(store, t, event, host, EdgeType.EXECUTED_ON.value)
+        await _edge(store, t, host, data, EdgeType.EXPOSES_DATA.value)
+
+        candidates = await find_candidate_paths(store, t)
+        assert len(candidates) == 1
+        c = candidates[0]
+        assert c.pair == ("runtime_detection", "sensitive_data")
+        assert c.confidence == "candidate"
+        assert 0 < c.score < min(_SEVERITY.values())  # scored, but below every named
+
+
+@pytest.mark.asyncio
+async def test_candidates_dedup_to_shortest_per_pair():
+    """Two routes between the same source and sink collapse to one (shortest) candidate."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # privileged_workload → sensitive_data is novel (named covers privileged→vuln, not →data).
+        pod = await _node(store, t, _K8S, "pod-1", {"privileged": True})
+        mid = await _node(store, t, _R, "mid", {})
+        data = await _node(store, t, _DC, "d:ssn", {"data_type": "ssn"})
+        await _edge(store, t, pod, data, EdgeType.CONTAINS.value)  # direct, 1 hop
+        await _edge(store, t, pod, mid, EdgeType.CONTAINS.value)  # indirect, 2 hops
+        await _edge(store, t, mid, data, EdgeType.EXPOSES_DATA.value)
+
+        candidates = await find_candidate_paths(store, t)
+        assert len(candidates) == 1  # both routes → one (source, sink) pair
+        assert len(candidates[0].path.hops) == 1  # the shortest route kept
