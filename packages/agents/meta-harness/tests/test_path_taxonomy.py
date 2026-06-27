@@ -32,6 +32,11 @@ _EXPOSURE_IMPACT = {
         (NC.CVE_FINDING, {}),
         ["RUNS_IMAGE", "VULNERABLE_TO"],
     ),
+    "internet_exposed_host_vulnerable": (
+        (NC.CLOUD_RESOURCE, {"is_public": True}),
+        (NC.CVE_FINDING, {}),
+        ["VULNERABLE_TO"],
+    ),
     "privileged_vulnerable": (
         (NC.K8S_OBJECT, {"privileged": True}),
         (NC.CVE_FINDING, {}),

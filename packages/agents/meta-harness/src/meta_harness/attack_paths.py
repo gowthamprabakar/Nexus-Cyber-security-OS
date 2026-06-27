@@ -43,6 +43,7 @@ _SEVERITY: dict[str, int] = {
     "malicious_destination": 85,
     "exposed_database": 84,
     "internet_exposed_vulnerable": 80,
+    "internet_exposed_host_vulnerable": 79,
     "privileged_vulnerable": 78,
     "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
@@ -123,6 +124,10 @@ def _title(path_type: str, grp: _Group) -> str:
         )
     if path_type == "internet_exposed_vulnerable":
         return f"Internet-exposed workload runs an image with {_cve_phrase(grp)}"
+    if path_type == "internet_exposed_host_vulnerable":
+        return (
+            f"Internet-exposed host (EC2/VM) has an OS-package vulnerability ({_cve_phrase(grp)})"
+        )
     if path_type == "privileged_vulnerable":
         return f"Privileged K8s pod runs an image with {_cve_phrase(grp)}"
     if path_type == "runtime_exploit_vulnerable":
@@ -207,6 +212,10 @@ class AttackPathRanker:
         for p in await self._kg.find_privileged_vulnerable_workload():
             g("privileged_vulnerable", (p.workload_id, p.image_id)).add(
                 (p.workload_id, p.image_id), p.cve_id, cve_severity=p.severity
+            )
+        for hv in await self._kg.find_internet_exposed_host_vulnerable():
+            g("internet_exposed_host_vulnerable", (hv.host_id,)).add(
+                (hv.host_id,), hv.cve_id, cve_severity=hv.severity
             )
         for s in await self._kg.find_public_secret_exposure():
             g("public_secret", (s.resource_id,)).add(

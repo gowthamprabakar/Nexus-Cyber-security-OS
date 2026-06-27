@@ -175,6 +175,17 @@ class PrivilegedVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class HostVulnerableWorkload:
+    """An internet-exposed compute host (EC2/VM) with a known OS-package CVE (path #15). The
+    instance node is_public AND carries a DIRECT ``VULNERABLE_TO`` edge (host/AMI scan, not a
+    container ``RUNS_IMAGE`` hop) — a reachable host-OS RCE. ``severity`` is the CVE's label."""
+
+    host_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class RbacPrivilegeEscalation:
     """A K8s ServiceAccount bound to a cluster-admin-equivalent RBAC role (path #20). The SA
     --BINDS--> role node whose ``is_admin`` property is True (wildcard verbs on wildcard
@@ -670,6 +681,36 @@ class KgQuery:
                             severity=str(cve.properties.get("severity", "")),
                         )
                     )
+        return hits
+
+    async def find_internet_exposed_host_vulnerable(self) -> list[HostVulnerableWorkload]:
+        """Find internet-exposed compute hosts (EC2/VM) with a known OS-package CVE (path #15).
+
+        Self-seeded: enumerates CLOUD_RESOURCE nodes that are ``is_public`` and follows a DIRECT
+        ``VULNERABLE_TO`` edge to a CVE. Distinct from the container path: there the CVE hangs off
+        the image node via ``RUNS_IMAGE``; here the host scan (``trivy vm/rootfs``, keyed by the
+        instance ARN) records the CVE on the instance node itself. An exposed host with an OS RCE.
+        Read-only."""
+        hits: list[HostVulnerableWorkload] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for host in resources:
+            if host.properties.get("is_public") is not True:
+                continue
+            for vuln in await self._edges_from(host.entity_id, (EdgeType.VULNERABLE_TO.value,)):
+                cve = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                )
+                if cve is None:
+                    continue
+                hits.append(
+                    HostVulnerableWorkload(
+                        host_id=host.entity_id,
+                        cve_id=cve.external_id,
+                        severity=str(cve.properties.get("severity", "")),
+                    )
+                )
         return hits
 
     async def find_rbac_privilege_escalation(self) -> list[RbacPrivilegeEscalation]:

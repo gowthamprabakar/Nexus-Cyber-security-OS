@@ -30,6 +30,7 @@ _LABELS = {
     "exposed_database": "Exposed managed database",
     "exposed_kms_key": "Exposed KMS key policy",
     "internet_exposed_vulnerable": "Internet-exposed vulnerable workload",
+    "internet_exposed_host_vulnerable": "Internet-exposed vulnerable host (EC2/VM)",
     "privileged_vulnerable": "Privileged vulnerable workload",
     "rbac_privilege_escalation": "K8s RBAC privilege escalation",
     "public_unencrypted": "Public unencrypted data",

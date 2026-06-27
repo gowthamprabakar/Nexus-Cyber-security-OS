@@ -76,6 +76,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "load balancer so the workload is not reachable from 0.0.0.0/0.",
         auto_fixable=False,
     ),
+    "internet_exposed_host_vulnerable": FixAdvice(
+        "Patch the host's OS packages (or replace the instance from a patched AMI) to clear the CVEs, "
+        "and restrict the security group so the host is not reachable from 0.0.0.0/0.",
+        auto_fixable=False,
+    ),
     "privileged_vulnerable": FixAdvice(
         "Set securityContext.privileged=false on the pod to remove the node-escape path, then "
         "rebuild the image on a patched base to clear the CVEs. The privilege patch is auto-fixable; "

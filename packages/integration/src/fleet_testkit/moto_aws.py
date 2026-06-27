@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import boto3
 from cloud_posture.tools.aws_ec2 import Ec2Workload, read_ec2_workloads
@@ -347,26 +347,50 @@ def setup_ecs_workload(
     return str(service["service"]["serviceArn"])
 
 
-def setup_ec2_instance(ec2: object, *, name: str = "vm", iac_artifact: str = "") -> str:
+def setup_ec2_instance(
+    ec2: object, *, name: str = "vm", iac_artifact: str = "", public: bool = False
+) -> str:
     """Seed one running EC2 instance in a real VPC/subnet; returns its private IP.
 
     The private IP is the join key the network-endpoint→instance ``OWNED_BY`` resolver matches a
     flow's src IP against (cross-domain path A1). ``iac_artifact`` (when set) is written as a
     ``nexus:iac`` tag — the IaC provenance the code-to-cloud ``DEPLOYED_VIA`` resolver matches (A3).
+    ``public`` attaches a real ``0.0.0.0/0`` SG + a public IP, so the reader marks it
+    internet-exposed (host-vuln path #15).
     """
     vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
     subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
     tags = [{"Key": "Name", "Value": name}]
     if iac_artifact:
         tags.append({"Key": "nexus:iac", "Value": iac_artifact})
-    instance = ec2.run_instances(  # type: ignore[attr-defined]
-        ImageId="ami-12345678",
-        MinCount=1,
-        MaxCount=1,
-        SubnetId=subnet,
-        InstanceType="t2.micro",
-        TagSpecifications=[{"ResourceType": "instance", "Tags": tags}],
-    )["Instances"][0]
+    kwargs: dict[str, Any] = {
+        "ImageId": "ami-12345678",
+        "MinCount": 1,
+        "MaxCount": 1,
+        "InstanceType": "t2.micro",
+        "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
+    }
+    if public:
+        sg = ec2.create_security_group(GroupName=f"{name}-open", Description="open", VpcId=vpc)[
+            "GroupId"
+        ]  # type: ignore[attr-defined]
+        ec2.authorize_security_group_ingress(  # type: ignore[attr-defined]
+            GroupId=sg,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 22,
+                    "ToPort": 22,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                }
+            ],
+        )
+        kwargs["NetworkInterfaces"] = [
+            {"DeviceIndex": 0, "SubnetId": subnet, "AssociatePublicIpAddress": True, "Groups": [sg]}
+        ]
+    else:
+        kwargs["SubnetId"] = subnet
+    instance = ec2.run_instances(**kwargs)["Instances"][0]  # type: ignore[attr-defined]
     return str(instance["PrivateIpAddress"])
 
 
