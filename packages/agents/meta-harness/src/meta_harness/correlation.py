@@ -36,9 +36,11 @@ async def link_ip_ownership(store: SemanticStore, tenant_id: str) -> int:
     resources = await _cloud_resources(store, tenant_id)
     ip_to_instance: dict[str, str] = {}
     for r in resources:
-        if r.properties.get("kind") == "ec2-instance":
-            for ip in r.properties.get("private_ips", []) or []:
-                ip_to_instance[str(ip)] = r.entity_id
+        # An instance is identified by carrying private_ips, NOT by kind: a later host-vuln scan
+        # (path #15) can decorate the instance node's kind to "scan-target", so keying on kind
+        # would drop the bridge. private_ips is the actual join data and only EC2 instances have it.
+        for ip in r.properties.get("private_ips", []) or []:
+            ip_to_instance[str(ip)] = r.entity_id
 
     count = 0
     for r in resources:

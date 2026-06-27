@@ -348,7 +348,12 @@ def setup_ecs_workload(
 
 
 def setup_ec2_instance(
-    ec2: object, *, name: str = "vm", iac_artifact: str = "", public: bool = False
+    ec2: object,
+    *,
+    name: str = "vm",
+    iac_artifact: str = "",
+    public: bool = False,
+    subnet_cidr: str = "10.0.1.0/24",
 ) -> str:
     """Seed one running EC2 instance in a real VPC/subnet; returns its private IP.
 
@@ -356,10 +361,12 @@ def setup_ec2_instance(
     flow's src IP against (cross-domain path A1). ``iac_artifact`` (when set) is written as a
     ``nexus:iac`` tag — the IaC provenance the code-to-cloud ``DEPLOYED_VIA`` resolver matches (A3).
     ``public`` attaches a real ``0.0.0.0/0`` SG + a public IP, so the reader marks it
-    internet-exposed (host-vuln path #15).
+    internet-exposed (host-vuln path #15). ``subnet_cidr`` distinguishes instances that must get
+    DIFFERENT private IPs (moto assigns the same first address per identical subnet CIDR) — needed
+    for a multi-host scene like lateral movement (#14).
     """
     vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
-    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock=subnet_cidr)["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
     tags = [{"Key": "Name", "Value": name}]
     if iac_artifact:
         tags.append({"Key": "nexus:iac", "Value": iac_artifact})

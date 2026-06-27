@@ -175,6 +175,20 @@ class PrivilegedVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class LateralMovement:
+    """A public-facing foothold with an OBSERVED network flow to an internal host that carries a
+    known CVE (path #14). The foothold endpoint is ``OWNED_BY`` a public resource and
+    ``COMMUNICATES_WITH`` a dst endpoint ``OWNED_BY`` a target resource that is ``VULNERABLE_TO``
+    a CVE — a perimeter breach pivoting laterally to a soft internal target. This uses observed
+    flow edges, NOT derived reachability (CAN_REACH, Stage 3). ``severity`` is the target CVE's."""
+
+    foothold_id: str
+    target_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class HostVulnerableWorkload:
     """An internet-exposed compute host (EC2/VM) with a known OS-package CVE (path #15). The
     instance node is_public AND carries a DIRECT ``VULNERABLE_TO`` edge (host/AMI scan, not a
@@ -1020,6 +1034,56 @@ class KgQuery:
                                 indicator_value=str(ioc.properties.get("value", "")),
                             )
                         )
+        return hits
+
+    async def find_lateral_movement_to_vulnerable_host(self) -> list[LateralMovement]:
+        """Find a public foothold with an observed flow to an internal vulnerable host (path #14).
+
+        Self-seeded over observed network topology + the IP-ownership bridge: a network-endpoint
+        ``OWNED_BY`` a public resource (the perimeter foothold) ``COMMUNICATES_WITH`` a dst endpoint
+        ``OWNED_BY`` a target resource that is directly ``VULNERABLE_TO`` a CVE. The attacker
+        breaches the internet-facing foothold, then pivots laterally over the observed flow to a
+        soft internal target. Observed flows only — derived reachability (CAN_REACH) is Stage 3.
+        Read-only."""
+        hits: list[LateralMovement] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for endpoint in resources:
+            if endpoint.properties.get("kind") != "network-endpoint":
+                continue
+            footholds: list[str] = []
+            for owner in await self._edges_from(endpoint.entity_id, (EdgeType.OWNED_BY.value,)):
+                fr = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=owner.dst_entity_id
+                )
+                if fr is not None and fr.properties.get("is_public") is True:
+                    footholds.append(fr.entity_id)
+            if not footholds:
+                continue
+            for comm in await self._edges_from(
+                endpoint.entity_id, (EdgeType.COMMUNICATES_WITH.value,)
+            ):
+                for towner in await self._edges_from(
+                    comm.dst_entity_id, (EdgeType.OWNED_BY.value,)
+                ):
+                    for vuln in await self._edges_from(
+                        towner.dst_entity_id, (EdgeType.VULNERABLE_TO.value,)
+                    ):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        for foothold_id in footholds:
+                            hits.append(
+                                LateralMovement(
+                                    foothold_id=foothold_id,
+                                    target_id=towner.dst_entity_id,
+                                    cve_id=cve.external_id,
+                                    severity=str(cve.properties.get("severity", "")),
+                                )
+                            )
         return hits
 
     async def _edges_from(

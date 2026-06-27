@@ -26,7 +26,7 @@ This doc defines the coverage denominator. Honest caveat: the denominator is the
 | 11  | Active runtime exploit on a vulnerable workload                   | ✅       | runtime_exploit_vulnerable                  |
 | 12  | Code-to-cloud: IaC misconfig deployed                             | ✅       | iac_misconfig_deployed                      |
 | 13  | Identity privilege-escalation chain (assume a role to reach data) | ✅       | privilege_escalation (C1)                   |
-| 14  | Network lateral movement (reachability/CAN_REACH)                 | ❌       | —                                           |
+| 14  | Network lateral movement (observed flow → vuln host)              | ✅       | lateral_movement (#14, observed flows)      |
 | 15  | Host/OS vulnerability (VM/AMI, not container)                     | ✅       | internet_exposed_host_vulnerable (#15)      |
 | 16  | Registry / supply-chain image vulnerability                       | 🟡       | subsumed by 3; registry scan operator-only  |
 | 17  | Secret-in-code → live cloud credential                            | ✅       | leaked_credential (#17, access-key-id join) |
@@ -36,7 +36,7 @@ This doc defines the coverage denominator. Honest caveat: the denominator is the
 | 21  | KMS key / encryption exposure                                     | ✅       | exposed_kms_key (#21)                       |
 | 22  | Compliance/posture drift as a risk                                | 🟡       | compliance not a path feeder                |
 
-**Covered: 18 full + 2 partial of 22 = ~86%** (19/22 = 0.864). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) closed #13; #20 RBAC privesc via cluster-admin-bound SA; #15 host/OS vuln via real `trivy` host scan keyed onto the public EC2 instance node.**
+**Covered: 19 full + 2 partial of 22 = ~91%** (20/22 = 0.909). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) #13; #20 RBAC privesc via cluster-admin-bound SA; #15 host/OS vuln via real `trivy` host scan keyed onto the public EC2 node; #14 lateral movement via OBSERVED flow (foothold→internal vuln host), NOT derived CAN_REACH reachability (Stage 3).**
 
 ## What the gaps tell us (the breadth backlog, ranked)
 
@@ -56,4 +56,4 @@ Promote ~3 of these → ~68%; the rest are depth/operator work.
 - **B. Live loop:** B1 one scan→correlate→rank command · B2 LocalStack full-loop e2e, timed · B3 continuous schedule (operator).
 - **C. Breadth:** C1 promote candidates (#13) · C2 KMS/secret sinks (#21) · C3 SaaS/compliance (#18/#22) · C4 agent depth (#19, effective-perms).
 
-**Verdict:** detection is **~86% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.
+**Verdict:** detection is **~91% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.

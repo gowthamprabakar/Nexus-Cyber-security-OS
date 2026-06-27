@@ -83,7 +83,7 @@ _COVERAGE: list[tuple[str, str]] = [
     ("runtime exploit on vuln workload", "full"),
     ("code-to-cloud IaC misconfig", "full"),
     ("identity privilege-escalation chain", "full"),
-    ("network lateral movement", "none"),
+    ("network lateral movement", "full"),
     ("host/OS vuln (VM/AMI)", "full"),
     ("registry / supply-chain vuln", "partial"),
     ("secret-in-code -> cloud cred", "full"),
@@ -106,10 +106,10 @@ def test_coverage_denominator_number() -> None:
     print(f"  uncovered: {', '.join(c for c, s in _COVERAGE if s == 'none')}")
     # Pin the number so doc and code can't drift; bump deliberately when a gap closes.
     assert (full, partial, total) == (
-        18,
+        19,
         2,
         22,
-    )  # +privilege_escalation (#13) +leaked_credential (#17) +rbac (#20) +host_vuln (#15)
+    )  # +privesc(#13) +leaked_cred(#17) +rbac(#20) +host_vuln(#15) +lateral(#14)
     assert pct >= 50, f"coverage {pct:.0f}% below the ~50-60% North-Star floor"
 
 

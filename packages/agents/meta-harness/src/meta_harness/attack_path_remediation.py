@@ -50,6 +50,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "credentials the workload held.",
         auto_fixable=False,
     ),
+    "lateral_movement": FixAdvice(
+        "Segment the network so the internet-facing foothold cannot reach the internal host "
+        "(tighten security groups / NACLs to least-privilege east-west), and patch the target "
+        "host's CVEs so a pivot has nothing to exploit.",
+        auto_fixable=False,
+    ),
     "malicious_destination": FixAdvice(
         "Treat the resource as potentially compromised: isolate it (deny egress via security group), "
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",

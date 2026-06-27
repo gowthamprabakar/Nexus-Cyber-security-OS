@@ -87,6 +87,7 @@ _OUT_OF_MODEL = {
     "exposed_database",
     "exposed_kms_key",
     "rbac_privilege_escalation",
+    "lateral_movement",
 }
 
 

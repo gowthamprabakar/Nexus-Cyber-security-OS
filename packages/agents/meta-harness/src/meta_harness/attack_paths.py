@@ -42,6 +42,7 @@ _SEVERITY: dict[str, int] = {
     "runtime_exploit_vulnerable": 88,
     "malicious_destination": 85,
     "exposed_database": 84,
+    "lateral_movement": 82,
     "internet_exposed_vulnerable": 80,
     "internet_exposed_host_vulnerable": 79,
     "privileged_vulnerable": 78,
@@ -139,6 +140,11 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"K8s ServiceAccount is bound to a cluster-admin RBAC role ({role}) — full cluster control"
     if path_type == "exposed_database":
         return f"Internet-facing managed database ({_types_phrase(grp)}) is publicly accessible"
+    if path_type == "lateral_movement":
+        return (
+            f"Public foothold has an observed network flow to an internal vulnerable host "
+            f"({_cve_phrase(grp)}) — lateral movement"
+        )
     if path_type == "malicious_destination":
         return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
     if path_type == "leaked_credential":
@@ -248,6 +254,10 @@ class AttackPathRanker:
         for md in await self._kg.find_resource_contacting_malicious_ip():
             g("malicious_destination", (md.resource_id,)).add(
                 (md.resource_id, md.destination_id), md.indicator_value
+            )
+        for lm in await self._kg.find_lateral_movement_to_vulnerable_host():
+            g("lateral_movement", (lm.foothold_id, lm.target_id)).add(
+                (lm.foothold_id, lm.target_id), lm.cve_id, cve_severity=lm.severity
             )
         for lc in await self._kg.find_leaked_credential_to_data():
             g("leaked_credential", (lc.principal_id, lc.resource_id)).add(
