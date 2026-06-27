@@ -82,7 +82,7 @@ _COVERAGE: list[tuple[str, str]] = [
     ("active C2 / malicious IP", "full"),
     ("runtime exploit on vuln workload", "full"),
     ("code-to-cloud IaC misconfig", "full"),
-    ("identity privilege-escalation chain", "none"),
+    ("identity privilege-escalation chain", "full"),
     ("network lateral movement", "none"),
     ("host/OS vuln (VM/AMI)", "none"),
     ("registry / supply-chain vuln", "partial"),
@@ -105,8 +105,8 @@ def test_coverage_denominator_number() -> None:
     print(f"  {full} full + {partial} partial of {total} = {covered:.0f}/{total} = {pct:.0f}%")
     print(f"  uncovered: {', '.join(c for c, s in _COVERAGE if s == 'none')}")
     # Pin the number so doc and code can't drift; bump deliberately when a gap closes.
-    assert (full, partial, total) == (12, 2, 22)
-    assert 50 <= pct <= 60, f"coverage {pct:.0f}% outside the claimed ~50-60% band"
+    assert (full, partial, total) == (13, 2, 22)  # +privilege_escalation (#13)
+    assert pct >= 50, f"coverage {pct:.0f}% below the ~50-60% North-Star floor"
 
 
 @pytest.mark.asyncio

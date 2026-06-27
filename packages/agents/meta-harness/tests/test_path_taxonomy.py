@@ -62,6 +62,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["HAS_ACCESS_TO", "EXPOSES_DATA"],
     ),
+    "privilege_escalation": (
+        (NC.IDENTITY, {}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["ASSUMES", "HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
     "runtime_exploit_vulnerable": (
         (NC.PROCESS_EVENT, {}),
         (NC.CVE_FINDING, {}),

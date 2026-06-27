@@ -187,6 +187,19 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class PrivilegeEscalationToData:
+    """A principal that can reach sensitive data by ASSUMING another role (privilege escalation),
+    without any direct grant of its own (path #13). The principal ASSUMES a role that HAS_ACCESS_TO
+    a public resource EXPOSING data — the principal escalates to the role to reach the data."""
+
+    principal_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class IacMisconfigDeployed:
     """A live cloud resource deployed from infrastructure-as-code that has a misconfiguration
     (cross-domain: cloud-posture/data-security + appsec). The resource DEPLOYED_VIA an IAC_ARTIFACT
@@ -680,6 +693,42 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_privilege_escalation_to_data(self) -> list[PrivilegeEscalationToData]:
+        """Find a principal that reaches sensitive data by assuming another role (path #13).
+
+        Self-seeded: enumerates IDENTITY nodes, follows ``ASSUMES`` to another IDENTITY (a role —
+        the internal role-assumption edge identity writes from trust policies), then the assumed
+        role's ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data. The principal has no direct
+        grant (else it is a fine-grained finding); it escalates via the role. Read-only."""
+        hits: list[PrivilegeEscalationToData] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            for assume in await self._edges_from(principal.entity_id, (EdgeType.ASSUMES.value,)):
+                role_id = assume.dst_entity_id
+                if role_id == principal.entity_id:
+                    continue
+                for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            PrivilegeEscalationToData(
+                                principal_id=principal.entity_id,
+                                role_id=role_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
         return hits
 
     async def find_resource_from_misconfigured_iac(self) -> list[IacMisconfigDeployed]:

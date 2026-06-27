@@ -67,6 +67,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "AES256) on the bucket.",
         auto_fixable=False,
     ),
+    "privilege_escalation": FixAdvice(
+        "Remove the principal from the role's trust policy (or tighten the AssumeRole condition) so "
+        "it can no longer escalate, and scope the assumed role's data access to least privilege.",
+        auto_fixable=False,
+    ),
     "external_trust": FixAdvice(
         "Remove or tighten the role's trust policy so the foreign account can no longer assume it; "
         "if cross-account access is required, scope it to specific principals and add a condition.",

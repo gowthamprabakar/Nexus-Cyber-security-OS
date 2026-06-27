@@ -45,6 +45,7 @@ _SEVERITY: dict[str, int] = {
     "public_unencrypted": 75,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
+    "privilege_escalation": 66,
     "resource_based_data": 62,
     "fine_grained_data": 60,
     "iac_misconfig_deployed": 58,
@@ -130,6 +131,10 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Public unencrypted resource exposes {_types_phrase(grp)} data"
     if path_type == "external_trust":
         return f"Externally-trusted principal can reach {_types_phrase(grp)} data"
+    if path_type == "privilege_escalation":
+        return (
+            f"Principal can assume a role to reach {_types_phrase(grp)} data (privilege escalation)"
+        )
     if path_type == "exposed_ai_sensitive_data":
         return f"Internet-exposed AI service reads {_types_phrase(grp)} training data"
     if path_type == "resource_based_data":
@@ -213,6 +218,10 @@ class AttackPathRanker:
         for md in await self._kg.find_resource_contacting_malicious_ip():
             g("malicious_destination", (md.resource_id,)).add(
                 (md.resource_id, md.destination_id), md.indicator_value
+            )
+        for pe in await self._kg.find_privilege_escalation_to_data():
+            g("privilege_escalation", (pe.principal_id, pe.resource_id)).add(
+                (pe.principal_id, pe.role_id, pe.resource_id), pe.data_type
             )
         for rb in await self._kg.find_resource_based_data_exposure():
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(

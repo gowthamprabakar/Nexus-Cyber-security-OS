@@ -101,6 +101,19 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 principal_node or "", resource_node or "", EdgeType.HAS_ACCESS_TO, {}
             )
 
+    async def record_assume_grants(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --ASSUMES--> IDENTITY edges (internal role assumption, path #13).
+
+        Each grant is ``(assuming_principal_arn, role_arn)``: a same-account principal a role's trust
+        policy lets assume it. Both endpoints upserted idempotently onto the IDENTITY spine, so the
+        edge joins principals the listing already wrote. The escalation reach (the assumed role's
+        ``HAS_ACCESS_TO``) is the privilege-escalation detector's join.
+        """
+        for principal_arn, role_arn in grants:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {})
+            role_node = await self.upsert_node(NodeCategory.IDENTITY, role_arn, {})
+            await self.add_edge(principal_node or "", role_node or "", EdgeType.ASSUMES, {})
+
     async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
         """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
 

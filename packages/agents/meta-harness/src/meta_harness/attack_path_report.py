@@ -30,6 +30,7 @@ _LABELS = {
     "privileged_vulnerable": "Privileged vulnerable workload",
     "public_unencrypted": "Public unencrypted data",
     "external_trust": "External trust",
+    "privilege_escalation": "Privilege escalation",
     "exposed_ai_sensitive_data": "Exposed AI service",
     "resource_based_data": "Resource-based access",
     "fine_grained_data": "Over-permissioned access",

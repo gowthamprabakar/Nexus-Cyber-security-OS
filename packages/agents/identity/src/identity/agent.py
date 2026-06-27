@@ -492,6 +492,38 @@ def _externally_trusted_arns(listing: IdentityListing) -> list[str]:
     return flagged
 
 
+def _named_aws_principals(principal: object) -> list[str]:
+    """Specific user/role ARNs named in ``Principal.AWS`` (not ``*``, account-root, or service)."""
+    if not isinstance(principal, dict):
+        return []
+    aws = principal.get("AWS")
+    values = [aws] if isinstance(aws, str) else list(aws or [])
+    return [v for v in values if isinstance(v, str) and (":role/" in v or ":user/" in v)]
+
+
+def _assume_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """``(principal_arn, role_arn)`` for each SAME-account named principal a role's trust policy
+    lets assume it — the internal role-assumption edges (privilege-escalation, path #13).
+
+    Offline, from each role's ``AssumeRolePolicyDocument``. Cross-account / wildcard / federated
+    principals are external trust (path 8, ``_externally_trusted_arns``), not internal escalation.
+    Deduped, order-preserving.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for role in listing.roles:
+        own_account = _account_of(role.arn)
+        for stmt in role.assume_role_policy_document.get("Statement") or []:
+            if stmt.get("Effect") != "Allow":
+                continue
+            for arn in _named_aws_principals(stmt.get("Principal")):
+                grant = (arn, role.arn)
+                if _account_of(arn) == own_account and arn != role.arn and grant not in seen:
+                    seen.add(grant)
+                    out.append(grant)
+    return out
+
+
 def _principal_is_federated(principal: object) -> bool:
     """True when a trust statement allows an external OIDC/SAML federation provider."""
     return isinstance(principal, dict) and bool(principal.get("Federated"))
