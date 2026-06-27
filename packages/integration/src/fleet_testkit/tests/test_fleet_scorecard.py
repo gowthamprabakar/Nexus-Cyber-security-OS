@@ -65,6 +65,50 @@ _PATHS: list[tuple[str, str, _Runner, str | None]] = [
 ]
 
 
+# Coverage denominator — docs/strategy/wiz-coverage-denominator-2026-06-28.md. The public CNAPP
+# attack-path category set (breadth proxy, NOT Wiz's internal rule count). "full" = a named
+# archetype covers it; "partial" = half credit. This is COVERAGE (what we detect at all), distinct
+# from the P/R QUALITY the banks measure (how well we detect what we cover).
+_COVERAGE: list[tuple[str, str]] = [
+    ("public storage + data", "full"),
+    ("public resource + secret", "full"),
+    ("internet-exposed + vuln", "full"),
+    ("privileged k8s + vuln", "full"),
+    ("over-permissioned identity -> data", "full"),
+    ("external/cross-account trust -> data", "full"),
+    ("resource-policy data exposure", "full"),
+    ("exposed AI + training data", "full"),
+    ("crown jewel (composite)", "full"),
+    ("active C2 / malicious IP", "full"),
+    ("runtime exploit on vuln workload", "full"),
+    ("code-to-cloud IaC misconfig", "full"),
+    ("identity privilege-escalation chain", "none"),
+    ("network lateral movement", "none"),
+    ("host/OS vuln (VM/AMI)", "none"),
+    ("registry / supply-chain vuln", "partial"),
+    ("secret-in-code -> cloud cred", "none"),
+    ("SaaS over-scoped OAuth / SSO", "none"),
+    ("exposed managed database", "none"),
+    ("k8s RBAC privilege escalation", "none"),
+    ("KMS key / encryption exposure", "none"),
+    ("compliance/posture drift", "partial"),
+]
+
+
+def test_coverage_denominator_number() -> None:
+    full = sum(1 for _, s in _COVERAGE if s == "full")
+    partial = sum(1 for _, s in _COVERAGE if s == "partial")
+    total = len(_COVERAGE)
+    covered = full + 0.5 * partial
+    pct = 100 * covered / total
+    print("\n=== DETECTION COVERAGE vs WIZ (breadth) ===")
+    print(f"  {full} full + {partial} partial of {total} = {covered:.0f}/{total} = {pct:.0f}%")
+    print(f"  uncovered: {', '.join(c for c, s in _COVERAGE if s == 'none')}")
+    # Pin the number so doc and code can't drift; bump deliberately when a gap closes.
+    assert (full, partial, total) == (12, 2, 22)
+    assert 50 <= pct <= 60, f"coverage {pct:.0f}% outside the claimed ~50-60% band"
+
+
 @pytest.mark.asyncio
 async def test_fleet_coverage_scorecard() -> None:
     base = Path(__file__).parent / "banks"
