@@ -23,6 +23,7 @@ _BANDS = ((90, "CRITICAL"), (70, "HIGH"), (50, "MEDIUM"), (0, "LOW"))
 #: path_type → a short human label (fallback: title-case the type).
 _LABELS = {
     "crown_jewel": "Crown jewel",
+    "leaked_credential": "Leaked cloud credential in code",
     "public_secret": "Public secret",
     "runtime_exploit_vulnerable": "Active exploit on vulnerable workload",
     "malicious_destination": "Communicating with malicious IP",

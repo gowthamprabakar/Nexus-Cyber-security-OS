@@ -37,6 +37,7 @@ from meta_harness.kg_query import KgQuery
 # path_type → severity (the triage-order product judgment).
 _SEVERITY: dict[str, int] = {
     "crown_jewel": 95,
+    "leaked_credential": 92,
     "public_secret": 90,
     "runtime_exploit_vulnerable": 88,
     "malicious_destination": 85,
@@ -125,6 +126,8 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Active runtime detection on a workload running a vulnerable image ({_cve_phrase(grp)})"
     if path_type == "malicious_destination":
         return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
+    if path_type == "leaked_credential":
+        return f"A live cloud credential is committed in source code and can reach {_types_phrase(grp)} data"
     if path_type == "public_secret":
         return f"Public resource exposes a {_types_phrase(grp)} credential"
     if path_type == "public_unencrypted":
@@ -218,6 +221,10 @@ class AttackPathRanker:
         for md in await self._kg.find_resource_contacting_malicious_ip():
             g("malicious_destination", (md.resource_id,)).add(
                 (md.resource_id, md.destination_id), md.indicator_value
+            )
+        for lc in await self._kg.find_leaked_credential_to_data():
+            g("leaked_credential", (lc.principal_id, lc.resource_id)).add(
+                (lc.principal_id, lc.credential_id, lc.repo_id, lc.resource_id), lc.data_type
             )
         for pe in await self._kg.find_privilege_escalation_to_data():
             g("privilege_escalation", (pe.principal_id, pe.resource_id)).add(

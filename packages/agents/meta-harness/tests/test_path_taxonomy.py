@@ -75,7 +75,7 @@ _EXPOSURE_IMPACT = {
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.
-_OUT_OF_MODEL = {"malicious_destination", "iac_misconfig_deployed"}
+_OUT_OF_MODEL = {"malicious_destination", "iac_misconfig_deployed", "leaked_credential"}
 
 
 def test_every_exposure_impact_archetype_is_expressible():

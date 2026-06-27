@@ -114,6 +114,20 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             role_node = await self.upsert_node(NodeCategory.IDENTITY, role_arn, {})
             await self.add_edge(principal_node or "", role_node or "", EdgeType.ASSUMES, {})
 
+    async def record_credential_ownership(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --OWNS--> SECRET(access-key-id) for each IAM user access key (path #17).
+
+        Each grant is ``(user_arn, access_key_id)``. The SECRET node is keyed by the access key ID
+        (the non-secret identifier), the SAME key appsec uses for a credential leaked in code — so
+        the leaked credential and its owning identity converge. No secret material.
+        """
+        for user_arn, key_id in grants:
+            user_node = await self.upsert_node(NodeCategory.IDENTITY, user_arn, {})
+            cred_node = await self.upsert_node(
+                NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
+            )
+            await self.add_edge(user_node or "", cred_node or "", EdgeType.OWNS, {})
+
     async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
         """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
 

@@ -14,11 +14,16 @@ severity cross the boundary.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
 from appsec.tools.gitleaks_runner import GitleaksResult
+
+#: AWS access key ID — the NON-secret credential identifier (CloudTrail logs it; the secret access
+#: key is the sensitive half). Only this is extracted for the leaked-cred graph join (path #17).
+_AKIA_RE = re.compile(r"AKIA[0-9A-Z]{16}")
 
 #: Sibling-workspace artifact DSPM consumes (same shape as D.1 runtime_secrets.json).
 CODE_SECRETS_OUTPUT = "code_secrets.json"
@@ -68,6 +73,25 @@ def _to_hit(raw: dict[str, Any]) -> CodeSecretHit:
 def gitleaks_to_secret_hits(result: GitleaksResult) -> list[CodeSecretHit]:
     """Flatten + redact gitleaks findings (drops Secret/Match by construction)."""
     return [_to_hit(raw) for raw in result.payload if isinstance(raw, dict)]
+
+
+def extract_leaked_key_ids(result: GitleaksResult) -> list[tuple[str, str]]:
+    """``(file, AWS access key ID)`` for each gitleaks hit whose match contains an ``AKIA…``.
+
+    NARROW, DELIBERATE exception to the redaction boundary (operator-approved, path #17): reads the
+    gitleaks match to extract ONLY the access key ID — the non-secret identifier AWS logs in
+    CloudTrail. The secret access key and ALL other match content are never retained. Feeds the
+    leaked-cred -> cloud-identity graph join; the DSPM handoff (:class:`CodeSecretHit`) is untouched
+    and stays fully redacted.
+    """
+    out: list[tuple[str, str]] = []
+    for raw in result.payload:
+        if not isinstance(raw, dict):
+            continue
+        match = _AKIA_RE.search(f"{raw.get('Secret', '')} {raw.get('Match', '')}")
+        if match:
+            out.append((str(raw.get("File", "")), match.group(0)))
+    return out
 
 
 def render_code_secrets_json(*, run_id: str, hits: Sequence[CodeSecretHit]) -> bytes:

@@ -39,6 +39,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "object, and enable S3 Block Public Access on the bucket.",
         auto_fixable=False,
     ),
+    "leaked_credential": FixAdvice(
+        "Deactivate and rotate the leaked AWS access key immediately (assume it is compromised), "
+        "purge it from the repo's git history, and scope the owning principal to least privilege.",
+        auto_fixable=False,
+    ),
     "runtime_exploit_vulnerable": FixAdvice(
         "Treat as an active incident: isolate the workload, investigate the runtime detection for "
         "compromise, rebuild the image on a patched base to clear the CVEs, and rotate any "

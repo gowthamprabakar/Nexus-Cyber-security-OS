@@ -187,6 +187,21 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class LeakedCredentialToData:
+    """An IAM credential committed in source code that can reach sensitive data (cross-domain:
+    appsec + identity, path #17). A user OWNS a SECRET (access key) that is DEFINED_IN a repo
+    (leaked) AND HAS_ACCESS_TO a public resource EXPOSING data — a live credential, in code,
+    that grants the data. ``credential_id`` is the access key ID (non-secret)."""
+
+    principal_id: str
+    credential_id: str
+    repo_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class PrivilegeEscalationToData:
     """A principal that can reach sensitive data by ASSUMING another role (privilege escalation),
     without any direct grant of its own (path #13). The principal ASSUMES a role that HAS_ACCESS_TO
@@ -693,6 +708,50 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_leaked_credential_to_data(self) -> list[LeakedCredentialToData]:
+        """Find an IAM credential committed in source code that can reach sensitive data (#17).
+
+        The cross-domain join (appsec + identity over the access-key-id key): enumerates IDENTITY
+        principals, follows ``OWNS`` to a SECRET (access key) that is ``DEFINED_IN`` a repo — the
+        leaked-in-code signal (appsec) — AND the principal's ``HAS_ACCESS_TO`` → resource →
+        ``EXPOSES_DATA`` → data. A live credential, in code, that grants the data. Read-only."""
+        hits: list[LeakedCredentialToData] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            leaked: list[tuple[str, str]] = []  # (credential_id_node, repo_id_node)
+            for owns in await self._edges_from(principal.entity_id, (EdgeType.OWNS.value,)):
+                for defined in await self._edges_from(
+                    owns.dst_entity_id, (EdgeType.DEFINED_IN.value,)
+                ):
+                    leaked.append((owns.dst_entity_id, defined.dst_entity_id))
+            if not leaked:
+                continue
+            for access in await self._edges_from(
+                principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)
+            ):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    for cred_id, repo_id in leaked:
+                        hits.append(
+                            LeakedCredentialToData(
+                                principal_id=principal.entity_id,
+                                credential_id=cred_id,
+                                repo_id=repo_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
         return hits
 
     async def find_privilege_escalation_to_data(self) -> list[PrivilegeEscalationToData]:

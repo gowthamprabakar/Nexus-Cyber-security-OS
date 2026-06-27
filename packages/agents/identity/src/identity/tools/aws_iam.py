@@ -49,6 +49,9 @@ class IamUser:
     inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
     #: gap #8: the permissions-boundary policy ARN (caps effective permissions), "" if none.
     permission_boundary_arn: str = ""
+    #: path #17: the user's AWS access key IDs (AKIA…, the non-secret identifiers) — the join key to
+    #: a credential leaked in source code (appsec keys the same SECRET node by the key id).
+    access_key_ids: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +247,15 @@ def _get_permission_boundary_arn(iam: Any, op: str, key: str, name: str) -> str:
         return ""
 
 
+def _list_access_key_ids(iam: Any, user_name: str) -> tuple[str, ...]:
+    """The user's AWS access key IDs (AKIA…) — non-secret identifiers, "" on failure."""
+    try:
+        meta = iam.list_access_keys(UserName=user_name).get("AccessKeyMetadata", [])
+    except Exception:
+        return ()
+    return tuple(str(k["AccessKeyId"]) for k in meta if k.get("AccessKeyId"))
+
+
 def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
     users: list[IamUser] = []
     for page in iam.get_paginator("list_users").paginate():
@@ -276,6 +288,7 @@ def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
                         permission_boundary_arn=_get_permission_boundary_arn(
                             iam, "get_user", "UserName", name
                         ),
+                        access_key_ids=_list_access_key_ids(iam, name),
                     )
                 )
             except Exception as exc:

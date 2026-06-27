@@ -11,32 +11,32 @@ This doc defines the coverage denominator. Honest caveat: the denominator is the
 
 ## The denominator — cloud attack-path categories
 
-| #   | Category                                                          | Covered? | By                                              |
-| --- | ----------------------------------------------------------------- | -------- | ----------------------------------------------- |
-| 1   | Public storage + sensitive data                                   | ✅       | public_unencrypted (7)                          |
-| 2   | Public resource + exposed secret/credential                       | ✅       | public_secret (3)                               |
-| 3   | Internet-exposed workload + vulnerability                         | ✅       | internet_exposed_vulnerable (2)                 |
-| 4   | Privileged K8s workload + vulnerability                           | ✅       | privileged_vulnerable (6)                       |
-| 5   | Over-permissioned identity → sensitive data                       | ✅       | fine_grained_data (4)                           |
-| 6   | External / cross-account trust → data                             | ✅       | external_trust (8)                              |
-| 7   | Resource-policy (bucket-policy) data exposure                     | ✅       | resource_based_data (#7)                        |
-| 8   | Exposed AI/ML service + sensitive training data                   | ✅       | exposed_ai_sensitive_data (10)                  |
-| 9   | Crown jewel (exposed+vuln+privilege+data, composite)              | ✅       | crown_jewel (5)                                 |
-| 10  | Active C2 / communication with known-malicious IP                 | ✅       | malicious_destination                           |
-| 11  | Active runtime exploit on a vulnerable workload                   | ✅       | runtime_exploit_vulnerable                      |
-| 12  | Code-to-cloud: IaC misconfig deployed                             | ✅       | iac_misconfig_deployed                          |
-| 13  | Identity privilege-escalation chain (assume a role to reach data) | ✅       | privilege_escalation (C1)                       |
-| 14  | Network lateral movement (reachability/CAN_REACH)                 | ❌       | —                                               |
-| 15  | Host/OS vulnerability (VM/AMI, not container)                     | ❌       | deferred (EC2 = AMI)                            |
-| 16  | Registry / supply-chain image vulnerability                       | 🟡       | subsumed by 3; registry scan operator-only      |
-| 17  | Secret-in-code → live cloud credential                            | ❌       | appsec finds the secret; not linked to the cred |
-| 18  | SaaS over-scoped OAuth / SSO → cloud identity                     | ❌       | sspm not wired (A4, operator-only)              |
-| 19  | Exposed managed database (RDS/etc. public)                        | ❌       | data-security is storage; DB sources deferred   |
-| 20  | K8s RBAC privilege escalation                                     | ❌       | k8s-posture has basic RBAC, not in paths        |
-| 21  | KMS key / encryption exposure                                     | ❌       | no KMS sink                                     |
-| 22  | Compliance/posture drift as a risk                                | 🟡       | compliance not a path feeder                    |
+| #   | Category                                                          | Covered? | By                                            |
+| --- | ----------------------------------------------------------------- | -------- | --------------------------------------------- |
+| 1   | Public storage + sensitive data                                   | ✅       | public_unencrypted (7)                        |
+| 2   | Public resource + exposed secret/credential                       | ✅       | public_secret (3)                             |
+| 3   | Internet-exposed workload + vulnerability                         | ✅       | internet_exposed_vulnerable (2)               |
+| 4   | Privileged K8s workload + vulnerability                           | ✅       | privileged_vulnerable (6)                     |
+| 5   | Over-permissioned identity → sensitive data                       | ✅       | fine_grained_data (4)                         |
+| 6   | External / cross-account trust → data                             | ✅       | external_trust (8)                            |
+| 7   | Resource-policy (bucket-policy) data exposure                     | ✅       | resource_based_data (#7)                      |
+| 8   | Exposed AI/ML service + sensitive training data                   | ✅       | exposed_ai_sensitive_data (10)                |
+| 9   | Crown jewel (exposed+vuln+privilege+data, composite)              | ✅       | crown_jewel (5)                               |
+| 10  | Active C2 / communication with known-malicious IP                 | ✅       | malicious_destination                         |
+| 11  | Active runtime exploit on a vulnerable workload                   | ✅       | runtime_exploit_vulnerable                    |
+| 12  | Code-to-cloud: IaC misconfig deployed                             | ✅       | iac_misconfig_deployed                        |
+| 13  | Identity privilege-escalation chain (assume a role to reach data) | ✅       | privilege_escalation (C1)                     |
+| 14  | Network lateral movement (reachability/CAN_REACH)                 | ❌       | —                                             |
+| 15  | Host/OS vulnerability (VM/AMI, not container)                     | ❌       | deferred (EC2 = AMI)                          |
+| 16  | Registry / supply-chain image vulnerability                       | 🟡       | subsumed by 3; registry scan operator-only    |
+| 17  | Secret-in-code → live cloud credential                            | ✅       | leaked_credential (#17, access-key-id join)   |
+| 18  | SaaS over-scoped OAuth / SSO → cloud identity                     | ❌       | sspm not wired (A4, operator-only)            |
+| 19  | Exposed managed database (RDS/etc. public)                        | ❌       | data-security is storage; DB sources deferred |
+| 20  | K8s RBAC privilege escalation                                     | ❌       | k8s-posture has basic RBAC, not in paths      |
+| 21  | KMS key / encryption exposure                                     | ❌       | no KMS sink                                   |
+| 22  | Compliance/posture drift as a risk                                | 🟡       | compliance not a path feeder                  |
 
-**Covered: 13 full + 2 partial of 22 = ~64%** (14/22 = 0.636). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) closed #13.**
+**Covered: 14 full + 2 partial of 22 = ~68%** (15/22 = 0.682). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) closed #13.**
 
 ## What the gaps tell us (the breadth backlog, ranked)
 
@@ -56,4 +56,4 @@ Promote ~3 of these → ~68%; the rest are depth/operator work.
 - **B. Live loop:** B1 one scan→correlate→rank command · B2 LocalStack full-loop e2e, timed · B3 continuous schedule (operator).
 - **C. Breadth:** C1 promote candidates (#13) · C2 KMS/secret sinks (#21) · C3 SaaS/compliance (#18/#22) · C4 agent depth (#19, effective-perms).
 
-**Verdict:** detection is **~64% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.
+**Verdict:** detection is **~68% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.

@@ -524,6 +524,12 @@ def _assume_grants(listing: IdentityListing) -> list[tuple[str, str]]:
     return out
 
 
+def _credential_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """``(user_arn, access_key_id)`` for every IAM user access key — the credential-ownership
+    edges that converge with a credential leaked in source code (path #17). Order-preserving."""
+    return [(user.arn, key_id) for user in listing.users for key_id in user.access_key_ids]
+
+
 def _principal_is_federated(principal: object) -> bool:
     """True when a trust statement allows an external OIDC/SAML federation provider."""
     return isinstance(principal, dict) and bool(principal.get("Federated"))
