@@ -1,13 +1,14 @@
 """The customer-facing render of ranked attack paths — text report + JSON + CLI wiring."""
 
 from click.testing import CliRunner
+from meta_harness.attack_path_remediation import REMEDIATION, advice_for
 from meta_harness.attack_path_report import (
     path_label,
     path_to_dict,
     render_report,
     severity_band,
 )
-from meta_harness.attack_paths import AttackPath
+from meta_harness.attack_paths import _SEVERITY, AttackPath
 from meta_harness.cli import main
 
 
@@ -59,6 +60,37 @@ def test_render_report_truncates_with_total():
 
 def test_render_report_empty():
     assert render_report([], tenant_id="t") == "No attack paths found for tenant t."
+
+
+def test_every_archetype_has_remediation_advice():
+    # No path the ranker can emit may render without a fix.
+    assert set(REMEDIATION) == set(_SEVERITY)
+
+
+def test_only_privileged_vulnerable_is_auto_fixable():
+    # Honest: A.1 only does K8s patches today, so exactly one archetype is auto-fixable.
+    auto = {pt for pt, a in REMEDIATION.items() if a.auto_fixable}
+    assert auto == {"privileged_vulnerable"}
+    assert advice_for("privileged_vulnerable").auto_via.startswith("remediation_k8s_patch_")
+
+
+def test_to_dict_includes_remediation():
+    d = path_to_dict(_path("public_secret", 90))
+    assert d["fix"].startswith("Rotate the exposed credential")
+    assert d["auto_fixable"] is False
+    assert d["auto_via"] == ""
+    d2 = path_to_dict(_path("privileged_vulnerable", 78))
+    assert d2["auto_fixable"] is True
+    assert d2["auto_via"] == "remediation_k8s_patch_disable_privileged_container"
+
+
+def test_render_includes_fix_and_auto_fix_lines():
+    out = render_report(
+        [_path("public_secret", 90), _path("privileged_vulnerable", 78)], tenant_id="t"
+    )
+    assert "Fix: Rotate the exposed credential" in out
+    assert "Auto-fix: no (manual)" in out
+    assert "Auto-fix: yes (remediation_k8s_patch_disable_privileged_container)" in out
 
 
 def test_cli_attack_paths_is_wired():

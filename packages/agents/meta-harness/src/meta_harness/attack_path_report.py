@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from meta_harness.attack_path_remediation import advice_for
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -42,7 +44,8 @@ def path_label(path_type: str) -> str:
 
 
 def path_to_dict(path: AttackPath) -> dict[str, object]:
-    """JSON-serializable view of one attack path (for an API surface)."""
+    """JSON-serializable view of one attack path, including remediation advice (for an API)."""
+    advice = advice_for(path.path_type)
     return {
         "path_type": path.path_type,
         "label": path_label(path.path_type),
@@ -52,6 +55,9 @@ def path_to_dict(path: AttackPath) -> dict[str, object]:
         "count": path.count,
         "evidence": list(path.evidence),
         "entities": list(path.entities),
+        "fix": advice.steps if advice else "",
+        "auto_fixable": advice.auto_fixable if advice else False,
+        "auto_via": advice.auto_via if advice else "",
     }
 
 
@@ -76,6 +82,11 @@ def render_report(paths: Sequence[AttackPath], *, tenant_id: str, limit: int = 1
             f"     {p.count} finding{'s' if p.count != 1 else ''}"
             f" · {len(p.entities)} resource{'s' if len(p.entities) != 1 else ''}"
         )
+        advice = advice_for(p.path_type)
+        if advice:
+            lines.append(f"     Fix: {advice.steps}")
+            auto = f"yes ({advice.auto_via})" if advice.auto_fixable else "no (manual)"
+            lines.append(f"     Auto-fix: {auto}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
