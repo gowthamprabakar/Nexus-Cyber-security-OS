@@ -24,15 +24,35 @@ _ACTIVE_STATES = frozenset({"running", "pending"})
 
 @dataclass(frozen=True, slots=True)
 class Ec2Workload:
-    """An EC2 instance resolved to its ARN, internet-exposure, and instance-profile role."""
+    """An EC2 instance resolved to its ARN, internet-exposure, role, and private IPs."""
 
     instance_arn: str
     is_public: bool
     role_arn: str = ""
+    #: The instance's private IPv4 addresses — the join key the network-endpoint→instance
+    #: resolver (``OWNED_BY`` bridge) matches a flow's IP against.
+    private_ips: tuple[str, ...] = ()
 
 
 def _instance_arn(instance_id: str, *, account_id: str, region: str) -> str:
     return f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
+
+
+def _instance_private_ips(instance: dict) -> tuple[str, ...]:
+    """The instance's private IPv4 addresses (top-level + per-network-interface), deduped."""
+    ips: list[str] = []
+    top = instance.get("PrivateIpAddress")
+    if top:
+        ips.append(str(top))
+    for eni in instance.get("NetworkInterfaces", []):
+        for pa in eni.get("PrivateIpAddresses", []):
+            ip = pa.get("PrivateIpAddress")
+            if ip:
+                ips.append(str(ip))
+        eni_ip = eni.get("PrivateIpAddress")
+        if eni_ip:
+            ips.append(str(eni_ip))
+    return tuple(dict.fromkeys(ips))  # dedupe, order-preserving
 
 
 def _instance_sg_ids(instance: dict) -> list[str]:
@@ -76,6 +96,7 @@ def read_ec2_workloads(
                     ),
                     is_public=is_public,
                     role_arn=_profile_role_arn(iam, instance.get("IamInstanceProfile")),
+                    private_ips=_instance_private_ips(instance),
                 )
             )
     return workloads

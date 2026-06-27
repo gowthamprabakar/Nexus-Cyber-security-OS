@@ -192,10 +192,12 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         EC2 runs an AMI, not a container image — host-vuln is a separate slice.)
         """
         for workload in workloads:
+            props: dict[str, Any] = {"kind": "ec2-instance", "is_public": workload.is_public}
+            if workload.private_ips:
+                # The join key for the network-endpoint→instance OWNED_BY bridge (correlation).
+                props["private_ips"] = list(workload.private_ips)
             instance_node = await self.upsert_node(
-                NodeCategory.CLOUD_RESOURCE,
-                workload.instance_arn,
-                {"kind": "ec2-instance", "is_public": workload.is_public},
+                NodeCategory.CLOUD_RESOURCE, workload.instance_arn, props
             )
             if workload.role_arn:
                 role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})

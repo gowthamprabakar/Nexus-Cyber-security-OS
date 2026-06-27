@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import boto3
+from cloud_posture.tools.aws_ec2 import Ec2Workload, read_ec2_workloads
 from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
 from data_security.canonical import s3_bucket_arn
@@ -344,6 +345,34 @@ def setup_ecs_workload(
     return str(service["service"]["serviceArn"])
 
 
+def setup_ec2_instance(ec2: object, *, name: str = "vm") -> str:
+    """Seed one running EC2 instance in a real VPC/subnet; returns its private IP.
+
+    The private IP is the join key the network-endpoint→instance ``OWNED_BY`` resolver matches a
+    flow's src IP against (cross-domain path A1).
+    """
+    vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
+    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    instance = ec2.run_instances(  # type: ignore[attr-defined]
+        ImageId="ami-12345678",
+        MinCount=1,
+        MaxCount=1,
+        SubnetId=subnet,
+        InstanceType="t2.micro",
+        TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": name}]}],
+    )["Instances"][0]
+    return str(instance["PrivateIpAddress"])
+
+
+async def drive_ec2_workloads(
+    store: SemanticStore, *, tenant_id: str, ec2_client: object, iam_client: object
+) -> list[Ec2Workload]:
+    """Run cloud-posture's REAL EC2 reader + ``record_ec2_workloads`` (instance + private IPs)."""
+    workloads = read_ec2_workloads(ec2_client, iam_client)
+    await CloudPostureKgWriter(store, tenant_id).record_ec2_workloads(workloads)
+    return workloads
+
+
 async def drive_cloud_workloads(
     store: SemanticStore,
     *,
@@ -386,6 +415,7 @@ __all__ = [
     "drive_aispm",
     "drive_cloud_workloads",
     "drive_data_security",
+    "drive_ec2_workloads",
     "moto_ai_clients",
     "moto_all_clients",
     "moto_aws_clients",
@@ -393,6 +423,7 @@ __all__ = [
     "moto_full_clients",
     "moto_s3",
     "moto_scene_clients",
+    "setup_ec2_instance",
     "setup_ecs_workload",
     "setup_sagemaker_endpoint",
 ]

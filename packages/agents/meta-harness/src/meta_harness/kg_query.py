@@ -187,6 +187,18 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class MaliciousDestinationExposure:
+    """An owned cloud resource communicating with a known-malicious IP (cross-domain: network +
+    threat-intel). The endpoint OWNED_BY the resource COMMUNICATES_WITH a destination that
+    MATCHES_INDICATOR a threat-intel IOC — active C2/exfil signal on the account's own resource."""
+
+    resource_id: str
+    destination_id: str
+    indicator_id: str
+    indicator_value: str
+
+
+@dataclass(frozen=True, slots=True)
 class ResourceBasedDataExposure:
     """A principal granted access by a resource's OWN policy (an S3 bucket policy) to a public
     resource exposing sensitive data — access invisible to IAM-side grant resolution (gap #7).
@@ -642,6 +654,48 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_resource_contacting_malicious_ip(
+        self,
+    ) -> list[MaliciousDestinationExposure]:
+        """Find an owned cloud resource communicating with a known-malicious IP (cross-domain).
+
+        The mechanism-② cross-domain join (network + threat-intel): enumerates network-endpoint
+        nodes that are ``OWNED_BY`` a cloud resource (the IP→instance bridge), follows
+        ``COMMUNICATES_WITH`` to a destination endpoint, then ``MATCHES_INDICATOR`` (the IP→IOC
+        bridge) to a threat-intel IOC. One hit per (owning resource, malicious destination). An
+        active C2/exfil signal on the account's own resource. Read-only; self-seeded."""
+        hits: list[MaliciousDestinationExposure] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for endpoint in resources:
+            if endpoint.properties.get("kind") != "network-endpoint":
+                continue
+            owners = await self._edges_from(endpoint.entity_id, (EdgeType.OWNED_BY.value,))
+            if not owners:
+                continue
+            for comm in await self._edges_from(
+                endpoint.entity_id, (EdgeType.COMMUNICATES_WITH.value,)
+            ):
+                for match in await self._edges_from(
+                    comm.dst_entity_id, (EdgeType.MATCHES_INDICATOR.value,)
+                ):
+                    ioc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=match.dst_entity_id
+                    )
+                    if ioc is None:
+                        continue
+                    for owner in owners:
+                        hits.append(
+                            MaliciousDestinationExposure(
+                                resource_id=owner.dst_entity_id,
+                                destination_id=comm.dst_entity_id,
+                                indicator_id=ioc.entity_id,
+                                indicator_value=str(ioc.properties.get("value", "")),
+                            )
+                        )
         return hits
 
     async def _edges_from(

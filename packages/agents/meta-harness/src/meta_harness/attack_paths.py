@@ -38,6 +38,7 @@ from meta_harness.kg_query import KgQuery
 _SEVERITY: dict[str, int] = {
     "crown_jewel": 95,
     "public_secret": 90,
+    "malicious_destination": 85,
     "internet_exposed_vulnerable": 80,
     "privileged_vulnerable": 78,
     "public_unencrypted": 75,
@@ -117,6 +118,8 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Internet-exposed workload runs an image with {_cve_phrase(grp)}"
     if path_type == "privileged_vulnerable":
         return f"Privileged K8s pod runs an image with {_cve_phrase(grp)}"
+    if path_type == "malicious_destination":
+        return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
     if path_type == "public_secret":
         return f"Public resource exposes a {_types_phrase(grp)} credential"
     if path_type == "public_unencrypted":
@@ -196,6 +199,10 @@ class AttackPathRanker:
         for a in await self._kg.find_exposed_ai_with_sensitive_data():
             g("exposed_ai_sensitive_data", (a.service_id, a.resource_id)).add(
                 (a.service_id, a.resource_id, a.data_classification_id), a.data_type
+            )
+        for md in await self._kg.find_resource_contacting_malicious_ip():
+            g("malicious_destination", (md.resource_id,)).add(
+                (md.resource_id, md.destination_id), md.indicator_value
             )
         for rb in await self._kg.find_resource_based_data_exposure():
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(

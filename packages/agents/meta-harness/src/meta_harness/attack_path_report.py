@@ -23,6 +23,7 @@ _BANDS = ((90, "CRITICAL"), (70, "HIGH"), (50, "MEDIUM"), (0, "LOW"))
 _LABELS = {
     "crown_jewel": "Crown jewel",
     "public_secret": "Public secret",
+    "malicious_destination": "Communicating with malicious IP",
     "internet_exposed_vulnerable": "Internet-exposed vulnerable workload",
     "privileged_vulnerable": "Privileged vulnerable workload",
     "public_unencrypted": "Public unencrypted data",

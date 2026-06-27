@@ -39,6 +39,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "object, and enable S3 Block Public Access on the bucket.",
         auto_fixable=False,
     ),
+    "malicious_destination": FixAdvice(
+        "Treat the resource as potentially compromised: isolate it (deny egress via security group), "
+        "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",
+        auto_fixable=False,
+    ),
     "internet_exposed_vulnerable": FixAdvice(
         "Rebuild the image on a patched base to clear the CVEs, and restrict the security group / "
         "load balancer so the workload is not reachable from 0.0.0.0/0.",
