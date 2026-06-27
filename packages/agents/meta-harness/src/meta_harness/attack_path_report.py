@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from meta_harness.attack_paths import AttackPath
+    from meta_harness.path_engine import CandidatePath
 
 #: Numeric severity → a triage band a human reads at a glance.
 _BANDS = ((90, "CRITICAL"), (70, "HIGH"), (50, "MEDIUM"), (0, "LOW"))
@@ -94,4 +95,48 @@ def render_report(paths: Sequence[AttackPath], *, tenant_id: str, limit: int = 1
     return "\n".join(lines).rstrip() + "\n"
 
 
-__all__ = ["path_label", "path_to_dict", "render_report", "severity_band"]
+def candidate_to_dict(candidate: CandidatePath) -> dict[str, object]:
+    """JSON-serializable view of one generic-engine candidate path (for an API / review queue)."""
+    p = candidate.path
+    return {
+        "source": p.source_marker,
+        "sink": p.sink_marker,
+        "edge_signature": list(p.edge_signature),
+        "hops": len(p.hops),
+        "score": candidate.score,
+        "confidence": candidate.confidence,
+    }
+
+
+def render_candidates(candidates: Sequence[CandidatePath], *, tenant_id: str) -> str:
+    """The candidate tier — novel source→impact paths the generic engine found, clearly UNVERIFIED.
+
+    Separate from :func:`render_report` (the confirmed, named findings) by design: candidates are
+    heuristically scored and unverified, a "what should we name next?" review queue, never mixed into
+    the prioritized confirmed list.
+    """
+    if not candidates:
+        return f"No candidate attack paths for tenant {tenant_id}."
+
+    lines = [
+        f"Candidate attack paths for tenant {tenant_id} ({len(candidates)} found — UNVERIFIED, "
+        "review to promote to a named detector):",
+        "",
+    ]
+    for i, c in enumerate(candidates, start=1):
+        p = c.path
+        lines.append(f"  {i}. [candidate {c.score}] {p.source_marker} -> {p.sink_marker}")
+        chain = " -> ".join(p.edge_signature)
+        lines.append(f"     via {chain} ({len(p.hops)} hop{'s' if len(p.hops) != 1 else ''})")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+__all__ = [
+    "candidate_to_dict",
+    "path_label",
+    "path_to_dict",
+    "render_candidates",
+    "render_report",
+    "severity_band",
+]

@@ -3,17 +3,25 @@
 from click.testing import CliRunner
 from meta_harness.attack_path_remediation import REMEDIATION, advice_for
 from meta_harness.attack_path_report import (
+    candidate_to_dict,
     path_label,
     path_to_dict,
+    render_candidates,
     render_report,
     severity_band,
 )
 from meta_harness.attack_paths import _SEVERITY, AttackPath
 from meta_harness.cli import main
+from meta_harness.path_engine import CandidatePath, GenericPath, PathHop
 
 
 def _path(path_type, severity, title="t", entities=("a",), evidence=("e",), count=1):
     return AttackPath(path_type, severity, title, entities, evidence, count)
+
+
+def _candidate(source, sink, edges, score):
+    hops = tuple(PathHop(e, f"n{i}") for i, e in enumerate(edges))
+    return CandidatePath(GenericPath("src", source, "snk", sink, hops), score)
 
 
 def test_severity_bands():
@@ -91,6 +99,35 @@ def test_render_includes_fix_and_auto_fix_lines():
     assert "Fix: Rotate the exposed credential" in out
     assert "Auto-fix: no (manual)" in out
     assert "Auto-fix: yes (remediation_k8s_patch_disable_privileged_container)" in out
+
+
+def test_render_candidates_is_distinct_and_unverified():
+    cands = [
+        _candidate("runtime_detection", "sensitive_data", ["EXECUTED_ON", "EXPOSES_DATA"], 38),
+        _candidate(
+            "external_identity", "known_vulnerability", ["HAS_ACCESS_TO", "VULNERABLE_TO"], 32
+        ),
+    ]
+    out = render_candidates(cands, tenant_id="acme")
+    assert "UNVERIFIED" in out  # never presented as confirmed
+    assert "1. [candidate 38] runtime_detection -> sensitive_data" in out
+    assert "via EXECUTED_ON -> EXPOSES_DATA (2 hops)" in out
+
+
+def test_render_candidates_empty():
+    assert render_candidates([], tenant_id="t") == "No candidate attack paths for tenant t."
+
+
+def test_candidate_to_dict_shape():
+    d = candidate_to_dict(_candidate("runtime_detection", "sensitive_data", ["EXECUTED_ON"], 40))
+    assert d == {
+        "source": "runtime_detection",
+        "sink": "sensitive_data",
+        "edge_signature": ["EXECUTED_ON"],
+        "hops": 1,
+        "score": 40,
+        "confidence": "candidate",
+    }
 
 
 def test_cli_attack_paths_is_wired():
