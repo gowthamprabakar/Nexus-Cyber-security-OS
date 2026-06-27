@@ -6,7 +6,9 @@
 >
 > **✅ A2 BUILT (commit 7dde0f4):** second cross-domain path — "active runtime detection on a workload running a vulnerable image" (runtime + vulnerability). Key simplification: the runtime host node **already carries `image_ref`**, so A2 rides the SAME proven `RUNS_IMAGE` bridge as paths 2/6 — **no host-id→instance resolver needed, the host-id-contract risk dissolved.** `link_runtime_images` → `RUNS_IMAGE`; `runtime_exploit_vulnerable` archetype (sev 88); real-trivy e2e.
 >
-> **Track A: 2 of 3 bridges built** (network+threat-intel, runtime). Remaining: A3 (code-to-cloud `DEPLOYED_VIA`, moto-tag-REAL); A4 deferred (operator-only), A5 skipped. Then revisit Track B (generic engine).
+> **✅ A3 BUILT (commit a7e9294):** third cross-domain path — "live resource deployed from misconfigured infrastructure-as-code" (cloud-posture + appsec, code-to-cloud). Key insight: appsec writes an `IAC_ARTIFACT` node ONLY for a misconfigured file, so the node's existence IS the signal. The bridge runs from the cloud side (the honest direction): a resource carries its IaC provenance as a `nexus:iac` tag → the `IAC_ARTIFACT` external_id. `link_deployed_via` → `DEPLOYED_VIA`; `iac_misconfig_deployed` archetype (sev 58); moto-tag-REAL e2e. appsec wrote its `DEPLOYED_VIA` edges.
+>
+> **✅ Track A COMPLETE — all 3 CI-REAL bridges built** (network+threat-intel, runtime, code-to-cloud). The combination now spans **9 node-type domains** (was 6); 5 formerly-cold agents are feeders. A4 (sspm federation) deferred as operator-only; A5 (compliance) skipped. **NEXT: revisit Track B** (the generic Phase-2 engine) now that the graph is rich enough to justify it.
 
 Answers the question: _"Have we finished the detection modules and their combination?"_ — **No.** This lays out exactly what's combined, what isn't, why, and the plan to finish it. We discuss and decide before building.
 
