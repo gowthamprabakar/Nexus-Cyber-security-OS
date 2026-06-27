@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import boto3
 from cloud_posture.tools.aws_ec2 import Ec2Workload, read_ec2_workloads
 from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
+from cloud_posture.tools.aws_rds import RdsInstance, read_rds_instances
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
 from data_security.canonical import s3_bucket_arn
 from data_security.classifiers import classify_bytes
@@ -368,6 +369,39 @@ def setup_ec2_instance(ec2: object, *, name: str = "vm", iac_artifact: str = "")
     return str(instance["PrivateIpAddress"])
 
 
+@contextmanager
+def moto_rds_client(*, region: str = _DEFAULT_REGION) -> Iterator[object]:
+    """Context manager yielding a bare moto-backed RDS client (path #19)."""
+    with mock_aws():
+        yield boto3.client("rds", region_name=region)
+
+
+def setup_rds_instance(
+    rds: object, *, name: str = "prod-db", public: bool = True, engine: str = "postgres"
+) -> str:
+    """Seed one RDS instance; returns its ARN. ``public`` sets ``PubliclyAccessible``."""
+    rds.create_db_instance(  # type: ignore[attr-defined]
+        DBInstanceIdentifier=name,
+        DBInstanceClass="db.t3.micro",
+        Engine=engine,
+        MasterUsername="admin",
+        MasterUserPassword="Sup3rSecret!",
+        AllocatedStorage=20,
+        PubliclyAccessible=public,
+    )
+    db = rds.describe_db_instances(DBInstanceIdentifier=name)["DBInstances"][0]  # type: ignore[attr-defined]
+    return str(db["DBInstanceArn"])
+
+
+async def drive_rds_instances(
+    store: SemanticStore, *, tenant_id: str, rds_client: object
+) -> list[RdsInstance]:
+    """Run cloud-posture's REAL RDS reader + ``record_rds_instances``."""
+    instances = read_rds_instances(rds_client)
+    await CloudPostureKgWriter(store, tenant_id).record_rds_instances(instances)
+    return instances
+
+
 async def drive_ec2_workloads(
     store: SemanticStore, *, tenant_id: str, ec2_client: object, iam_client: object
 ) -> list[Ec2Workload]:
@@ -420,14 +454,17 @@ __all__ = [
     "drive_cloud_workloads",
     "drive_data_security",
     "drive_ec2_workloads",
+    "drive_rds_instances",
     "moto_ai_clients",
     "moto_all_clients",
     "moto_aws_clients",
     "moto_ecs_clients",
     "moto_full_clients",
+    "moto_rds_client",
     "moto_s3",
     "moto_scene_clients",
     "setup_ec2_instance",
     "setup_ecs_workload",
+    "setup_rds_instance",
     "setup_sagemaker_endpoint",
 ]

@@ -88,7 +88,7 @@ _COVERAGE: list[tuple[str, str]] = [
     ("registry / supply-chain vuln", "partial"),
     ("secret-in-code -> cloud cred", "full"),
     ("SaaS over-scoped OAuth / SSO", "none"),
-    ("exposed managed database", "none"),
+    ("exposed managed database", "full"),
     ("k8s RBAC privilege escalation", "none"),
     ("KMS key / encryption exposure", "none"),
     ("compliance/posture drift", "partial"),
@@ -106,7 +106,7 @@ def test_coverage_denominator_number() -> None:
     print(f"  uncovered: {', '.join(c for c, s in _COVERAGE if s == 'none')}")
     # Pin the number so doc and code can't drift; bump deliberately when a gap closes.
     assert (full, partial, total) == (
-        14,
+        15,
         2,
         22,
     )  # +privilege_escalation (#13) +leaked_credential (#17)

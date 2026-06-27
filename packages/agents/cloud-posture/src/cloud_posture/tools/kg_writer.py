@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
+    from cloud_posture.tools.aws_rds import RdsInstance
     from cloud_posture.tools.azure_aci import AciWorkload
     from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload
 
@@ -181,6 +182,15 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 is_public=w.is_public,
                 kind="gcp-cloud-run-service",
                 assumes_principal=w.service_account,
+            )
+
+    async def record_rds_instances(self, instances: Iterable[RdsInstance]) -> None:
+        """Write each RDS instance as a ``CLOUD_RESOURCE{kind=rds-instance, is_public}`` (path #19)."""
+        for db in instances:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                db.instance_arn,
+                {"kind": "rds-instance", "is_public": db.is_public, "engine": db.engine},
             )
 
     async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:

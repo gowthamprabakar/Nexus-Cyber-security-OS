@@ -41,6 +41,7 @@ _SEVERITY: dict[str, int] = {
     "public_secret": 90,
     "runtime_exploit_vulnerable": 88,
     "malicious_destination": 85,
+    "exposed_database": 84,
     "internet_exposed_vulnerable": 80,
     "privileged_vulnerable": 78,
     "public_unencrypted": 75,
@@ -124,6 +125,8 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Privileged K8s pod runs an image with {_cve_phrase(grp)}"
     if path_type == "runtime_exploit_vulnerable":
         return f"Active runtime detection on a workload running a vulnerable image ({_cve_phrase(grp)})"
+    if path_type == "exposed_database":
+        return f"Internet-facing managed database ({_types_phrase(grp)}) is publicly accessible"
     if path_type == "malicious_destination":
         return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
     if path_type == "leaked_credential":
@@ -218,6 +221,8 @@ class AttackPathRanker:
             g("runtime_exploit_vulnerable", (re_.host_id,)).add(
                 (re_.host_id, re_.image_id), re_.cve_id, cve_severity=re_.severity
             )
+        for ed in await self._kg.find_exposed_database():
+            g("exposed_database", (ed.resource_id,)).add((ed.resource_id,), ed.engine or "database")
         for md in await self._kg.find_resource_contacting_malicious_ip():
             g("malicious_destination", (md.resource_id,)).add(
                 (md.resource_id, md.destination_id), md.indicator_value

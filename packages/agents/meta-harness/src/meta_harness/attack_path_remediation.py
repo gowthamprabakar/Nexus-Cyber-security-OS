@@ -55,6 +55,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",
         auto_fixable=False,
     ),
+    "exposed_database": FixAdvice(
+        "Set the database to not publicly accessible (PubliclyAccessible=false) and restrict its "
+        "security group to the application subnets; a managed database should never be internet-facing.",
+        auto_fixable=False,
+    ),
     "internet_exposed_vulnerable": FixAdvice(
         "Rebuild the image on a patched base to clear the CVEs, and restrict the security group / "
         "load balancer so the workload is not reachable from 0.0.0.0/0.",

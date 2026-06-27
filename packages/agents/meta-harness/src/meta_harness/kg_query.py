@@ -187,6 +187,15 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class ExposedDatabase:
+    """A publicly-accessible managed database (path #19) — an internet-facing data store. The
+    resource itself is the finding; a managed DB is sensitive-by-assumption."""
+
+    resource_id: str
+    engine: str
+
+
+@dataclass(frozen=True, slots=True)
 class LeakedCredentialToData:
     """An IAM credential committed in source code that can reach sensitive data (cross-domain:
     appsec + identity, path #17). A user OWNS a SECRET (access key) that is DEFINED_IN a repo
@@ -708,6 +717,17 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_exposed_database(self) -> list[ExposedDatabase]:
+        """Find publicly-accessible managed databases (path #19). Self-seeded: a CLOUD_RESOURCE with
+        ``kind=rds-instance`` and ``is_public`` — an internet-facing data store. Read-only."""
+        hits: list[ExposedDatabase] = []
+        for r in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if r.properties.get("kind") == "rds-instance" and r.properties.get("is_public") is True:
+                hits.append(ExposedDatabase(r.entity_id, str(r.properties.get("engine", ""))))
         return hits
 
     async def find_leaked_credential_to_data(self) -> list[LeakedCredentialToData]:

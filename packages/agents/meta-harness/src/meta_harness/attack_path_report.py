@@ -27,6 +27,7 @@ _LABELS = {
     "public_secret": "Public secret",
     "runtime_exploit_vulnerable": "Active exploit on vulnerable workload",
     "malicious_destination": "Communicating with malicious IP",
+    "exposed_database": "Exposed managed database",
     "internet_exposed_vulnerable": "Internet-exposed vulnerable workload",
     "privileged_vulnerable": "Privileged vulnerable workload",
     "public_unencrypted": "Public unencrypted data",
