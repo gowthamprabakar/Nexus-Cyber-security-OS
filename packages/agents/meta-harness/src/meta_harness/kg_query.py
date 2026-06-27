@@ -187,6 +187,19 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeExploitVulnerableWorkload:
+    """An active runtime detection firing ON a workload running a vulnerable image (cross-domain:
+    runtime + vulnerability). A runtime event EXECUTED_ON a host that RUNS_IMAGE a VULNERABLE_TO
+    image — suspicious behaviour on a known-vulnerable workload, i.e. likely active exploitation."""
+
+    host_id: str
+    event_id: str
+    image_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class MaliciousDestinationExposure:
     """An owned cloud resource communicating with a known-malicious IP (cross-domain: network +
     threat-intel). The endpoint OWNED_BY the resource COMMUNICATES_WITH a destination that
@@ -654,6 +667,45 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_runtime_exploit_on_vulnerable_workload(
+        self,
+    ) -> list[RuntimeExploitVulnerableWorkload]:
+        """Find an active runtime detection on a workload running a vulnerable image (cross-domain).
+
+        The mechanism-② cross-domain join (runtime + vulnerability over the image-ref bridge):
+        enumerates runtime L6 event nodes (PROCESS_EVENT / FILE_INTEGRITY_EVENT), follows
+        ``EXECUTED_ON`` to the host, ``RUNS_IMAGE`` (the resolver-written bridge) to the image, then
+        ``VULNERABLE_TO`` to each CVE. One hit per (event, CVE) — suspicious behaviour on a
+        known-vulnerable workload, i.e. likely active exploitation. Read-only; self-seeded."""
+        hits: list[RuntimeExploitVulnerableWorkload] = []
+        for category in (NodeCategory.PROCESS_EVENT, NodeCategory.FILE_INTEGRITY_EVENT):
+            events = await self._semantic_store.list_entities_by_type(
+                tenant_id=self._customer_id, entity_type=category.value
+            )
+            for event in events:
+                for ex in await self._edges_from(event.entity_id, (EdgeType.EXECUTED_ON.value,)):
+                    for runs in await self._edges_from(
+                        ex.dst_entity_id, (EdgeType.RUNS_IMAGE.value,)
+                    ):
+                        for vuln in await self._edges_from(
+                            runs.dst_entity_id, (EdgeType.VULNERABLE_TO.value,)
+                        ):
+                            cve = await self._semantic_store.get_entity(
+                                tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                            )
+                            if cve is None:
+                                continue
+                            hits.append(
+                                RuntimeExploitVulnerableWorkload(
+                                    host_id=ex.dst_entity_id,
+                                    event_id=event.entity_id,
+                                    image_id=runs.dst_entity_id,
+                                    cve_id=cve.external_id,
+                                    severity=str(cve.properties.get("severity", "")),
+                                )
+                            )
         return hits
 
     async def find_resource_contacting_malicious_ip(

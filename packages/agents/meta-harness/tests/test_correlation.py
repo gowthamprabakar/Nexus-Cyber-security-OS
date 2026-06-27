@@ -1,16 +1,19 @@
 """Cross-agent correlation resolvers — the OWNED_BY + MATCHES_INDICATOR bridge edges (hermetic)."""
 
 import pytest
-from charter.memory.graph_types import NodeCategory
+from charter.memory.graph_types import EdgeType, NodeCategory
 from fleet_testkit import in_memory_semantic_store
 from meta_harness.correlation import (
     correlate_all,
     link_ip_ownership,
+    link_runtime_images,
     link_threat_indicators,
 )
 from meta_harness.kg_query import KgQuery
 
 _R = NodeCategory.CLOUD_RESOURCE.value
+_PE = NodeCategory.PROCESS_EVENT.value
+_CVE = NodeCategory.CVE_FINDING.value
 
 
 async def _node(store, t, etype, ext, props):
@@ -77,3 +80,42 @@ async def test_ip_ownership_requires_matching_private_ip():
         )
         await _node(store, t, _R, "10.0.1.5", {"kind": "network-endpoint", "ip": "10.0.1.5"})
         assert await link_ip_ownership(store, t) == 0  # no endpoint IP matches an instance IP
+
+
+@pytest.mark.asyncio
+async def test_runtime_image_bridge_and_detector_fires():
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # A runtime event on a host carrying image_ref; vulnerability already scanned that image.
+        event = await _node(store, t, _PE, "RUNTIME-PROCESS-X-001-e", {"finding_type": "process"})
+        host = await _node(store, t, _R, "host-uid-1", {"image_ref": "myreg/app:1.0"})
+        image = await _node(store, t, _R, "myreg/app:1.0", {"kind": "container-image"})
+        cve = await _node(store, t, _CVE, "CVE-2020-7471", {"severity": "CRITICAL"})
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=event,
+            dst_entity_id=host,
+            relationship_type=EdgeType.EXECUTED_ON.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=image,
+            dst_entity_id=cve,
+            relationship_type=EdgeType.VULNERABLE_TO.value,
+            properties={},
+        )
+        assert await link_runtime_images(store, t) == 1  # RUNS_IMAGE: host → image
+
+        hits = await KgQuery(store, t).find_runtime_exploit_on_vulnerable_workload()
+        assert len(hits) == 1
+        assert hits[0].cve_id == "CVE-2020-7471"
+
+
+@pytest.mark.asyncio
+async def test_runtime_image_bridge_skips_unknown_image():
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # A runtime host whose image was never scanned → no image node to link to.
+        await _node(store, t, _R, "host-uid-1", {"image_ref": "myreg/unscanned:1.0"})
+        assert await link_runtime_images(store, t) == 0

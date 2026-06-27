@@ -84,10 +84,49 @@ async def link_threat_indicators(store: SemanticStore, tenant_id: str) -> int:
     return count
 
 
+async def link_runtime_images(store: SemanticStore, tenant_id: str) -> int:
+    """Write ``RUNS_IMAGE`` (runtime host → image node) where the host's image_ref matches an image
+    vulnerability already scanned. Returns #edges.
+
+    Runtime findings carry the workload's ``image_ref`` on the host node; it is the SAME key
+    vulnerability writes its CVE ``VULNERABLE_TO`` edges onto. Linking the runtime host to that
+    image node connects an active runtime detection to the image's known CVEs (cross-domain path
+    A2) — the same image-ref bridge proven for paths 2/6, no host-id→instance resolution needed.
+    Only links to an image node that already exists (vulnerability scanned it); otherwise there is
+    no CVE to reach and the edge is pointless.
+    """
+    resources = await _cloud_resources(store, tenant_id)
+    by_external_id = {r.external_id: r.entity_id for r in resources}
+    k8s_hosts = await store.list_entities_by_type(
+        tenant_id=tenant_id, entity_type=NodeCategory.K8S_OBJECT.value
+    )
+    hosts = [r for r in (*resources, *k8s_hosts) if r.properties.get("image_ref")]
+
+    count = 0
+    for host in hosts:
+        image_id = by_external_id.get(str(host.properties.get("image_ref", "")))
+        if image_id and image_id != host.entity_id:
+            await store.add_relationship(
+                tenant_id=tenant_id,
+                src_entity_id=host.entity_id,
+                dst_entity_id=image_id,
+                relationship_type=EdgeType.RUNS_IMAGE.value,
+                properties={},
+            )
+            count += 1
+    return count
+
+
 async def correlate_all(store: SemanticStore, tenant_id: str) -> None:
     """Run every cross-agent bridge resolver for a tenant (call after feeders, before detectors)."""
     await link_ip_ownership(store, tenant_id)
     await link_threat_indicators(store, tenant_id)
+    await link_runtime_images(store, tenant_id)
 
 
-__all__ = ["correlate_all", "link_ip_ownership", "link_threat_indicators"]
+__all__ = [
+    "correlate_all",
+    "link_ip_ownership",
+    "link_runtime_images",
+    "link_threat_indicators",
+]
