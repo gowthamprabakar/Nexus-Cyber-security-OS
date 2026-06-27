@@ -175,6 +175,19 @@ class PrivilegedVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class RbacPrivilegeEscalation:
+    """A K8s ServiceAccount bound to a cluster-admin-equivalent RBAC role (path #20). The SA
+    --BINDS--> role node whose ``is_admin`` property is True (wildcard verbs on wildcard
+    resources). Whoever controls the SA can do anything in the cluster — a privilege-escalation
+    path to full cluster control. ``role_name`` is the bound role's name for the headline."""
+
+    subject_id: str
+    role_id: str
+    subject_name: str
+    role_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExposedAiWithSensitiveData:
     """An internet-exposed AI service whose training-data bucket is public + sensitive
     (path 10). The service EXPOSES_MODEL to the internet AND HAS_ACCESS_TO a bucket that
@@ -657,6 +670,36 @@ class KgQuery:
                             severity=str(cve.properties.get("severity", "")),
                         )
                     )
+        return hits
+
+    async def find_rbac_privilege_escalation(self) -> list[RbacPrivilegeEscalation]:
+        """Find K8s ServiceAccounts bound to a cluster-admin-equivalent RBAC role (path #20).
+
+        Self-seeded: enumerates K8S_OBJECT service-accounts, follows ``BINDS`` to the role node,
+        and emits a hit when that role's ``is_admin`` property is True (k8s-posture marks a role
+        admin when a rule grants wildcard verbs on wildcard resources). A bound cluster-admin SA
+        is a privilege-escalation path to full cluster control. Read-only."""
+        hits: list[RbacPrivilegeEscalation] = []
+        objects = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for sa in objects:
+            if sa.properties.get("kind") != "service-account":
+                continue
+            for binds in await self._edges_from(sa.entity_id, (EdgeType.BINDS.value,)):
+                role = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=binds.dst_entity_id
+                )
+                if role is None or role.properties.get("is_admin") is not True:
+                    continue
+                hits.append(
+                    RbacPrivilegeEscalation(
+                        subject_id=sa.entity_id,
+                        role_id=role.entity_id,
+                        subject_name=str(sa.properties.get("name", "")),
+                        role_name=str(role.properties.get("name", "")),
+                    )
+                )
         return hits
 
     async def find_exposed_ai_with_sensitive_data(self) -> list[ExposedAiWithSensitiveData]:

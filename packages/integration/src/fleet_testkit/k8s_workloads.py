@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from k8s_posture.kg_writer import KnowledgeGraphWriter as K8sKgWriter
+from k8s_posture.tools.cluster_inventory import inventory_from_reader
 from k8s_posture.tools.privileged_pods import privileged_workloads
 
 if TYPE_CHECKING:
@@ -63,4 +64,76 @@ async def drive_privileged_workloads(
     return len(workloads)
 
 
-__all__ = ["drive_privileged_workloads", "managed_cluster_pods"]
+class _CannedClusterReader:
+    """A fake ``ClusterReader`` returning serialized RBAC dicts — the kube analogue of moto.
+
+    Feeds the REAL :func:`inventory_from_reader` parser the exact dict shape the live kubernetes
+    client serializes (``kind`` reinstated on list items), so the over-privileged-role parse runs
+    for real against a stand-in cluster.
+    """
+
+    def __init__(
+        self, *, sa_name: str, namespace: str, role_name: str, role_rules: list[dict[str, Any]]
+    ) -> None:
+        self._sa_name = sa_name
+        self._namespace = namespace
+        self._role_name = role_name
+        self._role_rules = role_rules
+
+    def list_namespaces(self) -> list[dict[str, Any]]:
+        return [{"metadata": {"name": self._namespace}}]
+
+    def list_service_accounts(self) -> list[dict[str, Any]]:
+        return [{"metadata": {"name": self._sa_name, "namespace": self._namespace}}]
+
+    def list_roles(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "kind": "ClusterRole",
+                "metadata": {"name": self._role_name},
+                "rules": self._role_rules,
+            }
+        ]
+
+    def list_role_bindings(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "kind": "ClusterRoleBinding",
+                "metadata": {"name": f"{self._role_name}-binding"},
+                "roleRef": {"kind": "ClusterRole", "name": self._role_name},
+                "subjects": [
+                    {"kind": "ServiceAccount", "name": self._sa_name, "namespace": self._namespace}
+                ],
+            }
+        ]
+
+
+def cluster_admin_rbac_reader(
+    *, sa_name: str = "deployer", namespace: str = "default", admin: bool = True
+) -> _CannedClusterReader:
+    """A canned reader: a ServiceAccount bound to a ClusterRole that is cluster-admin (``admin``)
+    or scoped read-only (``not admin``). Drives path #20's over-privileged-role parse + writer."""
+    rules = (
+        [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}]
+        if admin
+        else [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list"]}]
+    )
+    return _CannedClusterReader(
+        sa_name=sa_name, namespace=namespace, role_name="cluster-admin", role_rules=rules
+    )
+
+
+async def drive_cluster_inventory(
+    store: SemanticStore, *, tenant_id: str, cluster_id: str, reader: _CannedClusterReader
+) -> None:
+    """Run k8s-posture's REAL RBAC inventory parser + writer (namespaces/SAs/roles/bindings)."""
+    inventory = inventory_from_reader(reader, cluster_id=cluster_id)
+    await K8sKgWriter(store, tenant_id).record_inventory(inventory)
+
+
+__all__ = [
+    "cluster_admin_rbac_reader",
+    "drive_cluster_inventory",
+    "drive_privileged_workloads",
+    "managed_cluster_pods",
+]

@@ -31,6 +31,7 @@ _LABELS = {
     "exposed_kms_key": "Exposed KMS key policy",
     "internet_exposed_vulnerable": "Internet-exposed vulnerable workload",
     "privileged_vulnerable": "Privileged vulnerable workload",
+    "rbac_privilege_escalation": "K8s RBAC privilege escalation",
     "public_unencrypted": "Public unencrypted data",
     "external_trust": "External trust",
     "privilege_escalation": "Privilege escalation",

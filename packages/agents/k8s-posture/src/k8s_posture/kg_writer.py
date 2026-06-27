@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
+from k8s_posture.rbac.enumerate import role_is_admin
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -105,6 +107,7 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     "name": role.name,
                     "namespace": role.namespace,
                     "cluster_id": cluster,
+                    "is_admin": role_is_admin(role),
                 },
             )
 

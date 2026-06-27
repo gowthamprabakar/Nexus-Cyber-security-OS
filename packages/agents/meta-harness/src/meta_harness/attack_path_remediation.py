@@ -60,6 +60,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "the specific roles that need it; a public key policy defeats encryption-at-rest.",
         auto_fixable=False,
     ),
+    "rbac_privilege_escalation": FixAdvice(
+        "Remove the cluster-admin RoleBinding from the ServiceAccount and bind a least-privilege Role "
+        "scoped to only the verbs and resources the workload needs; a bound cluster-admin SA is a "
+        "full-cluster-control escalation path.",
+        auto_fixable=False,
+    ),
     "exposed_database": FixAdvice(
         "Set the database to not publicly accessible (PubliclyAccessible=false) and restrict its "
         "security group to the application subnets; a managed database should never be internet-facing.",

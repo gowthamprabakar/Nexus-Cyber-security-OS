@@ -89,7 +89,7 @@ _COVERAGE: list[tuple[str, str]] = [
     ("secret-in-code -> cloud cred", "full"),
     ("SaaS over-scoped OAuth / SSO", "none"),
     ("exposed managed database", "full"),
-    ("k8s RBAC privilege escalation", "none"),
+    ("k8s RBAC privilege escalation", "full"),
     ("KMS key / encryption exposure", "full"),
     ("compliance/posture drift", "partial"),
 ]
@@ -106,10 +106,10 @@ def test_coverage_denominator_number() -> None:
     print(f"  uncovered: {', '.join(c for c, s in _COVERAGE if s == 'none')}")
     # Pin the number so doc and code can't drift; bump deliberately when a gap closes.
     assert (full, partial, total) == (
-        16,
+        17,
         2,
         22,
-    )  # +privilege_escalation (#13) +leaked_credential (#17)
+    )  # +privilege_escalation (#13) +leaked_credential (#17) +rbac_privilege_escalation (#20)
     assert pct >= 50, f"coverage {pct:.0f}% below the ~50-60% North-Star floor"
 
 

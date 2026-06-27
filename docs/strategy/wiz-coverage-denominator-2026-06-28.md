@@ -32,11 +32,11 @@ This doc defines the coverage denominator. Honest caveat: the denominator is the
 | 17  | Secret-in-code → live cloud credential                            | ✅       | leaked_credential (#17, access-key-id join) |
 | 18  | SaaS over-scoped OAuth / SSO → cloud identity                     | ❌       | sspm not wired (A4, operator-only)          |
 | 19  | Exposed managed database (RDS publicly accessible)                | ✅       | exposed_database (#19)                      |
-| 20  | K8s RBAC privilege escalation                                     | ❌       | k8s-posture has basic RBAC, not in paths    |
+| 20  | K8s RBAC privilege escalation                                     | ✅       | rbac_privilege_escalation (#20)             |
 | 21  | KMS key / encryption exposure                                     | ✅       | exposed_kms_key (#21)                       |
 | 22  | Compliance/posture drift as a risk                                | 🟡       | compliance not a path feeder                |
 
-**Covered: 16 full + 2 partial of 22 = ~77%** (17/22 = 0.773). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) closed #13.**
+**Covered: 17 full + 2 partial of 22 = ~82%** (18/22 = 0.818). **Exceeds the ~50-60% North-Star band — with an explicit list, not a feel. C1 (privilege_escalation) closed #13; #20 RBAC privesc closed via cluster-admin-bound SA detection.**
 
 ## What the gaps tell us (the breadth backlog, ranked)
 
@@ -56,4 +56,4 @@ Promote ~3 of these → ~68%; the rest are depth/operator work.
 - **B. Live loop:** B1 one scan→correlate→rank command · B2 LocalStack full-loop e2e, timed · B3 continuous schedule (operator).
 - **C. Breadth:** C1 promote candidates (#13) · C2 KMS/secret sinks (#21) · C3 SaaS/compliance (#18/#22) · C4 agent depth (#19, effective-perms).
 
-**Verdict:** detection is **~77% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.
+**Verdict:** detection is **~82% coverage / 1.000 quality on what it covers**. "Complete per North Star" needs **B (live loop)** + a few **C** slices to push coverage toward 60-65%. The number is now real.

@@ -44,6 +44,7 @@ _SEVERITY: dict[str, int] = {
     "exposed_database": 84,
     "internet_exposed_vulnerable": 80,
     "privileged_vulnerable": 78,
+    "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
     "exposed_kms_key": 72,
     "external_trust": 70,
@@ -128,6 +129,9 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Active runtime detection on a workload running a vulnerable image ({_cve_phrase(grp)})"
     if path_type == "exposed_kms_key":
         return "KMS key policy is internet-open (the encryption boundary is exposed)"
+    if path_type == "rbac_privilege_escalation":
+        role = grp.context.get("role_name", "")
+        return f"K8s ServiceAccount is bound to a cluster-admin RBAC role ({role}) — full cluster control"
     if path_type == "exposed_database":
         return f"Internet-facing managed database ({_types_phrase(grp)}) is publicly accessible"
     if path_type == "malicious_destination":
@@ -226,6 +230,10 @@ class AttackPathRanker:
             )
         for ek in await self._kg.find_exposed_kms_key():
             g("exposed_kms_key", (ek.resource_id,)).add((ek.resource_id,), "kms-key")
+        for rp in await self._kg.find_rbac_privilege_escalation():
+            g("rbac_privilege_escalation", (rp.subject_id,)).add(
+                (rp.subject_id, rp.role_id), rp.subject_name, role_name=rp.role_name
+            )
         for ed in await self._kg.find_exposed_database():
             g("exposed_database", (ed.resource_id,)).add((ed.resource_id,), ed.engine or "database")
         for md in await self._kg.find_resource_contacting_malicious_ip():
