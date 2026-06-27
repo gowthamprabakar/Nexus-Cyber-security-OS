@@ -1,0 +1,28 @@
+test_case_id: path4-c1-standard-fine-grained
+description: A non-admin IAM role has s3:GetObject on a specific public bucket that holds PII —
+  a least-privilege violation the admin-only seed (path 1) misses.
+agent: identity
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: The grant names a CONCRETE bucket ARN (not "*"), so it is fine-grained access;
+    identity._fine_grained_grants extracts it offline from the role's customer-managed policy.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  roles:
+    - name: pii-reader
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+ground_truth_violations:
+  - id: gt-reader-pii
+    type: fine_grained_data
+    resource: arn:aws:s3:::acme-pii
+    severity: high
+    data_type: ssn
+    principal: arn:aws:iam::123456789012:role/pii-reader
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

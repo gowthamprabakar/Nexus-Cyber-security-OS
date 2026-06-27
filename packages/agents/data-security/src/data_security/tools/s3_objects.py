@@ -64,6 +64,8 @@ class ObjectSample(BaseModel):
     bucket: str = Field(min_length=1, max_length=63)
     key: str = Field(min_length=1)
     content_sample: bytes = Field(max_length=MAX_SAMPLE_BYTES)
+    # gap #2: this individual object is public via its object ACL (even if the bucket is private).
+    is_public: bool = False
 
     @field_validator("content_sample", mode="before")
     @classmethod

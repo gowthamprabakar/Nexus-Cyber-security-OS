@@ -1,0 +1,17 @@
+test_case_id: gap7-c3-clean-baseline
+description: A healthy environment — a private bucket with PII but no bucket policy (no
+  resource-based grant). The detector must emit nothing.
+agent: data-security
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Sensitive data present but no policy grants any external principal, so there is
+    no resource-based exposure.
+  buckets:
+    - name: private-pii
+      public: false
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

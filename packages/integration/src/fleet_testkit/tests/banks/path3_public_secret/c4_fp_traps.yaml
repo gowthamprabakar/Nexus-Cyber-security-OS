@@ -1,0 +1,39 @@
+test_case_id: path3-c4-fp-traps
+description: One real public-key exposure amid two false-positive traps — a real key in a PRIVATE
+  bucket (not exposed) and a public bucket holding an AKIA-prefixed string that is NOT a valid key.
+agent: data-security
+category: false_positive_traps
+environment:
+  fixture_path: inline
+  realism_notes: Tests precision. The private-bucket key and the malformed lookalike must NOT be
+    reported; only the genuinely public, genuinely-formatted key is a path-3 exposure.
+  buckets:
+    - name: acme-real-public
+      public: true
+      objects:
+        creds.txt: 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE'
+    - name: acme-private
+      public: false
+      objects:
+        creds.txt: 'aws_access_key_id = AKIA1234567890ABCDEF'
+    - name: acme-lookalike
+      public: true
+      objects:
+        note.txt: 'internal ticket reference AKIAlowercase_not_a_real_key please ignore'
+ground_truth_violations:
+  - id: gt-real-public-key
+    type: public_secret
+    resource: arn:aws:s3:::acme-real-public
+    severity: critical
+    data_type: aws_access_key
+expected_non_detections:
+  - id: nd-private-key
+    resource: arn:aws:s3:::acme-private
+    reason: a real key but the bucket is private — no public exposure.
+  - id: nd-lookalike
+    resource: arn:aws:s3:::acme-lookalike
+    reason: AKIA-prefixed prose that does not match the AKIA[0-9A-Z]{16} key format.
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

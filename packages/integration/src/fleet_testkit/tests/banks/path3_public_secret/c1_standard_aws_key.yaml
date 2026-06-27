@@ -1,0 +1,22 @@
+test_case_id: path3-c1-standard-aws-key
+description: A public S3 bucket exposes an AWS access key in an object — the canonical path-3 hit.
+agent: data-security
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: AKIA + 16 uppercase/digits is the real AWS access-key-id format the classifier matches.
+  buckets:
+    - name: acme-keys
+      public: true
+      objects:
+        creds.txt: 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE'
+ground_truth_violations:
+  - id: gt-aws-key
+    type: public_secret
+    resource: arn:aws:s3:::acme-keys
+    severity: critical
+    data_type: aws_access_key
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

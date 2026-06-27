@@ -501,5 +501,59 @@ def rate_skill_cmd(
         click.echo(f"note: {note}")
 
 
+# ---------------------- attack-paths (the North Star surface) ------------
+
+
+@main.command("attack-paths")
+@click.option("--customer-id", required=True, help="Tenant identifier")
+@click.option(
+    "--dsn",
+    envvar="NEXUS_MEMORY_DSN",
+    required=True,
+    help="Postgres DSN for the fleet graph (or set NEXUS_MEMORY_DSN)",
+)
+@click.option("--limit", default=10, show_default=True, help="Max paths to show")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a text report")
+def attack_paths_cmd(customer_id: str, dsn: str, limit: int, as_json: bool) -> None:
+    """Connect to the fleet graph and print a tenant's top attack paths, worst-first.
+
+    The North Star surface: runs the cross-agent bridges, then ranks the confirmed (named) +
+    candidate (generic) attack paths. Requires a populated graph (the agents' scan writes it).
+    """
+    import asyncio as _asyncio
+    import json as _json
+
+    from charter.memory.provisioning import build_session_factory
+    from charter.memory.semantic import SemanticStore
+
+    from meta_harness.attack_path_report import (
+        candidate_to_dict,
+        path_to_dict,
+        render_candidates,
+        render_report,
+    )
+    from meta_harness.scan import analyze
+
+    async def _run() -> None:
+        factory = await build_session_factory(dsn)
+        result = await analyze(SemanticStore(factory), customer_id)
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {
+                        "confirmed": [path_to_dict(p) for p in result.confirmed[:limit]],
+                        "candidates": [candidate_to_dict(c) for c in result.candidates],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(render_report(result.confirmed, tenant_id=customer_id, limit=limit))
+            click.echo()
+            click.echo(render_candidates(result.candidates, tenant_id=customer_id))
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     main()

@@ -1,0 +1,42 @@
+test_case_id: path10-c2-private-training-trap
+description: One real hit beside a trap — an exposed endpoint whose training bucket is PRIVATE
+  (sensitive but not publicly exposed), which must not fire.
+agent: aispm
+category: false_positive_traps
+environment:
+  fixture_path: inline
+  realism_notes: Tests the data-exposure axis. A private training bucket has no EXPOSES_DATA
+    edge, so only the endpoint reading the PUBLIC sensitive bucket is a path-10 exposure.
+    (The network-isolated negative is covered by aispm's own unit tests — moto cannot represent
+    EnableNetworkIsolation=True.)
+  buckets:
+    - name: acme-train
+      public: true
+      objects:
+        train.csv: "name,ssn\nJane Roe,123-45-6789"
+    - name: acme-train-private
+      public: false
+      objects:
+        train.csv: "name,ssn\nJohn Doe,987-65-4321"
+  endpoints:
+    - name: infer
+      model_data_bucket: acme-train
+      network_isolated: false
+    - name: infer-private
+      model_data_bucket: acme-train-private
+      network_isolated: false
+ground_truth_violations:
+  - id: gt-exposed-ai
+    type: exposed_ai_sensitive_data
+    resource: arn:aws:s3:::acme-train
+    severity: high
+    data_type: ssn
+    service: sagemaker:123456789012:infer
+expected_non_detections:
+  - id: nd-private-training
+    resource: arn:aws:s3:::acme-train-private
+    reason: exposed endpoint but its training bucket is private — not publicly exposed data.
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

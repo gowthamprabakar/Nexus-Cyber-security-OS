@@ -1,0 +1,27 @@
+test_case_id: gap7-c1-standard-resource-based
+description: A non-public bucket holds PII and its bucket policy grants a specific (foreign)
+  principal s3:GetObject — resource-based access invisible to IAM-side grant resolution.
+agent: data-security
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: The bucket is private (no wildcard), so it is not "public"; the named grant is a
+    resource-based path to the sensitive data, recorded as policy_readers on the bucket node.
+  buckets:
+    - name: shared-pii
+      public: false
+      policy_readers:
+        - 'arn:aws:iam::999999999999:role/partner'
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+ground_truth_violations:
+  - id: gt-resource-based
+    type: resource_based_data
+    resource: arn:aws:s3:::shared-pii
+    severity: high
+    data_type: ssn
+    principal: 'arn:aws:iam::999999999999:role/partner'
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

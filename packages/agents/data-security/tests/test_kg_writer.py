@@ -107,9 +107,12 @@ async def test_run_with_store_writes_storage_and_classification(
 
     storage = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource")
     assert len(storage) == 1
-    assert storage[0].external_id == "alpha"
+    assert (
+        storage[0].external_id == "arn:aws:s3:::alpha"
+    )  # canonical ARN key (was bucket.name — bug)
     assert storage[0].properties["is_public"] is True
     assert storage[0].properties["is_encrypted"] is False
+    assert storage[0].properties["source"] == "alpha"  # human-readable name preserved as property
 
     classifications = await store.list_entities_by_type(
         tenant_id=_TENANT, entity_type="data_classification"

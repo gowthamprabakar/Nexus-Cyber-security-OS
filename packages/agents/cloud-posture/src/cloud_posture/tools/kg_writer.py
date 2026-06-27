@@ -32,10 +32,20 @@ INSERT-only; cross-RUN duplicate-edge dedup is the separate Stage 3 PR (#718-D3)
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+    from cloud_posture.tools.aws_ecs import EcsWorkload
+    from cloud_posture.tools.aws_kms import KmsKey
+    from cloud_posture.tools.aws_rds import RdsInstance
+    from cloud_posture.tools.azure_aci import AciWorkload
+    from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -87,6 +97,134 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         for arn in affected_arns:
             asset_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, arn, {})
             await self.add_edge(finding_node or "", asset_node or "", EdgeType.AFFECTS)
+
+    async def record_workloads(self, workloads: Iterable[EcsWorkload]) -> None:
+        """Write workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
+
+        The mechanism-② bridge (ADR-023): the image node is the SAME spine node
+        vulnerability writes its CVE ``VULNERABLE_TO`` edges onto (both keyed by the
+        image ref), so an exposed workload's CVEs become reachable in one graph walk —
+        ``workload --RUNS_IMAGE--> image --VULNERABLE_TO--> CVE``. Properties merge, so
+        the image node coexists with vulnerability's ``kind=scan-target`` decoration.
+        """
+        for workload in workloads:
+            service_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.service_arn,
+                {"kind": "ecs-service", "is_public": workload.is_public},
+            )
+            image_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                workload.image_ref,
+                {"kind": "container-image"},
+            )
+            await self.add_edge(service_node or "", image_node or "", EdgeType.RUNS_IMAGE)
+            # The task role the workload runs as — joins to the IDENTITY spine node identity
+            # writes (same role ARN). An attacker who exploits the workload assumes this role,
+            # so its access (HAS_ACCESS_TO) becomes part of the workload's reachable blast
+            # radius — the crown-jewel 4-hop (path 5).
+            if workload.task_role_arn:
+                role_node = await self.upsert_node(
+                    NodeCategory.IDENTITY, workload.task_role_arn, {}
+                )
+                await self.add_edge(service_node or "", role_node or "", EdgeType.ASSUMES)
+
+    async def _record_container_workload(
+        self,
+        resource_id: str,
+        image_ref: str,
+        *,
+        is_public: bool,
+        kind: str,
+        assumes_principal: str = "",
+    ) -> None:
+        """Write a container workload ``CLOUD_RESOURCE{is_public}`` + ``RUNS_IMAGE`` → image node.
+
+        The cross-cloud path-2 leg: the same mechanism-② bridge as :meth:`record_workloads`, only
+        the workload is keyed by a non-ARN resource id. The image node is the SAME spine node
+        vulnerability writes CVE ``VULNERABLE_TO`` edges onto (both keyed by image ref), so an
+        exposed workload's CVEs are reachable in one graph walk — no detector change.
+
+        ``assumes_principal`` (the managed identity / service account the workload runs as) joins to
+        the IDENTITY spine node identity writes — the crown-jewel ASSUMES leg (path 5): an attacker
+        who exploits the workload assumes this principal, so its ``HAS_ACCESS_TO`` data becomes the
+        workload's reachable blast radius.
+        """
+        workload_node = await self.upsert_node(
+            NodeCategory.CLOUD_RESOURCE,
+            resource_id,
+            {"kind": kind, "is_public": is_public},
+        )
+        image_node = await self.upsert_node(
+            NodeCategory.CLOUD_RESOURCE, image_ref, {"kind": "container-image"}
+        )
+        await self.add_edge(workload_node or "", image_node or "", EdgeType.RUNS_IMAGE)
+        if assumes_principal:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, assumes_principal, {})
+            await self.add_edge(workload_node or "", principal_node or "", EdgeType.ASSUMES)
+
+    async def record_azure_workloads(self, workloads: Iterable[AciWorkload]) -> None:
+        """Write Azure ACI container-group workloads (cross-cloud paths 2 + 5)."""
+        for w in workloads:
+            await self._record_container_workload(
+                w.resource_id,
+                w.image_ref,
+                is_public=w.is_public,
+                kind="azure-container-group",
+                assumes_principal=w.identity_principal_id,
+            )
+
+    async def record_gcp_workloads(self, workloads: Iterable[CloudRunWorkload]) -> None:
+        """Write GCP Cloud Run service workloads (cross-cloud paths 2 + 5)."""
+        for w in workloads:
+            await self._record_container_workload(
+                w.resource_id,
+                w.image_ref,
+                is_public=w.is_public,
+                kind="gcp-cloud-run-service",
+                assumes_principal=w.service_account,
+            )
+
+    async def record_kms_keys(self, keys: Iterable[KmsKey]) -> None:
+        """Write each KMS key as a ``CLOUD_RESOURCE{kind=kms-key, is_public}`` (path #21)."""
+        for key in keys:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                key.key_arn,
+                {"kind": "kms-key", "is_public": key.is_public},
+            )
+
+    async def record_rds_instances(self, instances: Iterable[RdsInstance]) -> None:
+        """Write each RDS instance as a ``CLOUD_RESOURCE{kind=rds-instance, is_public}`` (path #19)."""
+        for db in instances:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                db.instance_arn,
+                {"kind": "rds-instance", "is_public": db.is_public, "engine": db.engine},
+            )
+
+    async def record_ec2_workloads(self, workloads: Iterable[Ec2Workload]) -> None:
+        """Write EC2 instance ``CLOUD_RESOURCE{is_public}`` + ``ASSUMES`` → instance-profile role.
+
+        Inventories non-ECS compute (gap #9) so an exposed EC2 instance is a first-class workload
+        on the graph. The instance-profile role is the EC2 analogue of an ECS task role — an
+        exposed instance whose role reaches sensitive data is a reachable path. (No ``RUNS_IMAGE``:
+        EC2 runs an AMI, not a container image — host-vuln is a separate slice.)
+        """
+        for workload in workloads:
+            props: dict[str, Any] = {"kind": "ec2-instance", "is_public": workload.is_public}
+            if workload.private_ips:
+                # The join key for the network-endpoint→instance OWNED_BY bridge (correlation).
+                props["private_ips"] = list(workload.private_ips)
+            if workload.iac_artifact:
+                # The join key for the code-to-cloud DEPLOYED_VIA bridge (correlation).
+                props["iac_artifact"] = workload.iac_artifact
+            instance_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE, workload.instance_arn, props
+            )
+            if workload.role_arn:
+                role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})
+                await self.add_edge(instance_node or "", role_node or "", EdgeType.ASSUMES)
 
 
 __all__ = ["KnowledgeGraphWriter"]

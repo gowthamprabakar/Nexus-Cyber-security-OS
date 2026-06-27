@@ -1,0 +1,36 @@
+test_case_id: path4-c4-edge-two-readers
+description: Two distinct non-admin roles each have fine-grained access to the same public PII
+  bucket — both are real least-privilege violations and must each be reported.
+agent: identity
+category: edge_cases
+environment:
+  fixture_path: inline
+  realism_notes: One sensitive bucket reachable by two principals → two exposures (per principal),
+    testing that the detector attributes the exposure to each grantee, not just the resource once.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  roles:
+    - name: app-reader
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+    - name: analytics-reader
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+ground_truth_violations:
+  - id: gt-app-reader
+    type: fine_grained_data
+    resource: arn:aws:s3:::acme-pii
+    severity: high
+    data_type: ssn
+    principal: arn:aws:iam::123456789012:role/app-reader
+  - id: gt-analytics-reader
+    type: fine_grained_data
+    resource: arn:aws:s3:::acme-pii
+    severity: high
+    data_type: ssn
+    principal: arn:aws:iam::123456789012:role/analytics-reader
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

@@ -2091,6 +2091,7 @@ dependencies = [
     { name = "nexus-charter" },
     { name = "nexus-shared" },
     { name = "pydantic" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -2108,6 +2109,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
 ]
 provides-extras = ["dev"]
 
@@ -2120,6 +2122,7 @@ dependencies = [
     { name = "nexus-audit-agent" },
     { name = "nexus-charter" },
     { name = "nexus-eval-framework" },
+    { name = "nexus-meta-harness-agent" },
     { name = "nexus-runtime" },
     { name = "nexus-shared" },
     { name = "pydantic" },
@@ -2146,6 +2149,7 @@ requires-dist = [
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-eval-framework", editable = "packages/eval-framework" },
     { name = "nexus-integration", marker = "extra == 'dev'", editable = "packages/integration" },
+    { name = "nexus-meta-harness-agent", editable = "packages/agents/meta-harness" },
     { name = "nexus-runtime", editable = "packages/runtime" },
     { name = "nexus-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.9.0" },
@@ -2417,9 +2421,18 @@ provides-extras = ["dev"]
 name = "nexus-runtime"
 version = "0.1.0"
 source = { editable = "packages/runtime" }
+dependencies = [
+    { name = "nexus-audit-agent" },
+    { name = "nexus-charter" },
+    { name = "nexus-data-security-agent" },
+    { name = "nexus-identity" },
+    { name = "nexus-investigation-agent" },
+    { name = "python-ulid" },
+]
 
 [package.optional-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2427,9 +2440,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
+    { name = "nexus-audit-agent", editable = "packages/agents/audit" },
+    { name = "nexus-charter", editable = "packages/charter" },
+    { name = "nexus-data-security-agent", editable = "packages/agents/data-security" },
+    { name = "nexus-identity", editable = "packages/agents/identity" },
+    { name = "nexus-investigation-agent", editable = "packages/agents/investigation" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
+    { name = "python-ulid", specifier = ">=3.0.0" },
 ]
 provides-extras = ["dev"]
 

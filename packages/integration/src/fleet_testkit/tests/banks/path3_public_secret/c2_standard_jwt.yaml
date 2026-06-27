@@ -1,0 +1,22 @@
+test_case_id: path3-c2-standard-jwt
+description: A public S3 bucket exposes a JWT (session/bearer token) in an object.
+agent: data-security
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: Three-segment base64url with eyJ-prefixed header+payload is the real JWT shape.
+  buckets:
+    - name: acme-tokens
+      public: true
+      objects:
+        session.log: 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N'
+ground_truth_violations:
+  - id: gt-jwt
+    type: public_secret
+    resource: arn:aws:s3:::acme-tokens
+    severity: high
+    data_type: jwt
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

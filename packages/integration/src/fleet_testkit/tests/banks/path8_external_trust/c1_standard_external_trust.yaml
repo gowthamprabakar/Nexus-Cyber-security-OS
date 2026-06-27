@@ -1,0 +1,29 @@
+test_case_id: path8-c1-standard-external-trust
+description: A role trusted by a FOREIGN AWS account can be assumed cross-account and has access
+  to a public bucket holding PII — a cross-account path to sensitive data.
+agent: identity
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: The trust policy names a foreign account root (offline-detectable by
+    identity._externally_trusted_arns); the role also has fine-grained S3 read on the bucket.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  roles:
+    - name: partner-access
+      trust: external
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+ground_truth_violations:
+  - id: gt-external-pii
+    type: external_trust
+    resource: arn:aws:s3:::acme-pii
+    severity: high
+    data_type: ssn
+    principal: arn:aws:iam::123456789012:role/partner-access
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

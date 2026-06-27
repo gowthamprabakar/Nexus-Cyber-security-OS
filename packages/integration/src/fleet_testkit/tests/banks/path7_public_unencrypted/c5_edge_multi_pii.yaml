@@ -1,0 +1,31 @@
+test_case_id: path7-c5-edge-multi-pii
+description: A public unencrypted bucket holds two PII kinds (SSN and a credit-card number) in
+  separate objects. Path 7 must surface the bucket as an unencrypted exposure (>=1 PII type).
+agent: data-security
+category: edge_cases
+environment:
+  fixture_path: inline
+  realism_notes: Multiple sensitive types on one unencrypted public bucket — the detector emits
+    one exposure per data type, so BOTH the SSN and the card are real path-7 violations.
+  buckets:
+    - name: acme-multi-pii
+      public: true
+      encrypted: false
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+        billing.txt: 'card on file 4111 1111 1111 1111'
+ground_truth_violations:
+  - id: gt-multi-ssn
+    type: public_unencrypted
+    resource: arn:aws:s3:::acme-multi-pii
+    severity: high
+    data_type: ssn
+  - id: gt-multi-card
+    type: public_unencrypted
+    resource: arn:aws:s3:::acme-multi-pii
+    severity: high
+    data_type: credit_card
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

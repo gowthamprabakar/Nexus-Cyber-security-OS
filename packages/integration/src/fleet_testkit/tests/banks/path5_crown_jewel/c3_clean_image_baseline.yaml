@@ -1,0 +1,24 @@
+test_case_id: path5-c3-clean-image-baseline
+description: A near-miss — an internet-exposed workload whose task role reaches public PII, but
+  the image has no known CVE. The exploitability leg is missing; emit nothing.
+agent: cloud-posture
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Three legs present (exposure + privilege + sensitivity) but the vuln leg is
+    missing — a clean image is not the crown jewel.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  workloads:
+    - name: web
+      image: 'myreg/crown-clean:1.0'
+      public: true
+      task_role: crown-role
+      role_grant_resource: 'arn:aws:s3:::acme-pii/*'
+      vulnerable_requirements: "certifi==2024.2.2\n"
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

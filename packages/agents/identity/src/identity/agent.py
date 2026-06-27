@@ -32,6 +32,7 @@ from typing import Any
 from charter import Charter, ToolRegistry
 from charter.contract import ExecutionContract
 from charter.llm import LLMProvider  # canonical Protocol lives in charter.llm
+from charter.memory.graph_types import NodeCategory
 from charter.memory.semantic import SemanticStore
 from shared.fabric.correlation import correlation_scope, new_correlation_id
 from shared.fabric.envelope import NexusEnvelope
@@ -216,6 +217,9 @@ async def run(
             )
         else:
             grants = _synthesize_admin_grants(listing)
+
+        if semantic_store is not None:
+            await _write_access_edges(semantic_store, contract.customer_id, grants)
 
         findings = await normalize_to_findings(
             listing,
@@ -424,6 +428,12 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
     Group transitivity is honored for both attached and inline group admin.
     """
     grants: list[EffectiveGrant] = []
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+
+    def _admin_capped(principal: object) -> bool:
+        # gap #8: a resolvable boundary that does NOT allow full admin caps the admin grant.
+        boundary = _boundary_doc(principal, doc_by_arn)
+        return boundary is not None and not _boundary_allows_admin(boundary)
 
     group_admin: dict[str, tuple[str, ...]] = {}
     for grp in listing.groups:
@@ -438,13 +448,13 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
         for grp_name in user.group_memberships:
             inherited.extend(group_admin.get(grp_name, ()))
         sources = tuple(direct) + tuple(inherited) + _inline_admin_sources(user.inline_policies)
-        if sources:
+        if sources and not _admin_capped(user):
             grants.append(_admin_grant(user.arn, sources))
 
     for role in listing.roles:
         admin = tuple(a for a in role.attached_policy_arns if _is_admin_policy(a))
         admin += _inline_admin_sources(role.inline_policies)
-        if admin:
+        if admin and not _admin_capped(role):
             grants.append(_admin_grant(role.arn, admin))
 
     for grp in listing.groups:
@@ -452,6 +462,215 @@ def _synthesize_admin_grants(listing: IdentityListing) -> list[EffectiveGrant]:
         if admin:
             grants.append(_admin_grant(grp.arn, admin))
 
+    return grants
+
+
+def _externally_trusted_arns(listing: IdentityListing) -> list[str]:
+    """Roles whose trust policy lets a *foreign account* (or `*`) assume them — offline.
+
+    Path-8 signal, derived purely from each role's ``AssumeRolePolicyDocument`` (already in
+    the listing). External = an ``Allow`` statement whose principal is either (a) ``Principal.AWS``
+    that is a wildcard or an account outside the role's own account, or (b) ``Principal.Federated``
+    — an external OIDC/SAML provider (e.g. GitHub Actions OIDC, an external IdP), assumable by
+    whoever controls that identity. Service principals (``Principal.Service``) are trust-to-an-
+    AWS-service, never external, so they are ignored. Offline counterpart to Access-Analyzer.
+    """
+    flagged: list[str] = []
+    for role in listing.roles:
+        own_account = _account_of(role.arn)
+        statements = role.assume_role_policy_document.get("Statement") or []
+        for stmt in statements:
+            if stmt.get("Effect") != "Allow":
+                continue
+            principal = stmt.get("Principal")
+            if _principal_is_federated(principal) or any(
+                account == "*" or account != own_account
+                for account in _aws_principal_accounts(principal)
+            ):
+                flagged.append(role.arn)
+                break
+    return flagged
+
+
+def _named_aws_principals(principal: object) -> list[str]:
+    """Specific user/role ARNs named in ``Principal.AWS`` (not ``*``, account-root, or service)."""
+    if not isinstance(principal, dict):
+        return []
+    aws = principal.get("AWS")
+    values = [aws] if isinstance(aws, str) else list(aws or [])
+    return [v for v in values if isinstance(v, str) and (":role/" in v or ":user/" in v)]
+
+
+def _assume_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """``(principal_arn, role_arn)`` for each SAME-account named principal a role's trust policy
+    lets assume it — the internal role-assumption edges (privilege-escalation, path #13).
+
+    Offline, from each role's ``AssumeRolePolicyDocument``. Cross-account / wildcard / federated
+    principals are external trust (path 8, ``_externally_trusted_arns``), not internal escalation.
+    Deduped, order-preserving.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for role in listing.roles:
+        own_account = _account_of(role.arn)
+        for stmt in role.assume_role_policy_document.get("Statement") or []:
+            if stmt.get("Effect") != "Allow":
+                continue
+            for arn in _named_aws_principals(stmt.get("Principal")):
+                grant = (arn, role.arn)
+                if _account_of(arn) == own_account and arn != role.arn and grant not in seen:
+                    seen.add(grant)
+                    out.append(grant)
+    return out
+
+
+def _credential_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """``(user_arn, access_key_id)`` for every IAM user access key — the credential-ownership
+    edges that converge with a credential leaked in source code (path #17). Order-preserving."""
+    return [(user.arn, key_id) for user in listing.users for key_id in user.access_key_ids]
+
+
+def _principal_is_federated(principal: object) -> bool:
+    """True when a trust statement allows an external OIDC/SAML federation provider."""
+    return isinstance(principal, dict) and bool(principal.get("Federated"))
+
+
+def _account_of(arn: str) -> str:
+    """The 12-digit account id from an ARN (`arn:aws:iam::ACCOUNT:role/x`), or "" if absent."""
+    parts = arn.split(":")
+    return parts[4] if len(parts) > 4 else ""
+
+
+def _aws_principal_accounts(principal: object) -> list[str]:
+    """Account ids (or `*`) named by a statement's ``Principal.AWS`` — `[]` for service-only.
+
+    ``Principal`` may be ``"*"``, ``{"AWS": "*"|arn|[arns]}``, or ``{"Service": ...}``.
+    A bare ``"*"`` (public) and an ``arn:aws:iam::ACCT:root`` both reduce to their account token.
+    """
+    if principal == "*":
+        return ["*"]
+    if not isinstance(principal, dict):
+        return []
+    aws = principal.get("AWS")
+    values = [aws] if isinstance(aws, str) else list(aws or [])
+    return ["*" if v == "*" else _account_of(v) for v in values]
+
+
+def _as_list(value: object) -> list[Any]:
+    """An IAM ``Action``/``Resource`` field as a list (it may be a bare string)."""
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _grants_s3_read(actions: object) -> bool:
+    """True if any action reads S3 object data (``*``, ``s3:*``, or an ``s3:get*``)."""
+    for action in _as_list(actions):
+        if not isinstance(action, str):
+            continue
+        lowered = action.lower()
+        if lowered in {"*", "s3:*"} or lowered.startswith("s3:get"):
+            return True
+    return False
+
+
+# --- gap #8: permission-boundary capping (conservative — never suppress on ambiguity) ---
+
+
+def _boundary_doc(
+    principal: object, doc_by_arn: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The principal's resolvable permission-boundary document, or ``None``.
+
+    ``None`` means *no boundary OR unresolvable* (AWS-managed boundary not in the listing) — the
+    callers treat ``None`` as "do not cap", so an unknown boundary never suppresses a finding
+    (no false negatives; we only cap when the boundary is known to disallow).
+    """
+    arn = getattr(principal, "permission_boundary_arn", "")
+    return doc_by_arn.get(arn) if arn else None
+
+
+def _boundary_allows_admin(doc: dict[str, Any]) -> bool:
+    """True if the boundary has an ``Allow`` of ``*`` action on ``*`` resource (full admin)."""
+    for stmt in doc.get("Statement") or []:
+        if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+            continue
+        actions = [a for a in _as_list(stmt.get("Action")) if isinstance(a, str)]
+        resources = [r for r in _as_list(stmt.get("Resource")) if isinstance(r, str)]
+        if "*" in actions and "*" in resources:
+            return True
+    return False
+
+
+def _boundary_allows_s3_read(doc: dict[str, Any], bucket_arn: str) -> bool:
+    """True if the boundary allows an S3 read on ``*`` or the given bucket."""
+    for stmt in doc.get("Statement") or []:
+        if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+            continue
+        if not _grants_s3_read(stmt.get("Action")):
+            continue
+        for resource in _as_list(stmt.get("Resource")):
+            if resource == "*" or bucket_arn in _concrete_bucket_arns([resource]):
+                return True
+    return False
+
+
+def _concrete_bucket_arns(resources: object) -> list[str]:
+    """Canonical bucket ARNs named by a statement ``Resource`` (object suffix stripped).
+
+    ``arn:aws:s3:::bucket/key/*`` → ``arn:aws:s3:::bucket`` so the grant joins the spine
+    bucket node data-security writes. A bare ``*`` (all buckets) is skipped — that is broad,
+    not fine-grained-to-a-resource.
+    """
+    arns: list[str] = []
+    for resource in _as_list(resources):
+        if not isinstance(resource, str) or not resource.startswith("arn:aws:s3:::"):
+            continue
+        bucket = resource[len("arn:aws:s3:::") :].split("/", 1)[0]
+        if bucket and bucket != "*":
+            arns.append(f"arn:aws:s3:::{bucket}")
+    return arns
+
+
+def _fine_grained_grants(listing: IdentityListing) -> list[tuple[str, str]]:
+    """Concrete-resource S3 read grants ``(principal_arn, bucket_arn)`` — offline depth.
+
+    Beyond :func:`_synthesize_admin_grants` (admin ``*`` over everything): walks each
+    principal's customer-managed + inline policy documents for ``Allow`` statements that grant
+    an S3 read action on a **concrete** bucket ARN, emitting a fine-grained (principal, bucket)
+    pair. This catches a least-privilege-violating principal — specific access to a sensitive
+    bucket, *not* admin — that the admin-only path (1) is blind to. A user's **group-inherited**
+    policies are resolved too (access via group membership). Deduped.
+    """
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+    group_by_name = {group.name: group for group in listing.groups}
+    grants: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for principal in (*listing.users, *listing.roles):
+        documents = [doc_by_arn[arn] for arn in principal.attached_policy_arns if arn in doc_by_arn]
+        documents += [doc for _name, doc in principal.inline_policies]
+        # Users inherit their groups' attached + inline policies (roles have no groups).
+        for group_name in getattr(principal, "group_memberships", ()):
+            group = group_by_name.get(group_name)
+            if group is None:
+                continue
+            documents += [
+                doc_by_arn[arn] for arn in group.attached_policy_arns if arn in doc_by_arn
+            ]
+            documents += [doc for _name, doc in group.inline_policies]
+        boundary = _boundary_doc(principal, doc_by_arn)  # gap #8: caps effective access
+        for document in documents:
+            for stmt in document.get("Statement") or []:
+                if stmt.get("Effect") != "Allow" or not _grants_s3_read(stmt.get("Action")):
+                    continue
+                for bucket_arn in _concrete_bucket_arns(stmt.get("Resource")):
+                    # A permissions boundary that does NOT allow this read caps the grant.
+                    if boundary is not None and not _boundary_allows_s3_read(boundary, bucket_arn):
+                        continue
+                    key = (principal.arn, bucket_arn)
+                    if key not in seen:
+                        seen.add(key)
+                        grants.append(key)
     return grants
 
 
@@ -469,6 +688,34 @@ def _admin_grant(principal_arn: str, source_policy_arns: tuple[str, ...]) -> Eff
 def _is_admin_policy(arn: str) -> bool:
     """True when the policy ARN is AWS-managed admin or any `*/AdministratorAccess`."""
     return arn == _ADMIN_POLICY_ARN or arn.endswith("/AdministratorAccess")
+
+
+async def _write_access_edges(
+    semantic_store: SemanticStore,
+    customer_id: str,
+    grants: list[EffectiveGrant],
+) -> None:
+    """Write IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE for admin-grade principals.
+
+    Drives the offline admin-grant synthesis: an admin (resource_pattern "*") can reach
+    every resource, so we expand "*" against the tenant's concrete CLOUD_RESOURCE nodes
+    (written by data-security/cloud-posture, keyed by ARN). record_access upserts
+    idempotently -> edges land on the existing resource nodes.
+
+    # Bound (v1): admin-grade only. Fine-grained non-admin access needs concrete
+    # per-statement Resource extraction (not implemented) + the live SimulatePrincipalPolicy
+    # simulator (needs live AWS) -- deferred to a later depth slice.
+    """
+    admins = [g for g in grants if g.is_admin]
+    if not admins:
+        return
+    resources = await semantic_store.list_entities_by_type(
+        tenant_id=customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    if not resources:
+        return
+    kg = KnowledgeGraphWriter(semantic_store, customer_id)
+    await kg.record_access([(g.principal_arn, r.external_id) for g in admins for r in resources])
 
 
 __all__ = ["build_registry", "run"]

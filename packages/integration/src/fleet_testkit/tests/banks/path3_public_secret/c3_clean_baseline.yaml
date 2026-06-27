@@ -1,0 +1,21 @@
+test_case_id: path3-c3-clean-baseline
+description: A healthy environment — a public bucket with only benign text, and a private bucket
+  that holds a real key (not exposed). The detector must emit nothing.
+agent: data-security
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Benign prose must not trip the secret patterns; a key in a PRIVATE bucket gets
+    no EXPOSES_DATA edge, so it is not a public-secret exposure.
+  buckets:
+    - name: acme-public-docs
+      public: true
+      objects:
+        readme.txt: 'Welcome to Acme. This bucket holds public marketing copy, lorem ipsum dolor sit amet.'
+    - name: acme-private-keys
+      public: false
+      objects:
+        creds.txt: 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE'
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

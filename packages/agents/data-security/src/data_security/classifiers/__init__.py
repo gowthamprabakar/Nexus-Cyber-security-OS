@@ -9,6 +9,6 @@ plan. See ``patterns.py`` for the implementation + the rationale.
 
 from __future__ import annotations
 
-from data_security.classifiers.patterns import classify
+from data_security.classifiers.patterns import classify, classify_bytes
 
-__all__ = ["classify"]
+__all__ = ["classify", "classify_bytes"]

@@ -1,0 +1,36 @@
+test_case_id: path8-c2-internal-trust-trap
+description: One real cross-account hit beside a trap — a same-account service-trusted role with
+  identical access to the PII bucket, which is NOT externally assumable and must not fire.
+agent: identity
+category: false_positive_traps
+environment:
+  fixture_path: inline
+  realism_notes: Tests the trust axis. A service principal (ec2.amazonaws.com) is internal — only
+    the foreign-account-trusted role is a cross-account exposure.
+  buckets:
+    - name: acme-pii
+      public: true
+      objects:
+        hr.csv: "name,ssn\nJane Roe,123-45-6789"
+  roles:
+    - name: partner-access
+      trust: external
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+    - name: internal-service
+      trust: internal
+      grant_resource: 'arn:aws:s3:::acme-pii/*'
+ground_truth_violations:
+  - id: gt-external-pii
+    type: external_trust
+    resource: arn:aws:s3:::acme-pii
+    severity: high
+    data_type: ssn
+    principal: arn:aws:iam::123456789012:role/partner-access
+expected_non_detections:
+  - id: nd-internal
+    resource: arn:aws:s3:::acme-pii
+    reason: service-trusted role is internal, not cross-account assumable.
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

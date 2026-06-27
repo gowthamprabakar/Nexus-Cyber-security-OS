@@ -69,6 +69,7 @@ from investigation.tools.ioc_extractor import extract_iocs
 from investigation.tools.memory_walk import memory_neighbors_walk
 from investigation.tools.mitre_mapper import map_to_mitre
 from investigation.tools.related_findings import RelatedFinding, find_related_findings
+from investigation.toxic_combination import detect_toxic_combination_hypotheses
 from investigation.validation.evidence_chain import assert_evidence_chain
 from investigation.validation.evidence_cited import assert_findings_cited
 from investigation.validation.no_speculation import assert_no_speculation
@@ -178,6 +179,7 @@ async def run(
     since: datetime | None = None,
     until: datetime | None = None,
     publish_events_to_bus: bool = False,
+    detect_toxic_combinations: bool = True,
 ) -> IncidentReport:
     """Run the 6-stage Orchestrator-Workers pipeline end-to-end.
 
@@ -255,6 +257,19 @@ async def run(
             # load-bearing (WI-I... bounded retry): a future change that added a retry loop would
             # have to thread its attempt count through here or trip the bound.
             assert_bounded_retry(1)
+
+            # Cross-agent correlation (default ON; pass detect_toxic_combinations=False to
+            # disable). Merge toxic-combination hypotheses BEFORE Stage 4 so they pass the same
+            # evidence-resolution + invariants as every other hypothesis. They cite the identity
+            # overprivilege finding's uid (in corpus), so they survive validation. Inert (empty)
+            # when no overprivilege findings or no toxic graph path exist.
+            if detect_toxic_combinations:
+                toxic = await detect_toxic_combination_hypotheses(
+                    semantic_store=semantic_store,
+                    customer_id=scope.tenant_id,
+                    related_findings=sub_outputs.related_findings,
+                )
+                hypotheses = (*hypotheses, *toxic)
 
             # Stage 4 — VALIDATE (drop unresolved-evidence hypotheses)
             current_stage = "validate"

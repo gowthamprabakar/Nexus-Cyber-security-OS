@@ -49,6 +49,15 @@ def _strs(value: Any) -> tuple[str, ...]:
     return tuple(str(v) for v in value) if isinstance(value, list) else ()
 
 
+def role_is_admin(role: Role) -> bool:
+    """True if any rule grants wildcard verbs on wildcard resources — cluster-admin-equivalent.
+
+    The canonical CSPM signal for an over-privileged role: ``verbs: ["*"]`` on ``resources: ["*"]``
+    means the holder can do anything. A ServiceAccount bound to such a role can escalate to full
+    cluster control (path #20)."""
+    return any("*" in rule.verbs and "*" in rule.resources for rule in role.rules)
+
+
 def enumerate_roles(raw_roles: Sequence[dict[str, Any]]) -> tuple[Role, ...]:
     """Parse ClusterRole / Role objects → typed `Role`s. No-name objects skipped."""
     out: list[Role] = []

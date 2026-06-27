@@ -50,6 +50,7 @@ def _seed() -> _FakeGraphReader:
                     "userPrincipalName": "bob@contoso.com",
                     "displayName": "Bob",
                     "accountEnabled": False,
+                    "userType": "Guest",
                 },
             ],
             "groups": [
@@ -105,11 +106,19 @@ async def test_security_enabled_flag_parsed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_parses_guest_user_type() -> None:
+    listing = await azure_ad_list_identities(graph=_seed())
+    by_id = {u.id: u for u in listing.users}
+    assert by_id["u2"].is_guest is True  # bob is a B2B Guest (path-8 external trust)
+    assert by_id["u1"].is_guest is False  # alice is a Member
+
+
+@pytest.mark.asyncio
 async def test_requests_the_right_select_fields() -> None:
     reader = _seed()
     await azure_ad_list_identities(graph=reader)
     calls = dict(reader.calls)
-    assert calls["users"] == "id,userPrincipalName,displayName,accountEnabled"
+    assert calls["users"] == "id,userPrincipalName,displayName,accountEnabled,userType"
     assert calls["groups"] == "id,displayName,securityEnabled"
     assert calls["servicePrincipals"] == "id,appId,displayName,servicePrincipalType,accountEnabled"
 

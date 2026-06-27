@@ -26,6 +26,8 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from identity.tools.aws_iam import IdentityListing
 
 
@@ -83,6 +85,59 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     EdgeType.MEMBER_OF,
                     {},
                 )
+
+    async def record_access(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE edges (cross-agent spine).
+
+        Each grant is ``(principal_arn, resource_arn)``. Both endpoints are upserted
+        idempotently — same ARN ⇒ same spine node cloud-posture/DSPM already own, so
+        the edge lands on the shared graph. ``grants`` is computed by the agent driver
+        from policy resource statements; the writer only persists.
+        """
+        for principal_arn, resource_arn in grants:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {})
+            resource_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, resource_arn, {})
+            await self.add_edge(
+                principal_node or "", resource_node or "", EdgeType.HAS_ACCESS_TO, {}
+            )
+
+    async def record_assume_grants(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --ASSUMES--> IDENTITY edges (internal role assumption, path #13).
+
+        Each grant is ``(assuming_principal_arn, role_arn)``: a same-account principal a role's trust
+        policy lets assume it. Both endpoints upserted idempotently onto the IDENTITY spine, so the
+        edge joins principals the listing already wrote. The escalation reach (the assumed role's
+        ``HAS_ACCESS_TO``) is the privilege-escalation detector's join.
+        """
+        for principal_arn, role_arn in grants:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {})
+            role_node = await self.upsert_node(NodeCategory.IDENTITY, role_arn, {})
+            await self.add_edge(principal_node or "", role_node or "", EdgeType.ASSUMES, {})
+
+    async def record_credential_ownership(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write IDENTITY --OWNS--> SECRET(access-key-id) for each IAM user access key (path #17).
+
+        Each grant is ``(user_arn, access_key_id)``. The SECRET node is keyed by the access key ID
+        (the non-secret identifier), the SAME key appsec uses for a credential leaked in code — so
+        the leaked credential and its owning identity converge. No secret material.
+        """
+        for user_arn, key_id in grants:
+            user_node = await self.upsert_node(NodeCategory.IDENTITY, user_arn, {})
+            cred_node = await self.upsert_node(
+                NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
+            )
+            await self.add_edge(user_node or "", cred_node or "", EdgeType.OWNS, {})
+
+    async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
+        """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
+
+        Each ARN is upserted with ``external_trust=True`` — properties merge, so this
+        decorates the principal node ``record_listing`` already wrote without dropping
+        its name/type. ``principal_arns`` is computed by the agent driver from the offline
+        trust-policy analysis (``_externally_trusted_arns``); the writer only persists.
+        """
+        for principal_arn in principal_arns:
+            await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {"external_trust": True})
 
 
 __all__ = ["KnowledgeGraphWriter"]

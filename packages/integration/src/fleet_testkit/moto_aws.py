@@ -1,0 +1,552 @@
+"""Reusable moto-backed AWS harness for fleet-test attack-path e2e (L2).
+
+Stands up an in-process **moto** S3 (and optionally IAM) and drives the *real*
+agent code — data-security's live S3 inventory reader + object sampler + the real
+classifier + the real ``kg_writer.record`` — into a provided ``SemanticStore``. No
+``s3_inventory_feed`` fixtures, no ``_FakeS3``, no hand-supplied classifier hits: the
+classifier runs on the actual bytes a real boto3 ``get_object`` returns from moto, and
+the public/private posture is derived from a real S3 ACL the reader parses.
+
+This is the shared harness the attack-path e2e tests reuse (path 3 / path 1). moto is
+in-process, so these run unskipped in normal CI (no ``NEXUS_LIVE_*`` gate).
+"""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+import boto3
+from cloud_posture.tools.aws_ec2 import Ec2Workload, read_ec2_workloads
+from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
+from cloud_posture.tools.aws_kms import KmsKey, read_kms_keys
+from cloud_posture.tools.aws_rds import RdsInstance, read_rds_instances
+from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
+from data_security.canonical import s3_bucket_arn
+from data_security.classifiers import classify_bytes
+from data_security.kg_writer import KnowledgeGraphWriter as DataSecurityKgWriter
+from data_security.schemas import ClassifierLabel
+from data_security.tools.s3_inventory_live import S3LiveInventoryReader
+from data_security.tools.s3_objects_live import S3LiveObjectSampler
+from moto import mock_aws
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from charter.memory.semantic import SemanticStore
+
+_DEFAULT_ACCOUNT_ID = "123456789012"  # moto's fixed account id
+_DEFAULT_REGION = "us-east-1"
+
+
+@dataclass(frozen=True, slots=True)
+class MotoBucket:
+    """A bucket to seed into moto: name, public posture, object bodies, encryption posture."""
+
+    name: str
+    public: bool
+    objects: dict[str, bytes] = field(default_factory=dict)
+    encrypted: bool = False  # default-SSE (AES256) → data-security reads is_encrypted=True
+    policy: str | None = None  # raw bucket-policy JSON (resource-based grants, path-7 gap fix)
+
+
+def _seed_buckets(s3: object, buckets: tuple[MotoBucket, ...]) -> None:
+    """Create each bucket in moto, set a real public-read ACL when public, put objects."""
+    for spec in buckets:
+        s3.create_bucket(Bucket=spec.name)  # type: ignore[attr-defined]
+        if spec.public:
+            # A real S3 grant to AllUsers — the live inventory reader parses this ACL and
+            # marks the bucket public (no fixture flag).
+            s3.put_bucket_acl(Bucket=spec.name, ACL="public-read")  # type: ignore[attr-defined]
+        if spec.encrypted:
+            # Real default SSE — the reader's get_bucket_encryption sees AES256, so
+            # data-security records is_encrypted=True (vs "NONE" → False).
+            s3.put_bucket_encryption(  # type: ignore[attr-defined]
+                Bucket=spec.name,
+                ServerSideEncryptionConfiguration={
+                    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
+                },
+            )
+        if spec.policy:
+            s3.put_bucket_policy(Bucket=spec.name, Policy=spec.policy)  # type: ignore[attr-defined]
+        for key, body in spec.objects.items():
+            s3.put_object(Bucket=spec.name, Key=key, Body=body)  # type: ignore[attr-defined]
+
+
+async def drive_data_security(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    buckets: tuple[MotoBucket, ...],
+    s3_client: object,
+    account_id: str = _DEFAULT_ACCOUNT_ID,
+) -> dict[str, str]:
+    """Run data-security's REAL readers + classifier + kg_writer against ``s3_client``.
+
+    Reads live S3 posture (``S3LiveInventoryReader``), samples every object
+    (``S3LiveObjectSampler`` at rate 1.0), runs the real ``classify`` over the real bytes,
+    and persists via the real ``KnowledgeGraphWriter.record`` — the same call data-security's
+    ``agent.run`` makes. Returns a mapping of bucket name -> canonical S3 ARN.
+    """
+    inventory = S3LiveInventoryReader(s3_client, account_id=account_id).read()  # type: ignore[arg-type]
+    sampler = S3LiveObjectSampler(s3_client, sample_rate=1.0)  # type: ignore[arg-type]
+
+    hits_by_bucket: dict[str, list[ClassifierLabel]] = {}
+    public_object_buckets: set[str] = set()
+    for bucket in inventory:
+        samples, _basis = sampler.sample(bucket.name)
+        for sample in samples:
+            if sample.is_public:
+                public_object_buckets.add(bucket.name)
+            label = classify_bytes(sample.content_sample)
+            if label is not ClassifierLabel.NONE:
+                hits_by_bucket.setdefault(bucket.name, []).append(label)
+
+    await DataSecurityKgWriter(store, tenant_id).record(
+        inventory, hits_by_bucket, public_object_buckets=public_object_buckets
+    )
+    return {b.name: s3_bucket_arn(b.name) for b in inventory}
+
+
+@contextmanager
+def moto_s3(
+    buckets: tuple[MotoBucket, ...],
+    *,
+    region: str = _DEFAULT_REGION,
+) -> Iterator[object]:
+    """Context manager: a live moto-backed boto3 S3 client with ``buckets`` seeded.
+
+    Yields the real boto3 client (the injectable ``S3Client`` the live reader/sampler
+    consume). Use with :func:`drive_data_security` to run the real data-security path.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3
+
+
+def setup_sagemaker_endpoint(
+    sm: object, *, name: str, model_data_bucket: str, network_isolated: bool
+) -> None:
+    """Seed a moto SageMaker endpoint whose model reads from ``model_data_bucket``.
+
+    ``network_isolated=False`` is the exposed posture aispm flags (EXPOSES_MODEL → internet).
+    """
+    sm.create_model(  # type: ignore[attr-defined]
+        ModelName=f"{name}-model",
+        ExecutionRoleArn="arn:aws:iam::123456789012:role/sm",
+        PrimaryContainer={"Image": "img", "ModelDataUrl": f"s3://{model_data_bucket}/model.tar.gz"},
+        EnableNetworkIsolation=network_isolated,
+    )
+    sm.create_endpoint_config(  # type: ignore[attr-defined]
+        EndpointConfigName=f"{name}-cfg",
+        ProductionVariants=[
+            {
+                "VariantName": "v",
+                "ModelName": f"{name}-model",
+                "InitialInstanceCount": 1,
+                "InstanceType": "ml.t2.medium",
+            }
+        ],
+    )
+    sm.create_endpoint(EndpointName=name, EndpointConfigName=f"{name}-cfg")  # type: ignore[attr-defined]
+
+
+async def drive_aispm(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    sm_client: object,
+    account_id: str = _DEFAULT_ACCOUNT_ID,
+) -> None:
+    """Run aispm's REAL SageMaker reader + ``record_aws`` against ``sm_client``.
+
+    Uses aispm's real ``sagemaker_endpoints()`` extraction (exposure + model-data bucket), but
+    defaults the Bedrock fields — moto doesn't implement ``list_guardrails`` and path 10 only
+    needs the SageMaker path. Writes AI_SERVICE + EXPOSES_MODEL + HAS_ACCESS_TO via the real writer.
+    """
+    from aispm.kg_writer import KnowledgeGraphWriter as AispmKgWriter
+    from aispm.tools.aws_ai import AwsAiInventory, SageMakerEndpoint
+
+    raw = _AispmSmReader(sm_client).sagemaker_endpoints()
+    endpoints = tuple(
+        SageMakerEndpoint(
+            name=str(e["name"]),
+            data_capture_enabled=e.get("data_capture_enabled"),
+            kms_encrypted=e.get("kms_encrypted"),
+            network_isolated=e.get("network_isolated"),
+            model_name=str(e.get("model_name", "")),
+            model_data_bucket=str(e.get("model_data_bucket", "")),
+        )
+        for e in raw
+        if e.get("name")
+    )
+    inventory = AwsAiInventory(
+        account_id=account_id, region=_DEFAULT_REGION, sagemaker_endpoints=endpoints
+    )
+    await AispmKgWriter(store, tenant_id).record_aws(inventory)
+
+
+class _AispmSmReader:
+    """aispm's real SageMaker extraction bound to an injected (moto) client."""
+
+    def __init__(self, sm_client: object) -> None:
+        from aispm.tools.aws_ai import _BotoAwsAiReader
+
+        self._reader = _BotoAwsAiReader.__new__(_BotoAwsAiReader)
+        self._reader._sm = sm_client  # type: ignore[attr-defined]
+
+    def sagemaker_endpoints(self) -> list:
+        return self._reader.sagemaker_endpoints()
+
+
+@contextmanager
+def moto_all_clients(
+    buckets: tuple[MotoBucket, ...],
+    *,
+    region: str = _DEFAULT_REGION,
+) -> Iterator[tuple[object, object, object, object]]:
+    """Context manager yielding ``(s3, iam, ecs, ec2)`` under one moto mock.
+
+    The path-5 crown jewel needs every feeder live together: S3 (data), IAM (identity),
+    ECS (workload) and EC2 (exposure). S3 buckets are seeded; the rest are bare.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, ecs, ec2
+
+
+@contextmanager
+def moto_ai_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object]]:
+    """Context manager yielding ``(s3, sagemaker)`` under one moto mock (path 10).
+
+    S3 buckets are seeded (data-security's data leg); the SageMaker client is bare for the
+    caller to populate via :func:`setup_sagemaker_endpoint`.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, sm
+
+
+@contextmanager
+def moto_full_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object, object, object, object]]:
+    """Context manager yielding ``(s3, iam, ecs, ec2, sagemaker)`` under one moto mock.
+
+    The full-fleet scene needs every AWS leg live together: data (S3), identity (IAM), workload
+    exposure (ECS+EC2), and AI (SageMaker). S3 buckets are seeded; the rest are bare.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, ecs, ec2, sm
+
+
+@contextmanager
+def moto_scene_clients(
+    buckets: tuple[MotoBucket, ...], *, region: str = _DEFAULT_REGION
+) -> Iterator[tuple[object, object, object]]:
+    """Context manager yielding ``(s3, iam, sagemaker)`` under one moto mock.
+
+    The hermetic whole-environment scene needs the data leg (S3), the identity leg (IAM) and the
+    AI leg (SageMaker) live together. S3 buckets are seeded; IAM + SageMaker are bare for the
+    caller to populate.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        sm = boto3.client("sagemaker", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam, sm
+
+
+@contextmanager
+def moto_ecs_clients(*, region: str = _DEFAULT_REGION) -> Iterator[tuple[object, object]]:
+    """Context manager yielding ``(ecs_client, ec2_client)`` under one moto mock.
+
+    Path-2 needs ECS (workloads) and EC2 (security groups) live together. Both are bare;
+    the caller seeds workloads via :func:`setup_ecs_workload`.
+    """
+    with mock_aws():
+        ecs = boto3.client("ecs", region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
+        yield ecs, ec2
+
+
+def setup_ecs_workload(
+    ecs: object,
+    ec2: object,
+    *,
+    image_ref: str,
+    public: bool,
+    name: str = "websvc",
+    task_role_arn: str = "",
+) -> str:
+    """Seed a moto ECS service running ``image_ref``; returns its service ARN.
+
+    Builds a real VPC/subnet/security-group + cluster + awsvpc task definition + service.
+    When ``public`` the security group gets a real ``0.0.0.0/0`` ingress and the service
+    assigns a public IP — the exact posture :func:`cloud_posture.tools.aws_ecs` flags as
+    internet-exposed. When not public, the SG is closed and no public IP is assigned.
+    ``task_role_arn`` (when set) is attached to the task definition (path-5 crown jewel:
+    the role the workload runs as).
+    """
+    vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
+    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock="10.0.1.0/24")["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    sg = ec2.create_security_group(GroupName=f"{name}-sg", Description="sg", VpcId=vpc)[  # type: ignore[attr-defined]
+        "GroupId"
+    ]
+    if public:
+        ec2.authorize_security_group_ingress(  # type: ignore[attr-defined]
+            GroupId=sg,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                }
+            ],
+        )
+    ecs.create_cluster(clusterName=f"{name}-cluster")  # type: ignore[attr-defined]
+    task_def_kwargs: dict[str, object] = {
+        "family": f"{name}-td",
+        "networkMode": "awsvpc",
+        "containerDefinitions": [{"name": "app", "image": image_ref, "memory": 128}],
+    }
+    if task_role_arn:
+        task_def_kwargs["taskRoleArn"] = task_role_arn
+    ecs.register_task_definition(**task_def_kwargs)  # type: ignore[attr-defined]
+    service = ecs.create_service(  # type: ignore[attr-defined]
+        cluster=f"{name}-cluster",
+        serviceName=name,
+        taskDefinition=f"{name}-td",
+        desiredCount=1,
+        networkConfiguration={
+            "awsvpcConfiguration": {
+                "subnets": [subnet],
+                "securityGroups": [sg],
+                "assignPublicIp": "ENABLED" if public else "DISABLED",
+            }
+        },
+    )
+    return str(service["service"]["serviceArn"])
+
+
+def setup_ec2_instance(
+    ec2: object,
+    *,
+    name: str = "vm",
+    iac_artifact: str = "",
+    public: bool = False,
+    subnet_cidr: str = "10.0.1.0/24",
+) -> str:
+    """Seed one running EC2 instance in a real VPC/subnet; returns its private IP.
+
+    The private IP is the join key the network-endpoint→instance ``OWNED_BY`` resolver matches a
+    flow's src IP against (cross-domain path A1). ``iac_artifact`` (when set) is written as a
+    ``nexus:iac`` tag — the IaC provenance the code-to-cloud ``DEPLOYED_VIA`` resolver matches (A3).
+    ``public`` attaches a real ``0.0.0.0/0`` SG + a public IP, so the reader marks it
+    internet-exposed (host-vuln path #15). ``subnet_cidr`` distinguishes instances that must get
+    DIFFERENT private IPs (moto assigns the same first address per identical subnet CIDR) — needed
+    for a multi-host scene like lateral movement (#14).
+    """
+    vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]  # type: ignore[attr-defined]
+    subnet = ec2.create_subnet(VpcId=vpc, CidrBlock=subnet_cidr)["Subnet"]["SubnetId"]  # type: ignore[attr-defined]
+    tags = [{"Key": "Name", "Value": name}]
+    if iac_artifact:
+        tags.append({"Key": "nexus:iac", "Value": iac_artifact})
+    kwargs: dict[str, Any] = {
+        "ImageId": "ami-12345678",
+        "MinCount": 1,
+        "MaxCount": 1,
+        "InstanceType": "t2.micro",
+        "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
+    }
+    if public:
+        sg = ec2.create_security_group(GroupName=f"{name}-open", Description="open", VpcId=vpc)[
+            "GroupId"
+        ]  # type: ignore[attr-defined]
+        ec2.authorize_security_group_ingress(  # type: ignore[attr-defined]
+            GroupId=sg,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 22,
+                    "ToPort": 22,
+                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                }
+            ],
+        )
+        kwargs["NetworkInterfaces"] = [
+            {"DeviceIndex": 0, "SubnetId": subnet, "AssociatePublicIpAddress": True, "Groups": [sg]}
+        ]
+    else:
+        kwargs["SubnetId"] = subnet
+    instance = ec2.run_instances(**kwargs)["Instances"][0]  # type: ignore[attr-defined]
+    return str(instance["PrivateIpAddress"])
+
+
+@contextmanager
+def moto_kms_client(*, region: str = _DEFAULT_REGION) -> Iterator[object]:
+    """Context manager yielding a bare moto-backed KMS client (path #21)."""
+    with mock_aws():
+        yield boto3.client("kms", region_name=region)
+
+
+def setup_kms_key(kms: object, *, public: bool) -> str:
+    """Seed a KMS key; ``public`` adds a wildcard-principal Allow to its key policy. Returns the ARN."""
+    meta = kms.create_key()["KeyMetadata"]  # type: ignore[attr-defined]
+    key_id, arn = meta["KeyId"], str(meta["Arn"])
+    if public:
+        import json as _json
+
+        policy = {
+            "Version": "2012-10-17",
+            "Id": "key-policy",
+            "Statement": [
+                {
+                    "Sid": "root",
+                    "Effect": "Allow",
+                    "Principal": {"AWS": f"arn:aws:iam::{_DEFAULT_ACCOUNT_ID}:root"},
+                    "Action": "kms:*",
+                    "Resource": "*",
+                },
+                {
+                    "Sid": "pub",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "kms:Decrypt",
+                    "Resource": "*",
+                },
+            ],
+        }
+        kms.put_key_policy(KeyId=key_id, PolicyName="default", Policy=_json.dumps(policy))  # type: ignore[attr-defined]
+    return arn
+
+
+async def drive_kms_keys(
+    store: SemanticStore, *, tenant_id: str, kms_client: object
+) -> list[KmsKey]:
+    """Run cloud-posture's REAL KMS reader + ``record_kms_keys``."""
+    keys = read_kms_keys(kms_client)
+    await CloudPostureKgWriter(store, tenant_id).record_kms_keys(keys)
+    return keys
+
+
+@contextmanager
+def moto_rds_client(*, region: str = _DEFAULT_REGION) -> Iterator[object]:
+    """Context manager yielding a bare moto-backed RDS client (path #19)."""
+    with mock_aws():
+        yield boto3.client("rds", region_name=region)
+
+
+def setup_rds_instance(
+    rds: object, *, name: str = "prod-db", public: bool = True, engine: str = "postgres"
+) -> str:
+    """Seed one RDS instance; returns its ARN. ``public`` sets ``PubliclyAccessible``."""
+    rds.create_db_instance(  # type: ignore[attr-defined]
+        DBInstanceIdentifier=name,
+        DBInstanceClass="db.t3.micro",
+        Engine=engine,
+        MasterUsername="admin",
+        MasterUserPassword="Sup3rSecret!",
+        AllocatedStorage=20,
+        PubliclyAccessible=public,
+    )
+    db = rds.describe_db_instances(DBInstanceIdentifier=name)["DBInstances"][0]  # type: ignore[attr-defined]
+    return str(db["DBInstanceArn"])
+
+
+async def drive_rds_instances(
+    store: SemanticStore, *, tenant_id: str, rds_client: object
+) -> list[RdsInstance]:
+    """Run cloud-posture's REAL RDS reader + ``record_rds_instances``."""
+    instances = read_rds_instances(rds_client)
+    await CloudPostureKgWriter(store, tenant_id).record_rds_instances(instances)
+    return instances
+
+
+async def drive_ec2_workloads(
+    store: SemanticStore, *, tenant_id: str, ec2_client: object, iam_client: object
+) -> list[Ec2Workload]:
+    """Run cloud-posture's REAL EC2 reader + ``record_ec2_workloads`` (instance + private IPs)."""
+    workloads = read_ec2_workloads(ec2_client, iam_client)
+    await CloudPostureKgWriter(store, tenant_id).record_ec2_workloads(workloads)
+    return workloads
+
+
+async def drive_cloud_workloads(
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    ecs_client: object,
+    ec2_client: object,
+) -> list[EcsWorkload]:
+    """Run cloud-posture's REAL ECS reader + ``record_workloads`` against the clients.
+
+    Reads ECS workloads (``read_ecs_workloads``), persists the workload nodes +
+    ``RUNS_IMAGE`` bridge edges via the real ``KnowledgeGraphWriter.record_workloads``.
+    Returns the read ``EcsWorkload`` rows.
+    """
+    workloads = read_ecs_workloads(ecs_client, ec2_client)
+    await CloudPostureKgWriter(store, tenant_id).record_workloads(workloads)
+    return workloads
+
+
+@contextmanager
+def moto_aws_clients(
+    buckets: tuple[MotoBucket, ...],
+    *,
+    region: str = _DEFAULT_REGION,
+) -> Iterator[tuple[object, object]]:
+    """Context manager yielding ``(s3_client, iam_client)`` under one moto mock.
+
+    Path-1 needs S3 *and* IAM live under the same moto session. S3 buckets are seeded;
+    the IAM client is bare for the caller to populate (roles/policies) via the real readers.
+    """
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=region)
+        iam = boto3.client("iam", region_name=region)
+        _seed_buckets(s3, buckets)
+        yield s3, iam
+
+
+__all__ = [
+    "EcsWorkload",
+    "MotoBucket",
+    "drive_aispm",
+    "drive_cloud_workloads",
+    "drive_data_security",
+    "drive_ec2_workloads",
+    "drive_kms_keys",
+    "drive_rds_instances",
+    "moto_ai_clients",
+    "moto_all_clients",
+    "moto_aws_clients",
+    "moto_ecs_clients",
+    "moto_full_clients",
+    "moto_kms_client",
+    "moto_rds_client",
+    "moto_s3",
+    "moto_scene_clients",
+    "setup_ec2_instance",
+    "setup_ecs_workload",
+    "setup_kms_key",
+    "setup_rds_instance",
+    "setup_sagemaker_endpoint",
+]
