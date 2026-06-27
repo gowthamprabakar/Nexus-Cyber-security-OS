@@ -67,13 +67,13 @@ Render a candidate as the labeled hop chain: `Public bucket "x" —EXPOSES_DATA�
 - **B4 — novelty filter:** drop signatures covered by a named archetype; keep only novel paths.
 - **B5 — wire + prove:** a "candidate paths" section in the report; run on the whole-environment scene with a **deliberately-unnamed planted path** → assert the engine surfaces it as a candidate AND does not duplicate any named archetype.
 
-## 9. Open decisions (discuss before B1)
+## 9. Decisions
 
-1. **Hybrid vs replacement** — I strongly recommend **hybrid** (named = confirmed, generic = candidate-discovery). Confirm?
-2. **Depth cap** — keep 3 (current substrate default) or raise to 4 (richer paths, more cost)?
-3. **Audience** — surface candidates to the customer (a "novel paths, review these" panel), or keep them internal first (a "what to name next" tool for us)?
-4. **Scoring** — ship the heuristic now (clearly labeled), or hold scoring until there's a labeled dataset and surface candidates _unranked_ initially?
-5. **Sequence** — build B now, or first widen the named set (cheap A4/other patterns) so the graph is even richer before the generic walker?
+1. **Hybrid vs replacement — ✅ LOCKED: HYBRID.** Named archetypes stay the "confirmed" tier untouched; the generic engine is an additive "candidate" discovery tier. Additive, can't regress the working product; replacement would throw away the curated severities / named explainability / remediation for no gain.
+2. **Depth cap — ✅ LOCKED: prove at 3, ship discovery at 4 (measured step).** Our named chains are already ~3 hops, so a depth-3 generic walker would mostly re-discover them and surface little novel. The novel value (transitive privilege chains, lateral movement) lives at depth 4. So: B1–B2 at depth 3 (cheap, proves the walker re-discovers known paths); then raise the discovery run to 4 and **measure the novel-vs-noise ratio** before committing. Raising the substrate cap 3→4 is a small, guarded change, not a blind default.
+3. **Audience** — (open) customer-facing "novel paths, review these" vs internal "what to name next" first.
+4. **Scoring** — (open) heuristic-now (labeled) vs unranked-until-labeled-dataset.
+5. **Sequence** — ✅ start B1 now (depth-independent, valuable regardless: it proves the taxonomy expresses every named archetype).
 
 ---
 
