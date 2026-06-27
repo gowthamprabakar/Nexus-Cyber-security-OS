@@ -187,6 +187,13 @@ class ExposedAiWithSensitiveData:
 
 
 @dataclass(frozen=True, slots=True)
+class ExposedKmsKey:
+    """A KMS key whose key policy is internet-open (path #21) — the encryption boundary is open."""
+
+    resource_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExposedDatabase:
     """A publicly-accessible managed database (path #19) — an internet-facing data store. The
     resource itself is the finding; a managed DB is sensitive-by-assumption."""
@@ -718,6 +725,17 @@ class KgQuery:
                         )
                     )
         return hits
+
+    async def find_exposed_kms_key(self) -> list[ExposedKmsKey]:
+        """Find KMS keys with an internet-open key policy (path #21). Self-seeded: a CLOUD_RESOURCE
+        with ``kind=kms-key`` and ``is_public``. Read-only."""
+        return [
+            ExposedKmsKey(r.entity_id)
+            for r in await self._semantic_store.list_entities_by_type(
+                tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+            )
+            if r.properties.get("kind") == "kms-key" and r.properties.get("is_public") is True
+        ]
 
     async def find_exposed_database(self) -> list[ExposedDatabase]:
         """Find publicly-accessible managed databases (path #19). Self-seeded: a CLOUD_RESOURCE with

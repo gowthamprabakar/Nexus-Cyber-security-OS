@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
+    from cloud_posture.tools.aws_kms import KmsKey
     from cloud_posture.tools.aws_rds import RdsInstance
     from cloud_posture.tools.azure_aci import AciWorkload
     from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload
@@ -182,6 +183,15 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 is_public=w.is_public,
                 kind="gcp-cloud-run-service",
                 assumes_principal=w.service_account,
+            )
+
+    async def record_kms_keys(self, keys: Iterable[KmsKey]) -> None:
+        """Write each KMS key as a ``CLOUD_RESOURCE{kind=kms-key, is_public}`` (path #21)."""
+        for key in keys:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                key.key_arn,
+                {"kind": "kms-key", "is_public": key.is_public},
             )
 
     async def record_rds_instances(self, instances: Iterable[RdsInstance]) -> None:

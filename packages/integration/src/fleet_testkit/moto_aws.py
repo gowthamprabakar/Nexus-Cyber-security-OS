@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import boto3
 from cloud_posture.tools.aws_ec2 import Ec2Workload, read_ec2_workloads
 from cloud_posture.tools.aws_ecs import EcsWorkload, read_ecs_workloads
+from cloud_posture.tools.aws_kms import KmsKey, read_kms_keys
 from cloud_posture.tools.aws_rds import RdsInstance, read_rds_instances
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudPostureKgWriter
 from data_security.canonical import s3_bucket_arn
@@ -370,6 +371,53 @@ def setup_ec2_instance(ec2: object, *, name: str = "vm", iac_artifact: str = "")
 
 
 @contextmanager
+def moto_kms_client(*, region: str = _DEFAULT_REGION) -> Iterator[object]:
+    """Context manager yielding a bare moto-backed KMS client (path #21)."""
+    with mock_aws():
+        yield boto3.client("kms", region_name=region)
+
+
+def setup_kms_key(kms: object, *, public: bool) -> str:
+    """Seed a KMS key; ``public`` adds a wildcard-principal Allow to its key policy. Returns the ARN."""
+    meta = kms.create_key()["KeyMetadata"]  # type: ignore[attr-defined]
+    key_id, arn = meta["KeyId"], str(meta["Arn"])
+    if public:
+        import json as _json
+
+        policy = {
+            "Version": "2012-10-17",
+            "Id": "key-policy",
+            "Statement": [
+                {
+                    "Sid": "root",
+                    "Effect": "Allow",
+                    "Principal": {"AWS": f"arn:aws:iam::{_DEFAULT_ACCOUNT_ID}:root"},
+                    "Action": "kms:*",
+                    "Resource": "*",
+                },
+                {
+                    "Sid": "pub",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "kms:Decrypt",
+                    "Resource": "*",
+                },
+            ],
+        }
+        kms.put_key_policy(KeyId=key_id, PolicyName="default", Policy=_json.dumps(policy))  # type: ignore[attr-defined]
+    return arn
+
+
+async def drive_kms_keys(
+    store: SemanticStore, *, tenant_id: str, kms_client: object
+) -> list[KmsKey]:
+    """Run cloud-posture's REAL KMS reader + ``record_kms_keys``."""
+    keys = read_kms_keys(kms_client)
+    await CloudPostureKgWriter(store, tenant_id).record_kms_keys(keys)
+    return keys
+
+
+@contextmanager
 def moto_rds_client(*, region: str = _DEFAULT_REGION) -> Iterator[object]:
     """Context manager yielding a bare moto-backed RDS client (path #19)."""
     with mock_aws():
@@ -454,17 +502,20 @@ __all__ = [
     "drive_cloud_workloads",
     "drive_data_security",
     "drive_ec2_workloads",
+    "drive_kms_keys",
     "drive_rds_instances",
     "moto_ai_clients",
     "moto_all_clients",
     "moto_aws_clients",
     "moto_ecs_clients",
     "moto_full_clients",
+    "moto_kms_client",
     "moto_rds_client",
     "moto_s3",
     "moto_scene_clients",
     "setup_ec2_instance",
     "setup_ecs_workload",
+    "setup_kms_key",
     "setup_rds_instance",
     "setup_sagemaker_endpoint",
 ]

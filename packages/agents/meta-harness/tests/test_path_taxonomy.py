@@ -80,6 +80,7 @@ _OUT_OF_MODEL = {
     "iac_misconfig_deployed",
     "leaked_credential",
     "exposed_database",
+    "exposed_kms_key",
 }
 
 

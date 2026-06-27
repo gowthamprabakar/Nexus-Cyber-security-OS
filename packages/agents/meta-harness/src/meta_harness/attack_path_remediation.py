@@ -55,6 +55,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",
         auto_fixable=False,
     ),
+    "exposed_kms_key": FixAdvice(
+        "Remove the wildcard (Principal: *) statement from the KMS key policy and scope key usage to "
+        "the specific roles that need it; a public key policy defeats encryption-at-rest.",
+        auto_fixable=False,
+    ),
     "exposed_database": FixAdvice(
         "Set the database to not publicly accessible (PubliclyAccessible=false) and restrict its "
         "security group to the application subnets; a managed database should never be internet-facing.",
