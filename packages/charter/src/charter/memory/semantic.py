@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import bindparam, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -68,6 +68,55 @@ class EntityRow:
         self.external_id = external_id
         self.properties = properties
         self.created_at = created_at
+
+
+class WalkedPath:
+    """A source→sink path found by :meth:`SemanticStore.walk_paths` (the recursive-CTE walk).
+
+    Graph-generic: the store has no notion of attack-path markers — it returns the resolved nodes
+    (entity_id, external_id, type, properties) along the path and the ordered edge types; the
+    consumer (meta-harness path_engine) applies the taxonomy. ``hop_*`` lists are dst-per-hop,
+    in order, so the last hop node IS the sink.
+    """
+
+    __slots__ = (
+        "edge_types",
+        "hop_entity_ids",
+        "hop_external_ids",
+        "sink_entity_type",
+        "sink_external_id",
+        "sink_id",
+        "sink_properties",
+        "source_external_id",
+        "source_id",
+    )
+
+    def __init__(
+        self,
+        *,
+        source_id: str,
+        source_external_id: str,
+        sink_id: str,
+        sink_external_id: str,
+        sink_entity_type: str,
+        sink_properties: dict[str, Any],
+        edge_types: tuple[str, ...],
+        hop_entity_ids: tuple[str, ...],
+        hop_external_ids: tuple[str, ...],
+    ) -> None:
+        self.source_id = source_id
+        self.source_external_id = source_external_id
+        self.sink_id = sink_id
+        self.sink_external_id = sink_external_id
+        self.sink_entity_type = sink_entity_type
+        self.sink_properties = sink_properties
+        self.edge_types = edge_types
+        self.hop_entity_ids = hop_entity_ids
+        self.hop_external_ids = hop_external_ids
+
+
+class PathWalkTooLarge(RuntimeError):
+    """Raised when a tenant's graph exceeds the node-count guard for the in-DB walk (BP5)."""
 
 
 class RelationshipRow:
@@ -368,6 +417,128 @@ class SemanticStore:
             models = (await session.execute(stmt)).scalars().all()
             return [self._row(m) for m in models]
 
+    async def walk_paths(
+        self,
+        *,
+        tenant_id: str,
+        source_ids: list[str],
+        traversable_edges: frozenset[str],
+        sink_categories: frozenset[str],
+        max_depth: int,
+        max_nodes: int = 100_000,
+    ) -> list[WalkedPath]:
+        """Recursive-CTE BFS (BP5): all paths from ``source_ids`` over ``traversable_edges`` to a
+        node whose type is in ``sink_categories``, cycle-free, depth-bounded, stopping at the first
+        sink. One SQL query for the whole traversal (replaces N per-hop round-trips), then one batch
+        query to resolve node labels/properties. Dialect-portable (SQLite + Postgres). Read-only,
+        tenant-scoped.
+
+        Raises :class:`PathWalkTooLarge` when the tenant has more than ``max_nodes`` entities — a
+        guard so a pathological graph can't drive an unbounded fan-out walk.
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id must be a non-empty string")
+        if not source_ids or not traversable_edges or not sink_categories:
+            return []
+
+        async with self._session_factory() as session:
+            total = (
+                await session.execute(
+                    text("SELECT count(*) FROM entities WHERE tenant_id = :t"), {"t": tenant_id}
+                )
+            ).scalar_one()
+            if total > max_nodes:
+                raise PathWalkTooLarge(
+                    f"tenant {tenant_id} has {total} entities (> {max_nodes}); refusing in-DB walk"
+                )
+
+            # cur_id never sinks at the seed (source/sink categories are disjoint). `visited` is a
+            # '/'-wrapped id list for cycle exclusion; `hop_ids` is '>'-joined dst ids (ULIDs, so no
+            # separator collisions); `edges` is comma-joined edge types (no commas in a type name).
+            sql = text(
+                """
+                WITH RECURSIVE walk(src_id, cur_id, depth, edges, hop_ids, visited, is_sink) AS (
+                    SELECT e.entity_id, e.entity_id, 0, '', '', '/' || e.entity_id || '/', 0
+                    FROM entities e
+                    WHERE e.tenant_id = :t AND e.entity_id IN :sources
+                  UNION ALL
+                    SELECT
+                        w.src_id, r.dst_entity_id, w.depth + 1,
+                        CASE WHEN w.edges = '' THEN r.relationship_type
+                             ELSE w.edges || ',' || r.relationship_type END,
+                        CASE WHEN w.hop_ids = '' THEN r.dst_entity_id
+                             ELSE w.hop_ids || '>' || r.dst_entity_id END,
+                        w.visited || r.dst_entity_id || '/',
+                        CASE WHEN d.entity_type IN :sinks THEN 1 ELSE 0 END
+                    FROM walk w
+                    JOIN relationships r
+                      ON r.tenant_id = :t AND r.src_entity_id = w.cur_id
+                     AND r.relationship_type IN :edges
+                    JOIN entities d ON d.tenant_id = :t AND d.entity_id = r.dst_entity_id
+                    WHERE w.is_sink = 0 AND w.depth < :maxdepth
+                      AND w.visited NOT LIKE '%/' || r.dst_entity_id || '/%'
+                )
+                SELECT src_id, cur_id AS sink_id, edges, hop_ids FROM walk WHERE is_sink = 1
+                """
+            ).bindparams(
+                bindparam("sources", expanding=True),
+                bindparam("sinks", expanding=True),
+                bindparam("edges", expanding=True),
+            )
+            rows = (
+                await session.execute(
+                    sql,
+                    {
+                        "t": tenant_id,
+                        "sources": list(source_ids),
+                        "sinks": list(sink_categories),
+                        "edges": list(traversable_edges),
+                        "maxdepth": max_depth,
+                    },
+                )
+            ).all()
+            if not rows:
+                return []
+
+            # Batch-resolve every node on every path → label / type / properties (one query).
+            node_ids: set[str] = set()
+            for src_id, _sink_id, _edges, hop_ids in rows:
+                node_ids.add(src_id)
+                node_ids.update(hop_ids.split(">") if hop_ids else [])
+            info_stmt = select(
+                EntityModel.entity_id,
+                EntityModel.external_id,
+                EntityModel.entity_type,
+                EntityModel.properties,
+            ).where(
+                EntityModel.tenant_id == tenant_id,
+                EntityModel.entity_id.in_(node_ids),
+            )
+            info = {
+                eid: (ext, etype, dict(props))
+                for eid, ext, etype, props in (await session.execute(info_stmt)).all()
+            }
+
+        out: list[WalkedPath] = []
+        for src_id, sink_id, edges, hop_ids in rows:
+            hops = hop_ids.split(">") if hop_ids else []
+            src_ext = info.get(src_id, ("", "", {}))[0]
+            sink_ext, sink_type, sink_props = info.get(sink_id, ("", "", {}))
+            out.append(
+                WalkedPath(
+                    source_id=src_id,
+                    source_external_id=src_ext,
+                    sink_id=sink_id,
+                    sink_external_id=sink_ext,
+                    sink_entity_type=sink_type,
+                    sink_properties=sink_props,
+                    edge_types=tuple(edges.split(",")) if edges else (),
+                    hop_entity_ids=tuple(hops),
+                    hop_external_ids=tuple(info.get(h, ("", "", {}))[0] for h in hops),
+                )
+            )
+        return out
+
     @staticmethod
     def _row(model: EntityModel) -> EntityRow:
         return EntityRow(
@@ -392,4 +563,11 @@ class SemanticStore:
         )
 
 
-__all__ = ["MAX_TRAVERSAL_DEPTH", "EntityRow", "RelationshipRow", "SemanticStore"]
+__all__ = [
+    "MAX_TRAVERSAL_DEPTH",
+    "EntityRow",
+    "PathWalkTooLarge",
+    "RelationshipRow",
+    "SemanticStore",
+    "WalkedPath",
+]

@@ -18,7 +18,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from meta_harness.path_taxonomy import (
+    SINK_MARKERS,
     SOURCE_MARKERS,
+    TRAVERSABLE_EDGES,
     is_traversable,
     match_sink,
     match_source,
@@ -78,11 +80,44 @@ class GenericPath:
 async def find_generic_paths(
     store: SemanticStore, tenant_id: str, *, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> list[GenericPath]:
-    """All source→sink paths within ``max_depth`` hops over attack-progressing edges."""
+    """All source→sink paths within ``max_depth`` hops over attack-progressing edges.
+
+    BP5: the traversal runs as ONE recursive-CTE query in the store (``walk_paths``) instead of N
+    per-hop round-trips — seconds on large graphs. Source markers (property predicates) are matched
+    in Python; sink markers are all category-only (``_always``), so the CTE stops at the first
+    sink-category node, matching the reference Python walker (:func:`_walk_python`)."""
+    source_marker_by_id = {
+        node.entity_id: marker for node, marker in await _source_nodes(store, tenant_id)
+    }
+    if not source_marker_by_id:
+        return []
+    walked = await store.walk_paths(
+        tenant_id=tenant_id,
+        source_ids=list(source_marker_by_id),
+        traversable_edges=TRAVERSABLE_EDGES,
+        sink_categories=frozenset(m.category.value for m in SINK_MARKERS),
+        max_depth=max_depth,
+    )
     paths: list[GenericPath] = []
-    for source, marker in await _source_nodes(store, tenant_id):
-        paths.extend(
-            await _walk(store, tenant_id, source.entity_id, marker, max_depth, source.external_id)
+    for w in walked:
+        hops = tuple(
+            PathHop(edge, hid, hext)
+            for edge, hid, hext in zip(
+                w.edge_types, w.hop_entity_ids, w.hop_external_ids, strict=True
+            )
+        )
+        paths.append(
+            GenericPath(
+                source_id=w.source_id,
+                source_marker=source_marker_by_id[w.source_id],
+                sink_id=w.sink_id,
+                sink_marker=match_sink(w.sink_entity_type, w.sink_properties) or "",
+                hops=hops,
+                source_label=w.source_external_id,
+                sink_severity=str(w.sink_properties.get("severity", "")),
+                sink_kev=w.sink_properties.get("kev") is True,
+                sink_data_type=str(w.sink_properties.get("data_type", "")),
+            )
         )
     return paths
 
@@ -303,7 +338,24 @@ async def _source_nodes(store: SemanticStore, tenant_id: str) -> list[tuple[obje
     return out
 
 
-async def _walk(
+async def find_generic_paths_python(
+    store: SemanticStore, tenant_id: str, *, max_depth: int = DEFAULT_MAX_DEPTH
+) -> list[GenericPath]:
+    """Reference (pre-BP5) in-Python BFS — kept as the equivalence oracle for the CTE walker.
+
+    ``find_generic_paths`` runs the same walk as one recursive-CTE query; an equivalence test pins
+    the two to identical output so the SQL rewrite can't silently diverge from this semantics."""
+    paths: list[GenericPath] = []
+    for source, marker in await _source_nodes(store, tenant_id):
+        paths.extend(
+            await _walk_python(
+                store, tenant_id, source.entity_id, marker, max_depth, source.external_id
+            )
+        )
+    return paths
+
+
+async def _walk_python(
     store: SemanticStore,
     tenant_id: str,
     source_id: str,

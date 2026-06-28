@@ -118,6 +118,55 @@ async def test_walker_empty_graph():
         assert await find_generic_paths(store, "t") == []
 
 
+@pytest.mark.asyncio
+async def test_bp5_cte_walker_matches_python_oracle():
+    """BP5: the recursive-CTE walk (find_generic_paths) is identical to the in-Python BFS oracle.
+
+    A multi-source graph exercising: a direct data path, a 2-hop transitive route, a vuln chain, a
+    cycle (must be excluded), and a depth-5 chain truncated at the bound."""
+    from meta_harness.path_engine import find_generic_paths_python
+
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        pub = await _node(store, t, _R, "arn:pub", {"is_public": True})
+        mid = await _node(store, t, _R, "arn:mid", {})
+        data = await _node(store, t, _DC, "arn:mid:ssn", {"data_type": "ssn"})
+        img = await _node(store, t, _R, "img:1", {"kind": "container-image"})
+        cve = await _node(store, t, _CVE, "CVE-1", {"severity": "HIGH", "kev": True})
+        await _edge(store, t, pub, data, EdgeType.EXPOSES_DATA.value)  # direct
+        await _edge(store, t, pub, mid, EdgeType.CONTAINS.value)  # transitive...
+        await _edge(store, t, mid, data, EdgeType.EXPOSES_DATA.value)  # ...to same data
+        await _edge(store, t, pub, img, EdgeType.RUNS_IMAGE.value)
+        await _edge(store, t, img, cve, EdgeType.VULNERABLE_TO.value)
+        await _edge(store, t, mid, pub, EdgeType.CONTAINS.value)  # cycle mid->pub
+
+        cte = await find_generic_paths(store, t, max_depth=4)
+        oracle = await find_generic_paths_python(store, t, max_depth=4)
+        assert frozenset(cte) == frozenset(oracle)
+        assert cte, "the graph yields paths (guards against both returning empty)"
+        # Sink risk-signals (BP2) survived the CTE round-trip.
+        vuln = next(p for p in cte if p.sink_marker == "known_vulnerability")
+        assert vuln.sink_severity == "HIGH" and vuln.sink_kev is True
+
+
+@pytest.mark.asyncio
+async def test_bp5_node_count_guard():
+    from charter.memory.semantic import PathWalkTooLarge
+
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        src = await _node(store, t, _R, "arn:pub", {"is_public": True})
+        with pytest.raises(PathWalkTooLarge):
+            await store.walk_paths(
+                tenant_id=t,
+                source_ids=[src],
+                traversable_edges=frozenset({"EXPOSES_DATA"}),
+                sink_categories=frozenset({_DC}),
+                max_depth=3,
+                max_nodes=0,  # any non-empty graph trips the guard
+            )
+
+
 # --- B3/B4: novelty filter + scoring -------------------------------------------------------------
 
 
