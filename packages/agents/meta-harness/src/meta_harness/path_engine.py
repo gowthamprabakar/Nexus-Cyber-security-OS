@@ -50,6 +50,11 @@ class GenericPath:
     sink_marker: str
     hops: tuple[PathHop, ...]
     source_label: str = ""  # the source node's external_id — for explainable render (BP3)
+    # The sink's risk signal, captured at the walk (BP2 scoring): a CVE's severity label + KEV
+    # flag (exploitability), or a data classification's type (sensitivity). Empty when absent.
+    sink_severity: str = ""
+    sink_kev: bool = False
+    sink_data_type: str = ""
 
     @property
     def edge_signature(self) -> tuple[str, ...]:
@@ -159,7 +164,50 @@ _SOURCE_WEIGHT = {
     "resource_policy_grant": 0.75,
     "identity_principal": 0.6,
 }
-_SINK_WEIGHT = {"sensitive_data": 1.0, "known_vulnerability": 0.85}
+
+#: BP2 exploitability: a CVE sink's severity label → weight; KEV (known-exploited) bumps it up.
+_CVE_SEVERITY_WEIGHT = {"CRITICAL": 1.0, "HIGH": 0.85, "MEDIUM": 0.6, "LOW": 0.4}
+_KEV_BOOST = 1.2
+
+#: BP2 sensitivity: a data sink's classification → weight (regulated/credential data scores higher).
+_HIGH_SENSITIVITY = frozenset(
+    {"ssn", "pci", "phi", "credentials", "aws_access_key", "mrn", "cvv", "npi"}
+)
+
+#: BP2 per-edge progression risk — how certain/severe traversing this edge is. A path is gated by
+#: its WEAKEST hop (a chain is only as strong as its least-certain progression), so the path's edge
+#: factor is the min over its hops. Observed network hops (COMMUNICATES_WITH) carry more uncertainty
+#: than a direct data-exposure edge; provenance edges (DEPLOYED_VIA / DEFINED_IN) weaker still.
+_EDGE_RISK = {
+    "EXPOSES_DATA": 1.0,
+    "VULNERABLE_TO": 1.0,
+    "MATCHES_INDICATOR": 1.0,
+    "EXECUTED_ON": 0.95,
+    "RUNS_IMAGE": 0.95,
+    "HAS_ACCESS_TO": 0.9,
+    "ASSUMES": 0.9,
+    "EXPOSES_MODEL": 0.9,
+    "OWNED_BY": 0.85,
+    "CONTAINS": 0.8,
+    "COMMUNICATES_WITH": 0.8,
+    "DEPLOYED_VIA": 0.7,
+    "DEFINED_IN": 0.7,
+}
+
+
+def _sink_factor(path: GenericPath) -> float:
+    """The impact weight of the path's sink: exploitability (CVE) or sensitivity (data)."""
+    if path.sink_marker == "known_vulnerability":
+        base = _CVE_SEVERITY_WEIGHT.get(path.sink_severity.upper(), 0.7)
+        return min(1.0, base * _KEV_BOOST) if path.sink_kev else base
+    if path.sink_marker == "sensitive_data":
+        return 1.0 if path.sink_data_type.lower() in _HIGH_SENSITIVITY else 0.75
+    return 0.8
+
+
+def _edge_factor(path: GenericPath) -> float:
+    """The weakest-link progression risk over the path's hops (1.0 for a direct/0-hop sink)."""
+    return min((_EDGE_RISK.get(e, 0.8) for e in path.edge_signature), default=1.0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,11 +237,18 @@ def is_novel(path: GenericPath) -> bool:
 
 
 def score_path(path: GenericPath) -> int:
-    """A heuristic candidate score: source x sink severity, decayed by path length, capped."""
+    """A heuristic candidate score (BP2), capped below every confirmed severity.
+
+    Four signals, each in [0, 1], multiplied then scaled by the cap:
+    - source exposure weight (a public resource outweighs a buried principal),
+    - sink impact: CVE exploitability (severity x KEV) or data sensitivity,
+    - weakest-edge progression risk (a chain is as strong as its least-certain hop),
+    - length decay (a longer transitive chain is more tenuous).
+    Calibration against a labeled scene set is BP8; this is the credible-ordering heuristic."""
     source = _SOURCE_WEIGHT.get(path.source_marker, 0.6)
-    sink = _SINK_WEIGHT.get(path.sink_marker, 0.8)
     decay = 1.0 / (1.0 + 0.25 * (len(path.hops) - 1))  # 1 hop = no decay; longer = more tenuous
-    return max(1, round(CANDIDATE_SCORE_CAP * source * sink * decay))
+    score = CANDIDATE_SCORE_CAP * source * _sink_factor(path) * _edge_factor(path) * decay
+    return max(1, round(score))
 
 
 async def find_candidate_paths(
@@ -278,6 +333,9 @@ async def _walk(
                             sink_marker,
                             new_hops,
                             source_label=source_label,
+                            sink_severity=str(dst.properties.get("severity", "")),
+                            sink_kev=dst.properties.get("kev") is True,
+                            sink_data_type=str(dst.properties.get("data_type", "")),
                         )
                     )
                 else:

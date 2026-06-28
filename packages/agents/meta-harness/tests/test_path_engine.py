@@ -13,8 +13,11 @@ from meta_harness.attack_paths import _SEVERITY
 from meta_harness.path_engine import (
     CANDIDATE_SCORE_CAP,
     NAMED_SHAPES,
+    GenericPath,
+    PathHop,
     find_candidate_paths,
     find_generic_paths,
+    score_path,
 )
 from meta_harness.path_taxonomy import SINK_MARKERS, SOURCE_MARKERS, is_traversable
 
@@ -132,6 +135,42 @@ def test_named_shapes_use_valid_markers_and_edges():
 def test_candidate_cap_is_below_every_named_severity():
     # A confirmed finding must always outrank an unverified candidate.
     assert min(_SEVERITY.values()) > CANDIDATE_SCORE_CAP
+
+
+def _gp(source, sink, edges, **sink_props):
+    hops = tuple(PathHop(e, f"n{i}", f"node{i}") for i, e in enumerate(edges))
+    return GenericPath("s", source, "k", sink, hops, **sink_props)
+
+
+def test_bp2_scoring_reflects_exploitability_sensitivity_and_edge_risk():
+    # Same shape, worse CVE → higher score; KEV bumps it further.
+    crit = _gp(
+        "public_resource", "known_vulnerability", ["VULNERABLE_TO"], sink_severity="CRITICAL"
+    )
+    low = _gp("public_resource", "known_vulnerability", ["VULNERABLE_TO"], sink_severity="LOW")
+    crit_kev = _gp(
+        "public_resource",
+        "known_vulnerability",
+        ["VULNERABLE_TO"],
+        sink_severity="HIGH",
+        sink_kev=True,
+    )
+    high = _gp("public_resource", "known_vulnerability", ["VULNERABLE_TO"], sink_severity="HIGH")
+    assert score_path(crit) > score_path(low)
+    assert score_path(crit_kev) > score_path(high)  # KEV raises a HIGH CVE
+
+    # Regulated data sink outscores a generic-data sink (same shape).
+    ssn = _gp("identity_principal", "sensitive_data", ["HAS_ACCESS_TO"], sink_data_type="ssn")
+    generic = _gp("identity_principal", "sensitive_data", ["HAS_ACCESS_TO"], sink_data_type="logs")
+    assert score_path(ssn) > score_path(generic)
+
+    # A weak progression edge (DEPLOYED_VIA) gates the score below a strong one (EXPOSES_DATA).
+    strong = _gp("public_resource", "sensitive_data", ["EXPOSES_DATA"], sink_data_type="ssn")
+    weak = _gp("public_resource", "sensitive_data", ["DEPLOYED_VIA"], sink_data_type="ssn")
+    assert score_path(strong) > score_path(weak)
+
+    # The cap holds for the strongest possible candidate.
+    assert score_path(crit) <= CANDIDATE_SCORE_CAP < min(_SEVERITY.values())
 
 
 @pytest.mark.asyncio
