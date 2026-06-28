@@ -31,12 +31,45 @@ def _principal_is_wildcard(principal: Any) -> bool:
     return False
 
 
+# Condition keys that SCOPE a wildcard principal down to a trusted set (org / account / arn) —
+# a `Principal: *` statement carrying one of these is NOT internet-open (the common org-scoped
+# key-policy pattern). Non-scoping conditions (e.g. aws:SecureTransport) do NOT narrow who can
+# use the key, so a wildcard with only those stays public — we suppress only recognized scopers,
+# never guess, so a genuinely-open key is never missed.
+_SCOPING_CONDITION_KEYS = frozenset(
+    {
+        "aws:principalorgid",
+        "aws:principalorgpaths",
+        "aws:principalaccount",
+        "aws:principalarn",
+        "aws:sourceaccount",
+        "aws:sourcearn",
+        "aws:sourceowner",
+        "kms:calleraccount",
+    }
+)
+
+
+def _has_scoping_condition(stmt: dict) -> bool:
+    """True if the statement's ``Condition`` narrows the principal to a trusted org/account/arn."""
+    condition = stmt.get("Condition")
+    if not isinstance(condition, dict):
+        return False
+    for operands in condition.values():
+        if isinstance(operands, dict) and any(
+            str(key).lower() in _SCOPING_CONDITION_KEYS for key in operands
+        ):
+            return True
+    return False
+
+
 def _policy_is_public(policy: dict) -> bool:
-    """True if the key policy has an ``Allow`` statement to a wildcard principal."""
+    """True if the key policy has an ``Allow`` to a wildcard principal with no scoping condition."""
     return any(
         isinstance(stmt, dict)
         and stmt.get("Effect") == "Allow"
         and _principal_is_wildcard(stmt.get("Principal"))
+        and not _has_scoping_condition(stmt)
         for stmt in policy.get("Statement") or []
     )
 
