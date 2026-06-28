@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from meta_harness.attack_paths import AttackPathRanker
+from meta_harness.candidate_history import (
+    CandidateDelta,
+    CandidateSnapshot,
+    diff_candidates,
+    snapshot_candidates,
+)
 from meta_harness.correlation import correlate_all
 from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
@@ -48,4 +54,21 @@ async def analyze(
     return ScanResult(confirmed=confirmed, candidates=candidates)
 
 
-__all__ = ["ScanResult", "analyze"]
+async def analyze_with_history(
+    store: SemanticStore,
+    tenant_id: str,
+    *,
+    previous: CandidateSnapshot,
+    suppressed: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(),
+) -> tuple[ScanResult, CandidateSnapshot, CandidateDelta]:
+    """One continuous-scan step (BP7): analyze, snapshot the candidate tier, diff vs the last run.
+
+    Returns the scan result, the new snapshot (persist it for next time), and the delta (a path that
+    just APPEARED is the alert). ``previous`` is the prior run's snapshot (``CandidateSnapshot({})``
+    on first run)."""
+    result = await analyze(store, tenant_id, suppressed=suppressed)
+    snapshot = snapshot_candidates(result.candidates)
+    return result, snapshot, diff_candidates(previous, snapshot)
+
+
+__all__ = ["ScanResult", "analyze", "analyze_with_history"]
