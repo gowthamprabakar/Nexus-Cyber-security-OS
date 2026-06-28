@@ -80,6 +80,33 @@ async def test_independent_legs_are_not_subsumed():
 
 
 @pytest.mark.asyncio
+async def test_external_trust_subsumes_fine_grained_for_same_principal():
+    """An externally-trusted principal with access to public SSN data is ONE path (external_trust),
+    not also a duplicate 'over-permissioned access' row. A separate non-external grant still shows."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        # External partner with access to public SSN data → external_trust (the complete framing).
+        partner = await _node(store, t, _ID, "arn:iam::999:role/partner", {"external_trust": True})
+        exports = await _node(store, t, _R, "arn:aws:s3:::exports", {"is_public": True})
+        ed = await _node(store, t, _DC, "arn:aws:s3:::exports:ssn", {"data_type": "ssn"})
+        await _edge(store, t, partner, exports, EdgeType.HAS_ACCESS_TO.value)
+        await _edge(store, t, exports, ed, EdgeType.EXPOSES_DATA.value)
+        # A separate NON-external analyst with access to a DIFFERENT public bucket → fine_grained.
+        analyst = await _node(store, t, _ID, "arn:iam::111:role/analyst", {})
+        pii = await _node(store, t, _R, "arn:aws:s3:::pii", {"is_public": True})
+        pd = await _node(store, t, _DC, "arn:aws:s3:::pii:ssn", {"data_type": "ssn"})
+        await _edge(store, t, analyst, pii, EdgeType.HAS_ACCESS_TO.value)
+        await _edge(store, t, pii, pd, EdgeType.EXPOSES_DATA.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        fine = [p for p in paths if p.path_type == "fine_grained_data"]
+        # The partner is NOT duplicated as fine-grained; only the analyst's grant is.
+        assert len(fine) == 1
+        assert exports not in fine[0].entities and partner not in fine[0].entities
+        assert {p.path_type for p in paths} == {"external_trust", "fine_grained_data"}
+
+
+@pytest.mark.asyncio
 async def test_public_secret_outranks_fine_grained():
     t = "t"
     async with in_memory_semantic_store() as store:

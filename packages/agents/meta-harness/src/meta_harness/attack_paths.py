@@ -199,6 +199,10 @@ class AttackPathRanker:
         # data. Those are folded into the crown jewel, not shown as separate rows (no double-count).
         subsumed_workloads: set[str] = set()
         subsumed_access: set[tuple[str, str]] = set()
+        # An externally-trusted principal's access to data is the more complete framing, so it
+        # SUBSUMES the same (principal, resource) surfacing again as a plain fine-grained grant —
+        # otherwise the partner shows as both "External trust" and "Over-permissioned access".
+        external_access: set[tuple[str, str]] = set()
         for h in await self._kg.find_crown_jewel_exposure():
             g("crown_jewel", (h.workload_id, h.role_id, h.resource_id)).add(
                 (h.workload_id, h.image_id, h.role_id, h.resource_id),
@@ -235,6 +239,7 @@ class AttackPathRanker:
             g("external_trust", (e.principal_id, e.resource_id)).add(
                 (e.principal_id, e.resource_id, e.data_classification_id), e.data_type
             )
+            external_access.add((e.principal_id, e.resource_id))
         for a in await self._kg.find_exposed_ai_with_sensitive_data():
             g("exposed_ai_sensitive_data", (a.service_id, a.resource_id)).add(
                 (a.service_id, a.resource_id, a.data_classification_id), a.data_type
@@ -274,6 +279,8 @@ class AttackPathRanker:
         for f in await self._kg.find_fine_grained_data_exposure():
             if (f.principal_id, f.resource_id) in subsumed_access:
                 continue  # this role→data access is the crown jewel's own access leg
+            if (f.principal_id, f.resource_id) in external_access:
+                continue  # already reported as the (more complete) external-trust path
             g("fine_grained_data", (f.principal_id, f.resource_id)).add(
                 (f.principal_id, f.resource_id, f.data_classification_id), f.data_type
             )
