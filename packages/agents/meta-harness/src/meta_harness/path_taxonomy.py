@@ -45,6 +45,18 @@ def _always(_: Mapping[str, Any]) -> bool:
     return True
 
 
+#: Scope tokens that mark an OAuth app as over-privileged across providers (Slack "admin",
+#: M365 "*.ReadWrite.*", Google "*/auth/admin..."). A read-only app is not an exposure.
+_PRIVILEGED_SCOPE_TOKENS = ("admin", "write", "owner", "manage", "full")
+
+
+def _over_scoped(p: Mapping[str, Any]) -> bool:
+    return any(
+        any(tok in str(scope).lower() for tok in _PRIVILEGED_SCOPE_TOKENS)
+        for scope in (p.get("scopes") or [])
+    )
+
+
 #: Where an attack STARTS — an exposure / foothold. Order is most-specific-first (the first match
 #: wins in :func:`match_source`), so ``external_identity`` is checked before the catch-all principal.
 SOURCE_MARKERS: tuple[NodeMarker, ...] = (
@@ -66,12 +78,17 @@ SOURCE_MARKERS: tuple[NodeMarker, ...] = (
     NodeMarker("exposed_ai_service", NodeCategory.AI_SERVICE, _always),
     NodeMarker("runtime_detection", NodeCategory.PROCESS_EVENT, _always),
     NodeMarker("runtime_detection_file", NodeCategory.FILE_INTEGRITY_EVENT, _always),
+    # BP6: an over-scoped third-party OAuth app is an external foothold into a SaaS tenant.
+    NodeMarker("over_scoped_oauth_app", NodeCategory.OAUTH_APP, _over_scoped),
 )
 
-#: Where IMPACT lands — a data breach or an exploitable vulnerability.
+#: Where IMPACT lands — a data breach, an exploitable vulnerability, or (BP6) a stolen AI model /
+#: a reachable SaaS workspace (impact domains the engine was previously blind to).
 SINK_MARKERS: tuple[NodeMarker, ...] = (
     NodeMarker("sensitive_data", NodeCategory.DATA_CLASSIFICATION, _always),
     NodeMarker("known_vulnerability", NodeCategory.CVE_FINDING, _always),
+    NodeMarker("ai_model", NodeCategory.AI_MODEL, _always),
+    NodeMarker("saas_tenant", NodeCategory.SAAS_TENANT, _always),
 )
 
 #: The attack-progressing edges the generic walker may traverse (directional, as written).
@@ -91,6 +108,8 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
         EdgeType.EXECUTED_ON,
         EdgeType.DEPLOYED_VIA,
         EdgeType.DEFINED_IN,
+        EdgeType.SERVES_MODEL,  # BP6: AI service → the model it serves (model theft/abuse)
+        EdgeType.AUTHORIZED,  # BP6: OAuth app → the SaaS tenant it can act on
     )
 )
 

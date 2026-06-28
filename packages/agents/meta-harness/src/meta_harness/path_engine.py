@@ -162,6 +162,7 @@ _SOURCE_WEIGHT = {
     "exposed_ai_service": 0.85,
     "privileged_workload": 0.85,
     "resource_policy_grant": 0.75,
+    "over_scoped_oauth_app": 0.85,
     "identity_principal": 0.6,
 }
 

@@ -54,8 +54,11 @@ _MARKER_PHRASE = {
     "exposed_ai_service": "Exposed AI service",
     "runtime_detection": "Active runtime detection",
     "runtime_detection_file": "Active file-integrity detection",
+    "over_scoped_oauth_app": "Over-scoped OAuth app",
     "sensitive_data": "sensitive data",
     "known_vulnerability": "a known vulnerability",
+    "ai_model": "an AI model",
+    "saas_tenant": "a SaaS tenant",
 }
 
 #: edge type → a verb phrase, so a hop reads as English (fallback: the lower-cased edge name).
@@ -73,6 +76,8 @@ _EDGE_PHRASE = {
     "EXECUTED_ON": "executed on",
     "DEPLOYED_VIA": "was deployed via",
     "DEFINED_IN": "is defined in",
+    "SERVES_MODEL": "serves model",
+    "AUTHORIZED": "is authorized to",
 }
 
 

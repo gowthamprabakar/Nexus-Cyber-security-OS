@@ -123,6 +123,16 @@ def test_named_shapes_cover_every_walker_discoverable_archetype():
         assert shape in NAMED_SHAPES, f"{name} shape {shape} missing from engine NAMED_SHAPES"
 
 
+def test_bp6_breadth_markers_and_edges_are_wired():
+    # BP6: the AI-model + SaaS domains the engine was blind to are now markable + traversable.
+    assert match_sink(NC.AI_MODEL.value, {}) == "ai_model"
+    assert match_sink(NC.SAAS_TENANT.value, {}) == "saas_tenant"
+    assert match_source(NC.OAUTH_APP.value, {"scopes": ["admin"]}) == "over_scoped_oauth_app"
+    # Precision: a read-only OAuth app is not an over-scoped source.
+    assert match_source(NC.OAUTH_APP.value, {"scopes": ["channels:read"]}) is None
+    assert is_traversable("SERVES_MODEL") and is_traversable("AUTHORIZED")
+
+
 def test_non_attack_edges_are_not_traversable():
     # Control-plane / audit / compliance edges are not attack progression.
     for edge in ("AFFECTS", "MAPS_TO_REQUIREMENT", "REMEDIATES", "SATISFIES", "VIOLATES"):
