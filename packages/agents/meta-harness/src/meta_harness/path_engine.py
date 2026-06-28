@@ -252,7 +252,12 @@ def score_path(path: GenericPath) -> int:
 
 
 async def find_candidate_paths(
-    store: SemanticStore, tenant_id: str, *, max_depth: int = DEFAULT_MAX_DEPTH, limit: int = 20
+    store: SemanticStore,
+    tenant_id: str,
+    *,
+    max_depth: int = DEFAULT_MAX_DEPTH,
+    limit: int = 20,
+    suppressed: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(),
 ) -> list[CandidatePath]:
     """Novel source→sink paths (no named archetype covers them), scored, worst-first, top ``limit``.
 
@@ -263,8 +268,10 @@ async def find_candidate_paths(
     pair is not already named-covered in this graph: new routes to NEW impacts surface; duplicates of
     a named endpoint pair are dropped.
 
-    Dedups to the shortest (most direct) path per (source, sink) node pair. The top-N cap bounds
-    output; callers should surface the cap so a truncated list never reads as complete.
+    Dedups to the shortest (most direct) path per (source, sink) node pair. ``suppressed`` (BP4) is a
+    set of (source, sink, edge-signature) shapes an analyst dismissed as noise — every candidate of
+    that shape is dropped. The top-N cap bounds output; callers should surface the cap so a truncated
+    list never reads as complete.
     """
     all_paths = await find_generic_paths(store, tenant_id, max_depth=max_depth)
     named_node_pairs = {(p.source_id, p.sink_id) for p in all_paths if not is_novel(p)}
@@ -273,6 +280,8 @@ async def find_candidate_paths(
         key = (p.source_id, p.sink_id)
         if not is_novel(p) or key in named_node_pairs:
             continue  # named shape, or the same endpoints a named shape already reports
+        if (p.source_marker, p.sink_marker, p.edge_signature) in suppressed:
+            continue  # an analyst dismissed this shape as noise (BP4)
         if key not in shortest or len(p.hops) < len(shortest[key].hops):
             shortest[key] = p
     candidates = [CandidatePath(p, score_path(p)) for p in shortest.values()]

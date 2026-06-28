@@ -31,12 +31,20 @@ class ScanResult:
     candidates: list[CandidatePath]
 
 
-async def analyze(store: SemanticStore, tenant_id: str) -> ScanResult:
+async def analyze(
+    store: SemanticStore,
+    tenant_id: str,
+    *,
+    suppressed: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(),
+) -> ScanResult:
     """Run the bridge resolvers, then rank the confirmed + candidate attack paths. Read-only-ish:
-    the only writes are the idempotent cross-agent bridge edges (``correlate_all``)."""
+    the only writes are the idempotent cross-agent bridge edges (``correlate_all``).
+
+    ``suppressed`` (BP4) is the set of candidate shapes an analyst dismissed — pass
+    ``FeedbackLog.suppressed_signatures()`` here so dismissed noise stops resurfacing."""
     await correlate_all(store, tenant_id)
     confirmed = await AttackPathRanker(KgQuery(store, tenant_id)).find_all()
-    candidates = await find_candidate_paths(store, tenant_id)
+    candidates = await find_candidate_paths(store, tenant_id, suppressed=suppressed)
     return ScanResult(confirmed=confirmed, candidates=candidates)
 
 
