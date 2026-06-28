@@ -70,22 +70,66 @@ async def find_generic_paths(
     return paths
 
 
-# --- B3/B4: novelty filter + scoring → the candidate tier ----------------------------------------
+# --- B3/B4 + BP1: novelty filter + scoring → the candidate tier ----------------------------------
 
-#: (source_marker, sink_marker) pairs a NAMED archetype already reports. A generic path whose pair
-#: is here is a duplicate of a named detector (which reports it better) → dropped. Everything else is
-#: a NOVEL source→impact combination we have no named detector for — the candidate's reason to exist.
-NAMED_PAIRS: frozenset[tuple[str, str]] = frozenset(
+#: (source_marker, sink_marker, edge_signature) SHAPES a NAMED archetype already reports — the
+#: BP1 keystone. Novelty is keyed on the full shape, not just the (source, sink) PAIR: a NEW ROUTE
+#: between an already-named pair (a different edge signature) is novel and surfaces, where the old
+#: pair-based filter dropped it. This is what makes transitive / multi-domain chains discoverable.
+#:
+#: A generic path whose exact shape is here is a duplicate of a named detector (which reports it
+#: better) → dropped. Every other source→sink shape is a combination no named detector covers.
+#: MUST list every named shape the walker can actually generate (terminating at the first sink),
+#: including ``internet_exposed_host_vulnerable`` — else it would surface as a false candidate.
+#: The taxonomy test pins this against the named-archetype model so the two can't drift.
+NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
     {
-        ("public_resource", "sensitive_data"),  # public_secret / public_unencrypted / crown_jewel
-        ("public_resource", "known_vulnerability"),  # internet_exposed_vulnerable
-        ("privileged_workload", "known_vulnerability"),  # privileged_vulnerable
-        ("external_identity", "sensitive_data"),  # external_trust
-        ("exposed_ai_service", "sensitive_data"),  # exposed_ai_sensitive_data
-        ("resource_policy_grant", "sensitive_data"),  # resource_based_data
-        ("identity_principal", "sensitive_data"),  # fine_grained_data
-        ("runtime_detection", "known_vulnerability"),  # runtime_exploit_vulnerable
-        ("runtime_detection_file", "known_vulnerability"),  # runtime_exploit (file events)
+        (
+            "public_resource",
+            "sensitive_data",
+            ("EXPOSES_DATA",),
+        ),  # public_secret / public_unencrypted
+        (
+            "public_resource",
+            "known_vulnerability",
+            ("RUNS_IMAGE", "VULNERABLE_TO"),
+        ),  # internet_exposed_vulnerable
+        (
+            "public_resource",
+            "known_vulnerability",
+            ("VULNERABLE_TO",),
+        ),  # internet_exposed_host_vulnerable (#15)
+        (
+            "privileged_workload",
+            "known_vulnerability",
+            ("RUNS_IMAGE", "VULNERABLE_TO"),
+        ),  # privileged_vulnerable
+        (
+            "external_identity",
+            "sensitive_data",
+            ("HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # external_trust
+        (
+            "exposed_ai_service",
+            "sensitive_data",
+            ("HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # exposed_ai_sensitive_data
+        ("resource_policy_grant", "sensitive_data", ("CONTAINS",)),  # resource_based_data
+        (
+            "identity_principal",
+            "sensitive_data",
+            ("HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # fine_grained_data
+        (
+            "identity_principal",
+            "sensitive_data",
+            ("ASSUMES", "HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # privilege_escalation
+        (
+            "runtime_detection",
+            "known_vulnerability",
+            ("EXECUTED_ON", "RUNS_IMAGE", "VULNERABLE_TO"),
+        ),  # runtime_exploit
     }
 )
 
@@ -125,8 +169,11 @@ class CandidatePath:
 
 
 def is_novel(path: GenericPath) -> bool:
-    """True when no named archetype covers this path's (source, sink) combination."""
-    return (path.source_marker, path.sink_marker) not in NAMED_PAIRS
+    """True when no named archetype covers this path's full SHAPE (source, sink, edge signature).
+
+    BP1: route-aware. A path between an already-named (source, sink) pair is still novel if its
+    edge signature differs from the named shape — a new route to a known impact is a new finding."""
+    return (path.source_marker, path.sink_marker, path.edge_signature) not in NAMED_SHAPES
 
 
 def score_path(path: GenericPath) -> int:
@@ -142,16 +189,23 @@ async def find_candidate_paths(
 ) -> list[CandidatePath]:
     """Novel source→sink paths (no named archetype covers them), scored, worst-first, top ``limit``.
 
-    Dedups to the shortest (most direct) path per (source, sink) node pair, so N routes between the
-    same two nodes collapse to one candidate. The top-N cap bounds output; callers should surface
-    the cap so a truncated list never reads as complete.
+    BP1 novelty is route-aware (shape, not just pair), but a novel-shaped route between two nodes a
+    NAMED shape ALREADY connects is a redundant parallel edge (e.g. a public bucket carries both
+    EXPOSES_DATA — the named public_secret — and a CONTAINS edge to the same data), not a new attack
+    path. So a route is a candidate only when its shape is unnamed AND its exact (source, sink) node
+    pair is not already named-covered in this graph: new routes to NEW impacts surface; duplicates of
+    a named endpoint pair are dropped.
+
+    Dedups to the shortest (most direct) path per (source, sink) node pair. The top-N cap bounds
+    output; callers should surface the cap so a truncated list never reads as complete.
     """
-    novel = [
-        p for p in await find_generic_paths(store, tenant_id, max_depth=max_depth) if is_novel(p)
-    ]
+    all_paths = await find_generic_paths(store, tenant_id, max_depth=max_depth)
+    named_node_pairs = {(p.source_id, p.sink_id) for p in all_paths if not is_novel(p)}
     shortest: dict[tuple[str, str], GenericPath] = {}
-    for p in novel:
+    for p in all_paths:
         key = (p.source_id, p.sink_id)
+        if not is_novel(p) or key in named_node_pairs:
+            continue  # named shape, or the same endpoints a named shape already reports
         if key not in shortest or len(p.hops) < len(shortest[key].hops):
             shortest[key] = p
     candidates = [CandidatePath(p, score_path(p)) for p in shortest.values()]
@@ -210,7 +264,7 @@ async def _walk(
 __all__ = [
     "CANDIDATE_SCORE_CAP",
     "DEFAULT_MAX_DEPTH",
-    "NAMED_PAIRS",
+    "NAMED_SHAPES",
     "CandidatePath",
     "GenericPath",
     "PathHop",

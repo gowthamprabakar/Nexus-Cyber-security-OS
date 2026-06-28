@@ -12,11 +12,11 @@ from fleet_testkit import in_memory_semantic_store
 from meta_harness.attack_paths import _SEVERITY
 from meta_harness.path_engine import (
     CANDIDATE_SCORE_CAP,
-    NAMED_PAIRS,
+    NAMED_SHAPES,
     find_candidate_paths,
     find_generic_paths,
 )
-from meta_harness.path_taxonomy import SINK_MARKERS, SOURCE_MARKERS
+from meta_harness.path_taxonomy import SINK_MARKERS, SOURCE_MARKERS, is_traversable
 
 _R = NodeCategory.CLOUD_RESOURCE.value
 _DC = NodeCategory.DATA_CLASSIFICATION.value
@@ -118,12 +118,15 @@ async def test_walker_empty_graph():
 # --- B3/B4: novelty filter + scoring -------------------------------------------------------------
 
 
-def test_named_pairs_use_valid_markers():
+def test_named_shapes_use_valid_markers_and_edges():
     sources = {m.name for m in SOURCE_MARKERS}
     sinks = {m.name for m in SINK_MARKERS}
-    for src, sink in NAMED_PAIRS:
+    for src, sink, signature in NAMED_SHAPES:
         assert src in sources, f"{src} not a source marker"
         assert sink in sinks, f"{sink} not a sink marker"
+        assert signature, f"{src}->{sink}: empty edge signature"
+        for edge in signature:
+            assert is_traversable(edge), f"{src}->{sink}: edge {edge} not traversable"
 
 
 def test_candidate_cap_is_below_every_named_severity():
@@ -140,6 +143,28 @@ async def test_named_covered_path_is_not_a_candidate():
         d = await _node(store, t, _DC, "arn:aws:s3:::pii:ssn", {"data_type": "ssn"})
         await _edge(store, t, b, d, EdgeType.EXPOSES_DATA.value)
         assert await find_candidate_paths(store, t) == []
+
+
+@pytest.mark.asyncio
+async def test_bp1_novel_route_between_named_pair_surfaces():
+    """BP1 keystone: a NEW ROUTE between an already-named (source, sink) pair is novel.
+
+    public_resource -> sensitive_data is named ONLY via the direct (EXPOSES_DATA,) shape. A public
+    resource that reaches the same data via a 2-hop (CONTAINS, EXPOSES_DATA) route is a different
+    shape -> a candidate. The old pair-based filter dropped it (same pair); shape-novelty keeps it."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        pub = await _node(store, t, _R, "pub", {"is_public": True})
+        mid = await _node(store, t, _R, "mid", {})  # non-public resource (not a source/sink)
+        data = await _node(store, t, _DC, "mid:ssn", {"data_type": "ssn"})
+        await _edge(store, t, pub, mid, EdgeType.CONTAINS.value)
+        await _edge(store, t, mid, data, EdgeType.EXPOSES_DATA.value)
+
+        candidates = await find_candidate_paths(store, t)
+        assert len(candidates) == 1
+        c = candidates[0]
+        assert c.pair == ("public_resource", "sensitive_data")  # a NAMED pair...
+        assert c.path.edge_signature == ("CONTAINS", "EXPOSES_DATA")  # ...via a novel route
 
 
 @pytest.mark.asyncio

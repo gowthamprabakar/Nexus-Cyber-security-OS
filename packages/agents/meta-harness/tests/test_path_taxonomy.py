@@ -104,6 +104,25 @@ def test_taxonomy_accounts_for_every_named_archetype():
     assert _EXPOSURE_IMPACT.keys() | _OUT_OF_MODEL == set(_SEVERITY)
 
 
+def test_named_shapes_cover_every_walker_discoverable_archetype():
+    # BP1: the engine's NAMED_SHAPES (the novelty filter) must list every exposure->impact
+    # archetype the walker can generate (terminating at the FIRST sink), in marker space — else a
+    # named shape would surface as a false "novel candidate". Multi-sink shapes (crown_jewel: data
+    # reached only THROUGH a CVE sink) are unreachable by the first-sink walker and exempt.
+    from meta_harness.path_engine import NAMED_SHAPES
+
+    walker_unreachable = {"crown_jewel"}  # data sink sits past a CVE sink the walker stops at
+    for name, ((src_cat, src_props), (sink_cat, sink_props), edges) in _EXPOSURE_IMPACT.items():
+        if name in walker_unreachable:
+            continue
+        shape = (
+            match_source(src_cat.value, src_props),
+            match_sink(sink_cat.value, sink_props),
+            tuple(edges),
+        )
+        assert shape in NAMED_SHAPES, f"{name} shape {shape} missing from engine NAMED_SHAPES"
+
+
 def test_non_attack_edges_are_not_traversable():
     # Control-plane / audit / compliance edges are not attack progression.
     for edge in ("AFFECTS", "MAPS_TO_REQUIREMENT", "REMEDIATES", "SATISFIES", "VIOLATES"):
