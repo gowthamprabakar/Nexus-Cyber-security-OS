@@ -31,7 +31,7 @@ ones they confirm become named detectors (the loop that grows the product withou
 - **BP5 — scale substrate.** Postgres **recursive CTE** for the walk (the deferred "Phase 1b"), per-tenant node-count guards, result caching — seconds on real-size graphs.
 - **BP6 — taxonomy breadth.** Add sources/sinks as feeders grow (KMS keys, secrets, SaaS identities, network reachability) so the engine sees the whole graph, not 6 domains.
 - **BP7 — continuous run.** Wire into the scan loop (`analyze()` already returns candidates); persist per scan, **diff across runs** (new path appeared → alert).
-- **BP8 — validation harness.** A "planted novel path" suite + **candidate-precision measurement** (of N surfaced candidates, how many are real vs noise) on realistic multi-domain scenes — the generic-engine analogue of the bank scorecard.
+- **BP8 — validation harness. ✅ DONE (2026-06-28, commit 9df7247).** Six realistic multi-domain scenes with known ground truth (4 plant a novel path the engine must surface — runtime->data, privileged-pod->data, transitive public->data, external assume-chain->data; 2 must stay clean — named-only, redundant parallel edge). Measures candidate precision + recall across the set, pinned at 1.0 so a missed novel path or spurious candidate fails loudly. Extensible as the generic-engine scorecard. (Done before BP4 so the feedback loop builds on a measured base.)
 
 ## Sequence
 
