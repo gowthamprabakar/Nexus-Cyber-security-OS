@@ -66,4 +66,7 @@ async def test_confirmed_and_candidate_tiers_coexist_and_separate() -> None:
 
         report = render_candidates(candidates, tenant_id=_TENANT)
         assert "UNVERIFIED" in report
-        assert "runtime_detection -> sensitive_data" in report
+        assert "runtime_detection -> sensitive_data" in report  # the raw shape line
+        # BP3: real node labels resolve from the scene into an English story (not ULIDs).
+        assert "Active runtime detection" in report
+        assert "`host-1`" in report and "exposes `ssn`" in report

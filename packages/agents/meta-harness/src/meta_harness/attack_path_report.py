@@ -44,6 +44,61 @@ _LABELS = {
 }
 
 
+#: source/sink marker → a human noun phrase (BP3 explainable render).
+_MARKER_PHRASE = {
+    "public_resource": "Public resource",
+    "resource_policy_grant": "Resource with a policy grant",
+    "external_identity": "Externally-trusted identity",
+    "identity_principal": "Identity principal",
+    "privileged_workload": "Privileged workload",
+    "exposed_ai_service": "Exposed AI service",
+    "runtime_detection": "Active runtime detection",
+    "runtime_detection_file": "Active file-integrity detection",
+    "sensitive_data": "sensitive data",
+    "known_vulnerability": "a known vulnerability",
+}
+
+#: edge type → a verb phrase, so a hop reads as English (fallback: the lower-cased edge name).
+_EDGE_PHRASE = {
+    "HAS_ACCESS_TO": "has access to",
+    "ASSUMES": "can assume",
+    "RUNS_IMAGE": "runs image",
+    "VULNERABLE_TO": "is vulnerable to",
+    "EXPOSES_DATA": "exposes",
+    "CONTAINS": "contains",
+    "EXPOSES_MODEL": "exposes model",
+    "OWNED_BY": "is owned by",
+    "COMMUNICATES_WITH": "communicates with",
+    "MATCHES_INDICATOR": "matches threat indicator",
+    "EXECUTED_ON": "executed on",
+    "DEPLOYED_VIA": "was deployed via",
+    "DEFINED_IN": "is defined in",
+}
+
+
+def _short_label(external_id: str) -> str:
+    """The last meaningful segment of an ARN/URI/key — a readable handle for a node in the story."""
+    tail = external_id.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    return tail or external_id
+
+
+def candidate_story(path: object) -> str:
+    """A one-sentence English walk of a candidate path: nodes by label, hops by verb (BP3).
+
+    e.g. ``Public resource `acme-creds` contains `mid`, which exposes `ssn` (sensitive data)`` —
+    a reviewer reads what the path *means*, not an edge-type signature.
+    """
+    labels = path.node_labels  # type: ignore[attr-defined]
+    src = _MARKER_PHRASE.get(path.source_marker, path.source_marker)  # type: ignore[attr-defined]
+    parts = [f"{src} `{_short_label(labels[0])}`"]
+    for i, hop in enumerate(path.hops):  # type: ignore[attr-defined]
+        verb = _EDGE_PHRASE.get(hop.edge_type, hop.edge_type.lower().replace("_", " "))
+        linker = "" if i == 0 else ", which"
+        parts.append(f"{linker} {verb} `{_short_label(labels[i + 1])}`")
+    sink = _MARKER_PHRASE.get(path.sink_marker, path.sink_marker)  # type: ignore[attr-defined]
+    return "".join(parts) + f" ({sink})"
+
+
 def severity_band(severity: int) -> str:
     """The triage band for a numeric severity (CRITICAL / HIGH / MEDIUM / LOW)."""
     return next(label for floor, label in _BANDS if severity >= floor)
@@ -112,6 +167,8 @@ def candidate_to_dict(candidate: CandidatePath) -> dict[str, object]:
         "hops": len(p.hops),
         "score": candidate.score,
         "confidence": candidate.confidence,
+        "story": candidate_story(p),
+        "node_labels": list(p.node_labels),
     }
 
 
@@ -132,14 +189,18 @@ def render_candidates(candidates: Sequence[CandidatePath], *, tenant_id: str) ->
     ]
     for i, c in enumerate(candidates, start=1):
         p = c.path
-        lines.append(f"  {i}. [candidate {c.score}] {p.source_marker} -> {p.sink_marker}")
+        lines.append(f"  {i}. [candidate {c.score}] {candidate_story(p)}")
         chain = " -> ".join(p.edge_signature)
-        lines.append(f"     via {chain} ({len(p.hops)} hop{'s' if len(p.hops) != 1 else ''})")
+        lines.append(
+            f"     shape: {p.source_marker} -> {p.sink_marker} via {chain} "
+            f"({len(p.hops)} hop{'s' if len(p.hops) != 1 else ''})"
+        )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 __all__ = [
+    "candidate_story",
     "candidate_to_dict",
     "path_label",
     "path_to_dict",

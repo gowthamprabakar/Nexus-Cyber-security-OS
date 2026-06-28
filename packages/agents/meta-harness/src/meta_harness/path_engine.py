@@ -33,10 +33,11 @@ DEFAULT_MAX_DEPTH = 3
 
 @dataclass(frozen=True, slots=True)
 class PathHop:
-    """One traversed edge: its type + the node it arrives at."""
+    """One traversed edge: its type, the node it arrives at, and that node's human label (BP3)."""
 
     edge_type: str
     dst_entity_id: str
+    dst_label: str = ""  # the dst node's external_id (ARN/URI/name) — for explainable render
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,7 @@ class GenericPath:
     sink_id: str
     sink_marker: str
     hops: tuple[PathHop, ...]
+    source_label: str = ""  # the source node's external_id — for explainable render (BP3)
 
     @property
     def edge_signature(self) -> tuple[str, ...]:
@@ -59,6 +61,14 @@ class GenericPath:
         """Every node on the path, source-first."""
         return (self.source_id, *(h.dst_entity_id for h in self.hops))
 
+    @property
+    def node_labels(self) -> tuple[str, ...]:
+        """Every node's human label (external_id), source-first — falls back to entity_id (BP3)."""
+        return (
+            self.source_label or self.source_id,
+            *(h.dst_label or h.dst_entity_id for h in self.hops),
+        )
+
 
 async def find_generic_paths(
     store: SemanticStore, tenant_id: str, *, max_depth: int = DEFAULT_MAX_DEPTH
@@ -66,7 +76,9 @@ async def find_generic_paths(
     """All source→sink paths within ``max_depth`` hops over attack-progressing edges."""
     paths: list[GenericPath] = []
     for source, marker in await _source_nodes(store, tenant_id):
-        paths.extend(await _walk(store, tenant_id, source.entity_id, marker, max_depth))
+        paths.extend(
+            await _walk(store, tenant_id, source.entity_id, marker, max_depth, source.external_id)
+        )
     return paths
 
 
@@ -227,7 +239,12 @@ async def _source_nodes(store: SemanticStore, tenant_id: str) -> list[tuple[obje
 
 
 async def _walk(
-    store: SemanticStore, tenant_id: str, source_id: str, source_marker: str, max_depth: int
+    store: SemanticStore,
+    tenant_id: str,
+    source_id: str,
+    source_marker: str,
+    max_depth: int,
+    source_label: str,
 ) -> list[GenericPath]:
     """Bounded, cycle-excluding BFS from one source; record a path at every sink reached."""
     results: list[GenericPath] = []
@@ -246,12 +263,22 @@ async def _walk(
                 dst = await store.get_entity(tenant_id=tenant_id, entity_id=rel.dst_entity_id)
                 if dst is None:
                     continue
-                new_hops = (*hops, PathHop(rel.relationship_type, rel.dst_entity_id))
+                new_hops = (
+                    *hops,
+                    PathHop(rel.relationship_type, rel.dst_entity_id, dst.external_id),
+                )
                 sink_marker = match_sink(dst.entity_type, dst.properties)
                 if sink_marker:
                     # A sink is terminal impact — record the path; do not expand past it.
                     results.append(
-                        GenericPath(source_id, source_marker, dst.entity_id, sink_marker, new_hops)
+                        GenericPath(
+                            source_id,
+                            source_marker,
+                            dst.entity_id,
+                            sink_marker,
+                            new_hops,
+                            source_label=source_label,
+                        )
                     )
                 else:
                     next_frontier.append(

@@ -20,8 +20,10 @@ def _path(path_type, severity, title="t", entities=("a",), evidence=("e",), coun
 
 
 def _candidate(source, sink, edges, score):
-    hops = tuple(PathHop(e, f"n{i}") for i, e in enumerate(edges))
-    return CandidatePath(GenericPath("src", source, "snk", sink, hops), score)
+    hops = tuple(PathHop(e, f"n{i}", f"node{i}") for i, e in enumerate(edges))
+    return CandidatePath(
+        GenericPath("src", source, "snk", sink, hops, source_label="src-node"), score
+    )
 
 
 def test_severity_bands():
@@ -110,8 +112,15 @@ def test_render_candidates_is_distinct_and_unverified():
     ]
     out = render_candidates(cands, tenant_id="acme")
     assert "UNVERIFIED" in out  # never presented as confirmed
-    assert "1. [candidate 38] runtime_detection -> sensitive_data" in out
-    assert "via EXECUTED_ON -> EXPOSES_DATA (2 hops)" in out
+    # BP3: the headline is an English story (node labels + per-hop verbs), not a signature.
+    assert (
+        "1. [candidate 38] Active runtime detection `src-node` executed on `node0`, "
+        "which exposes `node1` (sensitive data)" in out
+    )
+    # The raw shape stays as a secondary line (the dedup / promote key).
+    assert (
+        "shape: runtime_detection -> sensitive_data via EXECUTED_ON -> EXPOSES_DATA (2 hops)" in out
+    )
 
 
 def test_render_candidates_empty():
@@ -127,6 +136,8 @@ def test_candidate_to_dict_shape():
         "hops": 1,
         "score": 40,
         "confidence": "candidate",
+        "story": "Active runtime detection `src-node` executed on `node0` (sensitive data)",
+        "node_labels": ["src-node", "node0"],
     }
 
 
