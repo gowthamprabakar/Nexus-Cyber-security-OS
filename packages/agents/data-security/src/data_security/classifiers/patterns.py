@@ -78,6 +78,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import gzip
 import re
 
@@ -238,39 +239,61 @@ def classify(text: str) -> ClassifierLabel:
     return ClassifierLabel.NONE
 
 
-def classify_bytes(data: bytes) -> ClassifierLabel:
-    """Classify object bytes, transparently decoding **gzip** and **base64** wrappers (gap #3).
+_HEX_RE = re.compile(r"^[0-9A-Fa-f\s]+$")
+_BASE32_RE = re.compile(r"^[A-Z2-7\s]+=*$")
+#: How many nested encodings to peel — handles double-base64, base64+gzip combos, etc. Bounded so
+#: a maliciously deeply-nested blob can't drive unbounded work. Found by adversarial red-teaming:
+#: the prior code peeled exactly one gzip OR one base64 layer, so any other encoding (hex, base32,
+#: url) or any *combination* hid a secret.
+_MAX_DECODE_DEPTH = 3
 
-    Tries, in order: the UTF-8 text as-is; the gzip-decompressed text (if gzip-framed); the
-    base64-decoded text (if the content looks like base64). Returns the first specific match.
-    ``classify`` patterns are specific (no entropy guesses), so a random blob decoding to noise
-    is overwhelmingly unlikely to match — keeping false positives low. Wiz/Macie do the same.
-    """
+
+def _decode_candidates(data: bytes, text: str) -> list[bytes]:
+    """Plausible single-layer decodings of ``data`` (charset/magic-guarded to stay cheap)."""
+    out: list[bytes] = []
+    stripped = text.strip()
+    if data[:2] == b"\x1f\x8b":  # gzip magic
+        with contextlib.suppress(OSError, EOFError):
+            out.append(gzip.decompress(data))
+    if "%" in text:  # url-encoding (restores delimiters/word-boundaries around a token)
+        from urllib.parse import unquote
+
+        decoded_url = unquote(text)
+        if decoded_url != text:
+            out.append(decoded_url.encode("utf-8", errors="replace"))
+    if len(stripped) >= 16 and _BASE64_RE.match(stripped):
+        with contextlib.suppress(binascii.Error, ValueError):
+            out.append(base64.b64decode(stripped, validate=True))
+    if len(stripped) >= 16 and _BASE32_RE.match(stripped):
+        with contextlib.suppress(binascii.Error, ValueError):
+            out.append(base64.b32decode(stripped))
+    if len(stripped) >= 16 and len(stripped) % 2 == 0 and _HEX_RE.match(stripped):
+        with contextlib.suppress(ValueError):
+            out.append(bytes.fromhex("".join(stripped.split())))
+    return [d for d in out if d and d != data]
+
+
+def _peel(data: bytes, depth: int) -> ClassifierLabel:
     text = data.decode("utf-8", errors="replace")
     label = classify(text)
-    if label is not ClassifierLabel.NONE:
+    if label is not ClassifierLabel.NONE or depth <= 0:
         return label
-
-    if data[:2] == b"\x1f\x8b":  # gzip magic number
-        try:
-            label = classify(gzip.decompress(data).decode("utf-8", errors="replace"))
-        except (OSError, EOFError):
-            label = ClassifierLabel.NONE
+    for decoded in _decode_candidates(data, text):
+        label = _peel(decoded, depth - 1)
         if label is not ClassifierLabel.NONE:
             return label
-
-    stripped = text.strip()
-    if len(stripped) >= 16 and _BASE64_RE.match(stripped):
-        try:
-            decoded = base64.b64decode(stripped, validate=True)
-        except (binascii.Error, ValueError):
-            decoded = b""
-        if decoded:
-            label = classify(decoded.decode("utf-8", errors="replace"))
-            if label is not ClassifierLabel.NONE:
-                return label
-
     return ClassifierLabel.NONE
+
+
+def classify_bytes(data: bytes) -> ClassifierLabel:
+    """Classify object bytes, transparently peeling nested encodings before matching.
+
+    Recursively tries the text as-is then each plausible decoding — **gzip, base64, base32, hex,
+    url** — up to ``_MAX_DECODE_DEPTH`` layers, so a secret hidden under double-base64, base64+gzip,
+    hex, base32, or url-encoding is still found. ``classify`` patterns are specific (no entropy
+    guesses), so random blobs decoding to noise stay ``NONE`` — false positives remain low.
+    """
+    return _peel(data, _MAX_DECODE_DEPTH)
 
 
 __all__ = ["classify", "classify_bytes"]

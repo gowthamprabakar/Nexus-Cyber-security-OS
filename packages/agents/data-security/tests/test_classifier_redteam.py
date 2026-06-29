@@ -10,7 +10,11 @@ contiguous secret-looking string lands in source — otherwise GitHub's own push
 flags this file (which is, fittingly, exactly the kind of detection we're testing).
 """
 
+import base64
+import gzip
+
 from data_security.classifiers import classify
+from data_security.classifiers.patterns import classify_bytes
 from data_security.schemas import ClassifierLabel as L
 
 
@@ -64,6 +68,35 @@ def test_prior_classifications_unchanged_regression():
     assert classify("patient ssn 123-45-6789") is L.SSN
     assert classify("card 4111 1111 1111 1111") is L.CREDIT_CARD
     assert classify("contact bob@acme.com") is L.EMAIL
+
+
+_RAW_KEY = b"aws_access_key_id = AKIAIOSFODNN7EXAMPLE"
+
+
+def test_encoding_evasion_is_peeled():
+    # FIXED (red-team): a secret hidden under a nested encoding was MISSED — the prior code peeled
+    # exactly one gzip OR base64 layer. Now gzip/base64/base32/hex/url + combinations are peeled.
+    assert (
+        classify_bytes(base64.b64encode(base64.b64encode(_RAW_KEY))) is L.AWS_ACCESS_KEY
+    )  # double b64
+    assert (
+        classify_bytes(gzip.compress(base64.b64encode(_RAW_KEY))) is L.AWS_ACCESS_KEY
+    )  # b64 then gzip
+    assert (
+        classify_bytes(base64.b64encode(gzip.compress(_RAW_KEY))) is L.AWS_ACCESS_KEY
+    )  # gzip then b64
+    assert classify_bytes(_RAW_KEY.hex().encode()) is L.AWS_ACCESS_KEY  # hex
+    assert classify_bytes(base64.b32encode(_RAW_KEY)) is L.AWS_ACCESS_KEY  # base32
+    assert classify_bytes(_RAW_KEY.replace(b" ", b"%20")) is L.AWS_ACCESS_KEY  # url-encoded
+
+
+def test_encoding_peel_precision_random_blobs_stay_clean():
+    # The recursive peeler must not invent secrets out of noise (false-positive guard).
+    import os
+
+    assert classify_bytes(os.urandom(64)) is L.NONE
+    assert classify_bytes(b'{"region":"us-east-1","retries":3}') is L.NONE
+    assert classify_bytes(b"the quick brown fox " * 4) is L.NONE
 
 
 def test_known_gap_db_connection_password_is_not_caught_as_a_credential():
