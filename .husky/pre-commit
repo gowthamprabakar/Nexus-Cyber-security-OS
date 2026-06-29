@@ -2,3 +2,15 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 pnpm lint-staged
+
+# Whole-repo mypy when Python files are staged — matches the required CI `python` (mypy) check,
+# so type errors are caught BEFORE they silently block a PR merge. lint-staged runs ruff per-file
+# only; ruff does not type-check, so mypy errors used to surface for the first time in CI.
+if git diff --cached --name-only --diff-filter=ACM | grep -q '\.py$'; then
+  echo "→ mypy (staged Python changes; matches the CI 'python' check)…"
+  if ! uv run mypy; then
+    echo "✖ mypy failed — fix the type errors above before committing."
+    echo "  (This is the required CI 'python' check; a red mypy disables the PR merge button.)"
+    exit 1
+  fi
+fi
