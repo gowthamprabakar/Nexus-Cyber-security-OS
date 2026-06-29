@@ -148,13 +148,13 @@ def test_data_security_finding_type_wire_strings_are_stable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_classifier_label_has_13_plus_none() -> None:
-    """v0.2: 7 v0.1 PII + 3 PHI (Task 8) + 3 PCI (Task 9) labels + NONE sentinel."""
+def test_classifier_label_has_18_plus_none() -> None:
+    """7 v0.1 PII + 3 PHI + 3 PCI + 5 modern-secret labels (red-team additions) + NONE sentinel."""
     members = set(ClassifierLabel)
-    assert len(members) == 14
+    assert len(members) == 19
     assert ClassifierLabel.NONE in members
     sensitive = members - {ClassifierLabel.NONE}
-    assert len(sensitive) == 13
+    assert len(sensitive) == 18
     # The v0.2 PHI + PCI additions.
     assert {
         ClassifierLabel.MEDICAL_RECORD_NUMBER,
@@ -163,6 +163,14 @@ def test_classifier_label_has_13_plus_none() -> None:
         ClassifierLabel.CVV,
         ClassifierLabel.CARD_EXPIRATION,
         ClassifierLabel.TRACK_DATA,
+    } <= sensitive
+    # Modern secret formats added after adversarial red-teaming (private keys + provider tokens).
+    assert {
+        ClassifierLabel.PRIVATE_KEY,
+        ClassifierLabel.GITHUB_TOKEN,
+        ClassifierLabel.GOOGLE_API_KEY,
+        ClassifierLabel.STRIPE_KEY,
+        ClassifierLabel.SLACK_TOKEN,
     } <= sensitive
 
 
