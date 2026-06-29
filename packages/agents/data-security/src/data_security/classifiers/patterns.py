@@ -76,13 +76,24 @@ Extension notes (deferred to D.5 v0.2)
 
 from __future__ import annotations
 
+import base64
+import binascii
+import gzip
 import re
 
 from data_security.schemas import ClassifierLabel
 
+_BASE64_RE = re.compile(r"^[A-Za-z0-9+/\s]+={0,2}$")
+
 # Patterns ordered by precedence (more specific first). Match returns the
 # first hit's label; the matched substring is NEVER returned.
 _AWS_ACCESS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+# AWS *secret* access key — no fixed prefix (40-char base64), so require the
+# `secret access key` label (any separator / camelCase) to bound false positives.
+_AWS_SECRET_KEY_RE = re.compile(
+    r"secret[\s_-]?access[\s_-]?key['\"]?\s*[:=]\s*['\"]?[A-Za-z0-9/+]{40}",
+    re.IGNORECASE,
+)
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\b")
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 # Credit card: 13-19 digits, with optional space / hyphen separators.
@@ -171,7 +182,8 @@ def classify(text: str) -> ClassifierLabel:
     Empty / whitespace-only strings return ``NONE``. The implementation
     is pure (no side effects) and deterministic.
     """
-    if _AWS_ACCESS_KEY_RE.search(text):
+    if _AWS_ACCESS_KEY_RE.search(text) or _AWS_SECRET_KEY_RE.search(text):
+        # Both the AKIA access-key ID and the secret access key are AWS credentials.
         return ClassifierLabel.AWS_ACCESS_KEY
     if _JWT_RE.search(text):
         return ClassifierLabel.JWT
@@ -206,4 +218,39 @@ def classify(text: str) -> ClassifierLabel:
     return ClassifierLabel.NONE
 
 
-__all__ = ["classify"]
+def classify_bytes(data: bytes) -> ClassifierLabel:
+    """Classify object bytes, transparently decoding **gzip** and **base64** wrappers (gap #3).
+
+    Tries, in order: the UTF-8 text as-is; the gzip-decompressed text (if gzip-framed); the
+    base64-decoded text (if the content looks like base64). Returns the first specific match.
+    ``classify`` patterns are specific (no entropy guesses), so a random blob decoding to noise
+    is overwhelmingly unlikely to match — keeping false positives low. Wiz/Macie do the same.
+    """
+    text = data.decode("utf-8", errors="replace")
+    label = classify(text)
+    if label is not ClassifierLabel.NONE:
+        return label
+
+    if data[:2] == b"\x1f\x8b":  # gzip magic number
+        try:
+            label = classify(gzip.decompress(data).decode("utf-8", errors="replace"))
+        except (OSError, EOFError):
+            label = ClassifierLabel.NONE
+        if label is not ClassifierLabel.NONE:
+            return label
+
+    stripped = text.strip()
+    if len(stripped) >= 16 and _BASE64_RE.match(stripped):
+        try:
+            decoded = base64.b64decode(stripped, validate=True)
+        except (binascii.Error, ValueError):
+            decoded = b""
+        if decoded:
+            label = classify(decoded.decode("utf-8", errors="replace"))
+            if label is not ClassifierLabel.NONE:
+                return label
+
+    return ClassifierLabel.NONE
+
+
+__all__ = ["classify", "classify_bytes"]

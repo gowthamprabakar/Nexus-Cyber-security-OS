@@ -42,6 +42,13 @@ def test_parse_and_skip_nameless() -> None:
     assert [e.name for e in inv.endpoints] == ["ep-prod"]
 
 
+def test_parses_model_data_bucket() -> None:
+    # The model-artifact GCS bucket link for path 10 (gap #13 cross-cloud).
+    reader = _FakeGcpReader([{"name": "llm", "public": True, "model_data_bucket": "training"}])
+    inv = inventory_from_reader(reader, project_id="proj-1", location="us-central1")
+    assert inv.endpoints[0].model_data_bucket == "training"
+
+
 def test_all_three_checks_fire() -> None:
     inv = GcpAiInventory(
         project_id="proj-1",

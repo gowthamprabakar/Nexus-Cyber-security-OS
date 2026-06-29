@@ -1,0 +1,22 @@
+test_case_id: path2-c1-standard-exposed-vuln
+description: An internet-exposed ECS workload (0.0.0.0/0) runs an image with known CRITICAL CVEs.
+agent: cloud-posture
+category: standard_violations
+environment:
+  fixture_path: inline
+  realism_notes: Django 2.0.0 carries real CRITICAL CVEs in trivy's DB; the workload has a public
+    IP and a 0.0.0.0/0 security group (read by cloud-posture's real ECS reader).
+  workloads:
+    - name: web
+      image: 'myreg/web-vuln:1.0'
+      public: true
+      vulnerable_requirements: "Django==2.0.0\n"
+ground_truth_violations:
+  - id: gt-exposed-vuln
+    type: internet_exposed_vulnerable
+    resource: 'myreg/web-vuln:1.0'
+    severity: critical
+pass_criteria:
+  precision: 1.0
+  recall: 1.0
+  false_positives_max: 0

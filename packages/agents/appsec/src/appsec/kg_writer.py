@@ -72,5 +72,19 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 repo_ids[finding.repo_slug] = repo_id
             await self.add_edge(artifact_id or "", repo_id or "", EdgeType.DEFINED_IN)
 
+    async def record_leaked_credentials(self, repo_slug: str, key_ids: Iterable[str]) -> None:
+        """Write SECRET(access-key-id) --DEFINED_IN--> repo for each leaked AWS credential (#17).
+
+        The SECRET node is keyed by the AWS access key ID (the non-secret identifier); identity keys
+        the SAME node by the same id, so the leaked credential and its owning cloud identity
+        converge — the leaked-cred -> data attack path. No secret material crosses.
+        """
+        repo_id = await self.upsert_node(NodeCategory.CODE_REPOSITORY, repo_slug, {})
+        for key_id in key_ids:
+            cred_id = await self.upsert_node(
+                NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
+            )
+            await self.add_edge(cred_id or "", repo_id or "", EdgeType.DEFINED_IN)
+
 
 __all__ = ["KnowledgeGraphWriter"]

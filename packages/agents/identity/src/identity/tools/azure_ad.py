@@ -37,6 +37,12 @@ class AzureAdUser:
     user_principal_name: str
     display_name: str
     account_enabled: bool
+    user_type: str = ""  # "Member" | "Guest" (B2B external collaborator)
+
+    @property
+    def is_guest(self) -> bool:
+        """A B2B guest — an external (foreign-tenant) collaborator (path-8 external trust)."""
+        return self.user_type == "Guest"
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +104,7 @@ async def azure_ad_list_identities(
     )
     degraded: list[dict[str, str]] = []
     users_raw = await _read_section(
-        reader, "users", "id,userPrincipalName,displayName,accountEnabled", degraded
+        reader, "users", "id,userPrincipalName,displayName,accountEnabled,userType", degraded
     )
     groups_raw = await _read_section(reader, "groups", "id,displayName,securityEnabled", degraded)
     sps_raw = await _read_section(
@@ -153,6 +159,7 @@ def _parse_user(u: dict[str, Any]) -> AzureAdUser:
         user_principal_name=str(u.get("userPrincipalName", "")),
         display_name=str(u.get("displayName", "")),
         account_enabled=bool(u.get("accountEnabled", False)),
+        user_type=str(u.get("userType", "")),
     )
 
 

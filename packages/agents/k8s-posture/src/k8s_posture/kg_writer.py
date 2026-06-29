@@ -24,12 +24,21 @@ from typing import TYPE_CHECKING
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
+from k8s_posture.rbac.enumerate import role_is_admin
+
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from k8s_posture.tools.cluster_inventory import ClusterInventory
+    from k8s_posture.tools.privileged_pods import PrivilegedWorkload
 
 
 def _ns_key(cluster: str, namespace: str) -> str:
     return f"{cluster}/namespace/{namespace}"
+
+
+def _pod_key(cluster: str, namespace: str, name: str) -> str:
+    return f"{cluster}/namespace/{namespace}/pod/{name}"
 
 
 def _sa_key(cluster: str, namespace: str, name: str) -> str:
@@ -98,6 +107,7 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     "name": role.name,
                     "namespace": role.namespace,
                     "cluster_id": cluster,
+                    "is_admin": role_is_admin(role),
                 },
             )
 
@@ -123,6 +133,32 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                     )
                     sa_nodes[(subject.namespace, subject.name)] = subj_node
                 await self.add_edge(subj_node or "", role_node or "", EdgeType.BINDS)
+
+    async def record_privileged_workloads(
+        self, cluster_id: str, workloads: Iterable[PrivilegedWorkload]
+    ) -> None:
+        """Write privileged pod ``K8S_OBJECT{privileged}`` + ``RUNS_IMAGE`` → image node.
+
+        The image node is the SAME spine node vulnerability writes CVEs onto (both keyed by
+        the image ref), so a privileged pod running a vulnerable image is one graph walk:
+        ``pod --RUNS_IMAGE--> image --VULNERABLE_TO--> CVE`` (path 6 — exploit the CVE, escape
+        to the node via privileged)."""
+        for workload in workloads:
+            pod_node = await self.upsert_node(
+                NodeCategory.K8S_OBJECT,
+                _pod_key(cluster_id, workload.namespace, workload.name),
+                {
+                    "kind": "pod",
+                    "name": workload.name,
+                    "namespace": workload.namespace,
+                    "cluster_id": cluster_id,
+                    "privileged": True,
+                },
+            )
+            image_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE, workload.image_ref, {"kind": "container-image"}
+            )
+            await self.add_edge(pod_node or "", image_node or "", EdgeType.RUNS_IMAGE)
 
 
 __all__ = ["KnowledgeGraphWriter"]

@@ -1,0 +1,21 @@
+test_case_id: path8-c4-clean-baseline
+description: A healthy environment — a foreign-trusted role exists but its only access is to a
+  benign public bucket with no sensitive data. The detector must emit nothing.
+agent: identity
+category: clean_baseline
+environment:
+  fixture_path: inline
+  realism_notes: Cross-account trust is present and real, but no sensitive data is reachable, so
+    there is no external-trust exposure.
+  buckets:
+    - name: acme-public-docs
+      public: true
+      objects:
+        readme.txt: 'Public marketing copy, lorem ipsum dolor sit amet — nothing sensitive.'
+  roles:
+    - name: partner-access
+      trust: external
+      grant_resource: 'arn:aws:s3:::acme-public-docs/*'
+ground_truth_violations: []
+pass_criteria:
+  false_positives_max: 0

@@ -1,0 +1,123 @@
+"""EC2 instance inventory + internet-exposure reader (gap #9 — non-ECS compute).
+
+cloud-posture's workload reader only enumerated ECS services, so an exposed EC2 instance running
+a workload was invisible to the fleet graph. This reads EC2 instances, flags internet exposure
+(a public IP **and** a ``0.0.0.0/0`` security group), and resolves the instance-profile IAM role
+— the EC2 analogue of an ECS task role, so an exposed instance whose role reaches sensitive data
+is a reachable path (the ``ASSUMES`` bridge).
+
+Honest limit: an EC2 instance runs an **AMI / host packages**, not a container image, so the
+``RUNS_IMAGE`` → CVE join does not apply — host-vuln (trivy ``rootfs``/``vm``) is a separate slice.
+
+Plain boto3 reader (same shape as ``aws_ecs``): inject ``ec2`` + ``iam`` clients, so it runs
+against real AWS or in-process moto identically.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from cloud_posture.tools.aws_ecs import _sg_allows_public
+
+_ACTIVE_STATES = frozenset({"running", "pending"})
+
+
+@dataclass(frozen=True, slots=True)
+class Ec2Workload:
+    """An EC2 instance resolved to its ARN, internet-exposure, role, and private IPs."""
+
+    instance_arn: str
+    is_public: bool
+    role_arn: str = ""
+    #: The instance's private IPv4 addresses — the join key the network-endpoint→instance
+    #: resolver (``OWNED_BY`` bridge) matches a flow's IP against.
+    private_ips: tuple[str, ...] = ()
+    #: IaC provenance — the ``IAC_ARTIFACT`` external_id (``{repo_slug}:{file}``) this resource was
+    #: deployed from, read from a ``nexus:iac`` resource tag; the join key the code-to-cloud
+    #: (``DEPLOYED_VIA``) resolver matches. "" when the resource carries no provenance tag.
+    iac_artifact: str = ""
+
+
+def _instance_arn(instance_id: str, *, account_id: str, region: str) -> str:
+    return f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
+
+
+def _instance_private_ips(instance: dict[str, Any]) -> tuple[str, ...]:
+    """The instance's private IPv4 addresses (top-level + per-network-interface), deduped."""
+    ips: list[str] = []
+    top = instance.get("PrivateIpAddress")
+    if top:
+        ips.append(str(top))
+    for eni in instance.get("NetworkInterfaces", []):
+        for pa in eni.get("PrivateIpAddresses", []):
+            ip = pa.get("PrivateIpAddress")
+            if ip:
+                ips.append(str(ip))
+        eni_ip = eni.get("PrivateIpAddress")
+        if eni_ip:
+            ips.append(str(eni_ip))
+    return tuple(dict.fromkeys(ips))  # dedupe, order-preserving
+
+
+#: The resource tag carrying IaC provenance — the IAC_ARTIFACT external_id the resource deployed from.
+_IAC_TAG = "nexus:iac"
+
+
+def _instance_iac_artifact(instance: dict[str, Any]) -> str:
+    """The instance's ``nexus:iac`` provenance tag value (the IAC_ARTIFACT key). "" when absent."""
+    for tag in instance.get("Tags", []):
+        if tag.get("Key") == _IAC_TAG:
+            return str(tag.get("Value", ""))
+    return ""
+
+
+def _instance_sg_ids(instance: dict[str, Any]) -> list[str]:
+    """All security-group ids on an instance — top-level + per-network-interface."""
+    ids = [g["GroupId"] for g in instance.get("SecurityGroups", []) if g.get("GroupId")]
+    for eni in instance.get("NetworkInterfaces", []):
+        ids += [g["GroupId"] for g in eni.get("Groups", []) if g.get("GroupId")]
+    return list(dict.fromkeys(ids))  # dedupe, order-preserving
+
+
+def _profile_role_arn(iam: object, profile: dict[str, Any] | None) -> str:
+    """Resolve an instance profile to the ARN of the role it carries ("" if none)."""
+    arn = (profile or {}).get("Arn", "")
+    if not arn or "/" not in arn:
+        return ""
+    name = arn.rsplit("/", 1)[-1]
+    try:
+        roles = iam.get_instance_profile(InstanceProfileName=name)["InstanceProfile"]["Roles"]  # type: ignore[attr-defined]
+    except Exception:
+        return ""
+    return str(roles[0]["Arn"]) if roles else ""
+
+
+def read_ec2_workloads(
+    ec2: object, iam: object, *, account_id: str = "123456789012", region: str = "us-east-1"
+) -> list[Ec2Workload]:
+    """Enumerate running/pending EC2 instances as ``Ec2Workload`` rows (exposure + role)."""
+    workloads: list[Ec2Workload] = []
+    reservations = ec2.describe_instances().get("Reservations", [])  # type: ignore[attr-defined]
+    for reservation in reservations:
+        for instance in reservation.get("Instances", []):
+            if instance.get("State", {}).get("Name") not in _ACTIVE_STATES:
+                continue
+            is_public = bool(instance.get("PublicIpAddress")) and _sg_allows_public(
+                ec2, _instance_sg_ids(instance)
+            )
+            workloads.append(
+                Ec2Workload(
+                    instance_arn=_instance_arn(
+                        instance["InstanceId"], account_id=account_id, region=region
+                    ),
+                    is_public=is_public,
+                    role_arn=_profile_role_arn(iam, instance.get("IamInstanceProfile")),
+                    private_ips=_instance_private_ips(instance),
+                    iac_artifact=_instance_iac_artifact(instance),
+                )
+            )
+    return workloads
+
+
+__all__ = ["Ec2Workload", "read_ec2_workloads"]

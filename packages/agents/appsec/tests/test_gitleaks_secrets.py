@@ -62,3 +62,23 @@ async def test_missing_binary_degrades_gracefully(monkeypatch: pytest.MonkeyPatc
     result = await gitleaks_runner.run_gitleaks("/nonexistent")
     assert result.binary_present is False
     assert result.payload == []
+
+
+def test_extract_leaked_key_ids_returns_only_the_akia_identifier() -> None:
+    # The narrow exception (path #17): pull ONLY the AKIA access-key id, never the secret half.
+    from appsec.normalizers.gitleaks_secrets import extract_leaked_key_ids
+
+    result = GitleaksResult(
+        payload=[
+            {
+                "File": "prod.env",
+                "Secret": "AKIAIOSFODNN7EXAMPLE",
+                "Match": "key=AKIAIOSFODNN7EXAMPLE",
+            },
+            {"File": "db.env", "Secret": "hunter2-not-an-aws-key", "Match": "password=hunter2"},
+        ]
+    )
+    out = extract_leaked_key_ids(result)
+    assert out == [("prod.env", "AKIAIOSFODNN7EXAMPLE")]  # the non-AWS secret yields nothing
+    for _file, value in out:
+        assert value.startswith("AKIA") and len(value) == 20  # only the key id, no surrounding text

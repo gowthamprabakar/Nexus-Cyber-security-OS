@@ -225,9 +225,11 @@ def test_q6_privacy_contract_no_match_span_overloads() -> None:
         for name in dir(patterns)
         if not name.startswith("_") and callable(getattr(patterns, name))
     }
-    # ``classify`` is the only callable we ship publicly. ``ClassifierLabel``
-    # is a StrEnum class (also callable for construction); allow it.
-    expected = {"classify", "ClassifierLabel"}
+    # ``classify`` + ``classify_bytes`` are the callables we ship publicly; both return a
+    # ``ClassifierLabel`` only (classify_bytes decodes gzip/base64 then delegates to classify —
+    # reviewed against Q6, never returns matched text). ``ClassifierLabel`` is a StrEnum class
+    # (also callable for construction); allow it.
+    expected = {"classify", "classify_bytes", "ClassifierLabel"}
     extras = public_callables - expected
     assert not extras, (
         f"data_security.classifiers.patterns has unexpected public callables: {extras}. "

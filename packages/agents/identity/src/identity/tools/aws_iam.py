@@ -47,6 +47,11 @@ class IamUser:
     #: v0.4 Stage 1.5: inline policy (name, document) pairs — the documents, not
     #: just names (`inline_policy_names`), so per-role evaluation can read grants.
     inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
+    #: gap #8: the permissions-boundary policy ARN (caps effective permissions), "" if none.
+    permission_boundary_arn: str = ""
+    #: path #17: the user's AWS access key IDs (AKIA…, the non-secret identifiers) — the join key to
+    #: a credential leaked in source code (appsec keys the same SECRET node by the key id).
+    access_key_ids: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +65,8 @@ class IamRole:
     attached_policy_arns: tuple[str, ...] = field(default_factory=tuple)
     inline_policy_names: tuple[str, ...] = field(default_factory=tuple)
     inline_policies: tuple[tuple[str, dict[str, Any]], ...] = field(default_factory=tuple)
+    #: gap #8: the permissions-boundary policy ARN (caps effective permissions), "" if none.
+    permission_boundary_arn: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +233,29 @@ def _get_inline_policy_documents(
     return tuple(out)
 
 
+def _get_permission_boundary_arn(iam: Any, op: str, key: str, name: str) -> str:
+    """The principal's permissions-boundary policy ARN ("" if none). gap #8.
+
+    Read via ``get_user``/``get_role`` (``list_*`` omits the boundary). A fetch failure degrades
+    to "" — no boundary known → the grant resolvers conservatively keep the finding.
+    """
+    try:
+        principal = getattr(iam, op)(**{key: name})
+        record = principal.get("User") or principal.get("Role") or {}
+        return str(record.get("PermissionsBoundary", {}).get("PermissionsBoundaryArn", ""))
+    except Exception:
+        return ""
+
+
+def _list_access_key_ids(iam: Any, user_name: str) -> tuple[str, ...]:
+    """The user's AWS access key IDs (AKIA…) — non-secret identifiers, "" on failure."""
+    try:
+        meta = iam.list_access_keys(UserName=user_name).get("AccessKeyMetadata", [])
+    except Exception:
+        return ()
+    return tuple(str(k["AccessKeyId"]) for k in meta if k.get("AccessKeyId"))
+
+
 def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
     users: list[IamUser] = []
     for page in iam.get_paginator("list_users").paginate():
@@ -255,6 +285,10 @@ def _list_users(iam: Any, degraded: list[dict[str, str]]) -> list[IamUser]:
                         inline_policy_names=tuple(inline),
                         group_memberships=tuple(groups),
                         inline_policies=inline_docs,
+                        permission_boundary_arn=_get_permission_boundary_arn(
+                            iam, "get_user", "UserName", name
+                        ),
+                        access_key_ids=_list_access_key_ids(iam, name),
                     )
                 )
             except Exception as exc:
@@ -287,6 +321,9 @@ def _list_roles(iam: Any, degraded: list[dict[str, str]]) -> list[IamRole]:
                         attached_policy_arns=tuple(attached),
                         inline_policy_names=tuple(inline),
                         inline_policies=inline_docs,
+                        permission_boundary_arn=_get_permission_boundary_arn(
+                            iam, "get_role", "RoleName", name
+                        ),
                     )
                 )
             except Exception as exc:

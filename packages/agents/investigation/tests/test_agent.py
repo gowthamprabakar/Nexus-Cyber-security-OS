@@ -846,3 +846,141 @@ async def test_assert_complete_wired_raises_on_missing_output(
             since=None,
             until=None,
         )
+
+
+# ============================================================================
+# Toxic-combination opt-in seam (Task 2)
+#
+# Two tests prove the `detect_toxic_combinations` flag:
+#   1. opted-in  → toxic hypothesis survives Stage 4 + OCSF class_uid == 2005
+#   2. flag-off  → byte-identical to default; no toxic hypothesis leaks
+# ============================================================================
+
+from charter.memory.graph_types import EdgeType, NodeCategory  # noqa: E402
+
+
+async def _tc_seed_graph(
+    store: SemanticStore, tenant: str, *, principal_arn: str, bucket_arn: str
+) -> None:
+    """Populate the minimum graph for a public-data-exposure toxic combination."""
+    role = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.IDENTITY.value,
+        external_id=principal_arn,
+        properties={},
+    )
+    bucket = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id=bucket_arn,
+        properties={},
+    )
+    data = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+        external_id=f"{bucket_arn}:ssn",
+        properties={"data_type": "ssn"},
+    )
+    await store.add_relationship(
+        tenant_id=tenant,
+        src_entity_id=role,
+        dst_entity_id=bucket,
+        relationship_type=EdgeType.HAS_ACCESS_TO.value,
+        properties={},
+    )
+    await store.add_relationship(
+        tenant_id=tenant,
+        src_entity_id=bucket,
+        dst_entity_id=data,
+        relationship_type=EdgeType.EXPOSES_DATA.value,
+        properties={},
+    )
+
+
+def _tc_identity_workspace(tmp_path: Path, principal_arn: str) -> Path:
+    """Create a sibling identity workspace with one overprivilege finding."""
+    ws = tmp_path / "identity_ws"
+    ws.mkdir()
+    (ws / "findings.json").write_text(
+        json.dumps(
+            {
+                "agent": "identity",
+                "run_id": "r1",
+                "findings": [
+                    {
+                        "class_uid": 2004,
+                        "finding_info": {
+                            "uid": "IDENT-OVERPRIV-app-001-x",
+                            "types": ["overprivilege"],
+                        },
+                        "affected_principals": [
+                            {"type": "Role", "name": "app", "uid": principal_arn},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return ws
+
+
+@pytest.mark.asyncio
+async def test_run_surfaces_toxic_combination_by_default(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+) -> None:
+    """Default ON (no flag passed): toxic hypothesis survives Stage 4, report is OCSF 2005."""
+    principal = "arn:aws:iam::1:role/app"
+    bucket = "arn:aws:s3:::acme-pii"
+    await _tc_seed_graph(semantic_store, _TENANT_A, principal_arn=principal, bucket_arn=bucket)
+    ws = _tc_identity_workspace(tmp_path, principal)
+
+    contract = _contract(tmp_path)
+    report = await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(ws,),
+        since=None,
+        until=None,
+        # detect_toxic_combinations now defaults to True — omit to prove the default is ON
+    )
+
+    statements = [h.statement.lower() for h in report.hypotheses]
+    assert any("over-permissioned" in s for s in statements), (
+        "toxic hypothesis must survive Stage 4"
+    )
+    ocsf = report.to_ocsf()
+    assert ocsf["class_uid"] == 2005
+
+
+@pytest.mark.asyncio
+async def test_run_no_toxic_when_explicitly_disabled(
+    tmp_path: Path,
+    audit_store: AuditStore,
+    semantic_store: SemanticStore,
+) -> None:
+    """Explicit OFF: detect_toxic_combinations=False suppresses detection even with a toxic
+    graph + overprivilege finding present — the escape hatch back to pre-seam behaviour."""
+    principal = "arn:aws:iam::1:role/app"
+    bucket = "arn:aws:s3:::acme-pii"
+    await _tc_seed_graph(semantic_store, _TENANT_A, principal_arn=principal, bucket_arn=bucket)
+    ws = _tc_identity_workspace(tmp_path, principal)
+
+    contract = _contract(tmp_path)
+    report = await investigation_run(
+        contract,
+        llm_provider=None,
+        audit_store=audit_store,
+        semantic_store=semantic_store,
+        sibling_workspaces=(ws,),
+        since=None,
+        until=None,
+        detect_toxic_combinations=False,
+    )
+
+    statements = [h.statement.lower() for h in report.hypotheses]
+    assert not any("over-permissioned" in s for s in statements), "flag OFF → no toxic hypothesis"

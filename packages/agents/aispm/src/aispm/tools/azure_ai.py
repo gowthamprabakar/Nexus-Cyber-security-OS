@@ -28,6 +28,11 @@ class AzureOpenAiAccount:
     network_default_allow: bool | None  # networkAcls.defaultAction == "Allow"
     cmk_encrypted: bool | None  # encryption.keySource == "Microsoft.KeyVault"
     local_auth_disabled: bool | None  # disableLocalAuth
+    #: The Blob (storage account, container) holding this account's fine-tune / grounding data —
+    #: the model-data link for path 10. HAS_ACCESS_TO joins the service to its training data, keyed
+    #: by the same ``azure_blob_uri`` data-security's storage writer uses. "" when none.
+    model_data_account: str = ""
+    model_data_container: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +51,8 @@ def inventory_from_reader(reader: AzureAiReader, *, subscription_id: str) -> Azu
             network_default_allow=a.get("network_default_allow"),
             cmk_encrypted=a.get("cmk_encrypted"),
             local_auth_disabled=a.get("local_auth_disabled"),
+            model_data_account=str(a.get("model_data_account", "")),
+            model_data_container=str(a.get("model_data_container", "")),
         )
         for a in reader.openai_accounts()
         if a.get("name")

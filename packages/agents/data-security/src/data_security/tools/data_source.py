@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+from charter.canonical import azure_blob_uri, gcs_uri, s3_bucket_arn
+
 from data_security.tools.azure_blob_inventory import AzureBlobContainer
 from data_security.tools.gcs_inventory import GcsBucket
 from data_security.tools.s3_inventory import BucketInventory
@@ -35,6 +37,16 @@ class DataSource:
     def logical_name(self) -> str:
         """The cloud-agnostic dataset name — the last path segment, lowercased."""
         return self.identifier.rsplit("/", 1)[-1].lower()
+
+    @property
+    def canonical_key(self) -> str:
+        """The fleet-graph spine key for this source — per-cloud canonical identifier (ADR-023)."""
+        if self.cloud is DataCloud.AWS:
+            return s3_bucket_arn(self.identifier)
+        if self.cloud is DataCloud.AZURE:
+            account, _, container = self.identifier.partition("/")
+            return azure_blob_uri(account, container)
+        return gcs_uri(self.identifier)
 
 
 def from_s3(b: BucketInventory) -> DataSource:

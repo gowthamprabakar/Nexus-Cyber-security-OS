@@ -23,6 +23,23 @@ DEFAULT_SAMPLE_RATE = 0.01
 class S3ObjectClient(Protocol):
     def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]: ...
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+    def get_object_acl(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+
+
+_PUBLIC_ACL_GROUPS = ("AllUsers", "AuthenticatedUsers")
+
+
+def _object_is_public(client: S3ObjectClient, bucket: str, key: str) -> bool:
+    """True if the object's ACL grants AllUsers/AuthenticatedUsers (gap #2 — object-level public)."""
+    try:
+        acl = client.get_object_acl(Bucket=bucket, Key=key)
+    except Exception:
+        return False
+    for grant in acl.get("Grants", []):
+        uri = (grant.get("Grantee") or {}).get("URI") or ""
+        if any(group in uri for group in _PUBLIC_ACL_GROUPS):
+            return True
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +100,12 @@ class S3LiveObjectSampler:
             raw = body.read() if hasattr(body, "read") else body
             content = raw if isinstance(raw, bytes) else (bytes(raw) if raw else b"")
             samples.append(
-                ObjectSample(bucket=bucket, key=key, content_sample=content[:MAX_SAMPLE_BYTES])
+                ObjectSample(
+                    bucket=bucket,
+                    key=key,
+                    content_sample=content[:MAX_SAMPLE_BYTES],
+                    is_public=_object_is_public(self._client, bucket, key),
+                )
             )
         basis = SampleBasis(
             objects_scanned=len(samples),
