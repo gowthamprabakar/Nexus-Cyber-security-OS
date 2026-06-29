@@ -35,9 +35,10 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_fixable=False,
     ),
     "public_secret": FixAdvice(
-        "Rotate the exposed credential immediately (assume it is compromised), delete it from the "
-        "object, and enable S3 Block Public Access on the bucket.",
-        auto_fixable=False,
+        "Enable S3 Block Public Access on the bucket to close the exposure (auto-fixable), then "
+        "rotate the exposed credential and delete it from the object (manual — assume compromised).",
+        auto_fixable=True,
+        auto_via="remediation_s3_block_public_access",
     ),
     "leaked_credential": FixAdvice(
         "Deactivate and rotate the leaked AWS access key immediately (assume it is compromised), "
@@ -73,9 +74,10 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_fixable=False,
     ),
     "exposed_database": FixAdvice(
-        "Set the database to not publicly accessible (PubliclyAccessible=false) and restrict its "
-        "security group to the application subnets; a managed database should never be internet-facing.",
-        auto_fixable=False,
+        "Set the database to not publicly accessible (auto-fixable), then restrict its security "
+        "group to the application subnets; a managed database should never be internet-facing.",
+        auto_fixable=True,
+        auto_via="remediation_rds_disable_public_access",
     ),
     "internet_exposed_vulnerable": FixAdvice(
         "Rebuild the image on a patched base to clear the CVEs, and restrict the security group / "
@@ -95,9 +97,10 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_via="remediation_k8s_patch_disable_privileged_container",
     ),
     "public_unencrypted": FixAdvice(
-        "Enable S3 Block Public Access and turn on default server-side encryption (SSE-KMS or "
-        "AES256) on the bucket.",
-        auto_fixable=False,
+        "Enable S3 Block Public Access to close the exposure (auto-fixable), then turn on default "
+        "server-side encryption (SSE-KMS or AES256) on the bucket (manual).",
+        auto_fixable=True,
+        auto_via="remediation_s3_block_public_access",
     ),
     "privilege_escalation": FixAdvice(
         "Remove the principal from the role's trust policy (or tighten the AssumeRole condition) so "

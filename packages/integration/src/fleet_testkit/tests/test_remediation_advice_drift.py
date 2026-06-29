@@ -7,10 +7,19 @@ sees. This test ties the two packages together so that drift fails CI instead of
 
 from meta_harness.attack_path_remediation import REMEDIATION
 from remediation.schemas import RemediationActionType
+from remediation.tools.cloud_remediation import (
+    ACTION_RDS_DISABLE_PUBLIC_ACCESS,
+    ACTION_S3_BLOCK_PUBLIC_ACCESS,
+)
 
 
 def test_auto_via_values_are_real_remediation_actions() -> None:
-    real = {t.value for t in RemediationActionType}
+    # Real actions = the K8s-patch action types (RemediationArtifact path) + the cloud actions
+    # (cloud_remediation, a separate cloud-API execution path).
+    real = {t.value for t in RemediationActionType} | {
+        ACTION_S3_BLOCK_PUBLIC_ACCESS,
+        ACTION_RDS_DISABLE_PUBLIC_ACCESS,
+    }
     for path_type, advice in REMEDIATION.items():
         if advice.auto_fixable:
             assert advice.auto_via in real, (
