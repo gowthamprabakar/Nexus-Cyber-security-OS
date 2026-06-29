@@ -84,8 +84,21 @@ class ToxicCombination:
 
 
 # Secret-type data classifications (data-security ClassifierLabel secret labels). A public
-# resource exposing one of these is a publicly-readable credential — path 3 (ADR-023).
-_SECRET_DATA_TYPES = frozenset({"aws_access_key", "jwt", "generic_api_token"})
+# resource exposing one of these is a publicly-readable credential — path 3 (ADR-023). The modern
+# formats (private_key, provider tokens) were added after adversarial red-teaming found a leaked
+# private key was classified but NOT alerted (this allowlist was blind to it).
+_SECRET_DATA_TYPES = frozenset(
+    {
+        "aws_access_key",
+        "jwt",
+        "generic_api_token",
+        "private_key",
+        "github_token",
+        "google_api_key",
+        "stripe_key",
+        "slack_token",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

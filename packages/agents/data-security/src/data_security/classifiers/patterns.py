@@ -87,7 +87,15 @@ _BASE64_RE = re.compile(r"^[A-Za-z0-9+/\s]+={0,2}$")
 
 # Patterns ordered by precedence (more specific first). Match returns the
 # first hit's label; the matched substring is NEVER returned.
-_AWS_ACCESS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+# AWS access-key id — long-term (AKIA) OR temporary (ASIA); both are credentials.
+_AWS_ACCESS_KEY_RE = re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")
+# Modern secret formats (distinctive prefixes → very low false-positive risk). Added after
+# adversarial red-teaming found the v0.2 classifier missed all of these. High precedence.
+_PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----")
+_GITHUB_TOKEN_RE = re.compile(r"\b(?:gh[posru]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b")
+_GOOGLE_API_KEY_RE = re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")
+_STRIPE_KEY_RE = re.compile(r"\b[sr]k_live_[0-9A-Za-z]{20,}\b")
+_SLACK_TOKEN_RE = re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b")
 # AWS *secret* access key — no fixed prefix (40-char base64), so require the
 # `secret access key` label (any separator / camelCase) to bound false positives.
 _AWS_SECRET_KEY_RE = re.compile(
@@ -183,8 +191,20 @@ def classify(text: str) -> ClassifierLabel:
     is pure (no side effects) and deterministic.
     """
     if _AWS_ACCESS_KEY_RE.search(text) or _AWS_SECRET_KEY_RE.search(text):
-        # Both the AKIA access-key ID and the secret access key are AWS credentials.
+        # Both the AKIA/ASIA access-key ID and the secret access key are AWS credentials.
         return ClassifierLabel.AWS_ACCESS_KEY
+    # Modern distinctive-prefix secrets — high precedence (before the greedy credit-card / email
+    # patterns) so e.g. a Slack token is not misread as a credit card.
+    if _PRIVATE_KEY_RE.search(text):
+        return ClassifierLabel.PRIVATE_KEY
+    if _GITHUB_TOKEN_RE.search(text):
+        return ClassifierLabel.GITHUB_TOKEN
+    if _GOOGLE_API_KEY_RE.search(text):
+        return ClassifierLabel.GOOGLE_API_KEY
+    if _STRIPE_KEY_RE.search(text):
+        return ClassifierLabel.STRIPE_KEY
+    if _SLACK_TOKEN_RE.search(text):
+        return ClassifierLabel.SLACK_TOKEN
     if _JWT_RE.search(text):
         return ClassifierLabel.JWT
     if _SSN_RE.search(text):

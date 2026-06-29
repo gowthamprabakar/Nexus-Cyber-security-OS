@@ -119,6 +119,13 @@ class ClassifierLabel(StrEnum):
     CVV = "cvv"
     CARD_EXPIRATION = "card_expiration"
     TRACK_DATA = "track_data"
+    # Modern secret formats — appended (additive; classify() precedence keeps prior matches). Found
+    # by adversarial red-teaming: the v0.2 classifier missed private keys + provider tokens entirely.
+    PRIVATE_KEY = "private_key"  # enum label, not a credential
+    GITHUB_TOKEN = "github_token"  # noqa: S105  # enum label, not a credential
+    GOOGLE_API_KEY = "google_api_key"  # enum label, not a credential
+    STRIPE_KEY = "stripe_key"  # enum label, not a credential
+    SLACK_TOKEN = "slack_token"  # noqa: S105  # enum label, not a credential
     NONE = "none"
 
 
