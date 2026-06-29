@@ -17,6 +17,7 @@ and ``ec2`` clients, so it runs against real AWS or against in-process moto iden
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 _PUBLIC_CIDRS = frozenset({"0.0.0.0/0", "::/0"})
 # describe_services accepts at most 10 services per call.
@@ -58,7 +59,7 @@ def _task_def_image_and_role(ecs: object, task_def_arn: str) -> tuple[str, str]:
 
 
 def _service_is_public(
-    ec2: object, service: dict, lb_exposed_target_groups: frozenset[str]
+    ec2: object, service: dict[str, Any], lb_exposed_target_groups: frozenset[str]
 ) -> bool:
     """Internet-exposed = behind a public load balancer, OR awsvpc public IP + a 0.0.0.0/0 SG."""
     for lb in service.get("loadBalancers") or []:

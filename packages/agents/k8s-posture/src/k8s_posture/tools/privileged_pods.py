@@ -15,6 +15,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 from shutil import which
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +25,7 @@ class PrivilegedWorkload:
     image_ref: str
 
 
-def privileged_workloads(pods_json: dict) -> list[PrivilegedWorkload]:
+def privileged_workloads(pods_json: dict[str, Any]) -> list[PrivilegedWorkload]:
     """Pods with a privileged container, paired with that container's image ref.
 
     ``pods_json`` is the parsed ``kubectl get pods -o json`` document. ``privileged`` is a

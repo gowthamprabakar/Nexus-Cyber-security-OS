@@ -16,6 +16,7 @@ against real AWS or in-process moto identically.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from cloud_posture.tools.aws_ecs import _sg_allows_public
 
@@ -42,7 +43,7 @@ def _instance_arn(instance_id: str, *, account_id: str, region: str) -> str:
     return f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
 
 
-def _instance_private_ips(instance: dict) -> tuple[str, ...]:
+def _instance_private_ips(instance: dict[str, Any]) -> tuple[str, ...]:
     """The instance's private IPv4 addresses (top-level + per-network-interface), deduped."""
     ips: list[str] = []
     top = instance.get("PrivateIpAddress")
@@ -63,7 +64,7 @@ def _instance_private_ips(instance: dict) -> tuple[str, ...]:
 _IAC_TAG = "nexus:iac"
 
 
-def _instance_iac_artifact(instance: dict) -> str:
+def _instance_iac_artifact(instance: dict[str, Any]) -> str:
     """The instance's ``nexus:iac`` provenance tag value (the IAC_ARTIFACT key). "" when absent."""
     for tag in instance.get("Tags", []):
         if tag.get("Key") == _IAC_TAG:
@@ -71,7 +72,7 @@ def _instance_iac_artifact(instance: dict) -> str:
     return ""
 
 
-def _instance_sg_ids(instance: dict) -> list[str]:
+def _instance_sg_ids(instance: dict[str, Any]) -> list[str]:
     """All security-group ids on an instance — top-level + per-network-interface."""
     ids = [g["GroupId"] for g in instance.get("SecurityGroups", []) if g.get("GroupId")]
     for eni in instance.get("NetworkInterfaces", []):
@@ -79,7 +80,7 @@ def _instance_sg_ids(instance: dict) -> list[str]:
     return list(dict.fromkeys(ids))  # dedupe, order-preserving
 
 
-def _profile_role_arn(iam: object, profile: dict | None) -> str:
+def _profile_role_arn(iam: object, profile: dict[str, Any] | None) -> str:
     """Resolve an instance profile to the ARN of the role it carries ("" if none)."""
     arn = (profile or {}).get("Arn", "")
     if not arn or "/" not in arn:

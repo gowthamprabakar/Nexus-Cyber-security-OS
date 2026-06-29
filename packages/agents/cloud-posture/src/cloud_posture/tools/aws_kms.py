@@ -50,7 +50,7 @@ _SCOPING_CONDITION_KEYS = frozenset(
 )
 
 
-def _has_scoping_condition(stmt: dict) -> bool:
+def _has_scoping_condition(stmt: dict[str, Any]) -> bool:
     """True if the statement's ``Condition`` narrows the principal to a trusted org/account/arn."""
     condition = stmt.get("Condition")
     if not isinstance(condition, dict):
@@ -63,7 +63,7 @@ def _has_scoping_condition(stmt: dict) -> bool:
     return False
 
 
-def _policy_is_public(policy: dict) -> bool:
+def _policy_is_public(policy: dict[str, Any]) -> bool:
     """True if the key policy has an ``Allow`` to a wildcard principal with no scoping condition."""
     return any(
         isinstance(stmt, dict)

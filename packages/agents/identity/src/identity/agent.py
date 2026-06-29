@@ -47,6 +47,8 @@ from identity.tools.aws_access_analyzer import (
     aws_access_analyzer_findings,
 )
 from identity.tools.aws_iam import (
+    IamRole,
+    IamUser,
     IdentityListing,
     SimulationDecision,
     aws_iam_list_identities,
@@ -560,7 +562,11 @@ def _as_list(value: object) -> list[Any]:
     """An IAM ``Action``/``Resource`` field as a list (it may be a bare string)."""
     if value is None:
         return []
-    return [value] if isinstance(value, str) else list(value)
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return list(value)
+    return [value]
 
 
 def _grants_s3_read(actions: object) -> bool:
@@ -646,7 +652,8 @@ def _fine_grained_grants(listing: IdentityListing) -> list[tuple[str, str]]:
     group_by_name = {group.name: group for group in listing.groups}
     grants: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for principal in (*listing.users, *listing.roles):
+    principals: list[IamUser | IamRole] = [*listing.users, *listing.roles]
+    for principal in principals:
         documents = [doc_by_arn[arn] for arn in principal.attached_policy_arns if arn in doc_by_arn]
         documents += [doc for _name, doc in principal.inline_policies]
         # Users inherit their groups' attached + inline policies (roles have no groups).
