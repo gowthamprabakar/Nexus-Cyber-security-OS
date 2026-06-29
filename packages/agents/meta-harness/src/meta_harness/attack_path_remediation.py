@@ -63,9 +63,10 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_fixable=False,
     ),
     "exposed_kms_key": FixAdvice(
-        "Remove the wildcard (Principal: *) statement from the KMS key policy and scope key usage to "
-        "the specific roles that need it; a public key policy defeats encryption-at-rest.",
-        auto_fixable=False,
+        "Remove the wildcard (Principal: *) statement from the KMS key policy (auto-fixable — scoped "
+        "grants are left intact); a public key policy defeats encryption-at-rest.",
+        auto_fixable=True,
+        auto_via="remediation_kms_remove_wildcard_grant",
     ),
     "rbac_privilege_escalation": FixAdvice(
         "Remove the cluster-admin RoleBinding from the ServiceAccount and bind a least-privilege Role "

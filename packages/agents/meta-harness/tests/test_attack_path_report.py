@@ -85,10 +85,12 @@ def test_auto_fixable_set_is_the_k8s_and_cloud_actions():
         "public_secret",
         "public_unencrypted",
         "exposed_database",
+        "exposed_kms_key",
     }
     assert advice_for("privileged_vulnerable").auto_via.startswith("remediation_k8s_patch_")
     assert advice_for("public_secret").auto_via == "remediation_s3_block_public_access"
     assert advice_for("exposed_database").auto_via == "remediation_rds_disable_public_access"
+    assert advice_for("exposed_kms_key").auto_via == "remediation_kms_remove_wildcard_grant"
 
 
 def test_to_dict_includes_remediation():
