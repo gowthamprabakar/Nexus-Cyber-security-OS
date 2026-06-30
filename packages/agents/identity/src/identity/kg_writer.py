@@ -139,6 +139,11 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         Each grant is ``(user_arn, access_key_id)``. The SECRET node is keyed by the access key ID
         (the non-secret identifier), the SAME key appsec uses for a credential leaked in code — so
         the leaked credential and its owning identity converge. No secret material.
+
+        Also writes the reverse ``SECRET --OWNED_BY--> IDENTITY`` edge (slice #3): ``OWNS`` answers
+        "what keys does this user hold", but the leaked-credential *blast-radius* path starts AT the
+        leaked secret and must walk to its owner, so the generic walker needs the secret→owner
+        direction. ``OWNED_BY`` is traversable; ``OWNS`` is not.
         """
         for user_arn, key_id in grants:
             user_node = await self.upsert_node(NodeCategory.IDENTITY, user_arn, {})
@@ -146,6 +151,7 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
             )
             await self.add_edge(user_node or "", cred_node or "", EdgeType.OWNS, {})
+            await self.add_edge(cred_node or "", user_node or "", EdgeType.OWNED_BY, {})
 
     async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
         """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
