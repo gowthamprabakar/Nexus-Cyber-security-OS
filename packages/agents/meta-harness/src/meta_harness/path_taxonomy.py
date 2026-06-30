@@ -115,6 +115,8 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
         EdgeType.AUTHORIZED,  # BP6: OAuth app → the SaaS tenant it can act on
         EdgeType.CAN_ESCALATE_TO,  # slice #1: principal → admin it can escalate to (privesc)
         EdgeType.STORES_SECRET,  # W6: a workload → an embedded long-lived credential (cred access)
+        EdgeType.USES_SERVICE_ACCOUNT,  # W2: privileged pod → its K8s service account
+        EdgeType.IRSA_MAPPING,  # W2: K8s SA → the cloud IAM role it assumes (container escape → cloud)
     )
 )
 
