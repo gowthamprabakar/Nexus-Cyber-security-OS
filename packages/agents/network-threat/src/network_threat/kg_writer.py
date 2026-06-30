@@ -23,7 +23,7 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from network_threat.schemas import FlowRecord
 
@@ -51,6 +51,22 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 dst or "",
                 EdgeType.COMMUNICATES_WITH,
                 {"dst_port": flow.dst_port, "protocol": flow.protocol},
+            )
+
+    async def record_reachability(self, grants: Sequence[tuple[str, str, str, str]]) -> None:
+        """Write CLOUD_RESOURCE --CAN_REACH--> CLOUD_RESOURCE edges (derived reachability, slice #2).
+
+        Each grant is ``(src_resource_id, dst_resource_id, method, via)``: ``src`` can reach ``dst``
+        over the network per security-group config (``method=lateral_sg``). Unlike ``record_flows``
+        (observed traffic), this is *derived* — the Stage 3 reachability decision #715a parked. Both
+        endpoints upserted onto the shared CLOUD_RESOURCE spine; the path engine traverses CAN_REACH
+        so lateral-movement paths (public foothold → reachable private/vulnerable host) emerge.
+        """
+        for src_id, dst_id, method, via in grants:
+            src = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, src_id, {})
+            dst = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, dst_id, {})
+            await self.add_edge(
+                src or "", dst or "", EdgeType.CAN_REACH, {"method": method, "via": via}
             )
 
 
