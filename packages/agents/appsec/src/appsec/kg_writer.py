@@ -72,12 +72,16 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 repo_ids[finding.repo_slug] = repo_id
             await self.add_edge(artifact_id or "", repo_id or "", EdgeType.DEFINED_IN)
 
-    async def record_leaked_credentials(self, repo_slug: str, key_ids: Iterable[str]) -> None:
-        """Write SECRET(access-key-id) --DEFINED_IN--> repo for each leaked AWS credential (#17).
+    async def record_leaked_credentials(
+        self, repo_slug: str, key_ids: Iterable[str], *, kind: str = "aws-access-key"
+    ) -> None:
+        """Write SECRET(id) --DEFINED_IN--> repo for each leaked credential (#17, slice #3).
 
-        The SECRET node is keyed by the AWS access key ID (the non-secret identifier); identity keys
-        the SAME node by the same id, so the leaked credential and its owning cloud identity
-        converge — the leaked-cred -> data attack path. No secret material crosses.
+        The SECRET node is keyed by the non-secret identifier; identity keys the SAME node by the
+        same id, so the leaked credential and its owning cloud identity converge — the leaked-cred ->
+        data attack path. No secret material crosses. ``key_ids`` are AWS access-key-ids (the one
+        approved plaintext) for ``kind="aws-access-key"``, or ``secret_fingerprint`` hashes for hashed
+        kinds (e.g. ``gcp-sa-key``) where the natural identifier must not be stored in the clear.
         """
         repo_id = await self.upsert_node(NodeCategory.CODE_REPOSITORY, repo_slug, {})
         for key_id in key_ids:
@@ -85,7 +89,7 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             # identity agent merely inventories (owned, not leaked) carries no such flag → not a
             # source, so the path lights up only for a credential actually exposed in code.
             cred_id = await self.upsert_node(
-                NodeCategory.SECRET, key_id, {"kind": "aws-access-key", "leaked": True}
+                NodeCategory.SECRET, key_id, {"kind": kind, "leaked": True}
             )
             await self.add_edge(cred_id or "", repo_id or "", EdgeType.DEFINED_IN)
 
