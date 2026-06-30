@@ -1,6 +1,22 @@
 # Detection Coverage vs Wiz — the denominator (making "~55%" a real number)
 
-**Date:** 2026-06-28. Turns the _felt_ "~50-60% of Wiz" into an explicit, defensible fraction.
+**Date:** 2026-06-28 (multi-cloud correction 2026-06-29).
+
+> ⚠️ **The "~91%" headline is AWS. It is NOT a blanket CNAPP number — that framing was misleading.**
+> The fleet is heavily AWS-skewed (cloud-posture: 8 AWS readers vs 1 Azure / 1 GCP; data-security:
+> 7/1/1). The recent 73→91% jump was ~76% AWS-only work. Honest triple-track:
+>
+> | Cloud     | Attack-path category coverage | Note                                                                                                                                                 |
+> | --------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **AWS**   | **~91%**                      | the number below; deep + recently expanded                                                                                                           |
+> | **Azure** | **~55%**                      | only the cross-cloud-verified paths (storage 3/7, compute 2/5/6, AI 10, identity 4/8); KMS/RDS/privesc/lateral/host-vuln/secret-in-code are AWS-only |
+> | **GCP**   | **~50%**                      | same as Azure, minus the Azure AD identity depth                                                                                                     |
+>
+> 12 of 20 detectors are AWS-only; 8 have multi-cloud e2e. The per-edge build rule (graph-model
+> scope map) now requires every new edge to declare its per-cloud scope explicitly, so this gap
+> stops widening. The table below is the **AWS** denominator.
+
+**Turns the _felt_ "~50-60% of Wiz" into an explicit, defensible fraction.**
 
 ## Two different numbers (we were conflating them)
 
