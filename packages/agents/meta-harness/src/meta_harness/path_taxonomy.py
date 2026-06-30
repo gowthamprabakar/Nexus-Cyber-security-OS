@@ -117,6 +117,7 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
         EdgeType.STORES_SECRET,  # W6: a workload → an embedded long-lived credential (cred access)
         EdgeType.USES_SERVICE_ACCOUNT,  # W2: privileged pod → its K8s service account
         EdgeType.IRSA_MAPPING,  # W2: K8s SA → the cloud IAM role it assumes (container escape → cloud)
+        EdgeType.CAN_REACH,  # slice #2: resource → resource reachable over the network (lateral)
     )
 )
 
