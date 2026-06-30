@@ -114,6 +114,25 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             role_node = await self.upsert_node(NodeCategory.IDENTITY, role_arn, {})
             await self.add_edge(principal_node or "", role_node or "", EdgeType.ASSUMES, {})
 
+    async def record_escalation_grants(self, grants: Sequence[tuple[str, str, str, str]]) -> None:
+        """Write IDENTITY --CAN_ESCALATE_TO--> IDENTITY edges (privilege escalation, slice #1).
+
+        Each grant is ``(principal_arn, target_arn, method, via_action)``: the principal can obtain
+        the target admin's privileges via the named technique. ``confidence=confirmed`` — the
+        detector only emits when a real admin target is resolved. Both endpoints upserted onto the
+        IDENTITY spine; the path engine traverses ``CAN_ESCALATE_TO`` so privilege-escalation-to-data
+        paths emerge (and multi-hop chains fall out of single-hop edges via traversal).
+        """
+        for principal_arn, target_arn, method, via_action in grants:
+            principal_node = await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {})
+            target_node = await self.upsert_node(NodeCategory.IDENTITY, target_arn, {})
+            await self.add_edge(
+                principal_node or "",
+                target_node or "",
+                EdgeType.CAN_ESCALATE_TO,
+                {"method": method, "via_action": via_action, "confidence": "confirmed"},
+            )
+
     async def record_credential_ownership(self, grants: Sequence[tuple[str, str]]) -> None:
         """Write IDENTITY --OWNS--> SECRET(access-key-id) for each IAM user access key (path #17).
 

@@ -110,6 +110,7 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
         EdgeType.DEFINED_IN,
         EdgeType.SERVES_MODEL,  # BP6: AI service → the model it serves (model theft/abuse)
         EdgeType.AUTHORIZED,  # BP6: OAuth app → the SaaS tenant it can act on
+        EdgeType.CAN_ESCALATE_TO,  # slice #1: principal → admin it can escalate to (privesc)
     )
 )
 
