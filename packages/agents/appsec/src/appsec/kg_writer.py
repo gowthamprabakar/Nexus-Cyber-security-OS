@@ -81,8 +81,11 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         """
         repo_id = await self.upsert_node(NodeCategory.CODE_REPOSITORY, repo_slug, {})
         for key_id in key_ids:
+            # ``leaked=True`` makes this SECRET an attack *source* (slice #3 blast-radius). A key the
+            # identity agent merely inventories (owned, not leaked) carries no such flag → not a
+            # source, so the path lights up only for a credential actually exposed in code.
             cred_id = await self.upsert_node(
-                NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
+                NodeCategory.SECRET, key_id, {"kind": "aws-access-key", "leaked": True}
             )
             await self.add_edge(cred_id or "", repo_id or "", EdgeType.DEFINED_IN)
 

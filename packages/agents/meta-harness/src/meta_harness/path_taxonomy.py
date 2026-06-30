@@ -80,6 +80,9 @@ SOURCE_MARKERS: tuple[NodeMarker, ...] = (
     NodeMarker("runtime_detection_file", NodeCategory.FILE_INTEGRITY_EVENT, _always),
     # BP6: an over-scoped third-party OAuth app is an external foothold into a SaaS tenant.
     NodeMarker("over_scoped_oauth_app", NodeCategory.OAUTH_APP, _over_scoped),
+    # slice #3: a credential leaked in code (appsec ``leaked=True``) is a foothold — its blast
+    # radius is everything its owning identity can reach. A merely-inventoried key is not a source.
+    NodeMarker("leaked_credential", NodeCategory.SECRET, lambda p: p.get("leaked") is True),
 )
 
 #: Where IMPACT lands — a data breach, an exploitable vulnerability, or (BP6) a stolen AI model /
