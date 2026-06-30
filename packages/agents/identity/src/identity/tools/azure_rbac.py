@@ -93,6 +93,40 @@ def blob_read_grants(assignments: tuple[AzureRoleAssignment, ...]) -> list[tuple
     return out
 
 
+#: Built-in Azure roles that can WRITE role assignments → self-grant any role (privilege escalation).
+#: Owner can too, but Owner is already admin (the escalation target, not a source).
+_ROLE_ASSIGNMENT_WRITERS = frozenset(
+    {"User Access Administrator", "Role Based Access Control Administrator"}
+)
+_OWNER_ROLE = "Owner"
+#: The Azure control-plane permission the escalation hinges on (for explainability / the edge's via).
+_ESCALATION_ACTION = "Microsoft.Authorization/roleAssignments/write"
+
+
+def escalation_grants(
+    assignments: tuple[AzureRoleAssignment, ...],
+) -> list[tuple[str, str, str, str]]:
+    """``(principal_id, owner_id, method, via_action)`` Azure privilege escalation → CAN_ESCALATE_TO.
+
+    A principal that can write role assignments (``User Access Administrator`` / ``Role Based Access
+    Control Administrator``) but is not already ``Owner`` can grant itself Owner. The Azure
+    implementation of the SAME edge contract AWS uses (same 4-tuple, ``method=self_grant_admin``):
+    an edge is emitted ONLY when an Owner target is resolved — a bare role-write capability with no
+    Owner to become is not a confirmed escalation (the precision crux). Deduped, order-stable.
+    """
+    owners = {a.principal_id for a in assignments if a.role_name == _OWNER_ROLE}
+    if not owners:
+        return []
+    sources = {
+        a.principal_id for a in assignments if a.role_name in _ROLE_ASSIGNMENT_WRITERS
+    } - owners
+    out: list[tuple[str, str, str, str]] = []
+    for src in sorted(sources):
+        for owner in sorted(owners):
+            out.append((src, owner, "self_grant_admin", _ESCALATION_ACTION))
+    return out
+
+
 def external_trust_grants(
     assignments: tuple[AzureRoleAssignment, ...], guest_principal_ids: frozenset[str]
 ) -> list[tuple[str, str]]:
@@ -111,5 +145,6 @@ __all__ = [
     "AzureRbacReader",
     "AzureRoleAssignment",
     "blob_read_grants",
+    "escalation_grants",
     "external_trust_grants",
 ]
