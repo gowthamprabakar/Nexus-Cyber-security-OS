@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from charter.memory.semantic import SemanticStore
 
 #: The substrate's default traversal depth; the discovery run raises this (a measured step).
-DEFAULT_MAX_DEPTH = 3
+DEFAULT_MAX_DEPTH = 4  # real attack chains run 4+ hops (e.g. workload → stored key → owner → data)
 
 
 @dataclass(frozen=True, slots=True)

@@ -226,5 +226,21 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})
                 await self.add_edge(instance_node or "", role_node or "", EdgeType.ASSUMES)
 
+    async def record_stored_secrets(self, grants: Iterable[tuple[str, str]]) -> None:
+        """Write CLOUD_RESOURCE --STORES_SECRET--> SECRET(access-key-id) (W6 credential access).
+
+        Each grant is ``(resource_arn, access_key_id)``: a workload embeds a long-lived AWS key. The
+        SECRET node is keyed by the access key ID — the SAME node identity keys via ``OWNS``/
+        ``OWNED_BY`` — so the stored credential and its owning identity converge, and the walk
+        ``workload --STORES_SECRET--> secret --OWNED_BY--> identity --HAS_ACCESS_TO--> data`` emerges.
+        Only the non-secret key id crosses.
+        """
+        for resource_arn, key_id in grants:
+            resource_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, resource_arn, {})
+            secret_node = await self.upsert_node(
+                NodeCategory.SECRET, key_id, {"kind": "aws-access-key"}
+            )
+            await self.add_edge(resource_node or "", secret_node or "", EdgeType.STORES_SECRET)
+
 
 __all__ = ["KnowledgeGraphWriter"]
