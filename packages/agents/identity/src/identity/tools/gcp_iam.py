@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from charter.canonical import gcs_uri
+from charter.canonical import gcs_uri, secret_fingerprint
 
 #: GCP roles that grant object *read* on a bucket (data-plane), excluding public members which the
 #: storage writer already handles as ``is_public``.
@@ -86,6 +86,32 @@ def storage_read_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, 
     return out
 
 
+@dataclass(frozen=True, slots=True)
+class GcpServiceAccountKey:
+    """A GCP service-account key: the owning SA (the IDENTITY node key) + the key's non-secret id."""
+
+    service_account: str
+    private_key_id: str
+
+
+def sa_key_ownership(keys: tuple[GcpServiceAccountKey, ...]) -> list[tuple[str, str]]:
+    """``(service_account, secret_fingerprint(private_key_id))`` for each SA key (slice #3 GCP owner).
+
+    The fingerprint is the SAME convergence key appsec computes from a leaked key's
+    ``private_key_id`` (:func:`appsec.gcp_sa_key.leaked_sa_key_fingerprints`), so an SA key leaked in
+    code and its owning service account collapse onto one SECRET node — hashed convergence, nothing
+    readable stored. Deduped, order-stable.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for k in keys:
+        grant = (k.service_account, secret_fingerprint(k.private_key_id))
+        if grant not in seen:
+            seen.add(grant)
+            out.append(grant)
+    return out
+
+
 def _is_external(member: str, org_domain: str) -> bool:
     """True if a member is externally trusted: any-authenticated, or a user/group outside the org.
 
@@ -130,6 +156,8 @@ __all__ = [
     "GcpIamBinding",
     "GcpIamLiveReader",
     "GcpIamReader",
+    "GcpServiceAccountKey",
     "external_trust_grants",
+    "sa_key_ownership",
     "storage_read_grants",
 ]
