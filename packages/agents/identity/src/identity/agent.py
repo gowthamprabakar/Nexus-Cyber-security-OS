@@ -47,6 +47,7 @@ from identity.tools.aws_access_analyzer import (
     aws_access_analyzer_findings,
 )
 from identity.tools.aws_iam import (
+    IamGroup,
     IamRole,
     IamUser,
     IdentityListing,
@@ -222,6 +223,11 @@ async def run(
 
         if semantic_store is not None:
             await _write_access_edges(semantic_store, contract.customer_id, grants)
+            escalations = _escalation_grants(listing)
+            if escalations:
+                await KnowledgeGraphWriter(
+                    semantic_store, contract.customer_id
+                ).record_escalation_grants(escalations)
 
         findings = await normalize_to_findings(
             listing,
@@ -530,6 +536,165 @@ def _credential_grants(listing: IdentityListing) -> list[tuple[str, str]]:
     """``(user_arn, access_key_id)`` for every IAM user access key — the credential-ownership
     edges that converge with a credential leaked in source code (path #17). Order-preserving."""
     return [(user.arn, key_id) for user in listing.users for key_id in user.access_key_ids]
+
+
+# --- Privilege-escalation methods → CAN_ESCALATE_TO edges (slice #1, thin: 5 methods, target=admin).
+# An edge is emitted ONLY when the trigger action AND a resolvable admin target (within the action's
+# resource scope) are both present — a bare risky action is never a finding (the precision crux). ---
+_LAUNCH_ACTIONS = (
+    "lambda:createfunction",
+    "ec2:runinstances",
+    "ecs:runtask",
+    "glue:createdevendpoint",
+    "cloudformation:createstack",
+    "datapipeline:createpipeline",
+)
+
+
+def _action_matches(granted: str, wanted: str) -> bool:
+    """True if an IAM policy action string ``granted`` covers ``wanted`` (wildcard-aware)."""
+    g, w = granted.lower(), wanted.lower()
+    if g in ("*", w):
+        return True
+    return g.endswith("*") and w.startswith(g[:-1])
+
+
+def _allowed_action_resources(documents: list[dict[str, Any]]) -> list[tuple[str, list[str]]]:
+    """``[(action, [resources])]`` for every action in every ``Allow`` statement."""
+    out: list[tuple[str, list[str]]] = []
+    for doc in documents:
+        for stmt in doc.get("Statement") or []:
+            if stmt.get("Effect") != "Allow":
+                continue
+            resources = [r for r in _as_list(stmt.get("Resource")) if isinstance(r, str)]
+            for action in _as_list(stmt.get("Action")):
+                if isinstance(action, str):
+                    out.append((action, resources))
+    return out
+
+
+def _boundary_allows_action(doc: dict[str, Any], action: str) -> bool:
+    """True if a permission-boundary doc has an ``Allow`` for ``action`` (caps escalation, gap #8)."""
+    for stmt in doc.get("Statement") or []:
+        if stmt.get("Effect") != "Allow":
+            continue
+        if any(
+            isinstance(a, str) and _action_matches(a, action) for a in _as_list(stmt.get("Action"))
+        ):
+            return True
+    return False
+
+
+def _granted_capped(
+    action_resources: list[tuple[str, list[str]]], boundary: dict[str, Any] | None, wanted: str
+) -> list[str] | None:
+    """Resources granted for ``wanted`` (``None`` if not granted, or capped by a boundary)."""
+    res: list[str] = []
+    found = False
+    for action, resources in action_resources:
+        if _action_matches(action, wanted):
+            found = True
+            res.extend(resources)
+    if not found:
+        return None
+    if boundary is not None and not _boundary_allows_action(boundary, wanted):
+        return None
+    return res
+
+
+def _scoped_targets(resources: list[str], candidates: set[str]) -> set[str]:
+    """Admin targets reachable within an action's resource scope (``*`` → all)."""
+    return set(candidates) if "*" in resources else {a for a in candidates if a in resources}
+
+
+def _escalation_grants(listing: IdentityListing) -> list[tuple[str, str, str, str]]:
+    """``(principal_arn, target_arn, method, via_action)`` privilege-escalation edges → CAN_ESCALATE_TO.
+
+    Thin slice #1: 5 IAM methods, target = an ADMIN principal (the cleanest 'more privileged'
+    definition). An edge is emitted ONLY when the trigger action AND a resolvable admin target are
+    both present — a bare risky action is never an edge. A permission boundary that doesn't allow the
+    trigger action caps it (gap #8). Offline; deduped. Reuses ``_synthesize_admin_grants`` for the
+    admin set so privilege comparison isn't reinvented.
+    """
+    admin_arns = {g.principal_arn for g in _synthesize_admin_grants(listing) if g.is_admin}
+    if not admin_arns:
+        return []
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+    group_by_name = {group.name: group for group in listing.groups}
+    admin_roles = {r.arn for r in listing.roles if r.arn in admin_arns}
+    admin_users = {u.arn for u in listing.users if u.arn in admin_arns}
+    attached_to: dict[str, set[str]] = {}  # policy ARN -> principals it's attached to
+    all_principals: list[IamUser | IamRole | IamGroup] = [
+        *listing.users,
+        *listing.roles,
+        *listing.groups,
+    ]
+    for p in all_principals:
+        for parn in p.attached_policy_arns:
+            attached_to.setdefault(parn, set()).add(p.arn)
+
+    out: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    def emit(principal_arn: str, target_arn: str, method: str, via: str) -> None:
+        if principal_arn != target_arn and (principal_arn, target_arn, method) not in seen:
+            seen.add((principal_arn, target_arn, method))
+            out.append((principal_arn, target_arn, method, via))
+
+    principals: list[IamUser | IamRole] = [*listing.users, *listing.roles]
+    for principal in principals:
+        if principal.arn in admin_arns:
+            continue  # already admin — nothing to escalate to
+        documents = [doc_by_arn[a] for a in principal.attached_policy_arns if a in doc_by_arn]
+        documents += [doc for _name, doc in principal.inline_policies]
+        for group_name in getattr(principal, "group_memberships", ()):
+            group = group_by_name.get(group_name)
+            if group is not None:
+                documents += [doc_by_arn[a] for a in group.attached_policy_arns if a in doc_by_arn]
+                documents += [doc for _name, doc in group.inline_policies]
+        ar = _allowed_action_resources(documents)
+        boundary = _boundary_doc(principal, doc_by_arn)
+
+        # 1. self_grant_admin — attach/put an admin policy on self/* → become admin.
+        for act in (
+            "iam:AttachUserPolicy",
+            "iam:AttachRolePolicy",
+            "iam:PutUserPolicy",
+            "iam:PutRolePolicy",
+        ):
+            res = _granted_capped(ar, boundary, act)
+            if res is not None and ("*" in res or principal.arn in res):
+                for adm in admin_arns:
+                    emit(principal.arn, adm, "self_grant_admin", act)
+        # 2. policy_rewrite — version a policy attached to an admin → become that admin.
+        res = _granted_capped(ar, boundary, "iam:CreatePolicyVersion")
+        if res is not None:
+            for parn, holders in attached_to.items():
+                # AWS-managed policies (arn:aws:iam::aws:policy/…) can't be versioned by customers.
+                if parn.startswith("arn:aws:iam::aws:policy/"):
+                    continue
+                if "*" in res or parn in res:
+                    for adm in holders & admin_arns:
+                        emit(principal.arn, adm, "policy_rewrite", "iam:CreatePolicyVersion")
+        # 3. trust_rewrite — rewrite an admin role's trust to allow self → assume it.
+        res = _granted_capped(ar, boundary, "iam:UpdateAssumeRolePolicy")
+        if res is not None:
+            for arn in _scoped_targets(res, admin_roles):
+                emit(principal.arn, arn, "trust_rewrite", "iam:UpdateAssumeRolePolicy")
+        # 4. credential_mint — mint creds/login for an admin user.
+        for act in ("iam:CreateAccessKey", "iam:CreateLoginProfile"):
+            res = _granted_capped(ar, boundary, act)
+            if res is not None:
+                for arn in _scoped_targets(res, admin_users):
+                    emit(principal.arn, arn, "credential_mint", act)
+        # 5. pass_privileged_role — pass an admin role to a service you launch.
+        passres = _granted_capped(ar, boundary, "iam:PassRole")
+        if passres is not None and any(
+            _granted_capped(ar, boundary, la) is not None for la in _LAUNCH_ACTIONS
+        ):
+            for arn in _scoped_targets(passres, admin_roles):
+                emit(principal.arn, arn, "pass_privileged_role", "iam:PassRole")
+    return out
 
 
 def _principal_is_federated(principal: object) -> bool:
