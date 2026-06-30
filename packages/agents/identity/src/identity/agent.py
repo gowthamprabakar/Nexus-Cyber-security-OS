@@ -55,6 +55,7 @@ from identity.tools.aws_iam import (
     aws_iam_list_identities,
     aws_iam_simulate_principal_policy,
 )
+from identity.tools.cross_account import cross_account_trust_grants
 from identity.tools.federation import (
     detect_aws_oidc_providers,
     detect_aws_saml_providers,
@@ -228,6 +229,12 @@ async def run(
                 await KnowledgeGraphWriter(
                     semantic_store, contract.customer_id
                 ).record_escalation_grants(escalations)
+            # W3: roles trusting a foreign account → external principal can assume them (run-wired).
+            cross = cross_account_trust_grants(listing.roles)
+            if cross:
+                writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                await writer.record_external_trust([p for p, _ in cross])
+                await writer.record_assume_grants(cross)
 
         findings = await normalize_to_findings(
             listing,
