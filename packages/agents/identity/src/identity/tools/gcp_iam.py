@@ -86,6 +86,36 @@ def storage_read_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, 
     return out
 
 
+#: GCP roles whose permission set includes project-level ``setIamPolicy`` → self-grant any role
+#: (privilege escalation). ``roles/owner`` can too, but it is already admin (the target, not a source).
+_IAM_POLICY_WRITERS = frozenset(
+    {"roles/iam.securityAdmin", "roles/resourcemanager.projectIamAdmin"}
+)
+_OWNER_ROLE = "roles/owner"
+#: The GCP permission the escalation hinges on (for explainability / the edge's via).
+_ESCALATION_ACTION = "resourcemanager.projects.setIamPolicy"
+
+
+def escalation_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, str, str, str]]:
+    """``(member, owner_member, method, via_action)`` GCP privilege escalation → CAN_ESCALATE_TO.
+
+    A member granted ``roles/iam.securityAdmin`` or ``roles/resourcemanager.projectIamAdmin`` can
+    set the project IAM policy and grant itself ``roles/owner``. The GCP implementation of the SAME
+    edge contract AWS/Azure use (4-tuple, ``method=self_grant_admin``): an edge is emitted ONLY when
+    an Owner target is resolved (the precision crux). Expects **project-level** bindings — escalation
+    is a project-IAM concept, not bucket-scoped. Deduped, order-stable.
+    """
+    owners = {m for b in bindings if b.role == _OWNER_ROLE for m in b.members}
+    if not owners:
+        return []
+    sources = {m for b in bindings if b.role in _IAM_POLICY_WRITERS for m in b.members} - owners
+    out: list[tuple[str, str, str, str]] = []
+    for src in sorted(sources):
+        for owner in sorted(owners):
+            out.append((src, owner, "self_grant_admin", _ESCALATION_ACTION))
+    return out
+
+
 def _is_external(member: str, org_domain: str) -> bool:
     """True if a member is externally trusted: any-authenticated, or a user/group outside the org.
 
@@ -130,6 +160,7 @@ __all__ = [
     "GcpIamBinding",
     "GcpIamLiveReader",
     "GcpIamReader",
+    "escalation_grants",
     "external_trust_grants",
     "storage_read_grants",
 ]
