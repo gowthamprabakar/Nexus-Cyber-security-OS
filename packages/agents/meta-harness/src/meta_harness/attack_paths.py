@@ -266,11 +266,12 @@ class AttackPathRanker:
             )
         for lc in await self._kg.find_leaked_credential_to_data():
             g("leaked_credential", (lc.principal_id, lc.resource_id)).add(
-                (lc.principal_id, lc.credential_id, lc.repo_id, lc.resource_id), lc.data_type
+                (lc.principal_id, lc.credential_id, lc.repo_id, lc.resource_id, lc.data_classification_id),
+                lc.data_type,
             )
         for pe in await self._kg.find_privilege_escalation_to_data():
             g("privilege_escalation", (pe.principal_id, pe.resource_id)).add(
-                (pe.principal_id, pe.role_id, pe.resource_id), pe.data_type
+                (pe.principal_id, pe.role_id, pe.resource_id, pe.data_classification_id), pe.data_type
             )
         for rb in await self._kg.find_resource_based_data_exposure():
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(
