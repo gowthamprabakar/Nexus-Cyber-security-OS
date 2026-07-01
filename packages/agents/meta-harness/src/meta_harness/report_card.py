@@ -103,40 +103,55 @@ async def build_report_card(
     then title for stability), assigns ranks, and returns the top ``top_n``.
     """
     kq = KgQuery(store, tenant)
-    rows: list[tuple[int, str, str, tuple[str, ...]]] = []  # (severity, path_type, title, chain)
 
-    # The named ranker is authoritative for the path types it covers. Index its paths by
-    # (path_type → the entity_ids it touches), so a generic path of the SAME type that overlaps it
-    # is the same underlying risk found a second way — suppress it rather than double-count.
+    async def _labels(entity_ids: tuple[str, ...]) -> tuple[str, ...]:
+        """C1: resolve entity-ids → external-ids (ARNs) so named-path chains are readable."""
+        out: list[str] = []
+        for eid in entity_ids:
+            ent = await store.get_entity(tenant_id=tenant, entity_id=eid)
+            out.append(ent.external_id if ent is not None else eid)
+        return tuple(out)
+
+    # (severity, path_type, title, chain-labels, external-id set for subsumption)
+    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str]]] = []
+
+    # The named ranker is authoritative for the path types it covers. Index by (path_type →
+    # entity_ids), so a generic path of the SAME type overlapping it is the same risk → suppressed.
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in await AttackPathRanker(kq).find_all():
-        rows.append((ap.severity, ap.path_type, ap.title, ap.entities))
+        chain = await _labels(ap.entities)
+        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain)))
         named_entities_by_type.setdefault(ap.path_type, set()).update(ap.entities)
 
     for cand in await find_candidate_paths(store, tenant):
         pt = _generic_path_type(cand.path)
         if named_entities_by_type.get(pt, set()) & set(cand.path.node_ids):
             continue  # same risk a named detector already reported
+        chain = cand.path.node_labels  # already external-ids
         rows.append(
-            (
-                _SEVERITY.get(pt, _DEFAULT_SEVERITY),
-                pt,
-                _generic_title(pt, cand.path),
-                cand.path.node_labels,
-            )
+            (_SEVERITY.get(pt, _DEFAULT_SEVERITY), pt, _generic_title(pt, cand.path), chain, frozenset(chain))
         )
 
-    rows.sort(key=lambda r: (-r[0], r[2]))
+    # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
+    # higher-or-equal-severity, richer path (privesc / leaked-cred / crown-jewel) fully CONTAINS that
+    # leg's entities (same principal + resource + data), the bare leg is that path's own leg → drop.
+    # Strict subset avoids subsuming a *different* principal's access to the same resource.
+    richer = [r for r in rows if r[1] != "fine_grained_data"]
+    kept = [
+        r
+        for r in rows
+        if not (
+            r[1] == "fine_grained_data"
+            and any(h[0] >= r[0] and r[4] <= h[4] for h in richer)
+        )
+    ]
+
+    kept.sort(key=lambda r: (-r[0], r[2]))
     return [
         AttackPathCard(
-            rank=i + 1,
-            severity=sev,
-            path_type=pt,
-            title=title,
-            chain=chain,
-            fix=_FIX.get(pt, _DEFAULT_FIX),
+            rank=i + 1, severity=sev, path_type=pt, title=title, chain=chain, fix=_FIX.get(pt, _DEFAULT_FIX)
         )
-        for i, (sev, pt, title, chain) in enumerate(rows[:top_n])
+        for i, (sev, pt, title, chain, _es) in enumerate(kept[:top_n])
     ]
 
 
