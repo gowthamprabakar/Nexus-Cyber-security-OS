@@ -17,6 +17,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from charter.canonical import secret_fingerprint
 from charter.degradation import degraded_marker
 
 from identity.credentials_azure import AzureCredentialResolver
@@ -59,6 +60,33 @@ class AzureAdServicePrincipal:
     display_name: str
     sp_type: str  # servicePrincipalType: Application / ManagedIdentity / Legacy / SocialIdp
     account_enabled: bool
+
+
+#: The IDENTITY node key for an Azure service principal (keyed by its appId, the stable public id).
+def azure_sp_key(app_id: str) -> str:
+    return f"azuread:sp:{app_id}"
+
+
+def sp_credential_ownership(
+    service_principals: tuple[AzureAdServicePrincipal, ...],
+) -> list[tuple[str, str]]:
+    """``(sp_identity_key, secret_fingerprint(app_id))`` for each SP (slice #3 Azure owner side).
+
+    The fingerprint is the SAME convergence key appsec computes from a leaked SP secret's client-id
+    (:func:`appsec.azure_sp_secret.leaked_azure_sp_secrets`) — ``app_id == client_id`` — so a leaked
+    SP credential and its owning service principal collapse onto one SECRET node (hashed convergence,
+    nothing readable stored). Deduped, order-stable.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for sp in service_principals:
+        if not sp.app_id:
+            continue
+        grant = (azure_sp_key(sp.app_id), secret_fingerprint(sp.app_id))
+        if grant not in seen:
+            seen.add(grant)
+            out.append(grant)
+    return out
 
 
 @dataclass(frozen=True, slots=True)

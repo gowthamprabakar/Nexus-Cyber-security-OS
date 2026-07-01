@@ -169,6 +169,22 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             await self.add_edge(sa_node or "", cred_node or "", EdgeType.OWNS, {})
             await self.add_edge(cred_node or "", sa_node or "", EdgeType.OWNED_BY, {})
 
+    async def record_sp_credential_ownership(self, grants: Sequence[tuple[str, str]]) -> None:
+        """Write Azure service-principal credential ownership (slice #3 Azure owner side).
+
+        Each grant is ``(sp_identity_key, fingerprint)`` where ``fingerprint`` is
+        ``secret_fingerprint(app_id)`` — the SAME hash appsec computes from a leaked SP secret's
+        client-id, so leak ⇄ owner converge on one SECRET node with nothing readable stored. Writes
+        IDENTITY(sp) --OWNS--> SECRET + the reverse SECRET --OWNED_BY--> IDENTITY the walk needs.
+        """
+        for sp_key, fingerprint in grants:
+            sp_node = await self.upsert_node(NodeCategory.IDENTITY, sp_key, {})
+            cred_node = await self.upsert_node(
+                NodeCategory.SECRET, fingerprint, {"kind": "azure-sp-secret"}
+            )
+            await self.add_edge(sp_node or "", cred_node or "", EdgeType.OWNS, {})
+            await self.add_edge(cred_node or "", sp_node or "", EdgeType.OWNED_BY, {})
+
     async def record_external_trust(self, principal_arns: Sequence[str]) -> None:
         """Mark IDENTITY principals as externally trusted (path-8 cross-account signal).
 
