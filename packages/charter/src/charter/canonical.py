@@ -12,6 +12,21 @@ in agent code.
 
 from __future__ import annotations
 
+import hashlib
+
+
+def secret_fingerprint(identifier: str) -> str:
+    """Canonical convergence key for a credential whose plaintext id must NOT be stored.
+
+    SECRET-node key for credentials where the natural identifier is not an approved-plaintext value
+    (the only approved plaintext is the AWS access-key-id). Both the finder (appsec — a credential
+    leaked in code) and the owner (identity — the cloud principal that holds it) hash the SAME
+    non-secret identifier (e.g. a GCP service-account key's ``private_key_id``) through this function,
+    so the two signals collapse onto one graph node with NOTHING readable stored. The hashed value is
+    the key id, never the private key material. ``sha256`` hex, prefixed for node-key legibility.
+    """
+    return f"secretfp:{hashlib.sha256(identifier.encode()).hexdigest()}"
+
 
 def s3_bucket_arn(bucket_name: str) -> str:
     """Canonical ARN for an S3 bucket: ``arn:aws:s3:::{bucket_name}``."""
