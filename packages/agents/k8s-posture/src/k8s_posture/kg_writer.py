@@ -175,5 +175,18 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             )
             await self.add_edge(pod_node or "", sa_node or "", EdgeType.USES_SERVICE_ACCOUNT)
 
+    async def record_pod_reachability(self, grants: Iterable[tuple[str, str]]) -> None:
+        """Write K8S_OBJECT --POD_CAN_REACH--> K8S_OBJECT edges (W4 pod-to-pod lateral movement).
+
+        Each grant is ``(src_pod_id, dst_pod_id)``: default-allow K8s networking lets ``src`` reach
+        ``dst`` in the same namespace. Both endpoints upserted (idempotent — same pod key as
+        ``record_privileged_workloads``), so a compromised pod's lateral pivot to a neighbour (and
+        onward to its SA/cloud role or a vulnerable image) emerges as one graph walk.
+        """
+        for src_id, dst_id in grants:
+            src = await self.upsert_node(NodeCategory.K8S_OBJECT, src_id, {"kind": "pod"})
+            dst = await self.upsert_node(NodeCategory.K8S_OBJECT, dst_id, {"kind": "pod"})
+            await self.add_edge(src or "", dst or "", EdgeType.POD_CAN_REACH)
+
 
 __all__ = ["KnowledgeGraphWriter"]
