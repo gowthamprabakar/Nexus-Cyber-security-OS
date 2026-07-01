@@ -160,5 +160,20 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             )
             await self.add_edge(pod_node or "", image_node or "", EdgeType.RUNS_IMAGE)
 
+            # Container escape → cloud compromise: the pod USES_SERVICE_ACCOUNT, whose IRSA_MAPPING
+            # bridges to a cloud IAM role (record_inventory writes that leg). The SA node is keyed
+            # the same way (idempotent), so a privileged pod → SA → cloud role → data walk emerges.
+            sa_node = await self.upsert_node(
+                NodeCategory.K8S_OBJECT,
+                _sa_key(cluster_id, workload.namespace, workload.service_account),
+                {
+                    "kind": "service-account",
+                    "name": workload.service_account,
+                    "namespace": workload.namespace,
+                    "cluster_id": cluster_id,
+                },
+            )
+            await self.add_edge(pod_node or "", sa_node or "", EdgeType.USES_SERVICE_ACCOUNT)
+
 
 __all__ = ["KnowledgeGraphWriter"]

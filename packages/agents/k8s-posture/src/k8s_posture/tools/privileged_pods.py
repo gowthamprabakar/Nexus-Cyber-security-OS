@@ -23,6 +23,9 @@ class PrivilegedWorkload:
     namespace: str
     name: str
     image_ref: str
+    #: The pod's service account — the bridge to its IRSA-mapped cloud IAM role (container
+    #: escape → cloud compromise). ``spec.serviceAccountName`` falls back to ``"default"`` in K8s.
+    service_account: str = "default"
 
 
 def privileged_workloads(pods_json: dict[str, Any]) -> list[PrivilegedWorkload]:
@@ -46,6 +49,9 @@ def privileged_workloads(pods_json: dict[str, Any]) -> list[PrivilegedWorkload]:
                 namespace=str(meta.get("namespace") or "default"),
                 name=str(meta.get("name") or "unknown"),
                 image_ref=str(privileged["image"]),
+                service_account=str(
+                    (item.get("spec") or {}).get("serviceAccountName") or "default"
+                ),
             )
         )
     return out
