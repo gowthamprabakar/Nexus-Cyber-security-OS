@@ -161,4 +161,18 @@ def render_report_card(cards: list[AttackPathCard], *, tenant: str) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["AttackPathCard", "build_report_card", "render_report_card"]
+async def render_tenant_report_card(store: SemanticStore, tenant: str, *, top_n: int = 10) -> str:
+    """The single entry point (W1): a tenant's populated graph → the rendered Markdown report card.
+
+    Build + render in one call — what a caller (CLI / API / correlation runner) invokes after the
+    agents have populated the shared graph. Read-only.
+    """
+    return render_report_card(await build_report_card(store, tenant, top_n=top_n), tenant=tenant)
+
+
+__all__ = [
+    "AttackPathCard",
+    "build_report_card",
+    "render_report_card",
+    "render_tenant_report_card",
+]
