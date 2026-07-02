@@ -60,8 +60,8 @@ CATALOG: tuple[Family, ...] = (
     Family("network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT),
     # --- Impact domains ---
     Family("exposed_kms_key", "Impact", "exposed_kms_key", Status.BUILT),
-    Family("kms_key_access", "Credential Access", "kms_key_access", Status.PLANNED),
-    Family("exposed_database", "Exfiltration", "exposed_database", Status.PLANNED),
+    Family("kms_key_access", "Credential Access", "kms_key_access", Status.BUILT),
+    Family("exposed_database", "Exfiltration", "exposed_database", Status.BUILT),
     Family("exposed_ai_sensitive_data", "Collection", "exposed_ai_sensitive_data", Status.BUILT),
     Family("saas_oauth_tenant", "Initial Access", "saas_tenant", Status.BUILT),
     # --- Supply chain / provenance ---

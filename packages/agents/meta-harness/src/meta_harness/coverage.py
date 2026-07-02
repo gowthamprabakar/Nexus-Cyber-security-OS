@@ -35,7 +35,7 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     # BINDS is non-traversable, so it's detected by its path_type, not an edge (NEX-301 fix).
     "network_topology_lateral": "PEERED_WITH",
     "supply_chain_sbom": "CONTAINS_PACKAGE",
-    "kms_key_access": "__kms_sink__",  # placeholder until the sink lands (always absent today)
+    # kms_key_access + exposed_database are NAMED detectors → detected by path_type, not an edge.
 }
 
 

@@ -48,6 +48,7 @@ _SEVERITY: dict[str, int] = {
     "privileged_vulnerable": 78,
     "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
+    "kms_key_access": 74,
     "exposed_kms_key": 72,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
@@ -133,6 +134,9 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Privileged K8s pod runs an image with {_cve_phrase(grp)}"
     if path_type == "runtime_exploit_vulnerable":
         return f"Active runtime detection on a workload running a vulnerable image ({_cve_phrase(grp)})"
+    if path_type == "kms_key_access":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return f"A principal can use a KMS key that protects {dt or 'sensitive'} data (decrypt access)"
     if path_type == "exposed_kms_key":
         return "KMS key policy is internet-open (the encryption boundary is exposed)"
     if path_type == "rbac_privilege_escalation":
@@ -277,11 +281,21 @@ class AttackPathRanker:
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(
                 (rb.resource_id,), rb.data_type, principal=rb.principal_arn
             )
+        # NEX-202a: a principal reaching a KMS key that protects data is the more specific
+        # `kms_key_access` — subsume its fine-grained access leg so it is not double-reported.
+        kms_access: set[tuple[str, str]] = set()
+        for ka in await self._kg.find_kms_key_access():
+            g("kms_key_access", (ka.principal_id, ka.kms_key_id)).add(
+                (ka.principal_id, ka.kms_key_id, ka.data_classification_id), ka.data_type
+            )
+            kms_access.add((ka.principal_id, ka.kms_key_id))
         for f in await self._kg.find_fine_grained_data_exposure():
             if (f.principal_id, f.resource_id) in subsumed_access:
                 continue  # this role→data access is the crown jewel's own access leg
             if (f.principal_id, f.resource_id) in external_access:
                 continue  # already reported as the (more complete) external-trust path
+            if (f.principal_id, f.resource_id) in kms_access:
+                continue  # the more specific kms_key_access path already reports it
             g("fine_grained_data", (f.principal_id, f.resource_id)).add(
                 (f.principal_id, f.resource_id, f.data_classification_id), f.data_type
             )
