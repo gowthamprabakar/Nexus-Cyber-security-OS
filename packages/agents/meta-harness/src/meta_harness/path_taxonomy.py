@@ -123,6 +123,13 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
 )
 
 
+#: Agents that write ONLY findings / attestation (``AFFECTS``), never attack-progression edges or
+#: source/sink nodes — BY DESIGN (NEX-105). ``compliance`` is control-plane attestation, not a path
+#: producer; forcing a fake traversable edge would be lipstick. This registry makes the exclusion
+#: explicit and testable. (``multi-cloud-posture`` is NOT here — NEX-104 connected it to sources.)
+FINDINGS_ONLY_AGENTS: frozenset[str] = frozenset({"compliance"})
+
+
 def match_source(category: str, properties: Mapping[str, Any]) -> str | None:
     """The name of the first source marker matching this node, or ``None``."""
     return next((m.name for m in SOURCE_MARKERS if m.matches(category, properties)), None)
