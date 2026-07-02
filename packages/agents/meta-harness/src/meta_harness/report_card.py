@@ -259,7 +259,7 @@ def render_report_card(cards: list[AttackPathCard], *, tenant: str) -> str:
     for c in cards:
         blast = f"{c.blast_radius} data store{'s' if c.blast_radius != 1 else ''} at risk"
         lines += [
-            f"## {c.rank}. [P {c.probability:.2f} · loss {c.expected_loss:.1f} · severity {c.severity}] {c.title}",
+            f"## {c.rank}. [P {c.probability:.2f} · loss {c.expected_loss:.2f} · severity {c.severity}] {c.title}",
             f"- **Type:** `{c.path_type}`  ·  **Blast radius:** {blast}",
             f"- **Evidence:** {' → '.join(c.chain)}",  # NEX-405: the concrete path walk
             f"- **Fix:** {c.fix}",

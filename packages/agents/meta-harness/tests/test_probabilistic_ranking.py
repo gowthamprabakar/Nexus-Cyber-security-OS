@@ -94,3 +94,82 @@ async def test_edge_prior_table_is_load_bearing(monkeypatch) -> None:
         bumped = await build_report_card(store, t)
         bumped_p = max((card.probability for card in bumped), default=0.0)
         assert bumped_p < base_p  # lowering the CAN_REACH prior lowered the path probability
+
+
+@pytest.mark.asyncio
+async def test_kev_dominates() -> None:
+    # KEV boosts generic-path probability via leaf_probability floor (§4.4); named paths can't
+    # carry KEV — this asymmetry is by design, so we test GENERIC paths only (§4.5).
+    t = "kev-dominates"
+    async with in_memory_semantic_store() as store:
+        # path A: public_resource -CAN_REACH-> hostA -VULNERABLE_TO-> CVE-A (kev=True, severity=HIGH)
+        pubA = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:pubA",
+            properties={"is_public": True},
+        )
+        hostA = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:hostA",
+            properties={},
+        )
+        cveA = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CVE_FINDING.value,
+            external_id="CVE-A",
+            properties={"severity": "HIGH", "kev": True},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=pubA,
+            dst_entity_id=hostA,
+            relationship_type=EdgeType.CAN_REACH.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=hostA,
+            dst_entity_id=cveA,
+            relationship_type=EdgeType.VULNERABLE_TO.value,
+            properties={},
+        )
+        # path B: public_resource -CAN_REACH-> hostB -VULNERABLE_TO-> CVE-B (kev=False, severity=HIGH)
+        pubB = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:pubB",
+            properties={"is_public": True},
+        )
+        hostB = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:hostB",
+            properties={},
+        )
+        cveB = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CVE_FINDING.value,
+            external_id="CVE-B",
+            properties={"severity": "HIGH", "kev": False},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=pubB,
+            dst_entity_id=hostB,
+            relationship_type=EdgeType.CAN_REACH.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=hostB,
+            dst_entity_id=cveB,
+            relationship_type=EdgeType.VULNERABLE_TO.value,
+            properties={},
+        )
+        cards = await build_report_card(store, t)
+        kev_card = next(c for c in cards if "arn:hostA" in c.chain)
+        non_kev_card = next(c for c in cards if "arn:hostB" in c.chain)
+        # KEV floor raises leaf_probability to ≥0.9 vs ~0.66 for non-KEV HIGH severity.
+        assert kev_card.probability > non_kev_card.probability

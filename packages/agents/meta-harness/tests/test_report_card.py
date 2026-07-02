@@ -87,6 +87,6 @@ def test_render_lists_rank_severity_and_fix():
     ]
     out = render_report_card(cards, tenant="acme")
     assert "# Attack Path Report Card — acme" in out
-    assert "severity 92]" in out  # NEX-403: header now "[exploitability N · severity 92]"
+    assert "severity 92]" in out  # NEX-403: header now "[P … · loss … · severity 92]"
     assert "**Fix:** Rotate and revoke" in out
     assert "leaked_credential" in out
