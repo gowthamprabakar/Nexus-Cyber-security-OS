@@ -11,7 +11,7 @@ same-account or service principal is NOT cross-account (the precision crux).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,12 +25,29 @@ def _account_of(arn: str) -> str:
     return parts[4] if len(parts) > 4 and parts[4].isdigit() else ""
 
 
+def _is_externalid_guarded(statement: dict[str, Any]) -> bool:
+    """True if the trust statement requires an ``sts:ExternalId`` — the confused-deputy mitigation.
+
+    A cross-account role gated by ExternalId is NOT freely assumable: the external party must know a
+    shared secret. Flagging it as escalation is a false positive (NEX-408 precision fix), so such
+    statements are skipped. Checks every operator's condition keys for ``sts:externalid`` (case-insens).
+    """
+    condition = statement.get("Condition")
+    if not isinstance(condition, dict):
+        return False
+    return any(
+        isinstance(operands, dict) and any(str(k).lower() == "sts:externalid" for k in operands)
+        for operands in condition.values()
+    )
+
+
 def cross_account_trust_grants(roles: Sequence[IamRole]) -> list[tuple[str, str]]:
     """``(external_principal, role_arn)`` for each role trusting a foreign account / ``*``.
 
     Parses ``Allow`` statements' ``Principal.AWS`` (str or list). A principal whose account differs
     from the role's own account, or the anonymous ``*``, is cross-account. Same-account and non-AWS
-    (service/federated) principals are skipped. Deduped, order-stable.
+    (service/federated) principals are skipped. **A statement gated by ``sts:ExternalId`` is skipped**
+    (NEX-408: not freely assumable — the confused-deputy mitigation). Deduped, order-stable.
     """
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -41,6 +58,8 @@ def cross_account_trust_grants(roles: Sequence[IamRole]) -> list[tuple[str, str]
             statements = [statements]
         for stmt in statements:
             if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+                continue
+            if _is_externalid_guarded(stmt):
                 continue
             principal = stmt.get("Principal", {})
             aws = principal.get("AWS") if isinstance(principal, dict) else None
