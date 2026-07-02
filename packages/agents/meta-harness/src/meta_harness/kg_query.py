@@ -254,6 +254,17 @@ class ExposedDatabase:
 
 
 @dataclass(frozen=True, slots=True)
+class KmsKeyAccess:
+    """A principal that can use a KMS key which protects sensitive data (NEX-202a). Compromising the
+    principal → decrypt the data. The key's impact is modelled via EXPOSES_DATA (the spike reframe)."""
+
+    principal_id: str
+    kms_key_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class LeakedCredentialToData:
     """An IAM credential committed in source code that can reach sensitive data (cross-domain:
     appsec + identity, path #17). A user OWNS a SECRET (access key) that is DEFINED_IN a repo
@@ -609,6 +620,39 @@ class KgQuery:
                         FineGrainedDataExposure(
                             principal_id=principal.entity_id,
                             resource_id=access.dst_entity_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
+    async def find_kms_key_access(self) -> list[KmsKeyAccess]:
+        """Find a principal that can use a KMS key which protects sensitive data (NEX-202a).
+
+        Self-seeded: IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE(kind=kms-key) --EXPOSES_DATA--> data.
+        Per the NEX-202 spike, a KMS key's impact is modelled as EXPOSES_DATA to the data it protects,
+        so no new sink/walker is needed — this just filters the access-to-data shape to KMS keys, giving
+        the distinct ``kms_key_access`` family (compromise the principal → decrypt the crown data)."""
+        hits: list[KmsKeyAccess] = []
+        for principal in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        ):
+            for access in await self._edges_from(principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                key = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=access.dst_entity_id
+                )
+                if key is None or key.properties.get("kind") != "kms-key":
+                    continue
+                for expose in await self._edges_from(access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        KmsKeyAccess(
+                            principal_id=principal.entity_id,
+                            kms_key_id=access.dst_entity_id,
                             data_classification_id=dc.entity_id,
                             data_type=str(dc.properties.get("data_type", "")),
                         )

@@ -194,6 +194,24 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 {"kind": "kms-key", "is_public": key.is_public},
             )
 
+    async def record_kms_protected_data(self, grants: Iterable[tuple[str, str]]) -> None:
+        """Write KMS-key ``--EXPOSES_DATA-->`` DATA_CLASSIFICATION edges (NEX-202a).
+
+        Each grant is ``(kms_key_arn, data_type)``: the key protects sensitive data (it encrypts a
+        bucket/DB holding it). Per the NEX-202 spike, modelling a KMS key's impact as EXPOSES_DATA
+        reuses the existing data sink — a principal who can use the key reaches the data
+        (``kms_key_access``). The driver decides which key protects which data (deferred); the writer
+        persists. No walker/substrate change.
+        """
+        for key_arn, data_type in grants:
+            key_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE, key_arn, {"kind": "kms-key"}
+            )
+            data_node = await self.upsert_node(
+                NodeCategory.DATA_CLASSIFICATION, f"{key_arn}:protected", {"data_type": data_type}
+            )
+            await self.add_edge(key_node or "", data_node or "", EdgeType.EXPOSES_DATA)
+
     async def record_rds_instances(self, instances: Iterable[RdsInstance]) -> None:
         """Write each RDS instance as a ``CLOUD_RESOURCE{kind=rds-instance, is_public}`` (path #19)."""
         for db in instances:

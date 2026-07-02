@@ -67,6 +67,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["HAS_ACCESS_TO", "EXPOSES_DATA"],
     ),
+    "kms_key_access": (  # NEX-202a: same shape as fine_grained; the KMS key is an intermediate resource
+        (NC.IDENTITY, {}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
     "privilege_escalation": (
         (NC.IDENTITY, {}),
         (NC.DATA_CLASSIFICATION, {}),

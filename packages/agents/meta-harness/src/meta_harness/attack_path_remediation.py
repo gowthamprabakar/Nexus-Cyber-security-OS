@@ -40,6 +40,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_fixable=True,
         auto_via="remediation_s3_block_public_access",
     ),
+    "kms_key_access": FixAdvice(
+        "Scope the KMS key policy and the principal's kms:Decrypt grant to least privilege so only "
+        "intended workloads can use the key; it protects sensitive data, so treat broad key access "
+        "as a decrypt path to that data.",
+        auto_fixable=False,
+    ),
     "leaked_credential": FixAdvice(
         "Deactivate and rotate the leaked AWS access key immediately (assume it is compromised), "
         "purge it from the repo's git history, and scope the owning principal to least privilege.",
