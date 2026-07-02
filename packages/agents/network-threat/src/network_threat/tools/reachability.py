@@ -86,4 +86,45 @@ def reach_grants(
     return out
 
 
-__all__ = ["IngressRule", "NetworkInstance", "SecurityGroup", "reach_grants"]
+@dataclass(frozen=True, slots=True)
+class VpcInstance:
+    """A resource placed in a VPC — for cross-VPC (peering) reachability."""
+
+    resource_id: str
+    vpc_id: str
+
+
+def peering_reach_grants(
+    instances: tuple[VpcInstance, ...], peerings: frozenset[frozenset[str]]
+) -> list[tuple[str, str, str, str]]:
+    """``(src, dst, "vpc_peering", vpc_pair)`` for instances in DIFFERENT but PEERED VPCs (W4/NEX-302).
+
+    Same-SG ``reach_grants`` only covers one VPC; a VPC peering opens a lateral path *across* VPC
+    boundaries (the enabling condition — SG refinement is a follow-on). ``peerings`` is a set of
+    unordered VPC-id pairs. Emits a directed edge each way for every cross-VPC instance pair whose two
+    VPCs are peered. Same-VPC pairs (``reach_grants`` territory) and unpeered pairs are excluded — the
+    precision crux. Deduped, order-stable.
+    """
+    out: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for src in instances:
+        for dst in instances:
+            if src.resource_id == dst.resource_id or src.vpc_id == dst.vpc_id:
+                continue
+            if frozenset({src.vpc_id, dst.vpc_id}) not in peerings:
+                continue
+            key = (src.resource_id, dst.resource_id)
+            if key not in seen:
+                seen.add(key)
+                out.append((src.resource_id, dst.resource_id, "vpc_peering", f"{src.vpc_id}<->{dst.vpc_id}"))
+    return out
+
+
+__all__ = [
+    "IngressRule",
+    "NetworkInstance",
+    "SecurityGroup",
+    "VpcInstance",
+    "peering_reach_grants",
+    "reach_grants",
+]
