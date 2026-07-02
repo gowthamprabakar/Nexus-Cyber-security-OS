@@ -46,6 +46,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "as a decrypt path to that data.",
         auto_fixable=False,
     ),
+    "cicd_compromise": FixAdvice(
+        "Rotate the leaked pipeline credential and audit the repo's deploy history for tampering; the "
+        "production resources it deploys should be treated as potentially poisoned until verified.",
+        auto_fixable=False,
+    ),
     "leaked_credential": FixAdvice(
         "Deactivate and rotate the leaked AWS access key immediately (assume it is compromised), "
         "purge it from the repo's git history, and scope the owning principal to least privilege.",

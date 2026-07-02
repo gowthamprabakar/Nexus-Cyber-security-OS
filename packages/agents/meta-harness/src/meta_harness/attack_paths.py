@@ -56,6 +56,7 @@ _SEVERITY: dict[str, int] = {
     "resource_based_data": 62,
     "fine_grained_data": 60,
     "iac_misconfig_deployed": 58,
+    "cicd_compromise": 64,
 }
 
 
@@ -172,6 +173,8 @@ def _title(path_type: str, grp: _Group) -> str:
         )
     if path_type == "iac_misconfig_deployed":
         return f"Live resource deployed from misconfigured infrastructure-as-code ({_types_phrase(grp)})"
+    if path_type == "cicd_compromise":
+        return "Production resource deployed from a repo holding a leaked credential (poisonable pipeline)"
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -303,6 +306,8 @@ class AttackPathRanker:
             g("iac_misconfig_deployed", (ic.resource_id,)).add(
                 (ic.resource_id, ic.artifact_id, ic.repo_id), ic.artifact_ref
             )
+        for cc in await self._kg.find_cicd_compromise():
+            g("cicd_compromise", (cc.resource_id,)).add((cc.resource_id, cc.repo_id), "poisonable-pipeline")
 
         paths = [
             AttackPath(
