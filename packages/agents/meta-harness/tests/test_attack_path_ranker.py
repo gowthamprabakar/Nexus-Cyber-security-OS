@@ -152,3 +152,40 @@ async def test_multiple_cves_on_one_workload_group_into_one_path():
 async def test_empty_graph_returns_no_paths():
     async with in_memory_semantic_store() as store:
         assert await AttackPathRanker(KgQuery(store, "t")).find_all() == []
+
+
+@pytest.mark.asyncio
+async def test_fine_grained_path_exposes_its_data_sink() -> None:
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from fleet_testkit import in_memory_semantic_store
+    from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
+    from meta_harness.attack_paths import AttackPathRanker
+    from meta_harness.kg_query import KgQuery
+
+    t = "sink-id"
+    async with in_memory_semantic_store() as store:
+        b = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:aws:s3:::d",
+            properties={"is_public": True},
+        )
+        d = await store.upsert_entity(
+            tenant_id=t,
+            entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+            external_id="arn:aws:s3:::d/ssn",
+            properties={"data_type": "ssn"},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=b,
+            dst_entity_id=d,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
+        )
+        await IdentityKgWriter(store, t).record_access(
+            [("arn:aws:iam::1:role/r", "arn:aws:s3:::d")]
+        )
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        fg = [p for p in paths if p.path_type == "fine_grained_data"]
+        assert fg and fg[0].sink_id == d  # the data-classification entity id is the sink
