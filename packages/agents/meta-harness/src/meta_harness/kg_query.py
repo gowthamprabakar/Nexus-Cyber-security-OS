@@ -254,6 +254,15 @@ class ExposedDatabase:
 
 
 @dataclass(frozen=True, slots=True)
+class CicdCompromise:
+    """A live resource deployed from a repo that holds a leaked credential (NEX-304). An attacker with
+    the leaked pipeline credential can poison the deploy → the production resource is compromised."""
+
+    resource_id: str
+    repo_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class KmsKeyAccess:
     """A principal that can use a KMS key which protects sensitive data (NEX-202a). Compromising the
     principal → decrypt the data. The key's impact is modelled via EXPOSES_DATA (the spike reframe)."""
@@ -1010,6 +1019,35 @@ class KgQuery:
                         repo_id=repos[0].dst_entity_id if repos else "",
                     )
                 )
+        return hits
+
+    async def find_cicd_compromise(self) -> list[CicdCompromise]:
+        """Find a live resource deployed from a repo that holds a LEAKED credential (NEX-304).
+
+        Reuses the code-to-cloud chain in its natural direction (no reverse edge — the NEX-203 insight):
+        resource --DEPLOYED_VIA--> IAC_ARTIFACT --DEFINED_IN--> repo, where the repo also has a leaked
+        SECRET (``SECRET{leaked} --DEFINED_IN--> repo``). An attacker with that leaked pipeline
+        credential can poison the deploy, so the production resource's supply chain is compromised.
+        Read-only."""
+        compromised_repos: set[str] = set()
+        for secret in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.SECRET.value
+        ):
+            if secret.properties.get("leaked") is True:
+                for d in await self._edges_from(secret.entity_id, (EdgeType.DEFINED_IN.value,)):
+                    compromised_repos.add(d.dst_entity_id)
+        if not compromised_repos:
+            return []
+        hits: list[CicdCompromise] = []
+        for resource in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            for dep in await self._edges_from(resource.entity_id, (EdgeType.DEPLOYED_VIA.value,)):
+                for repo_edge in await self._edges_from(dep.dst_entity_id, (EdgeType.DEFINED_IN.value,)):
+                    if repo_edge.dst_entity_id in compromised_repos:
+                        hits.append(
+                            CicdCompromise(resource_id=resource.entity_id, repo_id=repo_edge.dst_entity_id)
+                        )
         return hits
 
     async def find_runtime_exploit_on_vulnerable_workload(

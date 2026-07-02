@@ -66,7 +66,7 @@ CATALOG: tuple[Family, ...] = (
     Family("saas_oauth_tenant", "Initial Access", "saas_tenant", Status.BUILT),
     # --- Supply chain / provenance ---
     Family("supply_chain_sbom", "Initial Access", "supply_chain_sbom", Status.BUILT),
-    Family("cicd_compromise", "Initial Access", "cicd_compromise", Status.PLANNED),
+    Family("cicd_compromise", "Initial Access", "cicd_compromise", Status.BUILT),
     Family("iac_misconfig_deployed", "Persistence", "iac_misconfig_deployed", Status.BUILT),
     # --- Threat presence ---
     Family("malicious_destination", "Command and Control", "malicious_destination", Status.BUILT),
