@@ -59,6 +59,23 @@ _DEFAULT_FIX = "Review this exposure and apply least privilege."
 _DEFAULT_SEVERITY = 50
 
 
+#: path_types that begin at an internet-facing exposure (reachable from outside → more exploitable).
+_INTERNET_FACING: frozenset[str] = frozenset({
+    "crown_jewel", "public_secret", "public_unencrypted", "internet_exposed_vulnerable",
+    "internet_exposed_host_vulnerable", "lateral_movement", "network_topology_lateral",
+    "supply_chain_sbom", "exposed_database", "exposed_kms_key", "runtime_exploit_vulnerable",
+})
+
+
+def _exploitability(severity: int, path_type: str, *, kev: bool) -> int:
+    """NEX-403: deterministic exploitability score — base severity weighted by real reachability.
+
+    ``+15`` if the path exploits a CISA Known-Exploited (KEV) vulnerability (weaponized in the wild),
+    ``+8`` if it begins at an internet-facing exposure. So an internet-facing KEV path outranks an
+    internal, same-base-severity one. Deterministic (no Bayesian — that is a measured v0.5 step)."""
+    return severity + (15 if kev else 0) + (8 if path_type in _INTERNET_FACING else 0)
+
+
 @dataclass(frozen=True, slots=True)
 class AttackPathCard:
     """One ranked row of the report card — what the customer sees and acts on."""
@@ -69,6 +86,7 @@ class AttackPathCard:
     title: str
     chain: tuple[str, ...]
     fix: str
+    exploitability: int = 0  # NEX-403: severity weighted by KEV + internet-facing (the rank key)
 
 
 def _generic_path_type(path: GenericPath) -> str:
@@ -122,15 +140,15 @@ async def build_report_card(
             out.append(ent.external_id if ent is not None else eid)
         return tuple(out)
 
-    # (severity, path_type, title, chain-labels, external-id set for subsumption)
-    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str]]] = []
+    # (severity, path_type, title, chain-labels, external-id set for subsumption, kev flag)
+    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool]] = []
 
     # The named ranker is authoritative for the path types it covers. Index by (path_type →
     # entity_ids), so a generic path of the SAME type overlapping it is the same risk → suppressed.
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in await AttackPathRanker(kq).find_all():
         chain = await _labels(ap.entities)
-        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain)))
+        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain), False))
         named_entities_by_type.setdefault(ap.path_type, set()).update(ap.entities)
 
     for cand in await find_candidate_paths(store, tenant):
@@ -138,9 +156,8 @@ async def build_report_card(
         if named_entities_by_type.get(pt, set()) & set(cand.path.node_ids):
             continue  # same risk a named detector already reported
         chain = cand.path.node_labels  # already external-ids
-        rows.append(
-            (_GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY), pt, _generic_title(pt, cand.path), chain, frozenset(chain))
-        )
+        sev = _GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY)
+        rows.append((sev, pt, _generic_title(pt, cand.path), chain, frozenset(chain), cand.path.sink_kev))
 
     # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
     # higher-or-equal-severity, richer path (privesc / leaked-cred / crown-jewel) fully CONTAINS that
@@ -156,12 +173,14 @@ async def build_report_card(
         )
     ]
 
-    kept.sort(key=lambda r: (-r[0], r[2]))
+    # NEX-403: rank by exploitability (severity weighted by KEV + internet-facing), then severity, title.
+    kept.sort(key=lambda r: (-_exploitability(r[0], r[1], kev=r[5]), -r[0], r[2]))
     return [
         AttackPathCard(
-            rank=i + 1, severity=sev, path_type=pt, title=title, chain=chain, fix=_FIX.get(pt, _DEFAULT_FIX)
+            rank=i + 1, severity=sev, path_type=pt, title=title, chain=chain, fix=_FIX.get(pt, _DEFAULT_FIX),
+            exploitability=_exploitability(sev, pt, kev=kev),
         )
-        for i, (sev, pt, title, chain, _es) in enumerate(kept[:top_n])
+        for i, (sev, pt, title, chain, _es, kev) in enumerate(kept[:top_n])
     ]
 
 
@@ -177,7 +196,7 @@ def render_report_card(cards: list[AttackPathCard], *, tenant: str) -> str:
     ]
     for c in cards:
         lines += [
-            f"## {c.rank}. [severity {c.severity}] {c.title}",
+            f"## {c.rank}. [exploitability {c.exploitability} · severity {c.severity}] {c.title}",
             f"- **Type:** `{c.path_type}`",
             f"- **Involves:** {', '.join(c.chain)}",
             f"- **Fix:** {c.fix}",
