@@ -146,6 +146,7 @@ async def run(
     azure_credential_source: str | None = None,
     assess_effective_perms: bool = False,
     semantic_store: SemanticStore | None = None,
+    iam_listing: IdentityListing | None = None,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -201,9 +202,16 @@ async def run(
             model_pin=model_pin,
         )
 
-        listing, aa_findings = await _fetch_inventory(
-            ctx, aws_region=aws_region, profile=profile, analyzer_arn=analyzer_arn
-        )
+        # NEX-004a wire-as-we-go: an injected fixture listing drives run() OFFLINE (no live IAM), so a
+        # fixture-driven operating run populates the graph with identity's edges — the dormancy fix.
+        listing: IdentityListing
+        aa_findings: Sequence[AccessAnalyzerFinding]
+        if iam_listing is not None:
+            listing, aa_findings = iam_listing, ()
+        else:
+            listing, aa_findings = await _fetch_inventory(
+                ctx, aws_region=aws_region, profile=profile, analyzer_arn=analyzer_arn
+            )
 
         # v0.4 Stage 1.2: write the IAM principal inventory to the fleet graph when a
         # SemanticStore is injected. Opt-in — default None is inert (no graph writes),
