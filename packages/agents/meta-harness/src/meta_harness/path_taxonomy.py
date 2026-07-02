@@ -120,6 +120,7 @@ TRAVERSABLE_EDGES: frozenset[str] = frozenset(
         EdgeType.CAN_REACH,  # slice #2: resource → resource reachable over the network (lateral)
         EdgeType.POD_CAN_REACH,  # W4: pod → pod reachable in a flat namespace (K8s lateral)
         EdgeType.PEERED_WITH,  # NEX-302: resource → resource reachable across a VPC peering (lateral)
+        EdgeType.CONTAINS_PACKAGE,  # NEX-305: image → SBOM package (supply-chain dependency vuln)
     )
 )
 
