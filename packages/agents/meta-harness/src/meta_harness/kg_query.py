@@ -646,13 +646,17 @@ class KgQuery:
         for principal in await self._semantic_store.list_entities_by_type(
             tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
         ):
-            for access in await self._edges_from(principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)):
+            for access in await self._edges_from(
+                principal.entity_id, (EdgeType.HAS_ACCESS_TO.value,)
+            ):
                 key = await self._semantic_store.get_entity(
                     tenant_id=self._customer_id, entity_id=access.dst_entity_id
                 )
                 if key is None or key.properties.get("kind") != "kms-key":
                     continue
-                for expose in await self._edges_from(access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)):
+                for expose in await self._edges_from(
+                    access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                ):
                     dc = await self._semantic_store.get_entity(
                         tenant_id=self._customer_id, entity_id=expose.dst_entity_id
                     )
@@ -1043,10 +1047,14 @@ class KgQuery:
             tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
         ):
             for dep in await self._edges_from(resource.entity_id, (EdgeType.DEPLOYED_VIA.value,)):
-                for repo_edge in await self._edges_from(dep.dst_entity_id, (EdgeType.DEFINED_IN.value,)):
+                for repo_edge in await self._edges_from(
+                    dep.dst_entity_id, (EdgeType.DEFINED_IN.value,)
+                ):
                     if repo_edge.dst_entity_id in compromised_repos:
                         hits.append(
-                            CicdCompromise(resource_id=resource.entity_id, repo_id=repo_edge.dst_entity_id)
+                            CicdCompromise(
+                                resource_id=resource.entity_id, repo_id=repo_edge.dst_entity_id
+                            )
                         )
         return hits
 

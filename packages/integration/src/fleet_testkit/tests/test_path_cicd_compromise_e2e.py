@@ -28,19 +28,43 @@ async def test_cicd_compromise_from_leaked_pipeline_credential() -> None:
         # appsec: a leaked credential lives in the repo (SECRET{leaked} --DEFINED_IN--> repo)
         await AppsecKgWriter(store, _T).record_leaked_credentials(_REPO, [_AKIA])
         # the code-to-cloud provenance: prod resource DEPLOYED_VIA an IaC artifact DEFINED_IN that repo
-        res = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                        external_id=_RESOURCE, properties={})
-        art = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.IAC_ARTIFACT.value,
-                                        external_id=_ARTIFACT, properties={})
-        repo = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CODE_REPOSITORY.value,
-                                         external_id=_REPO, properties={})
-        await store.add_relationship(tenant_id=_T, src_entity_id=res, dst_entity_id=art,
-                                     relationship_type=EdgeType.DEPLOYED_VIA.value, properties={})
-        await store.add_relationship(tenant_id=_T, src_entity_id=art, dst_entity_id=repo,
-                                     relationship_type=EdgeType.DEFINED_IN.value, properties={})
+        res = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=_RESOURCE,
+            properties={},
+        )
+        art = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.IAC_ARTIFACT.value,
+            external_id=_ARTIFACT,
+            properties={},
+        )
+        repo = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CODE_REPOSITORY.value,
+            external_id=_REPO,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=res,
+            dst_entity_id=art,
+            relationship_type=EdgeType.DEPLOYED_VIA.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=art,
+            dst_entity_id=repo,
+            relationship_type=EdgeType.DEFINED_IN.value,
+            properties={},
+        )
 
         paths = await AttackPathRanker(KgQuery(store, _T)).find_all()
         cc = [p for p in paths if p.path_type == "cicd_compromise"]
-        assert cc, "a resource deployed from a repo with a leaked credential must be cicd_compromise"
+        assert cc, (
+            "a resource deployed from a repo with a leaked credential must be cicd_compromise"
+        )
         assert "poisonable pipeline" in cc[0].title.lower()
         assert "cicd_compromise" in (await measure_coverage(store, _T)).produced

@@ -60,11 +60,21 @@ _DEFAULT_SEVERITY = 50
 
 
 #: path_types that begin at an internet-facing exposure (reachable from outside → more exploitable).
-_INTERNET_FACING: frozenset[str] = frozenset({
-    "crown_jewel", "public_secret", "public_unencrypted", "internet_exposed_vulnerable",
-    "internet_exposed_host_vulnerable", "lateral_movement", "network_topology_lateral",
-    "supply_chain_sbom", "exposed_database", "exposed_kms_key", "runtime_exploit_vulnerable",
-})
+_INTERNET_FACING: frozenset[str] = frozenset(
+    {
+        "crown_jewel",
+        "public_secret",
+        "public_unencrypted",
+        "internet_exposed_vulnerable",
+        "internet_exposed_host_vulnerable",
+        "lateral_movement",
+        "network_topology_lateral",
+        "supply_chain_sbom",
+        "exposed_database",
+        "exposed_kms_key",
+        "runtime_exploit_vulnerable",
+    }
+)
 
 
 def _exploitability(severity: int, path_type: str, *, kev: bool) -> int:
@@ -160,7 +170,17 @@ async def build_report_card(
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in await AttackPathRanker(kq).find_all():
         chain = await _labels(ap.entities)
-        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain), False, _blast(ap.entities)))
+        rows.append(
+            (
+                ap.severity,
+                ap.path_type,
+                ap.title,
+                chain,
+                frozenset(chain),
+                False,
+                _blast(ap.entities),
+            )
+        )
         named_entities_by_type.setdefault(ap.path_type, set()).update(ap.entities)
 
     for cand in await find_candidate_paths(store, tenant):
@@ -169,7 +189,17 @@ async def build_report_card(
             continue  # same risk a named detector already reported
         chain = cand.path.node_labels  # already external-ids
         sev = _GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY)
-        rows.append((sev, pt, _generic_title(pt, cand.path), chain, frozenset(chain), cand.path.sink_kev, _blast(cand.path.node_ids)))
+        rows.append(
+            (
+                sev,
+                pt,
+                _generic_title(pt, cand.path),
+                chain,
+                frozenset(chain),
+                cand.path.sink_kev,
+                _blast(cand.path.node_ids),
+            )
+        )
 
     # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
     # higher-or-equal-severity, richer path (privesc / leaked-cred / crown-jewel) fully CONTAINS that
@@ -179,18 +209,21 @@ async def build_report_card(
     kept = [
         r
         for r in rows
-        if not (
-            r[1] == "fine_grained_data"
-            and any(h[0] >= r[0] and r[4] <= h[4] for h in richer)
-        )
+        if not (r[1] == "fine_grained_data" and any(h[0] >= r[0] and r[4] <= h[4] for h in richer))
     ]
 
     # NEX-403: rank by exploitability (severity weighted by KEV + internet-facing), then severity, title.
     kept.sort(key=lambda r: (-_exploitability(r[0], r[1], kev=r[5]), -r[0], r[2]))
     return [
         AttackPathCard(
-            rank=i + 1, severity=sev, path_type=pt, title=title, chain=chain, fix=_FIX.get(pt, _DEFAULT_FIX),
-            exploitability=_exploitability(sev, pt, kev=kev), blast_radius=blast,
+            rank=i + 1,
+            severity=sev,
+            path_type=pt,
+            title=title,
+            chain=chain,
+            fix=_FIX.get(pt, _DEFAULT_FIX),
+            exploitability=_exploitability(sev, pt, kev=kev),
+            blast_radius=blast,
         )
         for i, (sev, pt, title, chain, _es, kev, blast) in enumerate(kept[:top_n])
     ]

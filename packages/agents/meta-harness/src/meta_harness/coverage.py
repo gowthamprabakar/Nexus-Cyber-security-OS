@@ -60,7 +60,9 @@ async def measure_coverage(store: SemanticStore, tenant: str) -> CoverageReport:
     """Measure which catalog families the graph produces (raw engine, not the report card)."""
     cands = await find_candidate_paths(store, tenant)
     edges_seen = {e for c in cands for e in c.path.edge_signature}
-    path_types_seen = {ap.path_type for ap in await AttackPathRanker(KgQuery(store, tenant)).find_all()}
+    path_types_seen = {
+        ap.path_type for ap in await AttackPathRanker(KgQuery(store, tenant)).find_all()
+    }
 
     produced: set[str] = set()
     for fam in CATALOG:

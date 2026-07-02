@@ -137,7 +137,9 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Active runtime detection on a workload running a vulnerable image ({_cve_phrase(grp)})"
     if path_type == "kms_key_access":
         dt = grp.context.get("data_type", "") or _types_phrase(grp)
-        return f"A principal can use a KMS key that protects {dt or 'sensitive'} data (decrypt access)"
+        return (
+            f"A principal can use a KMS key that protects {dt or 'sensitive'} data (decrypt access)"
+        )
     if path_type == "exposed_kms_key":
         return "KMS key policy is internet-open (the encryption boundary is exposed)"
     if path_type == "rbac_privilege_escalation":
@@ -273,12 +275,19 @@ class AttackPathRanker:
             )
         for lc in await self._kg.find_leaked_credential_to_data():
             g("leaked_credential", (lc.principal_id, lc.resource_id)).add(
-                (lc.principal_id, lc.credential_id, lc.repo_id, lc.resource_id, lc.data_classification_id),
+                (
+                    lc.principal_id,
+                    lc.credential_id,
+                    lc.repo_id,
+                    lc.resource_id,
+                    lc.data_classification_id,
+                ),
                 lc.data_type,
             )
         for pe in await self._kg.find_privilege_escalation_to_data():
             g("privilege_escalation", (pe.principal_id, pe.resource_id)).add(
-                (pe.principal_id, pe.role_id, pe.resource_id, pe.data_classification_id), pe.data_type
+                (pe.principal_id, pe.role_id, pe.resource_id, pe.data_classification_id),
+                pe.data_type,
             )
         for rb in await self._kg.find_resource_based_data_exposure():
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(
@@ -307,7 +316,9 @@ class AttackPathRanker:
                 (ic.resource_id, ic.artifact_id, ic.repo_id), ic.artifact_ref
             )
         for cc in await self._kg.find_cicd_compromise():
-            g("cicd_compromise", (cc.resource_id,)).add((cc.resource_id, cc.repo_id), "poisonable-pipeline")
+            g("cicd_compromise", (cc.resource_id,)).add(
+                (cc.resource_id, cc.repo_id), "poisonable-pipeline"
+            )
 
         paths = [
             AttackPath(

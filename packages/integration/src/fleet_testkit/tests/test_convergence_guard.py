@@ -35,21 +35,32 @@ async def test_three_agents_converge_on_one_resource_node() -> None:
         await IdentityKgWriter(store, _T).record_access([("arn:aws:iam::1:role/r", _ARN)])
         # data-security side: the bucket EXPOSES_DATA (same key)
         data = await store.upsert_entity(
-            tenant_id=_T, entity_type=NodeCategory.DATA_CLASSIFICATION.value,
-            external_id=f"{_ARN}/pii", properties={"data_type": "ssn"},
+            tenant_id=_T,
+            entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+            external_id=f"{_ARN}/pii",
+            properties={"data_type": "ssn"},
         )
         bucket_nodes = [r for r in await _resources(store) if r.external_id == _ARN]
         assert len(bucket_nodes) == 1, "3 agents must resolve to ONE bucket node"
         await store.add_relationship(
-            tenant_id=_T, src_entity_id=bucket_nodes[0].entity_id, dst_entity_id=data,
-            relationship_type=EdgeType.EXPOSES_DATA.value, properties={},
+            tenant_id=_T,
+            src_entity_id=bucket_nodes[0].entity_id,
+            dst_entity_id=data,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
         )
 
         # the single node carries all three signals (is_public + HAS_ACCESS_TO in + EXPOSES_DATA out)
         node = bucket_nodes[0]
         assert node.properties.get("is_public") is True
-        outs = {e.relationship_type for e in await store.get_relationships_from(
-            tenant_id=_T, src_entity_id=node.entity_id, edge_types=(EdgeType.EXPOSES_DATA.value,))}
+        outs = {
+            e.relationship_type
+            for e in await store.get_relationships_from(
+                tenant_id=_T,
+                src_entity_id=node.entity_id,
+                edge_types=(EdgeType.EXPOSES_DATA.value,),
+            )
+        }
         assert EdgeType.EXPOSES_DATA.value in outs
 
 
@@ -59,7 +70,9 @@ async def test_trap_mis_keyed_agent_creates_a_second_node() -> None:
     # — the exact bug shape that disconnected the graph once.
     async with in_memory_semantic_store() as store:
         await CloudKgWriter(store, _T).upsert_asset("s3-bucket", _ARN, {"is_public": True})
-        await IdentityKgWriter(store, _T).record_access([("arn:aws:iam::1:role/r", _BUCKET_NAME)])  # BAD key
+        await IdentityKgWriter(store, _T).record_access(
+            [("arn:aws:iam::1:role/r", _BUCKET_NAME)]
+        )  # BAD key
         keys = {r.external_id for r in await _resources(store)}
         assert _ARN in keys and _BUCKET_NAME in keys
         assert len(keys) == 2, "mis-keying must produce a divergent node — proves the guard bites"

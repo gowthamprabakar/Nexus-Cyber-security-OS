@@ -27,23 +27,46 @@ async def test_rbac_escalation_from_privileged_pod() -> None:
     async with in_memory_semantic_store() as store:
         k8s = K8sKgWriter(store, _T)
         # inventory: SA 'ci' + a wildcard-admin ClusterRole + a binding ci → admin (writes BINDS)
-        await k8s.record_inventory(ClusterInventory(
-            cluster_id=_CLUSTER, namespaces=("prod",),
-            service_accounts=(K8sServiceAccount(name="ci", namespace="prod"),),
-            roles=(Role(name="cluster-admin", kind="ClusterRole", namespace="",
-                        rules=(RoleRule(api_groups=("*",), resources=("*",), verbs=("*",)),)),),
-            role_bindings=(RoleBinding(name="ci-admin", kind="ClusterRoleBinding", namespace="",
-                                       role_ref_kind="ClusterRole", role_ref_name="cluster-admin",
-                                       subjects=(Subject(kind="ServiceAccount", name="ci", namespace="prod"),)),),
-        ))
+        await k8s.record_inventory(
+            ClusterInventory(
+                cluster_id=_CLUSTER,
+                namespaces=("prod",),
+                service_accounts=(K8sServiceAccount(name="ci", namespace="prod"),),
+                roles=(
+                    Role(
+                        name="cluster-admin",
+                        kind="ClusterRole",
+                        namespace="",
+                        rules=(RoleRule(api_groups=("*",), resources=("*",), verbs=("*",)),),
+                    ),
+                ),
+                role_bindings=(
+                    RoleBinding(
+                        name="ci-admin",
+                        kind="ClusterRoleBinding",
+                        namespace="",
+                        role_ref_kind="ClusterRole",
+                        role_ref_name="cluster-admin",
+                        subjects=(Subject(kind="ServiceAccount", name="ci", namespace="prod"),),
+                    ),
+                ),
+            )
+        )
         # a privileged foothold pod runs as 'ci' (writes pod --USES_SERVICE_ACCOUNT--> SA)
         await k8s.record_privileged_workloads(
-            _CLUSTER, [PrivilegedWorkload(namespace="prod", name="foothold", image_ref="img:1", service_account="ci")])
+            _CLUSTER,
+            [
+                PrivilegedWorkload(
+                    namespace="prod", name="foothold", image_ref="img:1", service_account="ci"
+                )
+            ],
+        )
 
         # the named detector fires: the SA is bound to cluster-admin → RBAC escalation
         paths = await AttackPathRanker(KgQuery(store, _T)).find_all()
-        assert any(p.path_type == "rbac_privilege_escalation" for p in paths), \
+        assert any(p.path_type == "rbac_privilege_escalation" for p in paths), (
             "SA bound to wildcard-admin must surface as rbac_privilege_escalation"
+        )
 
         # and it is now COUNTED by the coverage harness (was invisible via the non-traversable BINDS edge)
         report = await measure_coverage(store, _T)
