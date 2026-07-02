@@ -86,33 +86,49 @@ def storage_read_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, 
     return out
 
 
-#: GCP roles whose permission set includes project-level ``setIamPolicy`` → self-grant any role
-#: (privilege escalation). ``roles/owner`` can too, but it is already admin (the target, not a source).
-_IAM_POLICY_WRITERS = frozenset(
-    {"roles/iam.securityAdmin", "roles/resourcemanager.projectIamAdmin"}
-)
 _OWNER_ROLE = "roles/owner"
-#: The GCP permission the escalation hinges on (for explainability / the edge's via).
-_ESCALATION_ACTION = "resourcemanager.projects.setIamPolicy"
+#: NEX-402 GCP privesc-method depth: each role-set → the (method, via_action) escalation it enables.
+#: A member holding any role in a set can reach Owner by that technique. ``roles/owner`` is the target,
+#: never a source. Three distinct methods (was one), mirroring AWS's method breadth.
+_ESCALATION_METHODS: tuple[tuple[frozenset[str], str, str], ...] = (
+    (
+        frozenset({"roles/iam.securityAdmin", "roles/resourcemanager.projectIamAdmin"}),
+        "self_grant_admin",
+        "resourcemanager.projects.setIamPolicy",
+    ),
+    (  # can rewrite a custom role's permissions to include admin
+        frozenset({"roles/iam.roleAdmin", "roles/iam.organizationRoleAdmin"}),
+        "role_rewrite",
+        "iam.roles.update",
+    ),
+    (  # can mint a key for a privileged service account and assume it
+        frozenset({"roles/iam.serviceAccountKeyAdmin"}),
+        "credential_mint",
+        "iam.serviceAccountKeys.create",
+    ),
+)
 
 
 def escalation_grants(bindings: tuple[GcpIamBinding, ...]) -> list[tuple[str, str, str, str]]:
     """``(member, owner_member, method, via_action)`` GCP privilege escalation → CAN_ESCALATE_TO.
 
-    A member granted ``roles/iam.securityAdmin`` or ``roles/resourcemanager.projectIamAdmin`` can
-    set the project IAM policy and grant itself ``roles/owner``. The GCP implementation of the SAME
-    edge contract AWS/Azure use (4-tuple, ``method=self_grant_admin``): an edge is emitted ONLY when
-    an Owner target is resolved (the precision crux). Expects **project-level** bindings — escalation
-    is a project-IAM concept, not bucket-scoped. Deduped, order-stable.
+    Detects the members who can reach ``roles/owner`` by any of the modelled techniques (NEX-402:
+    self-grant via setIamPolicy, custom-role rewrite, or SA-key mint). Same 4-tuple edge contract
+    AWS/Azure use; an edge is emitted ONLY when an Owner target is resolved (the precision crux).
+    Expects **project-level** bindings. Deduped per (member, owner, method), order-stable.
     """
     owners = {m for b in bindings if b.role == _OWNER_ROLE for m in b.members}
     if not owners:
         return []
-    sources = {m for b in bindings if b.role in _IAM_POLICY_WRITERS for m in b.members} - owners
     out: list[tuple[str, str, str, str]] = []
-    for src in sorted(sources):
-        for owner in sorted(owners):
-            out.append((src, owner, "self_grant_admin", _ESCALATION_ACTION))
+    seen: set[tuple[str, str, str]] = set()
+    for roles, method, action in _ESCALATION_METHODS:
+        sources = {m for b in bindings if b.role in roles for m in b.members} - owners
+        for src in sorted(sources):
+            for owner in sorted(owners):
+                if (src, owner, method) not in seen:
+                    seen.add((src, owner, method))
+                    out.append((src, owner, method, action))
     return out
 
 
