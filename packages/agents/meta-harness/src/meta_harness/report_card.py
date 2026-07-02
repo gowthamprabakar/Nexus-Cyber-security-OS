@@ -48,7 +48,13 @@ _FIX: dict[str, str] = {
     "resource_based_data": "Scope the resource policy to least privilege and make the bucket private.",
     "fine_grained_data": "Scope the principal's data access to least privilege; make the bucket private.",
     "iac_misconfig_deployed": "Fix the misconfiguration in the IaC template and redeploy.",
+    "kms_key_access": "Scope the KMS key policy + kms:Decrypt grant to least privilege.",
+    "supply_chain_sbom": "Bump the vulnerable dependency to a patched version, then rebuild and redeploy the image.",
+    "network_topology_lateral": "Remove or tighten the VPC peering; restrict cross-VPC security-group ingress.",
+    "container_escape": "Drop the pod's privileged securityContext; scope its service-account/IRSA role to least privilege.",
 }
+#: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
+_GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}
 _DEFAULT_FIX = "Review this exposure and apply least privilege."
 _DEFAULT_SEVERITY = 50
 
@@ -72,8 +78,10 @@ def _generic_path_type(path: GenericPath) -> str:
         return "privilege_escalation"
     if "OWNED_BY" in sig and path.source_marker == "leaked_credential":
         return "leaked_credential"
-    if "CAN_REACH" in sig:
+    if "CAN_REACH" in sig or "PEERED_WITH" in sig:
         return "lateral_movement"
+    if "CONTAINS_PACKAGE" in sig:
+        return "supply_chain_sbom"
     if path.sink_marker == "known_vulnerability":
         return "internet_exposed_vulnerable"
     if path.sink_marker == "ai_model":
@@ -90,6 +98,8 @@ def _generic_title(path_type: str, path: GenericPath) -> str:
         "internet_exposed_vulnerable": "An exposed resource reaches a known vulnerability",
         "exposed_ai_sensitive_data": "An exposed path reaches an AI model",
         "fine_grained_data": "An exposed principal reaches sensitive data",
+        "supply_chain_sbom": "A public workload runs an image with a vulnerable dependency",
+        "container_escape": "A privileged pod escapes to its cloud role and reaches data",
     }
     return titles.get(path_type, f"Novel attack path ({' → '.join(path.edge_signature)})")
 
@@ -129,7 +139,7 @@ async def build_report_card(
             continue  # same risk a named detector already reported
         chain = cand.path.node_labels  # already external-ids
         rows.append(
-            (_SEVERITY.get(pt, _DEFAULT_SEVERITY), pt, _generic_title(pt, cand.path), chain, frozenset(chain))
+            (_GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY), pt, _generic_title(pt, cand.path), chain, frozenset(chain))
         )
 
     # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
