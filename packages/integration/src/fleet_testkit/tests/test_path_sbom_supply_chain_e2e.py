@@ -22,15 +22,29 @@ _IMAGE = "myreg/app:1.0"
 async def test_sbom_dependency_vuln_path_emerges() -> None:
     async with in_memory_semantic_store() as store:
         # public workload runs the image
-        wl = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                       external_id=_WORKLOAD, properties={"is_public": True})
-        img = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                        external_id=_IMAGE, properties={"kind": "container-image"})
-        await store.add_relationship(tenant_id=_T, src_entity_id=wl, dst_entity_id=img,
-                                     relationship_type=EdgeType.RUNS_IMAGE.value, properties={})
+        wl = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=_WORKLOAD,
+            properties={"is_public": True},
+        )
+        img = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=_IMAGE,
+            properties={"kind": "container-image"},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=wl,
+            dst_entity_id=img,
+            relationship_type=EdgeType.RUNS_IMAGE.value,
+            properties={},
+        )
         # the image's SBOM: log4j is the vulnerable dependency (real writer)
         await VulnKgWriter(store, _T).record_sbom_packages(
-            _IMAGE, [("log4j-core", "CVE-2021-44228", "CRITICAL")])
+            _IMAGE, [("log4j-core", "CVE-2021-44228", "CRITICAL")]
+        )
 
         cands = await find_candidate_paths(store, _T)
         sbom = [c for c in cands if "CONTAINS_PACKAGE" in c.path.edge_signature]

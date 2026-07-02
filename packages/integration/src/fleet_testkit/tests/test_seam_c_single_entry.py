@@ -27,17 +27,34 @@ async def test_report_card_is_the_complete_entry_find_all_is_not() -> None:
             [("u:attacker", "r:admin", "self_grant_admin", "iam:CreatePolicyVersion")]
         )
         await ident.record_access([("r:admin", "arn:aws:s3:::crown")])
-        bucket = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                           external_id="arn:aws:s3:::crown", properties={})
-        data = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.DATA_CLASSIFICATION.value,
-                                         external_id="arn:aws:s3:::crown/pii", properties={"data_type": "ssn"})
-        await store.add_relationship(tenant_id=_T, src_entity_id=bucket, dst_entity_id=data,
-                                     relationship_type=EdgeType.EXPOSES_DATA.value, properties={})
+        bucket = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:aws:s3:::crown",
+            properties={},
+        )
+        data = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+            external_id="arn:aws:s3:::crown/pii",
+            properties={"data_type": "ssn"},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=bucket,
+            dst_entity_id=data,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
+        )
 
         # find_all() (named ranker) does NOT surface the privesc moat path — it runs on old edges.
         named_types = {ap.path_type for ap in await AttackPathRanker(KgQuery(store, _T)).find_all()}
-        assert "privilege_escalation" not in named_types, "find_all is named-only (incomplete on its own)"
+        assert "privilege_escalation" not in named_types, (
+            "find_all is named-only (incomplete on its own)"
+        )
 
         # build_report_card (the single entry) DOES surface it.
         card_types = {c.path_type for c in await build_report_card(store, _T)}
-        assert "privilege_escalation" in card_types, "the report card must be the complete all-paths entry"
+        assert "privilege_escalation" in card_types, (
+            "the report card must be the complete all-paths entry"
+        )

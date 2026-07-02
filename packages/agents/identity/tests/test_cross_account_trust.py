@@ -73,7 +73,11 @@ def test_trap_externalid_conditioned_trust_is_not_free_escalation():
     # NEX-408: a cross-account trust gated by sts:ExternalId is the confused-deputy mitigation —
     # not freely assumable, so it must NOT be flagged as escalation.
     role = IamRole(
-        arn=_ROLE, name="partner-access", role_id="AROA9", create_date=_DATE, last_used_at=None,
+        arn=_ROLE,
+        name="partner-access",
+        role_id="AROA9",
+        create_date=_DATE,
+        last_used_at=None,
         assume_role_policy_document={
             "Statement": [
                 {
@@ -91,11 +95,18 @@ def test_trap_externalid_conditioned_trust_is_not_free_escalation():
 def test_unconditioned_foreign_trust_still_flagged_alongside_guarded():
     # Two statements: one ExternalId-guarded (skip), one open (flag). Only the open one emits.
     role = IamRole(
-        arn=_ROLE, name="p", role_id="AROA10", create_date=_DATE, last_used_at=None,
+        arn=_ROLE,
+        name="p",
+        role_id="AROA10",
+        create_date=_DATE,
+        last_used_at=None,
         assume_role_policy_document={
             "Statement": [
-                {"Effect": "Allow", "Principal": {"AWS": f"arn:aws:iam::{_FOREIGN}:root"},
-                 "Condition": {"StringEquals": {"sts:ExternalId": "x"}}},
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": f"arn:aws:iam::{_FOREIGN}:root"},
+                    "Condition": {"StringEquals": {"sts:ExternalId": "x"}},
+                },
                 {"Effect": "Allow", "Principal": {"AWS": "arn:aws:iam::888888888888:root"}},
             ]
         },

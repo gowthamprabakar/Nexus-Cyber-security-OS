@@ -26,16 +26,33 @@ async def test_cross_vpc_peering_lateral_path_emerges() -> None:
         frozenset({frozenset({"vpc-a", "vpc-b"})}),
     )
     async with in_memory_semantic_store() as store:
-        await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                  external_id=_PUB, properties={"is_public": True})
+        await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=_PUB,
+            properties={"is_public": True},
+        )
         await NetKgWriter(store, _T).record_peering_reachability(grants)
         # the peered private host is vulnerable
-        prv = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value,
-                                        external_id=_PRV, properties={})
-        cve = await store.upsert_entity(tenant_id=_T, entity_type=NodeCategory.CVE_FINDING.value,
-                                        external_id="CVE-2024-VPC", properties={"severity": "CRITICAL"})
-        await store.add_relationship(tenant_id=_T, src_entity_id=prv, dst_entity_id=cve,
-                                     relationship_type=EdgeType.VULNERABLE_TO.value, properties={})
+        prv = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id=_PRV,
+            properties={},
+        )
+        cve = await store.upsert_entity(
+            tenant_id=_T,
+            entity_type=NodeCategory.CVE_FINDING.value,
+            external_id="CVE-2024-VPC",
+            properties={"severity": "CRITICAL"},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=prv,
+            dst_entity_id=cve,
+            relationship_type=EdgeType.VULNERABLE_TO.value,
+            properties={},
+        )
 
         cands = await find_candidate_paths(store, _T)
         peered = [c for c in cands if "PEERED_WITH" in c.path.edge_signature]

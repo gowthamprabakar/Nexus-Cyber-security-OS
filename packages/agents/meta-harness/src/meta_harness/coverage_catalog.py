@@ -1,6 +1,6 @@
 """Attack-path coverage catalog (NEX-003a) — the DENOMINATOR for coverage %.
 
-Coverage was always an estimate ("~15–20%") with no fixed denominator, so the number was arbitrary.
+Coverage was always an estimate ("~15-20%") with no fixed denominator, so the number was arbitrary.
 This is the finite target set of attack-path families a cloud CNAPP should detect, derived from MITRE
 ATT&CK for Cloud tactics + the Wiz-style toxic-combination paths. Coverage = (families the fixture bank
 actually PRODUCES) / (families in this catalog). Each family names the ``path_type`` it surfaces as on
@@ -14,10 +14,10 @@ fixed up front, never trimmed to flatter the %.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     BUILT = "built"  # a detector produces this family's path today
     PLANNED = "planned"  # committed in the roadmap, not yet producing
 
@@ -41,8 +41,15 @@ CATALOG: tuple[Family, ...] = (
     Family("resource_based_data", "Collection", "resource_based_data", Status.BUILT),
     Family("external_trust", "Initial Access", "external_trust", Status.BUILT),
     # --- Vulnerability / exploit ---
-    Family("internet_exposed_vulnerable", "Initial Access", "internet_exposed_vulnerable", Status.BUILT),
-    Family("internet_exposed_host_vulnerable", "Initial Access", "internet_exposed_host_vulnerable", Status.BUILT),
+    Family(
+        "internet_exposed_vulnerable", "Initial Access", "internet_exposed_vulnerable", Status.BUILT
+    ),
+    Family(
+        "internet_exposed_host_vulnerable",
+        "Initial Access",
+        "internet_exposed_host_vulnerable",
+        Status.BUILT,
+    ),
     Family("privileged_vulnerable", "Privilege Escalation", "privileged_vulnerable", Status.BUILT),
     Family("crown_jewel", "Collection", "crown_jewel", Status.BUILT),
     Family("runtime_exploit_vulnerable", "Execution", "runtime_exploit_vulnerable", Status.BUILT),
@@ -51,13 +58,20 @@ CATALOG: tuple[Family, ...] = (
     Family("stored_secret", "Credential Access", "stored_secret", Status.BUILT),
     # --- Privilege escalation ---
     Family("privilege_escalation", "Privilege Escalation", "privilege_escalation", Status.BUILT),
-    Family("rbac_privilege_escalation", "Privilege Escalation", "rbac_privilege_escalation", Status.BUILT),
+    Family(
+        "rbac_privilege_escalation",
+        "Privilege Escalation",
+        "rbac_privilege_escalation",
+        Status.BUILT,
+    ),
     Family("cross_account_trust", "Privilege Escalation", "cross_account_trust", Status.BUILT),
     # --- Lateral movement ---
     Family("network_lateral", "Lateral Movement", "lateral_movement", Status.BUILT),
     Family("pod_lateral", "Lateral Movement", "pod_lateral", Status.BUILT),
     Family("container_escape_cloud", "Privilege Escalation", "container_escape", Status.BUILT),
-    Family("network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT),
+    Family(
+        "network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT
+    ),
     # --- Impact domains ---
     Family("exposed_kms_key", "Impact", "exposed_kms_key", Status.BUILT),
     Family("kms_key_access", "Credential Access", "kms_key_access", Status.BUILT),

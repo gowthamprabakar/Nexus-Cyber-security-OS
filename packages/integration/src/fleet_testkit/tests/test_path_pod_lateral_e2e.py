@@ -33,21 +33,37 @@ async def test_pod_lateral_to_vulnerable_neighbour_emerges() -> None:
         await k8s.record_pod_reachability(pod_reach_grants(pods))
         # the victim runs a vulnerable image
         victim = await store.upsert_entity(
-            tenant_id=_T, entity_type=NodeCategory.K8S_OBJECT.value, external_id=_VICTIM,
+            tenant_id=_T,
+            entity_type=NodeCategory.K8S_OBJECT.value,
+            external_id=_VICTIM,
             properties={"kind": "pod"},
         )
         img = await store.upsert_entity(
-            tenant_id=_T, entity_type=NodeCategory.CLOUD_RESOURCE.value, external_id="victim:1",
+            tenant_id=_T,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="victim:1",
             properties={"kind": "container-image"},
         )
         cve = await store.upsert_entity(
-            tenant_id=_T, entity_type=NodeCategory.CVE_FINDING.value, external_id="CVE-2024-77",
+            tenant_id=_T,
+            entity_type=NodeCategory.CVE_FINDING.value,
+            external_id="CVE-2024-77",
             properties={"severity": "CRITICAL"},
         )
-        await store.add_relationship(tenant_id=_T, src_entity_id=victim, dst_entity_id=img,
-                                     relationship_type=EdgeType.RUNS_IMAGE.value, properties={})
-        await store.add_relationship(tenant_id=_T, src_entity_id=img, dst_entity_id=cve,
-                                     relationship_type=EdgeType.VULNERABLE_TO.value, properties={})
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=victim,
+            dst_entity_id=img,
+            relationship_type=EdgeType.RUNS_IMAGE.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=_T,
+            src_entity_id=img,
+            dst_entity_id=cve,
+            relationship_type=EdgeType.VULNERABLE_TO.value,
+            properties={},
+        )
 
         cands = await find_candidate_paths(store, _T)
         lateral = [c for c in cands if "POD_CAN_REACH" in c.path.edge_signature]

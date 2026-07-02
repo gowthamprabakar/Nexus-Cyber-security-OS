@@ -19,7 +19,12 @@ def test_method_and_via():
 
 
 def test_trap_unpeered_vpcs():
-    assert peering_reach_grants((VpcInstance("i-a", "vpc-a"), VpcInstance("i-b", "vpc-b")), frozenset()) == []
+    assert (
+        peering_reach_grants(
+            (VpcInstance("i-a", "vpc-a"), VpcInstance("i-b", "vpc-b")), frozenset()
+        )
+        == []
+    )
 
 
 def test_trap_same_vpc_is_not_peering():

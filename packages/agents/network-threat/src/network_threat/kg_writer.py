@@ -69,7 +69,9 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 src or "", dst or "", EdgeType.CAN_REACH, {"method": method, "via": via}
             )
 
-    async def record_peering_reachability(self, grants: Sequence[tuple[str, str, str, str]]) -> None:
+    async def record_peering_reachability(
+        self, grants: Sequence[tuple[str, str, str, str]]
+    ) -> None:
         """Write CLOUD_RESOURCE --PEERED_WITH--> CLOUD_RESOURCE edges (W4/NEX-302 cross-VPC lateral).
 
         Each grant is ``(src, dst, method, via)``: ``src`` reaches ``dst`` across a VPC peering

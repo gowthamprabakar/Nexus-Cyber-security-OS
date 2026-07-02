@@ -39,4 +39,4 @@ async def test_three_agents_converge_on_one_secret_node() -> None:
             )
         ]
         assert secrets.count(_KEY) == 1, "appsec + identity must share ONE SECRET node"
-        assert len({s for s in secrets}) == 1, "no divergent SECRET nodes for the same credential"
+        assert len(set(secrets)) == 1, "no divergent SECRET nodes for the same credential"

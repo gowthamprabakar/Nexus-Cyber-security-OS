@@ -30,9 +30,17 @@ def test_credential_mint_method():
 
 
 def test_multiple_roles_yield_multiple_methods():
-    m = _methods([_b("roles/iam.securityAdmin", _ATTACKER), _b("roles/iam.roleAdmin", _ATTACKER), _b("roles/owner", _OWNER)])
+    m = _methods(
+        [
+            _b("roles/iam.securityAdmin", _ATTACKER),
+            _b("roles/iam.roleAdmin", _ATTACKER),
+            _b("roles/owner", _OWNER),
+        ]
+    )
     assert {"self_grant_admin", "role_rewrite"} <= {method for method, _v in m}
 
 
 def test_trap_no_owner_still_no_edge():
-    assert escalation_grants((_b("roles/iam.roleAdmin", _ATTACKER), _b("roles/editor", _OWNER))) == []
+    assert (
+        escalation_grants((_b("roles/iam.roleAdmin", _ATTACKER), _b("roles/editor", _OWNER))) == []
+    )

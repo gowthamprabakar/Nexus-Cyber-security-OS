@@ -13,9 +13,7 @@ def test_client_id_and_secret_together_is_a_leak():
 
 
 def test_fingerprint_reveals_nothing():
-    fp = leaked_azure_sp_secrets(
-        [("client_id", _APPID), ("client_secret", "topsecret")]
-    )[0]
+    fp = leaked_azure_sp_secrets([("client_id", _APPID), ("client_secret", "topsecret")])[0]
     assert _APPID not in fp and "topsecret" not in fp
 
 
@@ -28,11 +26,17 @@ def test_trap_client_id_alone_is_not_a_leak():
 
 
 def test_trap_secret_without_guid_client_id():
-    assert leaked_azure_sp_secrets([("AZURE_CLIENT_SECRET", "x"), ("CLIENT_ID", "not-a-guid")]) == []
+    assert (
+        leaked_azure_sp_secrets([("AZURE_CLIENT_SECRET", "x"), ("CLIENT_ID", "not-a-guid")]) == []
+    )
 
 
 def test_owner_and_appsec_fingerprints_converge():
-    sp = AzureAdServicePrincipal(id="obj-1", app_id=_APPID, display_name="ci", sp_type="Application", account_enabled=True)
+    sp = AzureAdServicePrincipal(
+        id="obj-1", app_id=_APPID, display_name="ci", sp_type="Application", account_enabled=True
+    )
     owner_fp = sp_credential_ownership((sp,))[0][1]
-    leak_fp = leaked_azure_sp_secrets([("AZURE_CLIENT_ID", _APPID), ("AZURE_CLIENT_SECRET", "y")])[0]
+    leak_fp = leaked_azure_sp_secrets([("AZURE_CLIENT_ID", _APPID), ("AZURE_CLIENT_SECRET", "y")])[
+        0
+    ]
     assert owner_fp == leak_fp, "leak and owner must hash to the SAME SECRET node key"

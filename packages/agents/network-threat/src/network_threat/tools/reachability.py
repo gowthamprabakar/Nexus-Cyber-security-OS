@@ -116,7 +116,14 @@ def peering_reach_grants(
             key = (src.resource_id, dst.resource_id)
             if key not in seen:
                 seen.add(key)
-                out.append((src.resource_id, dst.resource_id, "vpc_peering", f"{src.vpc_id}<->{dst.vpc_id}"))
+                out.append(
+                    (
+                        src.resource_id,
+                        dst.resource_id,
+                        "vpc_peering",
+                        f"{src.vpc_id}<->{dst.vpc_id}",
+                    )
+                )
     return out
 
 
