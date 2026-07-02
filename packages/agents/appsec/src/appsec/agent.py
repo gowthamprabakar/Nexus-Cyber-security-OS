@@ -27,6 +27,7 @@ from appsec.normalizers.checkov_iac import checkov_to_findings
 from appsec.normalizers.gitleaks_secrets import (
     CODE_SECRETS_OUTPUT,
     CodeSecretHit,
+    extract_leaked_key_ids,
     gitleaks_to_secret_hits,
     render_code_secrets_json,
 )
@@ -161,6 +162,7 @@ async def run(
         # Scan each repo checked out locally. Repos without a local_path are
         # skipped (live SCM checkout = a later B-1 PR).
         code_secret_hits: list[CodeSecretHit] = []
+        leaked_by_repo: dict[str, list[str]] = {}  # NEX-004b: repo_slug → leaked AWS key ids
         for repo in inventory.repositories:
             if repo.local_path is None:
                 continue
@@ -172,6 +174,8 @@ async def run(
             # handoff (ADR-015: AppSec scans, DSPM emits OCSF 2003).
             leaks = await ctx.call_tool(_GITLEAKS_TOOL, repo_path=repo.local_path)
             code_secret_hits.extend(gitleaks_to_secret_hits(leaks))
+            for _file, key_id in extract_leaked_key_ids(leaks):
+                leaked_by_repo.setdefault(repo.slug, []).append(key_id)
             # B-1 PR8 (Q-AppSec-5): Semgrep SAST → OCSF 2003 (SAST discriminator).
             sast = await ctx.call_tool(_SEMGREP_TOOL, repo_path=repo.local_path)
             for finding in semgrep_to_findings(sast.payload, repo_slug=repo.slug):
@@ -185,6 +189,10 @@ async def run(
         if semantic_store is not None:
             kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
             await kg.record(inventory, report.findings)
+            # NEX-004b wire-as-we-go: the leaked-credential family was test-only — write the leaked
+            # SECRET{leaked} nodes in run() so a real scan builds the leaked-cred blast-radius edge.
+            for repo_slug, key_ids in leaked_by_repo.items():
+                await kg.record_leaked_credentials(repo_slug, key_ids)
 
         ocsf_findings = [
             finding_to_ocsf(
