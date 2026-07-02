@@ -29,8 +29,8 @@ from meta_harness.path_taxonomy import (
 if TYPE_CHECKING:
     from charter.memory.semantic import SemanticStore
 
-#: The substrate's default traversal depth; the discovery run raises this (a measured step).
-DEFAULT_MAX_DEPTH = 4  # real attack chains run 4+ hops (e.g. workload → stored key → owner → data)
+#: Generic-walker traversal depth. v0.5 bumped 4->5 (measured); see v0-5-depth-benchmark-result.md.
+DEFAULT_MAX_DEPTH = 5  # real attack chains run 5+ hops; deeper caps + real-scale cost -> v0.6
 
 
 @dataclass(frozen=True, slots=True)
