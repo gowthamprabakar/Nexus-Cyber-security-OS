@@ -22,7 +22,10 @@ subclasses the shared :class:`KnowledgeGraphWriterBase` (ADR-019) — opt-in / i
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
@@ -77,6 +80,19 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         for arn in affected_arns:
             asset_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, arn, {})
             await self.add_edge(finding_node or "", asset_node or "", EdgeType.AFFECTS)
+
+    async def record_exposed_resources(self, resource_keys: Iterable[str]) -> None:
+        """Mark publicly-exposed Azure/GCP resources as attack-path SOURCES (NEX-104).
+
+        Before this, multi-cloud-posture wrote only ``AFFECTS`` (findings) — so Azure/GCP public
+        resources never carried ``is_public`` and could never be a ``public_resource`` source. A
+        finding from a public-exposure rule feeds its resource here; the property merges onto the
+        SAME canonical spine node other agents key, so an exposed Azure/GCP resource → data path now
+        forms (closing the multi-cloud parity gap at the graph level). ``resource_keys`` are canonical
+        (``azure_resource_id`` / ``gcs_uri`` / ``azure_blob_uri``), computed by the agent driver.
+        """
+        for key in resource_keys:
+            await self.upsert_node(NodeCategory.CLOUD_RESOURCE, key, {"is_public": True})
 
 
 __all__ = ["KnowledgeGraphWriter"]
