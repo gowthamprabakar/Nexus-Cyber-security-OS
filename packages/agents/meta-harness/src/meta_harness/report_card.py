@@ -87,6 +87,7 @@ class AttackPathCard:
     chain: tuple[str, ...]
     fix: str
     exploitability: int = 0  # NEX-403: severity weighted by KEV + internet-facing (the rank key)
+    blast_radius: int = 1  # NEX-404: distinct sensitive-data stores this path's principal can reach
 
 
 def _generic_path_type(path: GenericPath) -> str:
@@ -140,15 +141,26 @@ async def build_report_card(
             out.append(ent.external_id if ent is not None else eid)
         return tuple(out)
 
-    # (severity, path_type, title, chain-labels, external-id set for subsumption, kev flag)
-    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool]] = []
+    # NEX-404: blast radius — how many distinct sensitive-data stores each principal can reach.
+    principal_reach: dict[str, set[str]] = {}
+    for fg in await kq.find_fine_grained_data_exposure():
+        principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
+
+    def _blast(entity_ids: tuple[str, ...]) -> int:
+        reached: set[str] = set()
+        for eid in entity_ids:
+            reached |= principal_reach.get(eid, set())
+        return max(len(reached), 1)  # a path reaches at least its own data
+
+    # (severity, path_type, title, chain-labels, external-id set for subsumption, kev flag, blast)
+    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int]] = []
 
     # The named ranker is authoritative for the path types it covers. Index by (path_type →
     # entity_ids), so a generic path of the SAME type overlapping it is the same risk → suppressed.
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in await AttackPathRanker(kq).find_all():
         chain = await _labels(ap.entities)
-        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain), False))
+        rows.append((ap.severity, ap.path_type, ap.title, chain, frozenset(chain), False, _blast(ap.entities)))
         named_entities_by_type.setdefault(ap.path_type, set()).update(ap.entities)
 
     for cand in await find_candidate_paths(store, tenant):
@@ -157,7 +169,7 @@ async def build_report_card(
             continue  # same risk a named detector already reported
         chain = cand.path.node_labels  # already external-ids
         sev = _GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY)
-        rows.append((sev, pt, _generic_title(pt, cand.path), chain, frozenset(chain), cand.path.sink_kev))
+        rows.append((sev, pt, _generic_title(pt, cand.path), chain, frozenset(chain), cand.path.sink_kev, _blast(cand.path.node_ids)))
 
     # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
     # higher-or-equal-severity, richer path (privesc / leaked-cred / crown-jewel) fully CONTAINS that
@@ -178,9 +190,9 @@ async def build_report_card(
     return [
         AttackPathCard(
             rank=i + 1, severity=sev, path_type=pt, title=title, chain=chain, fix=_FIX.get(pt, _DEFAULT_FIX),
-            exploitability=_exploitability(sev, pt, kev=kev),
+            exploitability=_exploitability(sev, pt, kev=kev), blast_radius=blast,
         )
-        for i, (sev, pt, title, chain, _es, kev) in enumerate(kept[:top_n])
+        for i, (sev, pt, title, chain, _es, kev, blast) in enumerate(kept[:top_n])
     ]
 
 
@@ -195,10 +207,11 @@ def render_report_card(cards: list[AttackPathCard], *, tenant: str) -> str:
         "",
     ]
     for c in cards:
+        blast = f"{c.blast_radius} data store{'s' if c.blast_radius != 1 else ''} at risk"
         lines += [
             f"## {c.rank}. [exploitability {c.exploitability} · severity {c.severity}] {c.title}",
-            f"- **Type:** `{c.path_type}`",
-            f"- **Involves:** {', '.join(c.chain)}",
+            f"- **Type:** `{c.path_type}`  ·  **Blast radius:** {blast}",
+            f"- **Evidence:** {' → '.join(c.chain)}",  # NEX-405: the concrete path walk
             f"- **Fix:** {c.fix}",
             "",
         ]
