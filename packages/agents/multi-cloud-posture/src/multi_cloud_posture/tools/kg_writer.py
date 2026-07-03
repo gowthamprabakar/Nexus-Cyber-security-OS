@@ -22,6 +22,7 @@ subclasses the shared :class:`KnowledgeGraphWriterBase` (ADR-019) — opt-in / i
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -29,6 +30,21 @@ if TYPE_CHECKING:
 
 from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.kg_writer_base import KnowledgeGraphWriterBase
+
+
+@dataclass(frozen=True, slots=True)
+class KmsKeyRecord:
+    """Portable KMS-key descriptor for Azure Key Vault and GCP Cloud KMS spine nodes (B-1).
+
+    ``key_id`` is the canonical resource identifier (``azure_key_vault_key_uri`` or
+    ``gcp_kms_key_name`` from ``charter.canonical``). ``is_public`` reflects an internet-open
+    key policy (path #21). ``data_type`` optionally names the data the key protects, causing an
+    ``EXPOSES_DATA`` edge to a ``DATA_CLASSIFICATION`` node (path NEX-202a).
+    """
+
+    key_id: str
+    is_public: bool = False
+    data_type: str = field(default="")
 
 
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
@@ -81,6 +97,34 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             asset_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, arn, {})
             await self.add_edge(finding_node or "", asset_node or "", EdgeType.AFFECTS)
 
+    async def record_kms_keys(self, keys: Iterable[KmsKeyRecord]) -> None:
+        """Write Azure/GCP KMS keys as ``CLOUD_RESOURCE{kind=kms-key}`` spine nodes (B-1).
+
+        Mirrors the cloud-posture (F.3) ``record_kms_keys`` shape exactly so the cloud-agnostic
+        ``find_kms_key_access`` and ``find_exposed_kms_key`` detectors fire without any detector
+        change. If ``key.data_type`` is set, also writes a ``DATA_CLASSIFICATION`` node keyed
+        ``{key_id}:data`` and an ``EXPOSES_DATA`` edge (NEX-202a shape; enables
+        ``find_kms_key_access`` for the cross-cloud case).
+        """
+        for key in keys:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                key.key_id,
+                {"kind": "kms-key", "is_public": key.is_public},
+            )
+            if key.data_type:
+                data_node = await self.upsert_node(
+                    NodeCategory.DATA_CLASSIFICATION,
+                    f"{key.key_id}:data",
+                    {"data_type": key.data_type},
+                )
+                key_node = await self.upsert_node(
+                    NodeCategory.CLOUD_RESOURCE,
+                    key.key_id,
+                    {"kind": "kms-key", "is_public": key.is_public},
+                )
+                await self.add_edge(key_node or "", data_node or "", EdgeType.EXPOSES_DATA)
+
     async def record_exposed_resources(self, resource_keys: Iterable[str]) -> None:
         """Mark publicly-exposed Azure/GCP resources as attack-path SOURCES (NEX-104).
 
@@ -95,4 +139,4 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             await self.upsert_node(NodeCategory.CLOUD_RESOURCE, key, {"is_public": True})
 
 
-__all__ = ["KnowledgeGraphWriter"]
+__all__ = ["KmsKeyRecord", "KnowledgeGraphWriter"]
