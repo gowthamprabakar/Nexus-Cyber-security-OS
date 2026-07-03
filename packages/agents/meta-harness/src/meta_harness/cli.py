@@ -555,5 +555,59 @@ def attack_paths_cmd(customer_id: str, dsn: str, limit: int, as_json: bool) -> N
     _asyncio.run(_run())
 
 
+# ---------------------- scan (operating-path entry point) ----------------
+
+
+@main.command("scan")
+@click.option("--customer-id", required=True, help="Tenant identifier")
+@click.option(
+    "--dsn",
+    envvar="NEXUS_MEMORY_DSN",
+    required=True,
+    help="Postgres/SQLite DSN for the fleet graph (or set NEXUS_MEMORY_DSN)",
+)
+@click.option("--ds-inventory-feed", type=click.Path(), default=None)
+@click.option("--ds-objects-feed", type=click.Path(), default=None)
+@click.option("--limit", default=10, show_default=True, help="Max paths to show")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a text report")
+def scan_cmd(
+    customer_id: str,
+    dsn: str,
+    ds_inventory_feed: str | None,
+    ds_objects_feed: str | None,
+    limit: int,
+    as_json: bool,
+) -> None:
+    """Run the fleet's spine agents into the graph, then rank the top attack paths."""
+    import asyncio as _asyncio
+    from pathlib import Path as _Path
+
+    from charter.memory.provisioning import build_session_factory
+    from nexus_runtime.scan_pipeline import ScanSources, scan_run
+
+    from meta_harness.attack_path_report import render_candidates, render_report
+
+    async def _run() -> None:
+        factory = await build_session_factory(dsn)
+        sources = ScanSources(
+            ds_inventory_feed=_Path(ds_inventory_feed) if ds_inventory_feed else None,
+            ds_objects_feed=_Path(ds_objects_feed) if ds_objects_feed else None,
+        )
+        res = await scan_run(
+            session_factory=factory,
+            tenant=customer_id,
+            sources=sources,
+            workspace_root=_Path(".nexus-scan"),
+        )
+        for f in res.feeders:
+            click.echo(f"feeder {f.agent}: {'ok' if f.ok else 'FAILED ' + (f.error or '')}")
+        click.echo()
+        click.echo(render_report(res.confirmed, tenant_id=customer_id, limit=limit))  # type: ignore[arg-type]
+        click.echo()
+        click.echo(render_candidates(res.candidates, tenant_id=customer_id))  # type: ignore[arg-type]
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     main()
