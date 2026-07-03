@@ -192,6 +192,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "sensitive_data",
             ("USES_SERVICE_ACCOUNT", "IRSA_MAPPING", "HAS_ACCESS_TO", "EXPOSES_DATA"),
         ),  # k8s_escape_to_cloud_data (C-2)
+        (
+            "identity_principal",
+            "sensitive_data",
+            ("CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # escalation_method_to_data (C-3)
     }
 )
 

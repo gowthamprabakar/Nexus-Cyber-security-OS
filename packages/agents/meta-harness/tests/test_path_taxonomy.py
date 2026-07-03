@@ -92,6 +92,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["USES_SERVICE_ACCOUNT", "IRSA_MAPPING", "HAS_ACCESS_TO", "EXPOSES_DATA"],
     ),
+    "escalation_method_to_data": (
+        (NC.IDENTITY, {}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.

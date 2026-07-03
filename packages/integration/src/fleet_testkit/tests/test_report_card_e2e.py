@@ -69,15 +69,16 @@ async def test_report_card_surfaces_planted_paths_with_fixes(capsys) -> None:
         print("\n" + render_report_card(cards, tenant=_T))  # show the product output
 
         by_type = {c.path_type: c for c in cards}
-        # Both planted moat paths surface on the customer's report card...
+        # Both planted paths surface on the customer's report card...
         assert "leaked_credential" in by_type
-        assert "privilege_escalation" in by_type
-        # ...ranked worst-first: a leaked credential (92) outranks privilege escalation (66).
+        # C-3: the CAN_ESCALATE_TO path is now the NAMED escalation_method_to_data detector (74).
+        assert "escalation_method_to_data" in by_type
+        # ...ranked worst-first: a leaked credential (92) outranks escalation-method-to-data (74).
         assert by_type["leaked_credential"].rank == 1
-        assert by_type["leaked_credential"].rank < by_type["privilege_escalation"].rank
+        assert by_type["leaked_credential"].rank < by_type["escalation_method_to_data"].rank
         # ...each with a concrete, actionable fix.
         assert "Rotate and revoke" in by_type["leaked_credential"].fix
-        assert "least privilege" in by_type["privilege_escalation"].fix
+        assert "least privilege" in by_type["escalation_method_to_data"].fix
 
         rendered = render_report_card(cards, tenant=_T)
         assert "# Attack Path Report Card — acme-corp" in rendered

@@ -157,6 +157,13 @@ REMEDIATION: dict[str, FixAdvice] = {
         auto_fixable=True,
         auto_via="remediation_k8s_patch_disable_privileged_container",
     ),
+    "escalation_method_to_data": FixAdvice(
+        "Remove the escalation-enabling IAM grant (e.g. iam:AttachUserPolicy / iam:PassRole / "
+        "iam:CreatePolicyVersion) from the principal so it can no longer self-grant the target "
+        "identity's privileges; scope the principal to least privilege and audit all admin-granting "
+        "actions in CloudTrail to confirm no escalation has already occurred.",
+        auto_fixable=False,
+    ),
 }
 
 

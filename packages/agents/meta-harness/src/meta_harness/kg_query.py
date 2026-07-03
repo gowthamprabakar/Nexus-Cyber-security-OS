@@ -339,6 +339,27 @@ class PrivilegeEscalationToData:
 
 
 @dataclass(frozen=True, slots=True)
+class EscalationMethodToData:
+    """A principal that grants itself another identity's privileges via a privesc METHOD, then
+    reaches sensitive data (cross-domain: identity + data-security, path C-3).
+
+    Walk: ``IDENTITY --CAN_ESCALATE_TO--> IDENTITY(target) --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    Distinct from :class:`PrivilegeEscalationToData` (which walks ``ASSUMES`` — a role the
+    principal is *allowed* to assume); this walks ``CAN_ESCALATE_TO`` — a *method* (e.g.
+    ``iam:AttachUserPolicy`` / ``PassRole`` / ``CreatePolicyVersion``) by which the principal
+    can grant itself the target's privileges. ``method`` is the privesc technique name
+    captured from the edge's ``method`` / ``via_action`` property. Read-only."""
+
+    principal_id: str
+    target_id: str
+    method: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class IacMisconfigDeployed:
     """A live cloud resource deployed from infrastructure-as-code that has a misconfiguration
     (cross-domain: cloud-posture/data-security + appsec). The resource DEPLOYED_VIA an IAC_ARTIFACT
@@ -1119,6 +1140,55 @@ class KgQuery:
                         )
         return hits
 
+    async def find_escalation_method_to_data(self) -> list[EscalationMethodToData]:
+        """Find a principal that uses a privesc METHOD to grant itself another identity's privileges
+        and then reach sensitive data (path C-3).
+
+        Self-seeded: enumerates IDENTITY nodes, follows ``CAN_ESCALATE_TO`` to a target IDENTITY
+        (capturing the edge's ``method``/``via_action`` property — the privesc technique name),
+        then the TARGET's ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data. Distinct from
+        :meth:`find_privilege_escalation_to_data` (which walks ``ASSUMES`` — allowed role
+        assumption); this surfaces the ~20 AWS/cloud privesc methods (PassRole,
+        CreatePolicyVersion, self_grant_admin, …) written as ``CAN_ESCALATE_TO`` edges by the
+        identity agent. Read-only."""
+        hits: list[EscalationMethodToData] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            for escalate in await self._edges_from(
+                principal.entity_id, (EdgeType.CAN_ESCALATE_TO.value,)
+            ):
+                target_id = escalate.dst_entity_id
+                if target_id == principal.entity_id:
+                    continue
+                # Capture the privesc method from the edge properties. Identity writes both
+                # ``method`` (the technique name) and ``via_action`` (the IAM action); prefer
+                # ``method`` for the human-readable label, fall back to ``via_action``.
+                method = str(
+                    escalate.properties.get("method") or escalate.properties.get("via_action") or ""
+                )
+                for access in await self._edges_from(target_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            EscalationMethodToData(
+                                principal_id=principal.entity_id,
+                                target_id=target_id,
+                                method=method,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
+        return hits
+
     async def find_resource_from_misconfigured_iac(self) -> list[IacMisconfigDeployed]:
         """Find a live cloud resource deployed from infrastructure-as-code with a misconfiguration.
 
@@ -1326,6 +1396,7 @@ __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
     "CrownJewelExposure",
+    "EscalationMethodToData",
     "ExposedAiWithSensitiveData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",

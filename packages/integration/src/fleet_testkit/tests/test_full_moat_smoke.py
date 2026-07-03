@@ -215,7 +215,6 @@ async def test_full_moat_report_card() -> None:
         cands = await find_candidate_paths(store, _T)
         sigs = {e for c in cands for e in c.path.edge_signature}
         for edge in (
-            "CAN_ESCALATE_TO",
             "CAN_REACH",
             "OWNED_BY",
             "POD_CAN_REACH",
@@ -231,6 +230,10 @@ async def test_full_moat_report_card() -> None:
         # (C-2) — listed in NAMED_SHAPES and filtered from the generic engine.
         escape_hits = await kq.find_k8s_escape_to_cloud_data()
         assert escape_hits, "k8s-escape-to-cloud-data named detector must surface a path"
+        # CAN_ESCALATE_TO is now the named escalation_method_to_data detector (C-3) — listed in
+        # NAMED_SHAPES and filtered from the generic engine.
+        escalation_hits = await kq.find_escalation_method_to_data()
+        assert escalation_hits, "escalation-method-to-data named detector must surface a path"
 
         # the report card ranks them all, each with a fix, worst-first, readable labels
         cards = await build_report_card(store, _T, top_n=25)

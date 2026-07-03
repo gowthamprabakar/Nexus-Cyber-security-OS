@@ -59,6 +59,12 @@ CATALOG: tuple[Family, ...] = (
     # --- Privilege escalation ---
     Family("privilege_escalation", "Privilege Escalation", "privilege_escalation", Status.BUILT),
     Family(
+        "escalation_method_to_data",
+        "Privilege Escalation",
+        "escalation_method_to_data",
+        Status.BUILT,
+    ),
+    Family(
         "rbac_privilege_escalation",
         "Privilege Escalation",
         "rbac_privilege_escalation",

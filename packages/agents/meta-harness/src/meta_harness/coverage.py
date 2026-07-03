@@ -27,7 +27,9 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     "leaked_credential": "OWNED_BY",
     # stored_secret is now a NAMED detector (stored_secret_to_data) — detected by path_type,
     # not an edge signature (its shape is in NAMED_SHAPES and is filtered from generic paths).
-    "privilege_escalation": "CAN_ESCALATE_TO",
+    # privilege_escalation is now the NAMED detector escalation_method_to_data (C-3) — its shape
+    # (identity_principal → sensitive_data via CAN_ESCALATE_TO/HAS_ACCESS_TO/EXPOSES_DATA) is in
+    # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     "cross_account_trust": "ASSUMES",
     "network_lateral": "CAN_REACH",
     "pod_lateral": "POD_CAN_REACH",
@@ -38,7 +40,7 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     # BINDS is non-traversable, so it's detected by its path_type, not an edge (NEX-301 fix).
     "network_topology_lateral": "PEERED_WITH",
     "supply_chain_sbom": "CONTAINS_PACKAGE",
-    # kms_key_access + exposed_database are NAMED detectors → detected by path_type, not an edge.
+    # kms_key_access + exposed_database + escalation_method_to_data are NAMED detectors → path_type.
 }
 
 
