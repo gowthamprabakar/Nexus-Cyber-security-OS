@@ -49,6 +49,7 @@ _SEVERITY: dict[str, int] = {
     "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
     "kms_key_access": 74,
+    "escalation_method_to_data": 74,
     "exposed_kms_key": 72,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
@@ -57,6 +58,8 @@ _SEVERITY: dict[str, int] = {
     "fine_grained_data": 60,
     "iac_misconfig_deployed": 58,
     "cicd_compromise": 64,
+    "stored_secret_to_data": 88,
+    "k8s_escape_to_cloud_data": 82,
 }
 
 
@@ -187,6 +190,23 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Live resource deployed from misconfigured infrastructure-as-code ({_types_phrase(grp)})"
     if path_type == "cicd_compromise":
         return "Production resource deployed from a repo holding a leaked credential (poisonable pipeline)"
+    if path_type == "stored_secret_to_data":
+        return (
+            f"Running workload embeds a credential whose owner can reach "
+            f"{_types_phrase(grp)} data (hard-coded secret blast radius)"
+        )
+    if path_type == "k8s_escape_to_cloud_data":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"A privileged pod can escape to its cloud IAM role and reach {dt or 'sensitive'} data"
+        )
+    if path_type == "escalation_method_to_data":
+        method = grp.context.get("method", "")
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        method_clause = f" (via {method})" if method else ""
+        return (
+            f"A principal can escalate to admin{method_clause} and reach {dt or 'sensitive'} data"
+        )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -346,6 +366,44 @@ class AttackPathRanker:
         for cc in await self._kg.find_cicd_compromise():
             g("cicd_compromise", (cc.resource_id,)).add(
                 (cc.resource_id, cc.repo_id), "poisonable-pipeline"
+            )
+        for ss in await self._kg.find_stored_secret_to_data():
+            g("stored_secret_to_data", (ss.workload_id, ss.principal_id, ss.resource_id)).add(
+                (
+                    ss.workload_id,
+                    ss.secret_id,
+                    ss.principal_id,
+                    ss.resource_id,
+                    ss.data_classification_id,
+                ),
+                ss.data_type,
+                sink=ss.data_classification_id,
+            )
+        for ke in await self._kg.find_k8s_escape_to_cloud_data():
+            g("k8s_escape_to_cloud_data", (ke.pod_id, ke.role_id, ke.resource_id)).add(
+                (
+                    ke.pod_id,
+                    ke.service_account_id,
+                    ke.role_id,
+                    ke.resource_id,
+                    ke.data_classification_id,
+                ),
+                ke.data_type,
+                data_type=ke.data_type,
+                sink=ke.data_classification_id,
+            )
+        for em in await self._kg.find_escalation_method_to_data():
+            g("escalation_method_to_data", (em.principal_id, em.target_id, em.resource_id)).add(
+                (
+                    em.principal_id,
+                    em.target_id,
+                    em.resource_id,
+                    em.data_classification_id,
+                ),
+                em.data_type,
+                method=em.method,
+                data_type=em.data_type,
+                sink=em.data_classification_id,
             )
 
         paths = [

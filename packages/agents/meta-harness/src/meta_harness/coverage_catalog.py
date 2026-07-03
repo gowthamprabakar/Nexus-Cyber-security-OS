@@ -55,9 +55,15 @@ CATALOG: tuple[Family, ...] = (
     Family("runtime_exploit_vulnerable", "Execution", "runtime_exploit_vulnerable", Status.BUILT),
     # --- Credential access ---
     Family("leaked_credential", "Credential Access", "leaked_credential", Status.BUILT),
-    Family("stored_secret", "Credential Access", "stored_secret", Status.BUILT),
+    Family("stored_secret", "Credential Access", "stored_secret_to_data", Status.BUILT),
     # --- Privilege escalation ---
     Family("privilege_escalation", "Privilege Escalation", "privilege_escalation", Status.BUILT),
+    Family(
+        "escalation_method_to_data",
+        "Privilege Escalation",
+        "escalation_method_to_data",
+        Status.BUILT,
+    ),
     Family(
         "rbac_privilege_escalation",
         "Privilege Escalation",
@@ -68,7 +74,12 @@ CATALOG: tuple[Family, ...] = (
     # --- Lateral movement ---
     Family("network_lateral", "Lateral Movement", "lateral_movement", Status.BUILT),
     Family("pod_lateral", "Lateral Movement", "pod_lateral", Status.BUILT),
-    Family("container_escape_cloud", "Privilege Escalation", "container_escape", Status.BUILT),
+    Family(
+        "container_escape_cloud",
+        "Privilege Escalation",
+        "k8s_escape_to_cloud_data",
+        Status.BUILT,
+    ),
     Family(
         "network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT
     ),

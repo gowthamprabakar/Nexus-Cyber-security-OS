@@ -144,6 +144,26 @@ REMEDIATION: dict[str, FixAdvice] = {
         "resource inherits the fix from code (the root cause), preventing the drift from recurring.",
         auto_fixable=False,
     ),
+    "stored_secret_to_data": FixAdvice(
+        "Remove the hard-coded credential from the workload's environment (use a secrets manager "
+        "instead), rotate the key immediately (assume it is compromised), and scope the owning "
+        "principal's data access to least privilege.",
+        auto_fixable=False,
+    ),
+    "k8s_escape_to_cloud_data": FixAdvice(
+        "Drop the privileged securityContext from the pod (auto-fixable via A.1) to remove the "
+        "node-escape path, and scope the service account's IRSA-mapped cloud IAM role to least "
+        "privilege so a successful escape cannot reach sensitive data.",
+        auto_fixable=True,
+        auto_via="remediation_k8s_patch_disable_privileged_container",
+    ),
+    "escalation_method_to_data": FixAdvice(
+        "Remove the escalation-enabling IAM grant (e.g. iam:AttachUserPolicy / iam:PassRole / "
+        "iam:CreatePolicyVersion) from the principal so it can no longer self-grant the target "
+        "identity's privileges; scope the principal to least privilege and audit all admin-granting "
+        "actions in CloudTrail to confirm no escalation has already occurred.",
+        auto_fixable=False,
+    ),
 }
 
 

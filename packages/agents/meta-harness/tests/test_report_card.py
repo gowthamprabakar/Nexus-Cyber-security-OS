@@ -32,10 +32,11 @@ async def _edge(store, src, dst, rel, props=None):
 
 
 @pytest.mark.asyncio
-async def test_card_merges_novel_privesc_and_named_path_ranked_with_fixes():
+async def test_card_merges_named_privesc_method_and_direct_access_ranked_with_fixes():
     async with in_memory_semantic_store() as store:
-        # NOVEL moat path (generic engine): attacker --CAN_ESCALATE_TO--> admin --HAS_ACCESS_TO-->
-        # bucket --EXPOSES_DATA--> ssn. Not a named archetype → only the report card surfaces it.
+        # NAMED C-3 path (escalation_method_to_data): attacker --CAN_ESCALATE_TO--> admin
+        # --HAS_ACCESS_TO--> bucket --EXPOSES_DATA--> ssn. Now a named archetype (C-3) surfaced by
+        # the named ranker, not the generic engine.
         attacker = await _node(store, _ID, "arn:aws:iam::1:user/attacker", {})
         admin = await _node(store, _ID, "arn:aws:iam::1:role/admin", {})
         crown = await _node(store, _R, "arn:aws:s3:::crown", {"is_public": True})
@@ -52,18 +53,20 @@ async def test_card_merges_novel_privesc_and_named_path_ranked_with_fixes():
         cards = await build_report_card(store, _T)
 
         by_type = {c.path_type: c for c in cards}
-        assert "privilege_escalation" in by_type, "the novel moat path must appear on the card"
+        assert "escalation_method_to_data" in by_type, (
+            "the named escalation-method-to-data path must appear on the card (C-3)"
+        )
         assert "fine_grained_data" in by_type, "the named path must appear too"
         # v0.5: ranking is now expected-loss, not severity. Both routes reach the same sink with the
         # same blast radius, so they tie on expected loss; impact-driven order is covered by
         # test_probabilistic_ranking.test_higher_blast_radius_ranks_higher. Here we assert both the
-        # novel and named paths surface and each carries its fix.
+        # named and fine-grained paths surface and each carries its fix.
         assert (
-            by_type["privilege_escalation"].rank != by_type["fine_grained_data"].rank
+            by_type["escalation_method_to_data"].rank != by_type["fine_grained_data"].rank
         )  # distinct ranks
         # Every card carries a concrete fix.
         assert all(c.fix and c.fix != "" for c in cards)
-        assert "least privilege" in by_type["privilege_escalation"].fix
+        assert "least privilege" in by_type["escalation_method_to_data"].fix
 
 
 @pytest.mark.asyncio

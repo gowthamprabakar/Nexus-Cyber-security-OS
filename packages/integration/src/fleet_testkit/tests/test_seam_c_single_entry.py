@@ -1,9 +1,13 @@
-"""NEX-106 — Seam C: the report card is the SINGLE all-paths entry (find_all alone misses the moat).
+"""NEX-106 — Seam C: the report card is the SINGLE all-paths entry.
 
 The deep seam analysis found two path systems that meet only inside the report card: the named ranker
-(``find_all``) runs on pre-existing edges; the moat families (``CAN_ESCALATE_TO`` etc.) surface only via
-the generic engine. A consumer calling ``find_all()`` directly would silently miss every moat path.
-This test PROVES that gap and pins the contract: use ``build_report_card`` for "all paths".
+(``find_all``) runs on named detectors; the generic engine surfaces any remaining novel moat paths.
+A consumer calling ``find_all()`` directly would silently miss generic-engine-only paths.
+
+C-3 NOTE: ``CAN_ESCALATE_TO`` was previously a generic-only moat path. After C-3 it is the NAMED
+detector ``escalation_method_to_data`` — ``find_all()`` now surfaces it directly. The test is updated
+to verify C-3 is both named AND surfaces on the report card (the contract still holds: the report card
+is still the preferred single entry; the seam gap now applies to remaining un-named generic paths).
 """
 
 import pytest
@@ -21,7 +25,8 @@ _T = "seam-c"
 @pytest.mark.asyncio
 async def test_report_card_is_the_complete_entry_find_all_is_not() -> None:
     async with in_memory_semantic_store() as store:
-        # a pure MOAT path: attacker --CAN_ESCALATE_TO--> admin --HAS_ACCESS_TO--> bucket --EXPOSES_DATA--> data
+        # C-3 NAMED path: attacker --CAN_ESCALATE_TO--> admin --HAS_ACCESS_TO--> bucket
+        # --EXPOSES_DATA--> data. After C-3 this is a NAMED detector, so find_all() surfaces it.
         ident = IdentityKgWriter(store, _T)
         await ident.record_escalation_grants(
             [("u:attacker", "r:admin", "self_grant_admin", "iam:CreatePolicyVersion")]
@@ -47,14 +52,14 @@ async def test_report_card_is_the_complete_entry_find_all_is_not() -> None:
             properties={},
         )
 
-        # find_all() (named ranker) does NOT surface the privesc moat path — it runs on old edges.
+        # After C-3: find_all() (named ranker) DOES surface the escalation-method-to-data path.
         named_types = {ap.path_type for ap in await AttackPathRanker(KgQuery(store, _T)).find_all()}
-        assert "privilege_escalation" not in named_types, (
-            "find_all is named-only (incomplete on its own)"
+        assert "escalation_method_to_data" in named_types, (
+            "after C-3 the named ranker must surface escalation_method_to_data"
         )
 
-        # build_report_card (the single entry) DOES surface it.
+        # build_report_card (the single entry) also surfaces it.
         card_types = {c.path_type for c in await build_report_card(store, _T)}
-        assert "privilege_escalation" in card_types, (
-            "the report card must be the complete all-paths entry"
+        assert "escalation_method_to_data" in card_types, (
+            "the report card must surface the escalation-method-to-data path (C-3)"
         )

@@ -1,14 +1,15 @@
-"""Slice #1 e2e — a CAN_ESCALATE_TO edge makes a privilege-escalation-to-data path EMERGE.
+"""Slice #1 / C-3 e2e — CAN_ESCALATE_TO edges make escalation-method-to-data paths EMERGE.
 
 Drives identity's REAL ``record_escalation_grants`` to write the edge, wires the admin's access to
-sensitive data (the edges other agents write), and asserts the generic engine surfaces a candidate
-path that traverses CAN_ESCALATE_TO — proving the new edge is connective, not a dead-end finding.
-Also proves transitivity: two single-hop escalation edges chain through the graph on their own.
+sensitive data (the edges other agents write), and asserts the named detector
+``find_escalation_method_to_data`` surfaces the path — proving the new edge is connective, not a
+dead-end finding. Also proves transitivity: two single-hop escalation edges chain through the graph.
 """
 
 import pytest
 from charter.memory.graph_types import EdgeType, NodeCategory
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
+from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
 
 from fleet_testkit import in_memory_semantic_store
@@ -63,14 +64,16 @@ async def test_escalation_to_data_path_emerges() -> None:
             properties={},
         )
 
-        # 3) the path emerges: attacker --CAN_ESCALATE_TO--> admin --HAS_ACCESS_TO--> bucket --EXPOSES_DATA--> data.
-        cands = await find_candidate_paths(store, _T)
-        escal = [c for c in cands if "CAN_ESCALATE_TO" in c.path.edge_signature]
-        assert escal, "a privesc-to-data path must surface once CAN_ESCALATE_TO is traversable"
-        path = escal[0].path
-        assert path.source_id == await _id_of(store, _ATTACKER)
-        assert path.sink_marker == "sensitive_data"
-        assert path.edge_signature == ("CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA")
+        # 3) the named detector surfaces the path (C-3): the CAN_ESCALATE_TO shape is now NAMED
+        # and filtered from generic candidates, so we assert via find_escalation_method_to_data.
+        kq = KgQuery(store, _T)
+        hits = await kq.find_escalation_method_to_data()
+        assert hits, "escalation-method-to-data named detector must surface a path"
+        hit = hits[0]
+        assert hit.principal_id == await _id_of(store, _ATTACKER)
+        assert hit.target_id == await _id_of(store, _ADMIN)
+        assert hit.method == "self_grant_admin"
+        assert hit.data_type == "ssn"
 
 
 @pytest.mark.asyncio

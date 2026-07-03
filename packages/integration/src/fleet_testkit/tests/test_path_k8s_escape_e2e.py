@@ -12,7 +12,7 @@ from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
 from k8s_posture.kg_writer import KnowledgeGraphWriter as K8sKgWriter
 from k8s_posture.tools.cluster_inventory import ClusterInventory, K8sServiceAccount
 from k8s_posture.tools.privileged_pods import PrivilegedWorkload
-from meta_harness.path_engine import find_candidate_paths
+from meta_harness.kg_query import KgQuery
 
 from fleet_testkit import in_memory_semantic_store
 
@@ -65,9 +65,13 @@ async def test_container_escape_to_cloud_data_emerges() -> None:
             properties={},
         )
 
-        cands = await find_candidate_paths(store, _T)
-        escape = [c for c in cands if "USES_SERVICE_ACCOUNT" in c.path.edge_signature]
-        assert escape, "a privileged pod's escape to its IRSA cloud role's data must surface"
-        sig = escape[0].path.edge_signature
-        assert sig == ("USES_SERVICE_ACCOUNT", "IRSA_MAPPING", "HAS_ACCESS_TO", "EXPOSES_DATA")
-        assert escape[0].path.sink_marker == "sensitive_data"
+        kq = KgQuery(store, _T)
+        hits = await kq.find_k8s_escape_to_cloud_data()
+        assert hits, "a privileged pod's escape to its IRSA cloud role's data must surface"
+        h = hits[0]
+        assert h.data_type == "ssn"
+        assert h.role_id  # the internal entity_id of the cloud IAM role
+        assert h.resource_id  # the internal entity_id of the data-bearing resource
+        assert h.pod_id
+        assert h.service_account_id
+        assert h.data_classification_id

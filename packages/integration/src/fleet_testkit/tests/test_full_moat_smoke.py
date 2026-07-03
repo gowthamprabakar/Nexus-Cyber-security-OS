@@ -17,6 +17,7 @@ from identity.tools.cross_account import cross_account_trust_grants
 from k8s_posture.kg_writer import KnowledgeGraphWriter as K8sKgWriter
 from k8s_posture.tools.pod_reachability import PodRef, pod_reach_grants
 from k8s_posture.tools.privileged_pods import PrivilegedWorkload
+from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
 from meta_harness.report_card import build_report_card, render_tenant_report_card
 from network_threat.kg_writer import KnowledgeGraphWriter as NetKgWriter
@@ -214,16 +215,25 @@ async def test_full_moat_report_card() -> None:
         cands = await find_candidate_paths(store, _T)
         sigs = {e for c in cands for e in c.path.edge_signature}
         for edge in (
-            "CAN_ESCALATE_TO",
             "CAN_REACH",
             "OWNED_BY",
-            "STORES_SECRET",
-            "USES_SERVICE_ACCOUNT",
-            "IRSA_MAPPING",
             "POD_CAN_REACH",
             "ASSUMES",
         ):
             assert edge in sigs, f"{edge} produced no attack path"
+        # STORES_SECRET is now a NAMED detector (stored_secret_to_data) — it is listed in
+        # NAMED_SHAPES and filtered from the generic engine; verify via the named detector.
+        kq = KgQuery(store, _T)
+        stored_hits = await kq.find_stored_secret_to_data()
+        assert stored_hits, "stored-secret-to-data named detector must surface a path"
+        # USES_SERVICE_ACCOUNT + IRSA_MAPPING is now the named k8s_escape_to_cloud_data detector
+        # (C-2) — listed in NAMED_SHAPES and filtered from the generic engine.
+        escape_hits = await kq.find_k8s_escape_to_cloud_data()
+        assert escape_hits, "k8s-escape-to-cloud-data named detector must surface a path"
+        # CAN_ESCALATE_TO is now the named escalation_method_to_data detector (C-3) — listed in
+        # NAMED_SHAPES and filtered from the generic engine.
+        escalation_hits = await kq.find_escalation_method_to_data()
+        assert escalation_hits, "escalation-method-to-data named detector must surface a path"
 
         # the report card ranks them all, each with a fix, worst-first, readable labels
         cards = await build_report_card(store, _T, top_n=25)
