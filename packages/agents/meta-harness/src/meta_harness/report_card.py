@@ -54,6 +54,7 @@ _FIX: dict[str, str] = {
     "supply_chain_sbom": "Bump the vulnerable dependency to a patched version, then rebuild and redeploy the image.",
     "network_topology_lateral": "Remove or tighten the VPC peering; restrict cross-VPC security-group ingress.",
     "container_escape": "Drop the pod's privileged securityContext; scope its service-account/IRSA role to least privilege.",
+    "stored_secret_to_data": "Remove the hard-coded credential from the workload and use a secrets manager; rotate the key now.",
 }
 #: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
 _GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}

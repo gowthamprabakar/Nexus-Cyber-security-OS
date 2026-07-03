@@ -289,6 +289,24 @@ class LeakedCredentialToData:
 
 
 @dataclass(frozen=True, slots=True)
+class StoredSecretToData:
+    """A workload that STORES_SECRET an embedded credential whose owning identity can reach
+    sensitive data (cross-domain: cloud-posture + identity, path W6).
+
+    Walk: ``CLOUD_RESOURCE --STORES_SECRET--> SECRET --OWNED_BY--> IDENTITY
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    ``secret_id`` is the secret node (the embedded key), ``principal_id`` is the IAM identity
+    that owns it. Read-only."""
+
+    workload_id: str
+    secret_id: str
+    principal_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class PrivilegeEscalationToData:
     """A principal that can reach sensitive data by ASSUMING another role (privilege escalation),
     without any direct grant of its own (path #13). The principal ASSUMES a role that HAS_ACCESS_TO
@@ -960,6 +978,48 @@ class KgQuery:
                         )
         return hits
 
+    async def find_stored_secret_to_data(self) -> list[StoredSecretToData]:
+        """Find a workload with an embedded credential whose owner can reach sensitive data (W6).
+
+        Cross-domain join (cloud-posture + identity): enumerates CLOUD_RESOURCE nodes, follows
+        ``STORES_SECRET`` to a SECRET node (the embedded long-lived credential), then ``OWNED_BY``
+        to the IDENTITY principal that owns it, then ``HAS_ACCESS_TO`` to a resource, then
+        ``EXPOSES_DATA`` to a DATA_CLASSIFICATION. A running workload hard-codes a key whose owner
+        can reach sensitive data — blast radius for the embedded credential. Read-only."""
+        hits: list[StoredSecretToData] = []
+        workloads = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in workloads:
+            for stores in await self._edges_from(
+                workload.entity_id, (EdgeType.STORES_SECRET.value,)
+            ):
+                secret_id = stores.dst_entity_id
+                for owned in await self._edges_from(secret_id, (EdgeType.OWNED_BY.value,)):
+                    principal_id = owned.dst_entity_id
+                    for access in await self._edges_from(
+                        principal_id, (EdgeType.HAS_ACCESS_TO.value,)
+                    ):
+                        for expose in await self._edges_from(
+                            access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                        ):
+                            dc = await self._semantic_store.get_entity(
+                                tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                            )
+                            if dc is None:
+                                continue
+                            hits.append(
+                                StoredSecretToData(
+                                    workload_id=workload.entity_id,
+                                    secret_id=secret_id,
+                                    principal_id=principal_id,
+                                    resource_id=access.dst_entity_id,
+                                    data_classification_id=dc.entity_id,
+                                    data_type=str(dc.properties.get("data_type", "")),
+                                )
+                            )
+        return hits
+
     async def find_privilege_escalation_to_data(self) -> list[PrivilegeEscalationToData]:
         """Find a principal that reaches sensitive data by assuming another role (path #13).
 
@@ -1213,5 +1273,6 @@ __all__ = [
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
     "ResourceBasedDataExposure",
+    "StoredSecretToData",
     "ToxicCombination",
 ]

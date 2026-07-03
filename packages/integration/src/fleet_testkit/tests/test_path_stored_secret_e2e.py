@@ -10,7 +10,7 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter as CloudKgWriter
 from cloud_posture.tools.stored_secrets import stored_secret_grants
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
-from meta_harness.path_engine import find_candidate_paths
+from meta_harness.kg_query import KgQuery, StoredSecretToData
 
 from fleet_testkit import in_memory_semantic_store
 
@@ -58,13 +58,11 @@ async def test_stored_credential_blast_radius_emerges() -> None:
             properties={},
         )
 
-        cands = await find_candidate_paths(store, _T)
-        stored = [c for c in cands if "STORES_SECRET" in c.path.edge_signature]
-        assert stored, "a public workload's embedded credential reaching data must surface"
-        assert stored[0].path.edge_signature == (
-            "STORES_SECRET",
-            "OWNED_BY",
-            "HAS_ACCESS_TO",
-            "EXPOSES_DATA",
-        )
-        assert stored[0].path.sink_marker == "sensitive_data"
+        kq = KgQuery(store, _T)
+        hits = await kq.find_stored_secret_to_data()
+        assert hits, "a public workload's embedded credential reaching data must surface"
+        assert isinstance(hits[0], StoredSecretToData)
+        assert hits[0].workload_id is not None
+        assert hits[0].secret_id is not None
+        assert hits[0].principal_id is not None
+        assert hits[0].data_type == "ssn"

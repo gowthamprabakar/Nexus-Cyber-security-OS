@@ -55,7 +55,7 @@ CATALOG: tuple[Family, ...] = (
     Family("runtime_exploit_vulnerable", "Execution", "runtime_exploit_vulnerable", Status.BUILT),
     # --- Credential access ---
     Family("leaked_credential", "Credential Access", "leaked_credential", Status.BUILT),
-    Family("stored_secret", "Credential Access", "stored_secret", Status.BUILT),
+    Family("stored_secret", "Credential Access", "stored_secret_to_data", Status.BUILT),
     # --- Privilege escalation ---
     Family("privilege_escalation", "Privilege Escalation", "privilege_escalation", Status.BUILT),
     Family(

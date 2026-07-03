@@ -144,6 +144,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "resource inherits the fix from code (the root cause), preventing the drift from recurring.",
         auto_fixable=False,
     ),
+    "stored_secret_to_data": FixAdvice(
+        "Remove the hard-coded credential from the workload's environment (use a secrets manager "
+        "instead), rotate the key immediately (assume it is compromised), and scope the owning "
+        "principal's data access to least privilege.",
+        auto_fixable=False,
+    ),
 }
 
 

@@ -57,6 +57,7 @@ _SEVERITY: dict[str, int] = {
     "fine_grained_data": 60,
     "iac_misconfig_deployed": 58,
     "cicd_compromise": 64,
+    "stored_secret_to_data": 88,
 }
 
 
@@ -187,6 +188,11 @@ def _title(path_type: str, grp: _Group) -> str:
         return f"Live resource deployed from misconfigured infrastructure-as-code ({_types_phrase(grp)})"
     if path_type == "cicd_compromise":
         return "Production resource deployed from a repo holding a leaked credential (poisonable pipeline)"
+    if path_type == "stored_secret_to_data":
+        return (
+            f"Running workload embeds a credential whose owner can reach "
+            f"{_types_phrase(grp)} data (hard-coded secret blast radius)"
+        )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -346,6 +352,18 @@ class AttackPathRanker:
         for cc in await self._kg.find_cicd_compromise():
             g("cicd_compromise", (cc.resource_id,)).add(
                 (cc.resource_id, cc.repo_id), "poisonable-pipeline"
+            )
+        for ss in await self._kg.find_stored_secret_to_data():
+            g("stored_secret_to_data", (ss.workload_id, ss.principal_id, ss.resource_id)).add(
+                (
+                    ss.workload_id,
+                    ss.secret_id,
+                    ss.principal_id,
+                    ss.resource_id,
+                    ss.data_classification_id,
+                ),
+                ss.data_type,
+                sink=ss.data_classification_id,
             )
 
         paths = [

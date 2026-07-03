@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 #: here are detected by their named ``path_type`` instead (see the catalog).
 _FAMILY_KEY_EDGE: dict[str, str] = {
     "leaked_credential": "OWNED_BY",
-    "stored_secret": "STORES_SECRET",
+    # stored_secret is now a NAMED detector (stored_secret_to_data) — detected by path_type,
+    # not an edge signature (its shape is in NAMED_SHAPES and is filtered from generic paths).
     "privilege_escalation": "CAN_ESCALATE_TO",
     "cross_account_trust": "ASSUMES",
     "network_lateral": "CAN_REACH",

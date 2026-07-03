@@ -82,6 +82,11 @@ _EXPOSURE_IMPACT = {
         (NC.CVE_FINDING, {}),
         ["EXECUTED_ON", "RUNS_IMAGE", "VULNERABLE_TO"],
     ),
+    "stored_secret_to_data": (
+        (NC.CLOUD_RESOURCE, {"is_public": True}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["STORES_SECRET", "OWNED_BY", "HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.

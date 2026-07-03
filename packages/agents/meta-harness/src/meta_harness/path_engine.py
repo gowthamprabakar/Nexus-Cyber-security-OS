@@ -182,6 +182,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "known_vulnerability",
             ("EXECUTED_ON", "RUNS_IMAGE", "VULNERABLE_TO"),
         ),  # runtime_exploit
+        (
+            "public_resource",
+            "sensitive_data",
+            ("STORES_SECRET", "OWNED_BY", "HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # stored_secret_to_data (W6)
     }
 )
 
