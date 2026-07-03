@@ -19,8 +19,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from meta_harness.attack_paths import _SEVERITY, AttackPathRanker
+from meta_harness.belief import route_probability, sink_probability
 from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
+from meta_harness.path_priors import leaf_probability
 
 if TYPE_CHECKING:
     from charter.memory import SemanticStore
@@ -98,6 +100,8 @@ class AttackPathCard:
     fix: str
     exploitability: int = 0  # NEX-403: severity weighted by KEV + internet-facing (the rank key)
     blast_radius: int = 1  # NEX-404: distinct sensitive-data stores this path's principal can reach
+    probability: float = 0.0  # v0.5: this route's own P (belief over its hops)
+    expected_loss: float = 0.0  # v0.5: sink_p x blast_radius (the rank key)
 
 
 def _generic_path_type(path: GenericPath) -> str:
@@ -138,20 +142,20 @@ async def build_report_card(
 ) -> list[AttackPathCard]:
     """Build the ranked, fix-annotated report card for ``tenant`` from the shared graph.
 
-    Merges the named ranker and the novel generic paths into one worst-first list (severity desc,
-    then title for stability), assigns ranks, and returns the top ``top_n``.
+    v0.5: ranked by EXPECTED LOSS = P(sink compromised) x blast_radius, where P(sink) is the
+    noisy-OR over every route reaching that sink (the belief network). Named paths contribute
+    ``leaf_probability(severity)`` (severity is the curated per-archetype danger); generic paths
+    contribute ``route_probability`` over their real edge signature.
     """
     kq = KgQuery(store, tenant)
 
     async def _labels(entity_ids: tuple[str, ...]) -> tuple[str, ...]:
-        """C1: resolve entity-ids → external-ids (ARNs) so named-path chains are readable."""
         out: list[str] = []
         for eid in entity_ids:
             ent = await store.get_entity(tenant_id=tenant, entity_id=eid)
             out.append(ent.external_id if ent is not None else eid)
         return tuple(out)
 
-    # NEX-404: blast radius — how many distinct sensitive-data stores each principal can reach.
     principal_reach: dict[str, set[str]] = {}
     for fg in await kq.find_fine_grained_data_exposure():
         principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
@@ -160,16 +164,15 @@ async def build_report_card(
         reached: set[str] = set()
         for eid in entity_ids:
             reached |= principal_reach.get(eid, set())
-        return max(len(reached), 1)  # a path reaches at least its own data
+        return max(len(reached), 1)
 
-    # (severity, path_type, title, chain-labels, external-id set for subsumption, kev flag, blast)
-    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int]] = []
+    # row: (severity, path_type, title, chain, entset, kev, blast, sink_id, route_p)
+    rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int, str, float]] = []
 
-    # The named ranker is authoritative for the path types it covers. Index by (path_type →
-    # entity_ids), so a generic path of the SAME type overlapping it is the same risk → suppressed.
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in await AttackPathRanker(kq).find_all():
         chain = await _labels(ap.entities)
+        route_p = leaf_probability(ap.severity, kev=False)
         rows.append(
             (
                 ap.severity,
@@ -179,6 +182,8 @@ async def build_report_card(
                 frozenset(chain),
                 False,
                 _blast(ap.entities),
+                ap.sink_id,
+                route_p,
             )
         )
         named_entities_by_type.setdefault(ap.path_type, set()).update(ap.entities)
@@ -186,9 +191,11 @@ async def build_report_card(
     for cand in await find_candidate_paths(store, tenant):
         pt = _generic_path_type(cand.path)
         if named_entities_by_type.get(pt, set()) & set(cand.path.node_ids):
-            continue  # same risk a named detector already reported
-        chain = cand.path.node_labels  # already external-ids
+            continue
+        chain = cand.path.node_labels
         sev = _GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY)
+        leaf = leaf_probability(sev, kev=cand.path.sink_kev)
+        route_p = route_probability(leaf, cand.path.edge_signature)
         rows.append(
             (
                 sev,
@@ -198,13 +205,12 @@ async def build_report_card(
                 frozenset(chain),
                 cand.path.sink_kev,
                 _blast(cand.path.node_ids),
+                cand.path.sink_id,
+                route_p,
             )
         )
 
-    # C2: a fine_grained_data row is a bare access-leg (principal → resource → data). If a
-    # higher-or-equal-severity, richer path (privesc / leaked-cred / crown-jewel) fully CONTAINS that
-    # leg's entities (same principal + resource + data), the bare leg is that path's own leg → drop.
-    # Strict subset avoids subsuming a *different* principal's access to the same resource.
+    # C2 subsumption (unchanged): drop a bare fine_grained leg fully contained by a richer path.
     richer = [r for r in rows if r[1] != "fine_grained_data"]
     kept = [
         r
@@ -212,8 +218,17 @@ async def build_report_card(
         if not (r[1] == "fine_grained_data" and any(h[0] >= r[0] and r[4] <= h[4] for h in richer))
     ]
 
-    # NEX-403: rank by exploitability (severity weighted by KEV + internet-facing), then severity, title.
-    kept.sort(key=lambda r: (-_exploitability(r[0], r[1], kev=r[5]), -r[0], r[2]))
+    # Belief network: P(sink) = noisy-OR of every kept route reaching that sink.
+    routes_by_sink: dict[str, list[float]] = {}
+    for r in kept:
+        if r[7]:
+            routes_by_sink.setdefault(r[7], []).append(r[8])
+
+    def _sink_p(sink_id: str, route_p: float) -> float:
+        return sink_probability(routes_by_sink[sink_id]) if sink_id else route_p
+
+    # Rank by expected loss = P(sink) x blast_radius, then own route probability, then title.
+    kept.sort(key=lambda r: (-_sink_p(r[7], r[8]) * r[6], -r[8], r[2]))
     return [
         AttackPathCard(
             rank=i + 1,
@@ -224,8 +239,10 @@ async def build_report_card(
             fix=_FIX.get(pt, _DEFAULT_FIX),
             exploitability=_exploitability(sev, pt, kev=kev),
             blast_radius=blast,
+            probability=route_p,
+            expected_loss=_sink_p(sink_id, route_p) * blast,
         )
-        for i, (sev, pt, title, chain, _es, kev, blast) in enumerate(kept[:top_n])
+        for i, (sev, pt, title, chain, _es, kev, blast, sink_id, route_p) in enumerate(kept[:top_n])
     ]
 
 
@@ -242,7 +259,7 @@ def render_report_card(cards: list[AttackPathCard], *, tenant: str) -> str:
     for c in cards:
         blast = f"{c.blast_radius} data store{'s' if c.blast_radius != 1 else ''} at risk"
         lines += [
-            f"## {c.rank}. [exploitability {c.exploitability} · severity {c.severity}] {c.title}",
+            f"## {c.rank}. [P {c.probability:.2f} · loss {c.expected_loss:.2f} · severity {c.severity}] {c.title}",
             f"- **Type:** `{c.path_type}`  ·  **Blast radius:** {blast}",
             f"- **Evidence:** {' → '.join(c.chain)}",  # NEX-405: the concrete path walk
             f"- **Fix:** {c.fix}",

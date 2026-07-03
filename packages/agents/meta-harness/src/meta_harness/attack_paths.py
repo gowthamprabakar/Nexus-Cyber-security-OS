@@ -80,27 +80,37 @@ class AttackPath:
     entities: tuple[str, ...]
     evidence: tuple[str, ...] = ()
     count: int = 1
+    sink_id: str = ""  # v0.5: the data-classification this path reaches (for noisy-OR grouping)
 
 
 class _Group:
     """Accumulates the detector hits that share one (path_type, subject) into a single path."""
 
-    __slots__ = ("context", "entities", "evidence", "worst")
+    __slots__ = ("context", "entities", "evidence", "sink", "worst")
 
     def __init__(self) -> None:
         self.entities: set[str] = set()
         self.evidence: list[str] = []  # CVE ids or data types — order-preserving, deduped
         self.worst: str = ""  # worst CVE severity label seen (vuln paths only)
         self.context: dict[str, str] = {}  # descriptive fields constant within the group
+        self.sink: str = ""
 
     def add(
-        self, entities: tuple[str, ...], item: str, *, cve_severity: str = "", **context: str
+        self,
+        entities: tuple[str, ...],
+        item: str,
+        *,
+        cve_severity: str = "",
+        sink: str = "",
+        **context: str,
     ) -> None:
         self.entities.update(entities)
         if item and item not in self.evidence:
             self.evidence.append(item)
         if cve_severity and _CVE_RANK.get(cve_severity, 0) > _CVE_RANK.get(self.worst, 0):
             self.worst = cve_severity
+        if sink and not self.sink:
+            self.sink = sink
         for key, value in context.items():
             self.context.setdefault(key, value)
 
@@ -218,6 +228,7 @@ class AttackPathRanker:
                 h.cve_id,
                 cve_severity=h.severity,
                 data_type=h.data_type,
+                sink=h.data_classification_id,
             )
             subsumed_workloads.add(h.workload_id)
             subsumed_access.add((h.role_id, h.resource_id))
@@ -238,20 +249,28 @@ class AttackPathRanker:
             )
         for s in await self._kg.find_public_secret_exposure():
             g("public_secret", (s.resource_id,)).add(
-                (s.resource_id, s.data_classification_id), s.data_type
+                (s.resource_id, s.data_classification_id),
+                s.data_type,
+                sink=s.data_classification_id,
             )
         for u in await self._kg.find_public_unencrypted_exposure():
             g("public_unencrypted", (u.resource_id,)).add(
-                (u.resource_id, u.data_classification_id), u.data_type
+                (u.resource_id, u.data_classification_id),
+                u.data_type,
+                sink=u.data_classification_id,
             )
         for e in await self._kg.find_external_trust_exposure():
             g("external_trust", (e.principal_id, e.resource_id)).add(
-                (e.principal_id, e.resource_id, e.data_classification_id), e.data_type
+                (e.principal_id, e.resource_id, e.data_classification_id),
+                e.data_type,
+                sink=e.data_classification_id,
             )
             external_access.add((e.principal_id, e.resource_id))
         for a in await self._kg.find_exposed_ai_with_sensitive_data():
             g("exposed_ai_sensitive_data", (a.service_id, a.resource_id)).add(
-                (a.service_id, a.resource_id, a.data_classification_id), a.data_type
+                (a.service_id, a.resource_id, a.data_classification_id),
+                a.data_type,
+                sink=a.data_classification_id,
             )
         for re_ in await self._kg.find_runtime_exploit_on_vulnerable_workload():
             g("runtime_exploit_vulnerable", (re_.host_id,)).add(
@@ -283,22 +302,29 @@ class AttackPathRanker:
                     lc.data_classification_id,
                 ),
                 lc.data_type,
+                sink=lc.data_classification_id,
             )
         for pe in await self._kg.find_privilege_escalation_to_data():
             g("privilege_escalation", (pe.principal_id, pe.resource_id)).add(
                 (pe.principal_id, pe.role_id, pe.resource_id, pe.data_classification_id),
                 pe.data_type,
+                sink=pe.data_classification_id,
             )
         for rb in await self._kg.find_resource_based_data_exposure():
             g("resource_based_data", (rb.resource_id, rb.principal_arn)).add(
-                (rb.resource_id,), rb.data_type, principal=rb.principal_arn
+                (rb.resource_id,),
+                rb.data_type,
+                principal=rb.principal_arn,
+                sink=rb.data_classification_id,
             )
         # NEX-202a: a principal reaching a KMS key that protects data is the more specific
         # `kms_key_access` — subsume its fine-grained access leg so it is not double-reported.
         kms_access: set[tuple[str, str]] = set()
         for ka in await self._kg.find_kms_key_access():
             g("kms_key_access", (ka.principal_id, ka.kms_key_id)).add(
-                (ka.principal_id, ka.kms_key_id, ka.data_classification_id), ka.data_type
+                (ka.principal_id, ka.kms_key_id, ka.data_classification_id),
+                ka.data_type,
+                sink=ka.data_classification_id,
             )
             kms_access.add((ka.principal_id, ka.kms_key_id))
         for f in await self._kg.find_fine_grained_data_exposure():
@@ -309,7 +335,9 @@ class AttackPathRanker:
             if (f.principal_id, f.resource_id) in kms_access:
                 continue  # the more specific kms_key_access path already reports it
             g("fine_grained_data", (f.principal_id, f.resource_id)).add(
-                (f.principal_id, f.resource_id, f.data_classification_id), f.data_type
+                (f.principal_id, f.resource_id, f.data_classification_id),
+                f.data_type,
+                sink=f.data_classification_id,
             )
         for ic in await self._kg.find_resource_from_misconfigured_iac():
             g("iac_misconfig_deployed", (ic.resource_id,)).add(
@@ -328,6 +356,7 @@ class AttackPathRanker:
                 entities=tuple(sorted(grp.entities)),
                 evidence=tuple(grp.evidence),
                 count=len(grp.evidence),
+                sink_id=grp.sink,
             )
             for (path_type, _subject), grp in groups.items()
         ]

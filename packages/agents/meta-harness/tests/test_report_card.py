@@ -54,8 +54,13 @@ async def test_card_merges_novel_privesc_and_named_path_ranked_with_fixes():
         by_type = {c.path_type: c for c in cards}
         assert "privilege_escalation" in by_type, "the novel moat path must appear on the card"
         assert "fine_grained_data" in by_type, "the named path must appear too"
-        # Worst-first: privilege_escalation (sev 66) outranks fine_grained_data (sev 60).
-        assert by_type["privilege_escalation"].rank < by_type["fine_grained_data"].rank
+        # v0.5: ranking is now expected-loss, not severity. Both routes reach the same sink with the
+        # same blast radius, so they tie on expected loss; impact-driven order is covered by
+        # test_probabilistic_ranking.test_higher_blast_radius_ranks_higher. Here we assert both the
+        # novel and named paths surface and each carries its fix.
+        assert (
+            by_type["privilege_escalation"].rank != by_type["fine_grained_data"].rank
+        )  # distinct ranks
         # Every card carries a concrete fix.
         assert all(c.fix and c.fix != "" for c in cards)
         assert "least privilege" in by_type["privilege_escalation"].fix
@@ -82,6 +87,6 @@ def test_render_lists_rank_severity_and_fix():
     ]
     out = render_report_card(cards, tenant="acme")
     assert "# Attack Path Report Card — acme" in out
-    assert "severity 92]" in out  # NEX-403: header now "[exploitability N · severity 92]"
+    assert "severity 92]" in out  # NEX-403: header now "[P … · loss … · severity 92]"
     assert "**Fix:** Rotate and revoke" in out
     assert "leaked_credential" in out
