@@ -107,6 +107,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["PEERED_WITH", "EXPOSES_DATA"],
     ),
+    "pod_lateral_to_vulnerable": (
+        (NC.K8S_OBJECT, {"privileged": True}),
+        (NC.CVE_FINDING, {}),
+        ["POD_CAN_REACH", "RUNS_IMAGE", "VULNERABLE_TO"],
+    ),
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.

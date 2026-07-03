@@ -177,6 +177,14 @@ REMEDIATION: dict[str, FixAdvice] = {
         "successful VPC pivot cannot exfiltrate the sensitive data.",
         auto_fixable=False,
     ),
+    "pod_lateral_to_vulnerable": FixAdvice(
+        "Set securityContext.privileged=false on the foothold pod to remove the lateral-movement "
+        "origin (auto-fixable via A.1), apply NetworkPolicy to block east-west pod-to-pod reach, "
+        "and rebuild the neighbour's image on a patched base to clear the CVEs so a successful "
+        "lateral move has nothing to exploit.",
+        auto_fixable=True,
+        auto_via="remediation_k8s_patch_disable_privileged_container",
+    ),
 }
 
 

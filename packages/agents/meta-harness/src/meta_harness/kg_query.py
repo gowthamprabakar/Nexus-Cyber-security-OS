@@ -358,6 +358,26 @@ class SbomVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class PodLateralToVulnerable:
+    """A privileged K8s pod that can reach a neighbour pod running a vulnerable image (D-3).
+
+    Walk: ``K8S_OBJECT{privileged} --POD_CAN_REACH--> K8S_OBJECT --RUNS_IMAGE-->
+    CLOUD_RESOURCE(image) --VULNERABLE_TO--> CVE_FINDING``.
+
+    Distinct from :class:`PrivilegedVulnerableWorkload` (2-hop: pod's OWN image → CVE, no lateral
+    hop) and :class:`K8sEscapeToCloudData` (escape via IRSA to cloud data, not a vulnerable
+    neighbour). This 3-hop pattern: compromise the privileged foothold pod, reach the neighbour via
+    the flat network, and exploit the CVE in the neighbour's image. ``severity`` is the CVE's label.
+    Read-only."""
+
+    foothold_pod_id: str
+    neighbor_pod_id: str
+    image_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class VpcPeeredLateralToData:
     """An internet-exposed resource that is VPC-peered to a private resource exposing
     sensitive data (cross-VPC lateral movement path D-2).
@@ -770,6 +790,45 @@ class KgQuery:
                             data_type=str(dc.properties.get("data_type", "")),
                         )
                     )
+        return hits
+
+    async def find_pod_lateral_to_vulnerable(self) -> list[PodLateralToVulnerable]:
+        """Find privileged K8s pods that can reach a neighbour running a vulnerable image (D-3).
+
+        Self-seeded: enumerates ``privileged`` K8S_OBJECT pods (the foothold), follows
+        ``POD_CAN_REACH`` (written by k8s-posture's ``record_pod_reachability``) to the neighbour
+        pod, then ``RUNS_IMAGE`` to the image node, then ``VULNERABLE_TO`` (written by
+        vulnerability onto the image node) to each CVE. Distinct from
+        :meth:`find_privileged_vulnerable_workload` (which is a 2-hop path: the pod's OWN image →
+        CVE) — this 3-hop lateral path: foothold pod → reachable neighbour → vulnerable image →
+        CVE. An attacker who exploits the foothold can reach the neighbour and exploit the CVE in
+        the neighbour's image. One hit per (foothold pod, neighbour pod, CVE). Read-only."""
+        hits: list[PodLateralToVulnerable] = []
+        pods = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for pod in pods:
+            if pod.properties.get("privileged") is not True:
+                continue
+            for reach in await self._edges_from(pod.entity_id, (EdgeType.POD_CAN_REACH.value,)):
+                neighbor_id = reach.dst_entity_id
+                for runs in await self._edges_from(neighbor_id, (EdgeType.RUNS_IMAGE.value,)):
+                    image_id = runs.dst_entity_id
+                    for vuln in await self._edges_from(image_id, (EdgeType.VULNERABLE_TO.value,)):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        hits.append(
+                            PodLateralToVulnerable(
+                                foothold_pod_id=pod.entity_id,
+                                neighbor_pod_id=neighbor_id,
+                                image_id=image_id,
+                                cve_id=cve.external_id,
+                                severity=str(cve.properties.get("severity", "")),
+                            )
+                        )
         return hits
 
     async def find_fine_grained_data_exposure(self) -> list[FineGrainedDataExposure]:
@@ -1526,6 +1585,7 @@ __all__ = [
     "K8sEscapeToCloudData",
     "KgQuery",
     "PathEdge",
+    "PodLateralToVulnerable",
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",

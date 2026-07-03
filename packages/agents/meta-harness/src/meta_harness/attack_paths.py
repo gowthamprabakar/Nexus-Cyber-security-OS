@@ -62,6 +62,7 @@ _SEVERITY: dict[str, int] = {
     "k8s_escape_to_cloud_data": 82,
     "sbom_vulnerable_workload": 80,
     "vpc_peered_lateral_to_data": 82,
+    "pod_lateral_to_vulnerable": 80,
 }
 
 
@@ -217,6 +218,11 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"Internet-exposed resource is VPC-peered to a resource exposing "
             f"{dt or 'sensitive'} data (cross-VPC lateral movement)"
+        )
+    if path_type == "pod_lateral_to_vulnerable":
+        return (
+            f"Privileged K8s pod can reach a neighbour running a vulnerable image "
+            f"({_cve_phrase(grp)}) — pod-to-pod lateral exploit"
         )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
@@ -429,6 +435,15 @@ class AttackPathRanker:
                 vp.data_type,
                 data_type=vp.data_type,
                 sink=vp.data_classification_id,
+            )
+        for pl in await self._kg.find_pod_lateral_to_vulnerable():
+            g(
+                "pod_lateral_to_vulnerable",
+                (pl.foothold_pod_id, pl.neighbor_pod_id, pl.image_id),
+            ).add(
+                (pl.foothold_pod_id, pl.neighbor_pod_id, pl.image_id),
+                pl.cve_id,
+                cve_severity=pl.severity,
             )
 
         paths = [

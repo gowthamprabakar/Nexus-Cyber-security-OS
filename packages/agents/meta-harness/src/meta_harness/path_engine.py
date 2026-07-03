@@ -207,6 +207,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "sensitive_data",
             ("PEERED_WITH", "EXPOSES_DATA"),
         ),  # vpc_peered_lateral_to_data (D-2)
+        (
+            "privileged_workload",
+            "known_vulnerability",
+            ("POD_CAN_REACH", "RUNS_IMAGE", "VULNERABLE_TO"),
+        ),  # pod_lateral_to_vulnerable (D-3)
     }
 )
 

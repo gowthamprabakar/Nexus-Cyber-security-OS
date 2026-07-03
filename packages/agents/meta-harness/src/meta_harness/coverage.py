@@ -32,7 +32,9 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     "cross_account_trust": "ASSUMES",
     "network_lateral": "CAN_REACH",
-    "pod_lateral": "POD_CAN_REACH",
+    # pod_lateral is now the NAMED detector pod_lateral_to_vulnerable (D-3) — its shape
+    # (privileged_workload → known_vulnerability via POD_CAN_REACH/RUNS_IMAGE/VULNERABLE_TO) is in
+    # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     # container_escape_cloud is now the NAMED detector k8s_escape_to_cloud_data (C-2) — its shape
     # (privileged_workload → sensitive_data via USES_SERVICE_ACCOUNT/IRSA_MAPPING) is in NAMED_SHAPES
     # and filtered from generic paths; detected by path_type, not an edge signature.

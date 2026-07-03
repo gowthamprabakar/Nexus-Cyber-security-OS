@@ -73,7 +73,7 @@ CATALOG: tuple[Family, ...] = (
     Family("cross_account_trust", "Privilege Escalation", "cross_account_trust", Status.BUILT),
     # --- Lateral movement ---
     Family("network_lateral", "Lateral Movement", "lateral_movement", Status.BUILT),
-    Family("pod_lateral", "Lateral Movement", "pod_lateral", Status.BUILT),
+    Family("pod_lateral", "Lateral Movement", "pod_lateral_to_vulnerable", Status.BUILT),
     Family(
         "container_escape_cloud",
         "Privilege Escalation",

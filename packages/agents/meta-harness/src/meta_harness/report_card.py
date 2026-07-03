@@ -59,6 +59,7 @@ _FIX: dict[str, str] = {
     "escalation_method_to_data": "Remove the escalation-enabling grant (PassRole / CreatePolicyVersion / AttachUserPolicy) and scope the principal to least privilege.",
     "sbom_vulnerable_workload": "Bump the vulnerable dependency to a patched version, then rebuild and redeploy the image.",
     "vpc_peered_lateral_to_data": "Remove or tighten the VPC peering; restrict cross-VPC access to the data resource.",
+    "pod_lateral_to_vulnerable": "Drop the foothold pod's privileged securityContext, add NetworkPolicy to block east-west reach, and patch the neighbour's image.",
 }
 #: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
 _GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}
