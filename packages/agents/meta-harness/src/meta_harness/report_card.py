@@ -54,6 +54,9 @@ _FIX: dict[str, str] = {
     "supply_chain_sbom": "Bump the vulnerable dependency to a patched version, then rebuild and redeploy the image.",
     "network_topology_lateral": "Remove or tighten the VPC peering; restrict cross-VPC security-group ingress.",
     "container_escape": "Drop the pod's privileged securityContext; scope its service-account/IRSA role to least privilege.",
+    "stored_secret_to_data": "Remove the hard-coded credential from the workload and use a secrets manager; rotate the key now.",
+    "k8s_escape_to_cloud_data": "Drop the pod's privileged securityContext; scope the SA's IRSA role to least privilege.",
+    "escalation_method_to_data": "Remove the escalation-enabling grant (PassRole / CreatePolicyVersion / AttachUserPolicy) and scope the principal to least privilege.",
 }
 #: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
 _GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}
@@ -108,7 +111,10 @@ def _generic_path_type(path: GenericPath) -> str:
     """Classify a novel generic path into a triage bucket by its most-severe edge / its sink."""
     sig = path.edge_signature
     if "CAN_ESCALATE_TO" in sig:
-        return "privilege_escalation"
+        # Must match the named detector's path_type so build_report_card dedup checks the right
+        # bucket (named_entities_by_type["escalation_method_to_data"]) and suppresses the generic
+        # candidate.  Returning "privilege_escalation" here caused a duplicate card.
+        return "escalation_method_to_data"
     if "OWNED_BY" in sig and path.source_marker == "leaked_credential":
         return "leaked_credential"
     if "CAN_REACH" in sig or "PEERED_WITH" in sig:
@@ -125,6 +131,7 @@ def _generic_path_type(path: GenericPath) -> str:
 def _generic_title(path_type: str, path: GenericPath) -> str:
     """A readable, node-id-free narrative for a generic path (the chain holds the ids)."""
     titles = {
+        "escalation_method_to_data": "A principal can escalate to admin and reach sensitive data",
         "privilege_escalation": "A principal can escalate to admin and reach sensitive data",
         "leaked_credential": "A credential leaked in code reaches sensitive data through its owner",
         "lateral_movement": "An internet-exposed foothold can move laterally to a vulnerable host",

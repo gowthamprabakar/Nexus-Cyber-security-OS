@@ -90,9 +90,10 @@ async def test_multi_finding_tenant_report_card() -> None:
         cards = await build_report_card(store, _T)
         types = {c.path_type for c in cards}
         # the four planted risk families all reach the customer's card
+        # C-3: CAN_ESCALATE_TO is now the NAMED escalation_method_to_data detector (not generic).
         assert {
             "leaked_credential",
-            "privilege_escalation",
+            "escalation_method_to_data",
             "fine_grained_data",
             "internet_exposed_vulnerable",
         } <= types

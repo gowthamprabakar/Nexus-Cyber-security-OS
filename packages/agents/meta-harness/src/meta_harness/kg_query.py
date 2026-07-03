@@ -289,6 +289,43 @@ class LeakedCredentialToData:
 
 
 @dataclass(frozen=True, slots=True)
+class K8sEscapeToCloudData:
+    """A privileged K8s pod that escapes to its node and reaches sensitive data via an
+    IRSA-mapped cloud IAM role (cross-domain: k8s-posture + identity, path C-2).
+
+    Walk: ``K8S_OBJECT{privileged} --USES_SERVICE_ACCOUNT--> K8S_OBJECT(service-account)
+    --IRSA_MAPPING--> IDENTITY(cloud IAM role) --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    ``pod_id`` is the privileged pod; ``service_account_id`` the SA it runs as;
+    ``role_id`` the cloud IAM role the SA maps to. Read-only."""
+
+    pod_id: str
+    service_account_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoredSecretToData:
+    """A workload that STORES_SECRET an embedded credential whose owning identity can reach
+    sensitive data (cross-domain: cloud-posture + identity, path W6).
+
+    Walk: ``CLOUD_RESOURCE --STORES_SECRET--> SECRET --OWNED_BY--> IDENTITY
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    ``secret_id`` is the secret node (the embedded key), ``principal_id`` is the IAM identity
+    that owns it. Read-only."""
+
+    workload_id: str
+    secret_id: str
+    principal_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class PrivilegeEscalationToData:
     """A principal that can reach sensitive data by ASSUMING another role (privilege escalation),
     without any direct grant of its own (path #13). The principal ASSUMES a role that HAS_ACCESS_TO
@@ -296,6 +333,27 @@ class PrivilegeEscalationToData:
 
     principal_id: str
     role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class EscalationMethodToData:
+    """A principal that grants itself another identity's privileges via a privesc METHOD, then
+    reaches sensitive data (cross-domain: identity + data-security, path C-3).
+
+    Walk: ``IDENTITY --CAN_ESCALATE_TO--> IDENTITY(target) --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    Distinct from :class:`PrivilegeEscalationToData` (which walks ``ASSUMES`` — a role the
+    principal is *allowed* to assume); this walks ``CAN_ESCALATE_TO`` — a *method* (e.g.
+    ``iam:AttachUserPolicy`` / ``PassRole`` / ``CreatePolicyVersion``) by which the principal
+    can grant itself the target's privileges. ``method`` is the privesc technique name
+    captured from the edge's ``method`` / ``via_action`` property. Read-only."""
+
+    principal_id: str
+    target_id: str
+    method: str
     resource_id: str
     data_classification_id: str
     data_type: str
@@ -960,6 +1018,101 @@ class KgQuery:
                         )
         return hits
 
+    async def find_stored_secret_to_data(self) -> list[StoredSecretToData]:
+        """Find a workload with an embedded credential whose owner can reach sensitive data (W6).
+
+        Cross-domain join (cloud-posture + identity): enumerates CLOUD_RESOURCE nodes, follows
+        ``STORES_SECRET`` to a SECRET node (the embedded long-lived credential), then ``OWNED_BY``
+        to the IDENTITY principal that owns it, then ``HAS_ACCESS_TO`` to a resource, then
+        ``EXPOSES_DATA`` to a DATA_CLASSIFICATION. A running workload hard-codes a key whose owner
+        can reach sensitive data — blast radius for the embedded credential. Read-only.
+
+        **Scope note (intentionally broad):** this detector fires for ANY CLOUD_RESOURCE that stores
+        a secret — public or private.  A non-public workload is a real threat: an attacker who gains
+        access to the workload (via a vulnerability, supply-chain, or lateral movement) immediately
+        inherits the embedded credential's blast radius.  The ``NAMED_SHAPES`` entry for this
+        detector carries ``public_resource`` as its source marker only to suppress the generic-engine
+        duplicate path — the generic walker starts from *graph sources* (nodes with no inbound edges
+        within the tenant), and for the stored-secret shape, that starting node happens to be a public
+        resource.  Do NOT narrow ``list_entities_by_type`` to ``is_public=True`` here."""
+        hits: list[StoredSecretToData] = []
+        workloads = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in workloads:
+            for stores in await self._edges_from(
+                workload.entity_id, (EdgeType.STORES_SECRET.value,)
+            ):
+                secret_id = stores.dst_entity_id
+                for owned in await self._edges_from(secret_id, (EdgeType.OWNED_BY.value,)):
+                    principal_id = owned.dst_entity_id
+                    for access in await self._edges_from(
+                        principal_id, (EdgeType.HAS_ACCESS_TO.value,)
+                    ):
+                        for expose in await self._edges_from(
+                            access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                        ):
+                            dc = await self._semantic_store.get_entity(
+                                tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                            )
+                            if dc is None:
+                                continue
+                            hits.append(
+                                StoredSecretToData(
+                                    workload_id=workload.entity_id,
+                                    secret_id=secret_id,
+                                    principal_id=principal_id,
+                                    resource_id=access.dst_entity_id,
+                                    data_classification_id=dc.entity_id,
+                                    data_type=str(dc.properties.get("data_type", "")),
+                                )
+                            )
+        return hits
+
+    async def find_k8s_escape_to_cloud_data(self) -> list[K8sEscapeToCloudData]:
+        """Find privileged K8s pods whose IRSA-mapped cloud IAM role can reach sensitive data (C-2).
+
+        Cross-domain join (k8s-posture + identity): enumerates K8S_OBJECT pods where
+        ``privileged=True``, follows ``USES_SERVICE_ACCOUNT`` to the SA node, then
+        ``IRSA_MAPPING`` to the cloud IAM IDENTITY, then ``HAS_ACCESS_TO`` to a resource,
+        then ``EXPOSES_DATA`` to a DATA_CLASSIFICATION. A privileged pod can escape to its
+        node and exploit the SA's IRSA role to reach sensitive data. Read-only."""
+        hits: list[K8sEscapeToCloudData] = []
+        pods = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for pod in pods:
+            if pod.properties.get("privileged") is not True:
+                continue
+            for uses in await self._edges_from(
+                pod.entity_id, (EdgeType.USES_SERVICE_ACCOUNT.value,)
+            ):
+                service_account_id = uses.dst_entity_id
+                for irsa in await self._edges_from(
+                    service_account_id, (EdgeType.IRSA_MAPPING.value,)
+                ):
+                    role_id = irsa.dst_entity_id
+                    for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                        for expose in await self._edges_from(
+                            access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                        ):
+                            dc = await self._semantic_store.get_entity(
+                                tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                            )
+                            if dc is None:
+                                continue
+                            hits.append(
+                                K8sEscapeToCloudData(
+                                    pod_id=pod.entity_id,
+                                    service_account_id=service_account_id,
+                                    role_id=role_id,
+                                    resource_id=access.dst_entity_id,
+                                    data_classification_id=dc.entity_id,
+                                    data_type=str(dc.properties.get("data_type", "")),
+                                )
+                            )
+        return hits
+
     async def find_privilege_escalation_to_data(self) -> list[PrivilegeEscalationToData]:
         """Find a principal that reaches sensitive data by assuming another role (path #13).
 
@@ -989,6 +1142,55 @@ class KgQuery:
                             PrivilegeEscalationToData(
                                 principal_id=principal.entity_id,
                                 role_id=role_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
+        return hits
+
+    async def find_escalation_method_to_data(self) -> list[EscalationMethodToData]:
+        """Find a principal that uses a privesc METHOD to grant itself another identity's privileges
+        and then reach sensitive data (path C-3).
+
+        Self-seeded: enumerates IDENTITY nodes, follows ``CAN_ESCALATE_TO`` to a target IDENTITY
+        (capturing the edge's ``method``/``via_action`` property — the privesc technique name),
+        then the TARGET's ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data. Distinct from
+        :meth:`find_privilege_escalation_to_data` (which walks ``ASSUMES`` — allowed role
+        assumption); this surfaces the ~20 AWS/cloud privesc methods (PassRole,
+        CreatePolicyVersion, self_grant_admin, …) written as ``CAN_ESCALATE_TO`` edges by the
+        identity agent. Read-only."""
+        hits: list[EscalationMethodToData] = []
+        principals = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.IDENTITY.value
+        )
+        for principal in principals:
+            for escalate in await self._edges_from(
+                principal.entity_id, (EdgeType.CAN_ESCALATE_TO.value,)
+            ):
+                target_id = escalate.dst_entity_id
+                if target_id == principal.entity_id:
+                    continue
+                # Capture the privesc method from the edge properties. Identity writes both
+                # ``method`` (the technique name) and ``via_action`` (the IAM action); prefer
+                # ``method`` for the human-readable label, fall back to ``via_action``.
+                method = str(
+                    escalate.properties.get("method") or escalate.properties.get("via_action") or ""
+                )
+                for access in await self._edges_from(target_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            EscalationMethodToData(
+                                principal_id=principal.entity_id,
+                                target_id=target_id,
+                                method=method,
                                 resource_id=access.dst_entity_id,
                                 data_classification_id=dc.entity_id,
                                 data_type=str(dc.properties.get("data_type", "")),
@@ -1203,15 +1405,18 @@ __all__ = [
     "AttackPathResult",
     "BlastRadiusResult",
     "CrownJewelExposure",
+    "EscalationMethodToData",
     "ExposedAiWithSensitiveData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",
+    "K8sEscapeToCloudData",
     "KgQuery",
     "PathEdge",
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
     "ResourceBasedDataExposure",
+    "StoredSecretToData",
     "ToxicCombination",
 ]
