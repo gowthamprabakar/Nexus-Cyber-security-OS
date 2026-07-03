@@ -45,3 +45,20 @@ def azure_blob_uri(storage_account: str, container: str) -> str:
 def gcs_uri(bucket_name: str) -> str:
     """Canonical key for a GCS bucket (multi-cloud spine, gap #13): ``gs://{bucket_name}``."""
     return f"gs://{bucket_name}"
+
+
+def azure_key_vault_key_uri(vault_name: str, key_name: str) -> str:
+    """Canonical key for an Azure Key Vault key (multi-cloud KMS spine, B-1).
+
+    Azure Key Vault has no ARN; the key URL is the stable, globally-unique identifier —
+    the Azure analogue of an AWS KMS key ARN.
+    """
+    return f"https://{vault_name}.vault.azure.net/keys/{key_name}"
+
+
+def gcp_kms_key_name(project: str, location: str, key_ring: str, key: str) -> str:
+    """Canonical resource name for a GCP Cloud KMS key (multi-cloud KMS spine, B-1).
+
+    GCP uses resource-name paths as stable identifiers — the GCP analogue of an AWS KMS key ARN.
+    """
+    return f"projects/{project}/locations/{location}/keyRings/{key_ring}/cryptoKeys/{key}"
