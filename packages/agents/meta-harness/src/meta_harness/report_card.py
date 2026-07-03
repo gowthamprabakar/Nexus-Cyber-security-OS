@@ -57,6 +57,7 @@ _FIX: dict[str, str] = {
     "stored_secret_to_data": "Remove the hard-coded credential from the workload and use a secrets manager; rotate the key now.",
     "k8s_escape_to_cloud_data": "Drop the pod's privileged securityContext; scope the SA's IRSA role to least privilege.",
     "escalation_method_to_data": "Remove the escalation-enabling grant (PassRole / CreatePolicyVersion / AttachUserPolicy) and scope the principal to least privilege.",
+    "sbom_vulnerable_workload": "Bump the vulnerable dependency to a patched version, then rebuild and redeploy the image.",
 }
 #: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
 _GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}
@@ -78,6 +79,7 @@ _INTERNET_FACING: frozenset[str] = frozenset(
         "exposed_database",
         "exposed_kms_key",
         "runtime_exploit_vulnerable",
+        "sbom_vulnerable_workload",
     }
 )
 

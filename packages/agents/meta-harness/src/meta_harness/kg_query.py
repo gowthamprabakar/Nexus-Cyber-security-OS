@@ -339,6 +339,25 @@ class PrivilegeEscalationToData:
 
 
 @dataclass(frozen=True, slots=True)
+class SbomVulnerableWorkload:
+    """An internet-exposed workload running an image whose SBOM package has a known CVE
+    (supply-chain path D-1). The walk: ``CLOUD_RESOURCE{is_public} --RUNS_IMAGE--> image
+    --CONTAINS_PACKAGE--> SBOM_PACKAGE --VULNERABLE_TO--> CVE_FINDING``.
+
+    Distinct from :class:`InternetExposedVulnerableWorkload` (which follows
+    ``RUNS_IMAGE --VULNERABLE_TO`` directly on the image node — an image-level CVE). This
+    path goes through the ``CONTAINS_PACKAGE`` hop to a named SBOM_PACKAGE dependency,
+    then ``VULNERABLE_TO`` the CVE — a dependency/supply-chain CVE (e.g. Log4Shell
+    in log4j-core). ``severity`` is the CVE's label. Read-only."""
+
+    workload_id: str
+    image_id: str
+    package_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class EscalationMethodToData:
     """A principal that grants itself another identity's privileges via a privesc METHOD, then
     reaches sensitive data (cross-domain: identity + data-security, path C-3).
@@ -657,6 +676,44 @@ class KgQuery:
                             severity=str(cve.properties.get("severity", "")),
                         )
                     )
+        return hits
+
+    async def find_sbom_vulnerable_workload(self) -> list[SbomVulnerableWorkload]:
+        """Find internet-exposed workloads running an image with a vulnerable SBOM dependency (D-1).
+
+        Supply-chain walk: enumerates ``is_public`` CLOUD_RESOURCE workloads, follows
+        ``RUNS_IMAGE`` to the image node, then ``CONTAINS_PACKAGE`` (written by vulnerability's
+        ``record_sbom_packages``) to the SBOM_PACKAGE node, then ``VULNERABLE_TO`` to the CVE.
+        Distinct from :meth:`find_internet_exposed_vulnerable_workload` which skips the package hop
+        — this names the SPECIFIC vulnerable dependency (e.g. log4j-core for Log4Shell). One hit
+        per (exposed workload, package, CVE). Read-only; self-seeded (no caller list)."""
+        hits: list[SbomVulnerableWorkload] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in resources:
+            if workload.properties.get("is_public") is not True:
+                continue
+            for runs in await self._edges_from(workload.entity_id, (EdgeType.RUNS_IMAGE.value,)):
+                for contains in await self._edges_from(
+                    runs.dst_entity_id, (EdgeType.CONTAINS_PACKAGE.value,)
+                ):
+                    package_id = contains.dst_entity_id
+                    for vuln in await self._edges_from(package_id, (EdgeType.VULNERABLE_TO.value,)):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        hits.append(
+                            SbomVulnerableWorkload(
+                                workload_id=workload.entity_id,
+                                image_id=runs.dst_entity_id,
+                                package_id=package_id,
+                                cve_id=cve.external_id,
+                                severity=str(cve.properties.get("severity", "")),
+                            )
+                        )
         return hits
 
     async def find_fine_grained_data_exposure(self) -> list[FineGrainedDataExposure]:
@@ -1417,6 +1474,7 @@ __all__ = [
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
     "ResourceBasedDataExposure",
+    "SbomVulnerableWorkload",
     "StoredSecretToData",
     "ToxicCombination",
 ]

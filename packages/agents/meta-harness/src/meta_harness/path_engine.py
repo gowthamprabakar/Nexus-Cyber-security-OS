@@ -197,6 +197,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "sensitive_data",
             ("CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA"),
         ),  # escalation_method_to_data (C-3)
+        (
+            "public_resource",
+            "known_vulnerability",
+            ("RUNS_IMAGE", "CONTAINS_PACKAGE", "VULNERABLE_TO"),
+        ),  # sbom_vulnerable_workload (D-1)
     }
 )
 

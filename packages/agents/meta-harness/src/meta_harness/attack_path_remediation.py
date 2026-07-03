@@ -164,6 +164,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "actions in CloudTrail to confirm no escalation has already occurred.",
         auto_fixable=False,
     ),
+    "sbom_vulnerable_workload": FixAdvice(
+        "Bump the vulnerable dependency to a patched version in the image's build manifest, "
+        "rebuild the container image, and redeploy the workload; restrict the workload's internet "
+        "exposure while the patch is in progress.",
+        auto_fixable=False,
+    ),
 }
 
 

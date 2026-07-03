@@ -60,6 +60,7 @@ _SEVERITY: dict[str, int] = {
     "cicd_compromise": 64,
     "stored_secret_to_data": 88,
     "k8s_escape_to_cloud_data": 82,
+    "sbom_vulnerable_workload": 80,
 }
 
 
@@ -207,6 +208,9 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"A principal can escalate to admin{method_clause} and reach {dt or 'sensitive'} data"
         )
+    if path_type == "sbom_vulnerable_workload":
+        cve = grp.context.get("cve_id", "") or (grp.evidence[0] if grp.evidence else "")
+        return f"Internet-exposed workload runs an image with a vulnerable dependency ({cve})"
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -404,6 +408,13 @@ class AttackPathRanker:
                 method=em.method,
                 data_type=em.data_type,
                 sink=em.data_classification_id,
+            )
+        for sb in await self._kg.find_sbom_vulnerable_workload():
+            g("sbom_vulnerable_workload", (sb.workload_id, sb.image_id, sb.package_id)).add(
+                (sb.workload_id, sb.image_id, sb.package_id, sb.cve_id),
+                sb.cve_id,
+                cve_severity=sb.severity,
+                cve_id=sb.cve_id,
             )
 
         paths = [
