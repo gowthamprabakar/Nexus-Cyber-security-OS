@@ -1025,7 +1025,16 @@ class KgQuery:
         ``STORES_SECRET`` to a SECRET node (the embedded long-lived credential), then ``OWNED_BY``
         to the IDENTITY principal that owns it, then ``HAS_ACCESS_TO`` to a resource, then
         ``EXPOSES_DATA`` to a DATA_CLASSIFICATION. A running workload hard-codes a key whose owner
-        can reach sensitive data — blast radius for the embedded credential. Read-only."""
+        can reach sensitive data — blast radius for the embedded credential. Read-only.
+
+        **Scope note (intentionally broad):** this detector fires for ANY CLOUD_RESOURCE that stores
+        a secret — public or private.  A non-public workload is a real threat: an attacker who gains
+        access to the workload (via a vulnerability, supply-chain, or lateral movement) immediately
+        inherits the embedded credential's blast radius.  The ``NAMED_SHAPES`` entry for this
+        detector carries ``public_resource`` as its source marker only to suppress the generic-engine
+        duplicate path — the generic walker starts from *graph sources* (nodes with no inbound edges
+        within the tenant), and for the stored-secret shape, that starting node happens to be a public
+        resource.  Do NOT narrow ``list_entities_by_type`` to ``is_public=True`` here."""
         hits: list[StoredSecretToData] = []
         workloads = await self._semantic_store.list_entities_by_type(
             tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value

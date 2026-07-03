@@ -111,7 +111,10 @@ def _generic_path_type(path: GenericPath) -> str:
     """Classify a novel generic path into a triage bucket by its most-severe edge / its sink."""
     sig = path.edge_signature
     if "CAN_ESCALATE_TO" in sig:
-        return "privilege_escalation"
+        # Must match the named detector's path_type so build_report_card dedup checks the right
+        # bucket (named_entities_by_type["escalation_method_to_data"]) and suppresses the generic
+        # candidate.  Returning "privilege_escalation" here caused a duplicate card.
+        return "escalation_method_to_data"
     if "OWNED_BY" in sig and path.source_marker == "leaked_credential":
         return "leaked_credential"
     if "CAN_REACH" in sig or "PEERED_WITH" in sig:
@@ -128,6 +131,7 @@ def _generic_path_type(path: GenericPath) -> str:
 def _generic_title(path_type: str, path: GenericPath) -> str:
     """A readable, node-id-free narrative for a generic path (the chain holds the ids)."""
     titles = {
+        "escalation_method_to_data": "A principal can escalate to admin and reach sensitive data",
         "privilege_escalation": "A principal can escalate to admin and reach sensitive data",
         "leaked_credential": "A credential leaked in code reaches sensitive data through its owner",
         "lateral_movement": "An internet-exposed foothold can move laterally to a vulnerable host",
