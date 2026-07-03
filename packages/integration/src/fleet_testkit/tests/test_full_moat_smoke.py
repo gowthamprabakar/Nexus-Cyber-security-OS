@@ -218,8 +218,6 @@ async def test_full_moat_report_card() -> None:
             "CAN_ESCALATE_TO",
             "CAN_REACH",
             "OWNED_BY",
-            "USES_SERVICE_ACCOUNT",
-            "IRSA_MAPPING",
             "POD_CAN_REACH",
             "ASSUMES",
         ):
@@ -229,6 +227,10 @@ async def test_full_moat_report_card() -> None:
         kq = KgQuery(store, _T)
         stored_hits = await kq.find_stored_secret_to_data()
         assert stored_hits, "stored-secret-to-data named detector must surface a path"
+        # USES_SERVICE_ACCOUNT + IRSA_MAPPING is now the named k8s_escape_to_cloud_data detector
+        # (C-2) — listed in NAMED_SHAPES and filtered from the generic engine.
+        escape_hits = await kq.find_k8s_escape_to_cloud_data()
+        assert escape_hits, "k8s-escape-to-cloud-data named detector must surface a path"
 
         # the report card ranks them all, each with a fix, worst-first, readable labels
         cards = await build_report_card(store, _T, top_n=25)

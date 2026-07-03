@@ -58,6 +58,7 @@ _SEVERITY: dict[str, int] = {
     "iac_misconfig_deployed": 58,
     "cicd_compromise": 64,
     "stored_secret_to_data": 88,
+    "k8s_escape_to_cloud_data": 82,
 }
 
 
@@ -192,6 +193,11 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"Running workload embeds a credential whose owner can reach "
             f"{_types_phrase(grp)} data (hard-coded secret blast radius)"
+        )
+    if path_type == "k8s_escape_to_cloud_data":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"A privileged pod can escape to its cloud IAM role and reach {dt or 'sensitive'} data"
         )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
@@ -364,6 +370,19 @@ class AttackPathRanker:
                 ),
                 ss.data_type,
                 sink=ss.data_classification_id,
+            )
+        for ke in await self._kg.find_k8s_escape_to_cloud_data():
+            g("k8s_escape_to_cloud_data", (ke.pod_id, ke.role_id, ke.resource_id)).add(
+                (
+                    ke.pod_id,
+                    ke.service_account_id,
+                    ke.role_id,
+                    ke.resource_id,
+                    ke.data_classification_id,
+                ),
+                ke.data_type,
+                data_type=ke.data_type,
+                sink=ke.data_classification_id,
             )
 
         paths = [

@@ -87,6 +87,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["STORES_SECRET", "OWNED_BY", "HAS_ACCESS_TO", "EXPOSES_DATA"],
     ),
+    "k8s_escape_to_cloud_data": (
+        (NC.K8S_OBJECT, {"privileged": True}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["USES_SERVICE_ACCOUNT", "IRSA_MAPPING", "HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.

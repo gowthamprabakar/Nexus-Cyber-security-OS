@@ -68,7 +68,12 @@ CATALOG: tuple[Family, ...] = (
     # --- Lateral movement ---
     Family("network_lateral", "Lateral Movement", "lateral_movement", Status.BUILT),
     Family("pod_lateral", "Lateral Movement", "pod_lateral", Status.BUILT),
-    Family("container_escape_cloud", "Privilege Escalation", "container_escape", Status.BUILT),
+    Family(
+        "container_escape_cloud",
+        "Privilege Escalation",
+        "k8s_escape_to_cloud_data",
+        Status.BUILT,
+    ),
     Family(
         "network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT
     ),

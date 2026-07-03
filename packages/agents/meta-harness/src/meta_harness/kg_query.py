@@ -289,6 +289,25 @@ class LeakedCredentialToData:
 
 
 @dataclass(frozen=True, slots=True)
+class K8sEscapeToCloudData:
+    """A privileged K8s pod that escapes to its node and reaches sensitive data via an
+    IRSA-mapped cloud IAM role (cross-domain: k8s-posture + identity, path C-2).
+
+    Walk: ``K8S_OBJECT{privileged} --USES_SERVICE_ACCOUNT--> K8S_OBJECT(service-account)
+    --IRSA_MAPPING--> IDENTITY(cloud IAM role) --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    ``pod_id`` is the privileged pod; ``service_account_id`` the SA it runs as;
+    ``role_id`` the cloud IAM role the SA maps to. Read-only."""
+
+    pod_id: str
+    service_account_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class StoredSecretToData:
     """A workload that STORES_SECRET an embedded credential whose owning identity can reach
     sensitive data (cross-domain: cloud-posture + identity, path W6).
@@ -1020,6 +1039,50 @@ class KgQuery:
                             )
         return hits
 
+    async def find_k8s_escape_to_cloud_data(self) -> list[K8sEscapeToCloudData]:
+        """Find privileged K8s pods whose IRSA-mapped cloud IAM role can reach sensitive data (C-2).
+
+        Cross-domain join (k8s-posture + identity): enumerates K8S_OBJECT pods where
+        ``privileged=True``, follows ``USES_SERVICE_ACCOUNT`` to the SA node, then
+        ``IRSA_MAPPING`` to the cloud IAM IDENTITY, then ``HAS_ACCESS_TO`` to a resource,
+        then ``EXPOSES_DATA`` to a DATA_CLASSIFICATION. A privileged pod can escape to its
+        node and exploit the SA's IRSA role to reach sensitive data. Read-only."""
+        hits: list[K8sEscapeToCloudData] = []
+        pods = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for pod in pods:
+            if pod.properties.get("privileged") is not True:
+                continue
+            for uses in await self._edges_from(
+                pod.entity_id, (EdgeType.USES_SERVICE_ACCOUNT.value,)
+            ):
+                service_account_id = uses.dst_entity_id
+                for irsa in await self._edges_from(
+                    service_account_id, (EdgeType.IRSA_MAPPING.value,)
+                ):
+                    role_id = irsa.dst_entity_id
+                    for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                        for expose in await self._edges_from(
+                            access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                        ):
+                            dc = await self._semantic_store.get_entity(
+                                tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                            )
+                            if dc is None:
+                                continue
+                            hits.append(
+                                K8sEscapeToCloudData(
+                                    pod_id=pod.entity_id,
+                                    service_account_id=service_account_id,
+                                    role_id=role_id,
+                                    resource_id=access.dst_entity_id,
+                                    data_classification_id=dc.entity_id,
+                                    data_type=str(dc.properties.get("data_type", "")),
+                                )
+                            )
+        return hits
+
     async def find_privilege_escalation_to_data(self) -> list[PrivilegeEscalationToData]:
         """Find a principal that reaches sensitive data by assuming another role (path #13).
 
@@ -1267,6 +1330,7 @@ __all__ = [
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",
+    "K8sEscapeToCloudData",
     "KgQuery",
     "PathEdge",
     "PrivilegedVulnerableWorkload",

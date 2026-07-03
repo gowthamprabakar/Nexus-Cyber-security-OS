@@ -31,7 +31,9 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     "cross_account_trust": "ASSUMES",
     "network_lateral": "CAN_REACH",
     "pod_lateral": "POD_CAN_REACH",
-    "container_escape_cloud": "USES_SERVICE_ACCOUNT",
+    # container_escape_cloud is now the NAMED detector k8s_escape_to_cloud_data (C-2) — its shape
+    # (privileged_workload → sensitive_data via USES_SERVICE_ACCOUNT/IRSA_MAPPING) is in NAMED_SHAPES
+    # and filtered from generic paths; detected by path_type, not an edge signature.
     # rbac_privilege_escalation is a NAMED detector (SA→BINDS→admin), NOT a generic-walker family —
     # BINDS is non-traversable, so it's detected by its path_type, not an edge (NEX-301 fix).
     "network_topology_lateral": "PEERED_WITH",
