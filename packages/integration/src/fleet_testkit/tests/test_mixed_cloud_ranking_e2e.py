@@ -18,6 +18,7 @@ Ranking assertions:
 from __future__ import annotations
 
 import pytest
+from charter.memory.graph_types import EdgeType, NodeCategory
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
 from meta_harness.report_card import build_report_card, render_tenant_report_card
 
@@ -69,13 +70,13 @@ async def _plant_aws_path(store) -> None:
         # public resource + sensitive data (the same shape test_probabilistic_ranking.py uses)
         b = await store.upsert_entity(
             tenant_id=_TENANT,
-            entity_type="CLOUD_RESOURCE",
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
             external_id=resource_arn,
             properties={"is_public": True},
         )
         d = await store.upsert_entity(
             tenant_id=_TENANT,
-            entity_type="DATA_CLASSIFICATION",
+            entity_type=NodeCategory.DATA_CLASSIFICATION.value,
             external_id=f"{resource_arn}/pii",
             properties={"data_type": "ssn"},
         )
@@ -83,7 +84,7 @@ async def _plant_aws_path(store) -> None:
             tenant_id=_TENANT,
             src_entity_id=b,
             dst_entity_id=d,
-            relationship_type="EXPOSES_DATA",
+            relationship_type=EdgeType.EXPOSES_DATA.value,
             properties={},
         )
         await ident.record_access([(_AWS_ROLE, resource_arn)])
@@ -168,16 +169,21 @@ async def test_mixed_cloud_ranking_coherence() -> None:
             f"expected_loss must be non-increasing (ranking invariant); got {losses}"
         )
 
-        # (d) AWS card (blast_radius=3) has higher or equal expected_loss than single-store cards
+        # (d) AWS card (blast_radius=3) outranks the single-store cloud cards.
+        # UNCONDITIONAL: a silently-empty aws_cards (e.g. the entity_type=.value regression) MUST fail here,
+        # not skip. Both the AWS path and a single-store cloud path must actually be present.
         aws_cards = [c for c in cards if any("arn:aws:s3:::" in n for n in c.chain)]
-        if aws_cards:
-            aws_loss = max(c.expected_loss for c in aws_cards)
-            single_store_cards = [c for c in cards if c.blast_radius == 1 and c not in aws_cards]
-            for sc in single_store_cards:
-                assert aws_loss >= sc.expected_loss, (
-                    f"AWS card (blast_radius=3, loss={aws_loss:.4f}) should rank >= "
-                    f"single-store card (loss={sc.expected_loss:.4f}, type={sc.path_type!r})"
-                )
+        assert aws_cards, "AWS path must produce a card (guards the NodeCategory.value regression)"
+        aws_loss = max(c.expected_loss for c in aws_cards)
+        single_store_cards = [c for c in cards if c.blast_radius == 1 and c not in aws_cards]
+        assert single_store_cards, (
+            "expected at least one single-store (Azure/GCP) card to compare against"
+        )
+        for sc in single_store_cards:
+            assert aws_loss >= sc.expected_loss, (
+                f"AWS card (blast_radius=3, loss={aws_loss:.4f}) should rank >= "
+                f"single-store card (loss={sc.expected_loss:.4f}, type={sc.path_type!r})"
+            )
 
         # (e) render end-to-end
         rendered = await render_tenant_report_card(store, _TENANT)
