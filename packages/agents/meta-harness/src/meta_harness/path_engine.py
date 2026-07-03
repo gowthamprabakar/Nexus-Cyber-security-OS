@@ -202,6 +202,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "known_vulnerability",
             ("RUNS_IMAGE", "CONTAINS_PACKAGE", "VULNERABLE_TO"),
         ),  # sbom_vulnerable_workload (D-1)
+        (
+            "public_resource",
+            "sensitive_data",
+            ("PEERED_WITH", "EXPOSES_DATA"),
+        ),  # vpc_peered_lateral_to_data (D-2)
     }
 )
 

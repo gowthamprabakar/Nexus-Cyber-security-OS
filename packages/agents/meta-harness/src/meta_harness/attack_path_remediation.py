@@ -170,6 +170,13 @@ REMEDIATION: dict[str, FixAdvice] = {
         "exposure while the patch is in progress.",
         auto_fixable=False,
     ),
+    "vpc_peered_lateral_to_data": FixAdvice(
+        "Remove or tighten the VPC peering so the internet-exposed resource can no longer reach "
+        "the private resource across the peering boundary; additionally restrict the private "
+        "resource's data access via security groups / IAM policy to least privilege so even a "
+        "successful VPC pivot cannot exfiltrate the sensitive data.",
+        auto_fixable=False,
+    ),
 }
 
 

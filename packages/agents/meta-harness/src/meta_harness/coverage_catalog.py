@@ -83,6 +83,12 @@ CATALOG: tuple[Family, ...] = (
     Family(
         "network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT
     ),
+    Family(
+        "vpc_peered_lateral_to_data",
+        "Lateral Movement",
+        "vpc_peered_lateral_to_data",
+        Status.BUILT,
+    ),
     # --- Impact domains ---
     Family("exposed_kms_key", "Impact", "exposed_kms_key", Status.BUILT),
     Family("kms_key_access", "Credential Access", "kms_key_access", Status.BUILT),

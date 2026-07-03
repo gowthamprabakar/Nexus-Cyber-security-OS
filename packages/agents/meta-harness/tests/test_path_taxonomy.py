@@ -102,6 +102,11 @@ _EXPOSURE_IMPACT = {
         (NC.CVE_FINDING, {}),
         ["RUNS_IMAGE", "CONTAINS_PACKAGE", "VULNERABLE_TO"],
     ),
+    "vpc_peered_lateral_to_data": (
+        (NC.CLOUD_RESOURCE, {"is_public": True}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["PEERED_WITH", "EXPOSES_DATA"],
+    ),
 }
 
 # Named archetypes that are a DIFFERENT correlation shape (not exposure→impact) and stay named-only.

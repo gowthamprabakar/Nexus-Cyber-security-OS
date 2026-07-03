@@ -358,6 +358,26 @@ class SbomVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class VpcPeeredLateralToData:
+    """An internet-exposed resource that is VPC-peered to a private resource exposing
+    sensitive data (cross-VPC lateral movement path D-2).
+
+    Walk: ``CLOUD_RESOURCE{is_public} --PEERED_WITH--> CLOUD_RESOURCE --EXPOSES_DATA-->
+    DATA_CLASSIFICATION``.
+
+    Distinct from :class:`LateralMovement` (which walks observed ``COMMUNICATES_WITH``
+    flows to a ``VULNERABLE_TO`` host — exploitability-focused). This walks derived
+    ``PEERED_WITH`` reachability to a data-exposing resource — the impact is data
+    exfiltration, not vulnerability exploitation. The foothold is internet-exposed; the
+    target is a private resource in a peered VPC that holds sensitive data. Read-only."""
+
+    foothold_id: str
+    target_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class EscalationMethodToData:
     """A principal that grants itself another identity's privileges via a privesc METHOD, then
     reaches sensitive data (cross-domain: identity + data-security, path C-3).
@@ -714,6 +734,42 @@ class KgQuery:
                                 severity=str(cve.properties.get("severity", "")),
                             )
                         )
+        return hits
+
+    async def find_vpc_peered_lateral_to_data(self) -> list[VpcPeeredLateralToData]:
+        """Find internet-exposed resources VPC-peered to a private resource exposing data (D-2).
+
+        Self-seeded: enumerates ``is_public`` CLOUD_RESOURCE nodes (the internet-exposed foothold),
+        follows ``PEERED_WITH`` (written by network-threat's ``record_peering_reachability``) to the
+        target CLOUD_RESOURCE in the peered VPC, then ``EXPOSES_DATA`` (written only for resources
+        with sensitive data) to the DATA_CLASSIFICATION. An attacker who compromises the
+        internet-exposed foothold can reach the peered-VPC resource's sensitive data directly across
+        the VPC peering — data exfiltration via derived reachability. Distinct from
+        :meth:`find_lateral_movement_to_vulnerable_host` which uses observed ``COMMUNICATES_WITH``
+        flows to a ``VULNERABLE_TO`` host (exploitability, not data). Read-only."""
+        hits: list[VpcPeeredLateralToData] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for foothold in resources:
+            if foothold.properties.get("is_public") is not True:
+                continue
+            for peered in await self._edges_from(foothold.entity_id, (EdgeType.PEERED_WITH.value,)):
+                target_id = peered.dst_entity_id
+                for expose in await self._edges_from(target_id, (EdgeType.EXPOSES_DATA.value,)):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        VpcPeeredLateralToData(
+                            foothold_id=foothold.entity_id,
+                            target_id=target_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
         return hits
 
     async def find_fine_grained_data_exposure(self) -> list[FineGrainedDataExposure]:
@@ -1477,4 +1533,5 @@ __all__ = [
     "SbomVulnerableWorkload",
     "StoredSecretToData",
     "ToxicCombination",
+    "VpcPeeredLateralToData",
 ]
