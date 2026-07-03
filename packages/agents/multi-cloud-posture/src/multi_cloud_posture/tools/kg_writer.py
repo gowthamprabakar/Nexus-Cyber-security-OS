@@ -47,6 +47,37 @@ class KmsKeyRecord:
     data_type: str = field(default="")
 
 
+@dataclass(frozen=True, slots=True)
+class SqlInstanceRecord:
+    """Portable managed-SQL descriptor for Azure SQL Database and GCP Cloud SQL spine nodes (B-2).
+
+    ``instance_id`` is the canonical resource identifier (Azure resource id or GCP resource name).
+    ``is_public`` reflects public network access being enabled. ``engine`` optionally carries the
+    database engine label (e.g. ``sqlserver``, ``mysql``, ``postgres``).
+
+    Both Azure SQL and GCP Cloud SQL share ``kind="rds-instance"`` so the cloud-agnostic
+    ``find_exposed_database`` detector fires without any detector change (path #19).
+    """
+
+    instance_id: str
+    is_public: bool = False
+    engine: str = field(default="")
+
+
+@dataclass(frozen=True, slots=True)
+class VmInstanceRecord:
+    """Portable VM descriptor for Azure Virtual Machines and GCP Compute Engine spine nodes (B-2).
+
+    ``instance_id`` is the canonical resource identifier (Azure resource id or GCP resource name).
+    ``is_public`` reflects internet reachability. The ``find_internet_exposed_host_vulnerable``
+    detector checks ``is_public`` + a direct ``VULNERABLE_TO`` edge; it does not filter by
+    ``kind``, so the unified ``kind="vm-instance"`` is informational only.
+    """
+
+    instance_id: str
+    is_public: bool = False
+
+
 class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
     """Customer-scoped writer for cloud resources, misconfigurations, and AFFECTS edges.
 
@@ -125,6 +156,35 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
                 )
                 await self.add_edge(key_node or "", data_node or "", EdgeType.EXPOSES_DATA)
 
+    async def record_sql_instances(self, instances: Iterable[SqlInstanceRecord]) -> None:
+        """Write Azure SQL / GCP Cloud SQL as ``CLOUD_RESOURCE{kind=rds-instance}`` spine nodes (B-2).
+
+        Both Azure SQL Database and GCP Cloud SQL use the unified ``kind="rds-instance"`` label so
+        the cloud-agnostic ``find_exposed_database`` detector (path #19) fires without any detector
+        change. ``is_public`` and ``engine`` are stored as properties alongside ``kind``.
+        """
+        for r in instances:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                r.instance_id,
+                {"kind": "rds-instance", "is_public": r.is_public, "engine": r.engine},
+            )
+
+    async def record_vm_instances(self, instances: Iterable[VmInstanceRecord]) -> None:
+        """Write Azure VMs / GCP Compute Engine VMs as ``CLOUD_RESOURCE{is_public}`` spine nodes (B-2).
+
+        Stamps the spine node the host-vulnerability detector (``find_internet_exposed_host_vulnerable``,
+        path #15) reads: it enumerates ``CLOUD_RESOURCE`` nodes where ``is_public`` is True and
+        follows a direct ``VULNERABLE_TO`` edge — it does NOT filter by ``kind``. ``kind="vm-instance"``
+        is stored as an informational property for observability only.
+        """
+        for r in instances:
+            await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE,
+                r.instance_id,
+                {"kind": "vm-instance", "is_public": r.is_public},
+            )
+
     async def record_exposed_resources(self, resource_keys: Iterable[str]) -> None:
         """Mark publicly-exposed Azure/GCP resources as attack-path SOURCES (NEX-104).
 
@@ -139,4 +199,4 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             await self.upsert_node(NodeCategory.CLOUD_RESOURCE, key, {"is_public": True})
 
 
-__all__ = ["KmsKeyRecord", "KnowledgeGraphWriter"]
+__all__ = ["KmsKeyRecord", "KnowledgeGraphWriter", "SqlInstanceRecord", "VmInstanceRecord"]
