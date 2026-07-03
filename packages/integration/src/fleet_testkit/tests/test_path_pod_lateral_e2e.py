@@ -10,7 +10,7 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from k8s_posture.kg_writer import KnowledgeGraphWriter as K8sKgWriter
 from k8s_posture.tools.pod_reachability import PodRef, pod_reach_grants
 from k8s_posture.tools.privileged_pods import PrivilegedWorkload
-from meta_harness.path_engine import find_candidate_paths
+from meta_harness.kg_query import KgQuery
 
 from fleet_testkit import in_memory_semantic_store
 
@@ -65,8 +65,19 @@ async def test_pod_lateral_to_vulnerable_neighbour_emerges() -> None:
             properties={},
         )
 
+        kq = KgQuery(store, _T)
+        hits = await kq.find_pod_lateral_to_vulnerable()
+        assert hits, "a pod's lateral reach to a vulnerable neighbour must surface"
+        assert hits[0].cve_id == "CVE-2024-77"
+        assert hits[0].severity == "CRITICAL"
+        # verify the edge signature through the generic engine for the NAMED_SHAPES guard
+        from meta_harness.path_engine import find_candidate_paths
+
         cands = await find_candidate_paths(store, _T)
         lateral = [c for c in cands if "POD_CAN_REACH" in c.path.edge_signature]
-        assert lateral, "a pod's lateral reach to a vulnerable neighbour must surface"
-        assert lateral[0].path.edge_signature == ("POD_CAN_REACH", "RUNS_IMAGE", "VULNERABLE_TO")
-        assert lateral[0].path.sink_marker == "known_vulnerability"
+        # Now that (privileged_workload, known_vulnerability, POD_CAN_REACH/RUNS_IMAGE/VULNERABLE_TO)
+        # is in NAMED_SHAPES, the generic engine drops it as a named shape — it should NOT appear
+        # as a candidate (it's covered by the named detector).
+        assert not lateral, (
+            "pod_lateral_to_vulnerable is now a named shape and must NOT surface as a candidate"
+        )

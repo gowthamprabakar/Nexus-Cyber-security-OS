@@ -79,7 +79,8 @@ def test_every_archetype_has_remediation_advice():
 
 def test_auto_fixable_set_is_the_k8s_and_cloud_actions():
     # Auto-fixable today: the K8s privilege patch + the two cloud one-click fixes (S3 BPA / RDS)
-    # + the k8s_escape_to_cloud_data detector (C-2, same K8s privilege patch via A.1).
+    # + the k8s_escape_to_cloud_data detector (C-2, same K8s privilege patch via A.1)
+    # + the pod_lateral_to_vulnerable detector (D-3, same K8s privilege patch on the foothold pod).
     auto = {pt for pt, a in REMEDIATION.items() if a.auto_fixable}
     assert auto == {
         "privileged_vulnerable",
@@ -88,9 +89,11 @@ def test_auto_fixable_set_is_the_k8s_and_cloud_actions():
         "exposed_database",
         "exposed_kms_key",
         "k8s_escape_to_cloud_data",
+        "pod_lateral_to_vulnerable",
     }
     assert advice_for("privileged_vulnerable").auto_via.startswith("remediation_k8s_patch_")
     assert advice_for("k8s_escape_to_cloud_data").auto_via.startswith("remediation_k8s_patch_")
+    assert advice_for("pod_lateral_to_vulnerable").auto_via.startswith("remediation_k8s_patch_")
     assert advice_for("public_secret").auto_via == "remediation_s3_block_public_access"
     assert advice_for("exposed_database").auto_via == "remediation_rds_disable_public_access"
     assert advice_for("exposed_kms_key").auto_via == "remediation_kms_remove_wildcard_grant"

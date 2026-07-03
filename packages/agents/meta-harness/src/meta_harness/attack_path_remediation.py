@@ -164,6 +164,27 @@ REMEDIATION: dict[str, FixAdvice] = {
         "actions in CloudTrail to confirm no escalation has already occurred.",
         auto_fixable=False,
     ),
+    "sbom_vulnerable_workload": FixAdvice(
+        "Bump the vulnerable dependency to a patched version in the image's build manifest, "
+        "rebuild the container image, and redeploy the workload; restrict the workload's internet "
+        "exposure while the patch is in progress.",
+        auto_fixable=False,
+    ),
+    "vpc_peered_lateral_to_data": FixAdvice(
+        "Remove or tighten the VPC peering so the internet-exposed resource can no longer reach "
+        "the private resource across the peering boundary; additionally restrict the private "
+        "resource's data access via security groups / IAM policy to least privilege so even a "
+        "successful VPC pivot cannot exfiltrate the sensitive data.",
+        auto_fixable=False,
+    ),
+    "pod_lateral_to_vulnerable": FixAdvice(
+        "Set securityContext.privileged=false on the foothold pod to remove the lateral-movement "
+        "origin (auto-fixable via A.1), apply NetworkPolicy to block east-west pod-to-pod reach, "
+        "and rebuild the neighbour's image on a patched base to clear the CVEs so a successful "
+        "lateral move has nothing to exploit.",
+        auto_fixable=True,
+        auto_via="remediation_k8s_patch_disable_privileged_container",
+    ),
 }
 
 

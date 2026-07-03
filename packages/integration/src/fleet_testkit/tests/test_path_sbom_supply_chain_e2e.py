@@ -8,7 +8,7 @@ Unlike image-level vuln (workload → image → CVE), this names the specific vu
 import pytest
 from charter.memory.graph_types import EdgeType, NodeCategory
 from meta_harness.coverage import measure_coverage
-from meta_harness.path_engine import find_candidate_paths
+from meta_harness.kg_query import KgQuery
 from vulnerability.kg_writer import KnowledgeGraphWriter as VulnKgWriter
 
 from fleet_testkit import in_memory_semantic_store
@@ -46,8 +46,11 @@ async def test_sbom_dependency_vuln_path_emerges() -> None:
             _IMAGE, [("log4j-core", "CVE-2021-44228", "CRITICAL")]
         )
 
-        cands = await find_candidate_paths(store, _T)
-        sbom = [c for c in cands if "CONTAINS_PACKAGE" in c.path.edge_signature]
-        assert sbom, "a supply-chain (SBOM dependency) vuln path must surface"
-        assert sbom[0].path.edge_signature == ("RUNS_IMAGE", "CONTAINS_PACKAGE", "VULNERABLE_TO")
+        hits = await KgQuery(store, _T).find_sbom_vulnerable_workload()
+        assert hits, "a supply-chain (SBOM dependency) vuln path must surface"
+        assert hits[0].workload_id  # the public workload
+        assert hits[0].image_id  # the image it runs
+        assert hits[0].package_id  # the named vulnerable package
+        assert hits[0].cve_id == "CVE-2021-44228"
+        assert hits[0].severity == "CRITICAL"
         assert "supply_chain_sbom" in (await measure_coverage(store, _T)).produced

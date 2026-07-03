@@ -60,6 +60,9 @@ _SEVERITY: dict[str, int] = {
     "cicd_compromise": 64,
     "stored_secret_to_data": 88,
     "k8s_escape_to_cloud_data": 82,
+    "sbom_vulnerable_workload": 80,
+    "vpc_peered_lateral_to_data": 82,
+    "pod_lateral_to_vulnerable": 80,
 }
 
 
@@ -206,6 +209,20 @@ def _title(path_type: str, grp: _Group) -> str:
         method_clause = f" (via {method})" if method else ""
         return (
             f"A principal can escalate to admin{method_clause} and reach {dt or 'sensitive'} data"
+        )
+    if path_type == "sbom_vulnerable_workload":
+        cve = grp.context.get("cve_id", "") or (grp.evidence[0] if grp.evidence else "")
+        return f"Internet-exposed workload runs an image with a vulnerable dependency ({cve})"
+    if path_type == "vpc_peered_lateral_to_data":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"Internet-exposed resource is VPC-peered to a resource exposing "
+            f"{dt or 'sensitive'} data (cross-VPC lateral movement)"
+        )
+    if path_type == "pod_lateral_to_vulnerable":
+        return (
+            f"Privileged K8s pod can reach a neighbour running a vulnerable image "
+            f"({_cve_phrase(grp)}) — pod-to-pod lateral exploit"
         )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
@@ -404,6 +421,29 @@ class AttackPathRanker:
                 method=em.method,
                 data_type=em.data_type,
                 sink=em.data_classification_id,
+            )
+        for sb in await self._kg.find_sbom_vulnerable_workload():
+            g("sbom_vulnerable_workload", (sb.workload_id, sb.image_id, sb.package_id)).add(
+                (sb.workload_id, sb.image_id, sb.package_id, sb.cve_id),
+                sb.cve_id,
+                cve_severity=sb.severity,
+                cve_id=sb.cve_id,
+            )
+        for vp in await self._kg.find_vpc_peered_lateral_to_data():
+            g("vpc_peered_lateral_to_data", (vp.foothold_id, vp.target_id)).add(
+                (vp.foothold_id, vp.target_id, vp.data_classification_id),
+                vp.data_type,
+                data_type=vp.data_type,
+                sink=vp.data_classification_id,
+            )
+        for pl in await self._kg.find_pod_lateral_to_vulnerable():
+            g(
+                "pod_lateral_to_vulnerable",
+                (pl.foothold_pod_id, pl.neighbor_pod_id, pl.image_id),
+            ).add(
+                (pl.foothold_pod_id, pl.neighbor_pod_id, pl.image_id),
+                pl.cve_id,
+                cve_severity=pl.severity,
             )
 
         paths = [

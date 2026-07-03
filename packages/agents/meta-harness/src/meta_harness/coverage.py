@@ -32,14 +32,18 @@ _FAMILY_KEY_EDGE: dict[str, str] = {
     # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     "cross_account_trust": "ASSUMES",
     "network_lateral": "CAN_REACH",
-    "pod_lateral": "POD_CAN_REACH",
+    # pod_lateral is now the NAMED detector pod_lateral_to_vulnerable (D-3) — its shape
+    # (privileged_workload → known_vulnerability via POD_CAN_REACH/RUNS_IMAGE/VULNERABLE_TO) is in
+    # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     # container_escape_cloud is now the NAMED detector k8s_escape_to_cloud_data (C-2) — its shape
     # (privileged_workload → sensitive_data via USES_SERVICE_ACCOUNT/IRSA_MAPPING) is in NAMED_SHAPES
     # and filtered from generic paths; detected by path_type, not an edge signature.
     # rbac_privilege_escalation is a NAMED detector (SA→BINDS→admin), NOT a generic-walker family —
     # BINDS is non-traversable, so it's detected by its path_type, not an edge (NEX-301 fix).
     "network_topology_lateral": "PEERED_WITH",
-    "supply_chain_sbom": "CONTAINS_PACKAGE",
+    # supply_chain_sbom is now the NAMED detector sbom_vulnerable_workload (D-1) — its shape
+    # (public_resource → known_vulnerability via RUNS_IMAGE/CONTAINS_PACKAGE/VULNERABLE_TO) is in
+    # NAMED_SHAPES and filtered from generic paths; detected by path_type, not an edge signature.
     # kms_key_access + exposed_database + escalation_method_to_data are NAMED detectors → path_type.
 }
 

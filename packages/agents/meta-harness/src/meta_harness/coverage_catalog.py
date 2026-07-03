@@ -73,7 +73,7 @@ CATALOG: tuple[Family, ...] = (
     Family("cross_account_trust", "Privilege Escalation", "cross_account_trust", Status.BUILT),
     # --- Lateral movement ---
     Family("network_lateral", "Lateral Movement", "lateral_movement", Status.BUILT),
-    Family("pod_lateral", "Lateral Movement", "pod_lateral", Status.BUILT),
+    Family("pod_lateral", "Lateral Movement", "pod_lateral_to_vulnerable", Status.BUILT),
     Family(
         "container_escape_cloud",
         "Privilege Escalation",
@@ -83,6 +83,12 @@ CATALOG: tuple[Family, ...] = (
     Family(
         "network_topology_lateral", "Lateral Movement", "network_topology_lateral", Status.BUILT
     ),
+    Family(
+        "vpc_peered_lateral_to_data",
+        "Lateral Movement",
+        "vpc_peered_lateral_to_data",
+        Status.BUILT,
+    ),
     # --- Impact domains ---
     Family("exposed_kms_key", "Impact", "exposed_kms_key", Status.BUILT),
     Family("kms_key_access", "Credential Access", "kms_key_access", Status.BUILT),
@@ -90,7 +96,7 @@ CATALOG: tuple[Family, ...] = (
     Family("exposed_ai_sensitive_data", "Collection", "exposed_ai_sensitive_data", Status.BUILT),
     Family("saas_oauth_tenant", "Initial Access", "saas_tenant", Status.BUILT),
     # --- Supply chain / provenance ---
-    Family("supply_chain_sbom", "Initial Access", "supply_chain_sbom", Status.BUILT),
+    Family("supply_chain_sbom", "Initial Access", "sbom_vulnerable_workload", Status.BUILT),
     Family("cicd_compromise", "Initial Access", "cicd_compromise", Status.BUILT),
     Family("iac_misconfig_deployed", "Persistence", "iac_misconfig_deployed", Status.BUILT),
     # --- Threat presence ---

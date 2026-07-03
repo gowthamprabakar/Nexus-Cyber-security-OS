@@ -339,6 +339,65 @@ class PrivilegeEscalationToData:
 
 
 @dataclass(frozen=True, slots=True)
+class SbomVulnerableWorkload:
+    """An internet-exposed workload running an image whose SBOM package has a known CVE
+    (supply-chain path D-1). The walk: ``CLOUD_RESOURCE{is_public} --RUNS_IMAGE--> image
+    --CONTAINS_PACKAGE--> SBOM_PACKAGE --VULNERABLE_TO--> CVE_FINDING``.
+
+    Distinct from :class:`InternetExposedVulnerableWorkload` (which follows
+    ``RUNS_IMAGE --VULNERABLE_TO`` directly on the image node — an image-level CVE). This
+    path goes through the ``CONTAINS_PACKAGE`` hop to a named SBOM_PACKAGE dependency,
+    then ``VULNERABLE_TO`` the CVE — a dependency/supply-chain CVE (e.g. Log4Shell
+    in log4j-core). ``severity`` is the CVE's label. Read-only."""
+
+    workload_id: str
+    image_id: str
+    package_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
+class PodLateralToVulnerable:
+    """A privileged K8s pod that can reach a neighbour pod running a vulnerable image (D-3).
+
+    Walk: ``K8S_OBJECT{privileged} --POD_CAN_REACH--> K8S_OBJECT --RUNS_IMAGE-->
+    CLOUD_RESOURCE(image) --VULNERABLE_TO--> CVE_FINDING``.
+
+    Distinct from :class:`PrivilegedVulnerableWorkload` (2-hop: pod's OWN image → CVE, no lateral
+    hop) and :class:`K8sEscapeToCloudData` (escape via IRSA to cloud data, not a vulnerable
+    neighbour). This 3-hop pattern: compromise the privileged foothold pod, reach the neighbour via
+    the flat network, and exploit the CVE in the neighbour's image. ``severity`` is the CVE's label.
+    Read-only."""
+
+    foothold_pod_id: str
+    neighbor_pod_id: str
+    image_id: str
+    cve_id: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
+class VpcPeeredLateralToData:
+    """An internet-exposed resource that is VPC-peered to a private resource exposing
+    sensitive data (cross-VPC lateral movement path D-2).
+
+    Walk: ``CLOUD_RESOURCE{is_public} --PEERED_WITH--> CLOUD_RESOURCE --EXPOSES_DATA-->
+    DATA_CLASSIFICATION``.
+
+    Distinct from :class:`LateralMovement` (which walks observed ``COMMUNICATES_WITH``
+    flows to a ``VULNERABLE_TO`` host — exploitability-focused). This walks derived
+    ``PEERED_WITH`` reachability to a data-exposing resource — the impact is data
+    exfiltration, not vulnerability exploitation. The foothold is internet-exposed; the
+    target is a private resource in a peered VPC that holds sensitive data. Read-only."""
+
+    foothold_id: str
+    target_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class EscalationMethodToData:
     """A principal that grants itself another identity's privileges via a privesc METHOD, then
     reaches sensitive data (cross-domain: identity + data-security, path C-3).
@@ -657,6 +716,119 @@ class KgQuery:
                             severity=str(cve.properties.get("severity", "")),
                         )
                     )
+        return hits
+
+    async def find_sbom_vulnerable_workload(self) -> list[SbomVulnerableWorkload]:
+        """Find internet-exposed workloads running an image with a vulnerable SBOM dependency (D-1).
+
+        Supply-chain walk: enumerates ``is_public`` CLOUD_RESOURCE workloads, follows
+        ``RUNS_IMAGE`` to the image node, then ``CONTAINS_PACKAGE`` (written by vulnerability's
+        ``record_sbom_packages``) to the SBOM_PACKAGE node, then ``VULNERABLE_TO`` to the CVE.
+        Distinct from :meth:`find_internet_exposed_vulnerable_workload` which skips the package hop
+        — this names the SPECIFIC vulnerable dependency (e.g. log4j-core for Log4Shell). One hit
+        per (exposed workload, package, CVE). Read-only; self-seeded (no caller list)."""
+        hits: list[SbomVulnerableWorkload] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for workload in resources:
+            if workload.properties.get("is_public") is not True:
+                continue
+            for runs in await self._edges_from(workload.entity_id, (EdgeType.RUNS_IMAGE.value,)):
+                for contains in await self._edges_from(
+                    runs.dst_entity_id, (EdgeType.CONTAINS_PACKAGE.value,)
+                ):
+                    package_id = contains.dst_entity_id
+                    for vuln in await self._edges_from(package_id, (EdgeType.VULNERABLE_TO.value,)):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        hits.append(
+                            SbomVulnerableWorkload(
+                                workload_id=workload.entity_id,
+                                image_id=runs.dst_entity_id,
+                                package_id=package_id,
+                                cve_id=cve.external_id,
+                                severity=str(cve.properties.get("severity", "")),
+                            )
+                        )
+        return hits
+
+    async def find_vpc_peered_lateral_to_data(self) -> list[VpcPeeredLateralToData]:
+        """Find internet-exposed resources VPC-peered to a private resource exposing data (D-2).
+
+        Self-seeded: enumerates ``is_public`` CLOUD_RESOURCE nodes (the internet-exposed foothold),
+        follows ``PEERED_WITH`` (written by network-threat's ``record_peering_reachability``) to the
+        target CLOUD_RESOURCE in the peered VPC, then ``EXPOSES_DATA`` (written only for resources
+        with sensitive data) to the DATA_CLASSIFICATION. An attacker who compromises the
+        internet-exposed foothold can reach the peered-VPC resource's sensitive data directly across
+        the VPC peering — data exfiltration via derived reachability. Distinct from
+        :meth:`find_lateral_movement_to_vulnerable_host` which uses observed ``COMMUNICATES_WITH``
+        flows to a ``VULNERABLE_TO`` host (exploitability, not data). Read-only."""
+        hits: list[VpcPeeredLateralToData] = []
+        resources = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        )
+        for foothold in resources:
+            if foothold.properties.get("is_public") is not True:
+                continue
+            for peered in await self._edges_from(foothold.entity_id, (EdgeType.PEERED_WITH.value,)):
+                target_id = peered.dst_entity_id
+                for expose in await self._edges_from(target_id, (EdgeType.EXPOSES_DATA.value,)):
+                    dc = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                    )
+                    if dc is None:
+                        continue
+                    hits.append(
+                        VpcPeeredLateralToData(
+                            foothold_id=foothold.entity_id,
+                            target_id=target_id,
+                            data_classification_id=dc.entity_id,
+                            data_type=str(dc.properties.get("data_type", "")),
+                        )
+                    )
+        return hits
+
+    async def find_pod_lateral_to_vulnerable(self) -> list[PodLateralToVulnerable]:
+        """Find privileged K8s pods that can reach a neighbour running a vulnerable image (D-3).
+
+        Self-seeded: enumerates ``privileged`` K8S_OBJECT pods (the foothold), follows
+        ``POD_CAN_REACH`` (written by k8s-posture's ``record_pod_reachability``) to the neighbour
+        pod, then ``RUNS_IMAGE`` to the image node, then ``VULNERABLE_TO`` (written by
+        vulnerability onto the image node) to each CVE. Distinct from
+        :meth:`find_privileged_vulnerable_workload` (which is a 2-hop path: the pod's OWN image →
+        CVE) — this 3-hop lateral path: foothold pod → reachable neighbour → vulnerable image →
+        CVE. An attacker who exploits the foothold can reach the neighbour and exploit the CVE in
+        the neighbour's image. One hit per (foothold pod, neighbour pod, CVE). Read-only."""
+        hits: list[PodLateralToVulnerable] = []
+        pods = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for pod in pods:
+            if pod.properties.get("privileged") is not True:
+                continue
+            for reach in await self._edges_from(pod.entity_id, (EdgeType.POD_CAN_REACH.value,)):
+                neighbor_id = reach.dst_entity_id
+                for runs in await self._edges_from(neighbor_id, (EdgeType.RUNS_IMAGE.value,)):
+                    image_id = runs.dst_entity_id
+                    for vuln in await self._edges_from(image_id, (EdgeType.VULNERABLE_TO.value,)):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        hits.append(
+                            PodLateralToVulnerable(
+                                foothold_pod_id=pod.entity_id,
+                                neighbor_pod_id=neighbor_id,
+                                image_id=image_id,
+                                cve_id=cve.external_id,
+                                severity=str(cve.properties.get("severity", "")),
+                            )
+                        )
         return hits
 
     async def find_fine_grained_data_exposure(self) -> list[FineGrainedDataExposure]:
@@ -1413,10 +1585,13 @@ __all__ = [
     "K8sEscapeToCloudData",
     "KgQuery",
     "PathEdge",
+    "PodLateralToVulnerable",
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
     "ResourceBasedDataExposure",
+    "SbomVulnerableWorkload",
     "StoredSecretToData",
     "ToxicCombination",
+    "VpcPeeredLateralToData",
 ]

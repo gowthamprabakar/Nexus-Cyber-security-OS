@@ -217,7 +217,6 @@ async def test_full_moat_report_card() -> None:
         for edge in (
             "CAN_REACH",
             "OWNED_BY",
-            "POD_CAN_REACH",
             "ASSUMES",
         ):
             assert edge in sigs, f"{edge} produced no attack path"
@@ -234,6 +233,10 @@ async def test_full_moat_report_card() -> None:
         # NAMED_SHAPES and filtered from the generic engine.
         escalation_hits = await kq.find_escalation_method_to_data()
         assert escalation_hits, "escalation-method-to-data named detector must surface a path"
+        # POD_CAN_REACH is now the named pod_lateral_to_vulnerable detector (D-3) — listed in
+        # NAMED_SHAPES and filtered from the generic engine; verify via the named detector.
+        pod_lateral_hits = await kq.find_pod_lateral_to_vulnerable()
+        assert pod_lateral_hits, "pod-lateral-to-vulnerable named detector must surface a path"
 
         # the report card ranks them all, each with a fix, worst-first, readable labels
         cards = await build_report_card(store, _T, top_n=25)
