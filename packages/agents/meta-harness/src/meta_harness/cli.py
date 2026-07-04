@@ -609,5 +609,86 @@ def scan_cmd(
     _asyncio.run(_run())
 
 
+# ---------------------- scan-loop (operating-path Phase 4 / Task 14b) ----
+
+
+@main.command("scan-loop")
+@click.option("--customer-id", required=True, help="Tenant identifier")
+@click.option(
+    "--dsn",
+    envvar="NEXUS_MEMORY_DSN",
+    required=True,
+    help="Postgres/SQLite DSN for the fleet graph (or set NEXUS_MEMORY_DSN)",
+)
+@click.option("--ds-inventory-feed", type=click.Path(), default=None)
+@click.option("--ds-objects-feed", type=click.Path(), default=None)
+@click.option(
+    "--cadence-minutes",
+    default=60,
+    show_default=True,
+    help="How many minutes between ticks.",
+)
+@click.option("--once", is_flag=True, help="Run ONE tick then exit (useful for smoke tests).")
+def scan_loop_cmd(
+    customer_id: str,
+    dsn: str,
+    ds_inventory_feed: str | None,
+    ds_objects_feed: str | None,
+    cadence_minutes: int,
+    once: bool,
+) -> None:
+    """Continuous scan loop — call scan_run for each due tenant on a cadence.
+
+    Delegates all scheduling decisions to ScanScheduler + run_due_scans.
+    The real wall-clock is read here (CLI boundary); the scheduler stays
+    deterministic (caller-supplied ``now``).
+    """
+    import asyncio as _asyncio
+    from datetime import timedelta as _timedelta
+    from pathlib import Path as _Path
+
+    from charter.memory.provisioning import build_session_factory
+    from nexus_runtime.continuous import ContinuousDriver
+    from nexus_runtime.scan_pipeline import ScanSources
+    from nexus_runtime.scan_scheduler import ScanScheduler, run_due_scans
+
+    async def _run() -> None:
+        factory = await build_session_factory(dsn)
+        scheduler = ScanScheduler(
+            tenants=[customer_id],
+            cadence=_timedelta(minutes=cadence_minutes),
+        )
+        driver = ContinuousDriver()
+        driver.register("scan", scheduler)
+
+        sources = ScanSources(
+            ds_inventory_feed=_Path(ds_inventory_feed) if ds_inventory_feed else None,
+            ds_objects_feed=_Path(ds_objects_feed) if ds_objects_feed else None,
+        )
+
+        def sources_for(_tenant: str) -> ScanSources:
+            return sources
+
+        while True:
+            now = datetime.now(UTC)
+            results = await run_due_scans(
+                driver=driver,
+                now=now,
+                session_factory=factory,
+                sources_for=sources_for,
+                workspace_root=_Path(".nexus-scan"),
+            )
+            for res in results:
+                confirmed_count = len(res.confirmed)
+                for f in res.feeders:
+                    status = "ok" if f.ok else f"FAILED {f.error or ''}"
+                    click.echo(f"feeder {f.agent}: {status} | confirmed={confirmed_count}")
+            if once:
+                break
+            await _asyncio.sleep(cadence_minutes * 60)
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     main()
