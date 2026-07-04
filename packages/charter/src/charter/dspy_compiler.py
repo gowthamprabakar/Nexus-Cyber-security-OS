@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 from charter.llm import LLMProvider
 
 if TYPE_CHECKING:  # import only for type-checkers; never at runtime
-    import dspy  # type: ignore[import-untyped]
+    import dspy
 
 # GEPA defaults per v0.2.5 brainstorm Q2.
 DEFAULT_GEPA_AUTO = "medium"
