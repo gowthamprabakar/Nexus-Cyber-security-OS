@@ -75,7 +75,7 @@ async def run_due_scans(
     Returns the list of ``ScanRunResult`` values (one per successfully
     dispatched run, in dispatch order).
     """
-    from nexus_runtime.scan_pipeline import scan_run  # deferred to avoid circular
+    from nexus_runtime.scan_pipeline import scan_run  # deferred: circular + test patch point (keep)
 
     results: list[ScanRunResult] = []
 
