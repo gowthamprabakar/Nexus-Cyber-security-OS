@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from aispm.agent import run as aispm_run
 from appsec.agent import run as appsec_run
 from appsec.tools.scm_connector import ScmConnector
 from charter.contract import BudgetSpec, ExecutionContract
@@ -107,6 +108,13 @@ _RT_TOOLS: list[str] = [
     "osquery_run",
 ]
 
+_AISPM_TOOLS: list[str] = [
+    "discover_aws_ai",
+    "discover_azure_ai",
+    "discover_gcp_ai",
+    "probe_garak",
+]
+
 _APPSEC_TOOLS: list[str] = [
     "discover_repositories",
     "run_checkov",
@@ -155,6 +163,11 @@ class ScanSources:
 
     # runtime-threat feed
     runtime_falco_feed: Path | None = None
+
+    # aispm injectable readers (object | None avoids importing heavy reader protocols here)
+    aispm_aws_reader: object | None = None
+    aispm_azure_reader: object | None = None
+    aispm_gcp_reader: object | None = None
 
     # appsec connector
     appsec_scm_connector: ScmConnector | None = None
@@ -415,7 +428,30 @@ async def scan_run(
         ),
     )
 
-    # 9. appsec (scm_connector)
+    # 9. aispm (injectable AWS/Azure/GCP AI readers)
+    await _feed(
+        "aispm",
+        (
+            sources.aispm_aws_reader is not None
+            or sources.aispm_azure_reader is not None
+            or sources.aispm_gcp_reader is not None
+        ),
+        lambda: aispm_run(
+            _contract(
+                tenant,
+                "aispm",
+                _AISPM_TOOLS,
+                workspace_root / "aispm",
+                ["findings.json", "summary.md"],
+            ),
+            aws_reader=sources.aispm_aws_reader,  # type: ignore[arg-type]
+            azure_reader=sources.aispm_azure_reader,  # type: ignore[arg-type]
+            gcp_reader=sources.aispm_gcp_reader,  # type: ignore[arg-type]
+            semantic_store=store,
+        ),
+    )
+
+    # 10. appsec (scm_connector)
     await _feed(
         "appsec",
         sources.appsec_scm_connector is not None,

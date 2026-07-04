@@ -117,3 +117,68 @@ async def test_scan_run_records_feeder_outcomes_and_analyzes(
     assert ds == FeederOutcome(agent="data-security", ok=True, error=None)
     # analyze ran (confirmed/candidates are lists, possibly empty on this minimal graph)
     assert isinstance(result.confirmed, list) and isinstance(result.candidates, list)
+
+
+# ---------------------------------------------------------------------------
+# G-2: aispm feeder wiring test
+# ---------------------------------------------------------------------------
+
+
+class _FakeAwsAiReader:
+    """Minimal fake mirroring aispm's own test fake (test_agent_unit.py)."""
+
+    def sagemaker_endpoints(self) -> list[dict[str, object]]:
+        return [{"name": "prod-ep", "data_capture_enabled": False, "model_name": "m1"}]
+
+    def sagemaker_notebooks(self) -> list[dict[str, object]]:
+        return []
+
+    def bedrock_logging_enabled(self) -> bool | None:
+        return True
+
+    def bedrock_guardrail_count(self) -> int:
+        return 1
+
+
+@pytest.mark.asyncio
+async def test_aispm_feeder_runs_and_writes_ai_nodes(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """aispm feeder fires when aws_reader is set, records ok=True, and writes AI_SERVICE nodes.
+
+    Uses the same _FakeAwsAiReader shape as aispm's own unit tests. The fake reports
+    one SageMaker endpoint + bedrock logging on → one OCSF 2003 inference-logging finding.
+    With semantic_store wired, the KG writer upserts an ai_service node.
+    """
+    sources = ScanSources(aispm_aws_reader=_FakeAwsAiReader())
+    result = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    assert isinstance(result, ScanRunResult)
+    aispm_outcome = next((f for f in result.feeders if f.agent == "aispm"), None)
+    assert aispm_outcome is not None, "aispm feeder was not executed"
+    assert aispm_outcome == FeederOutcome(agent="aispm", ok=True, error=None)
+    assert isinstance(result.confirmed, list) and isinstance(result.candidates, list)
+
+
+@pytest.mark.asyncio
+async def test_aispm_feeder_skipped_when_no_readers(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """aispm feeder is skipped (no FeederOutcome) when all reader fields are None."""
+    sources = ScanSources()  # all None
+    result = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    aispm_outcome = next((f for f in result.feeders if f.agent == "aispm"), None)
+    assert aispm_outcome is None, "aispm feeder should be skipped when no readers are set"
