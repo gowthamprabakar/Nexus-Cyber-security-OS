@@ -157,3 +157,27 @@ def test_kill_switch_suppresses_scan(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
     assert source is None
     assert decision["continuous_effective"] is False
+
+
+def test_scan_enabled_empty_customer_id_flag_is_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """NEXUS_CONTINUOUS_SCAN=1 + empty customer_id → flag is False and no scheduler registered.
+
+    The audit record must reflect what actually happened: registration is guarded by
+    ``if scan_enabled and customer_id``, so the flag must not be True when customer_id is empty.
+    """
+    monkeypatch.setenv("NEXUS_CONTINUOUS_SCAN", "1")
+    source, decision = _resolve_continuous_source(
+        continuous_mode=True,
+        continuous_kill_switch=False,
+        customer_id="",  # empty → no scheduler registered
+        workspace_root=tmp_path,
+    )
+    assert source is not None, "continuous source is still created (continuous_mode=True)"
+    assert decision["scan_scheduler_registered"] is False, (
+        "scan_scheduler_registered must be False when customer_id is empty"
+    )
+    # No 'scan' scheduler registered on the driver.
+    driver: ContinuousDriver = source._driver
+    assert "scan" not in driver.agents(), "driver must NOT have 'scan' when customer_id is empty"
