@@ -63,6 +63,7 @@ from cloud_posture.tools import aws_account_discovery, aws_iam, aws_s3, prowler
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
+from cloud_posture.tools.stored_secrets import stored_secret_grants
 
 NLAH_VERSION = "0.1.0"
 DEFAULT_AWS_ACCOUNT_ID = "111122223333"
@@ -539,3 +540,11 @@ async def _write_topology_to_kg(
         await kg.record_ec2_workloads(ec2_workloads)
     if ecs_workloads is not None:
         await kg.record_workloads(ecs_workloads)
+        # W6: detect stored secrets in ECS container env values. Only AKIA/ASIA
+        # key IDs are emitted in cleartext; non-AWS credentials are ignored by
+        # stored_secret_grants so no raw env values bleed into the graph.
+        grants = stored_secret_grants(
+            [(w.service_arn, w.env_values) for w in ecs_workloads if w.env_values]
+        )
+        if grants:
+            await kg.record_stored_secrets(grants)
