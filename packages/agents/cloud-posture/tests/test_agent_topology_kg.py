@@ -28,6 +28,8 @@ from charter.memory import SemanticStore
 from cloud_posture.agent import run
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
+from cloud_posture.tools.aws_kms import KmsKey
+from cloud_posture.tools.aws_rds import RdsInstance
 
 # ----------------------------- fixtures --------------------------------------
 
@@ -317,3 +319,127 @@ async def test_run_without_workloads_writes_no_topology_nodes(
     # Only Prowler-findings-derived CLOUD_RESOURCE nodes should exist.
     # With zero prowler findings (our stub), the list must be empty.
     assert cloud_resources == []
+
+
+# ----------------------------- KMS topology ----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_writes_kms_key_cloud_resource_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Injected KmsKey lands as CLOUD_RESOURCE{kind=kms-key, is_public=True}."""
+    contract = _contract(tmp_path)
+    _patch_tools(monkeypatch)
+    store = _make_store()
+
+    kms_key = KmsKey(
+        key_arn="arn:aws:kms:us-east-1:111122223333:key/mrk-abc123",
+        is_public=True,
+    )
+
+    await run(
+        contract=contract,
+        semantic_store=cast(SemanticStore, store),
+        kms_keys=[kms_key],
+    )
+
+    cloud_resources = await store.list_entities_by_type(
+        tenant_id="cust_topology_test", entity_type="cloud_resource"
+    )
+    arns = [r.external_id for r in cloud_resources]
+    assert "arn:aws:kms:us-east-1:111122223333:key/mrk-abc123" in arns
+
+    props = store.get_properties(
+        "cloud_resource", "arn:aws:kms:us-east-1:111122223333:key/mrk-abc123"
+    )
+    assert props.get("kind") == "kms-key"
+    assert props.get("is_public") is True
+
+
+@pytest.mark.asyncio
+async def test_run_kms_key_not_public_written_correctly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Injected KmsKey with is_public=False is still written (is_public=False)."""
+    contract = _contract(tmp_path)
+    _patch_tools(monkeypatch)
+    store = _make_store()
+
+    kms_key = KmsKey(
+        key_arn="arn:aws:kms:us-east-1:111122223333:key/mrk-private",
+        is_public=False,
+    )
+
+    await run(
+        contract=contract,
+        semantic_store=cast(SemanticStore, store),
+        kms_keys=[kms_key],
+    )
+
+    props = store.get_properties(
+        "cloud_resource", "arn:aws:kms:us-east-1:111122223333:key/mrk-private"
+    )
+    assert props.get("kind") == "kms-key"
+    assert props.get("is_public") is False
+
+
+# ----------------------------- RDS topology ----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_writes_rds_instance_cloud_resource_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Injected RdsInstance lands as CLOUD_RESOURCE{kind=rds-instance, is_public=True}."""
+    contract = _contract(tmp_path)
+    _patch_tools(monkeypatch)
+    store = _make_store()
+
+    rds_instance = RdsInstance(
+        instance_arn="arn:aws:rds:us-east-1:111122223333:db:mydb",
+        is_public=True,
+        engine="mysql",
+    )
+
+    await run(
+        contract=contract,
+        semantic_store=cast(SemanticStore, store),
+        rds_instances=[rds_instance],
+    )
+
+    cloud_resources = await store.list_entities_by_type(
+        tenant_id="cust_topology_test", entity_type="cloud_resource"
+    )
+    arns = [r.external_id for r in cloud_resources]
+    assert "arn:aws:rds:us-east-1:111122223333:db:mydb" in arns
+
+    props = store.get_properties("cloud_resource", "arn:aws:rds:us-east-1:111122223333:db:mydb")
+    assert props.get("kind") == "rds-instance"
+    assert props.get("is_public") is True
+    assert props.get("engine") == "mysql"
+
+
+@pytest.mark.asyncio
+async def test_run_rds_instance_engine_stored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Injected RdsInstance carries its engine property in the KG node."""
+    contract = _contract(tmp_path)
+    _patch_tools(monkeypatch)
+    store = _make_store()
+
+    rds_instance = RdsInstance(
+        instance_arn="arn:aws:rds:us-east-1:111122223333:db:pgdb",
+        is_public=False,
+        engine="postgres",
+    )
+
+    await run(
+        contract=contract,
+        semantic_store=cast(SemanticStore, store),
+        rds_instances=[rds_instance],
+    )
+
+    props = store.get_properties("cloud_resource", "arn:aws:rds:us-east-1:111122223333:db:pgdb")
+    assert props.get("engine") == "postgres"
