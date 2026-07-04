@@ -37,7 +37,8 @@ from nexus_runtime import ContinuousDriver
 
 from supervisor import __version__
 from supervisor.agent import run as agent_run
-from supervisor.cadence import resolve_cadence
+from supervisor.cadence import CADENCE_INTERVAL_SECONDS, resolve_cadence
+from supervisor.continuous_metrics import ContinuousMetrics
 from supervisor.continuous_source import ContinuousTriggerSource
 from supervisor.eval_runner import SupervisorEvalRunner
 from supervisor.heartbeat import (
@@ -48,6 +49,16 @@ from supervisor.routing.parser import load_routing_rules
 from supervisor.scheduled_queue import enqueue as enqueue_scheduled
 from supervisor.schemas import IncomingTask, TriggerSource
 from supervisor.status_page import build_continuous_status
+
+# ---------------------------------------------------------------------------
+# Opt-in env var for the scan scheduler (Task 14).
+# Default OFF — set to "1" to register a ScanScheduler on the continuous driver.
+# Mirrors NEXUS_DSPY_PRODUCTION / NEXUS_CONTINUOUS_CADENCE "wire + OFF" posture.
+# ---------------------------------------------------------------------------
+_ENV_CONTINUOUS_SCAN = "NEXUS_CONTINUOUS_SCAN"
+
+# Default scan cadence when no NEXUS_CONTINUOUS_CADENCE is configured (daily).
+_DEFAULT_SCAN_CADENCE_SECONDS = CADENCE_INTERVAL_SECONDS["daily"]
 
 _LOG = logging.getLogger(__name__)
 _DEFAULT_CASES_DIR = Path(__file__).parent.parent.parent / "eval" / "cases"
@@ -232,31 +243,77 @@ def schedule_cmd(
 
 
 def _resolve_continuous_source(
-    *, continuous_mode: bool, continuous_kill_switch: bool
-) -> tuple[ContinuousTriggerSource | None, dict[str, bool]]:
-    """Track D D-1: resolve the continuous trigger source for a ``run``.
+    *,
+    continuous_mode: bool,
+    continuous_kill_switch: bool,
+    customer_id: str = "",
+    workspace_root: Path | None = None,
+    metrics: ContinuousMetrics | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[ContinuousTriggerSource | None, dict[str, bool | str | None]]:
+    """Track D D-1 + Task 14: resolve the continuous trigger source for a ``run``.
 
     Default OFF → ``None`` (Heartbeat falls back to its no-op continuous source =
     heartbeat-only, byte-identical to pre-Track-D behaviour). When continuous mode
     is requested AND not kill-switched for this tenant, build a
-    ``ContinuousTriggerSource`` over an empty ``ContinuousDriver`` — **wired but
-    inert** (no schedulers registered → no due runs), per Q3 "wire + OFF, NOT
-    activation". The per-tenant kill-switch overrides the global enable.
+    ``ContinuousTriggerSource`` over a ``ContinuousDriver``.
+
+    Task 14 (opt-in, default OFF): when ``NEXUS_CONTINUOUS_SCAN=1`` is set AND
+    ``customer_id`` is provided, register a ``ScanScheduler`` under agent-id
+    ``"scan"`` on the driver.  Without the env var the driver stays empty —
+    wire + OFF, NOT activation (mirrors NEXUS_DSPY_PRODUCTION posture).
+
+    The per-tenant kill-switch overrides the global enable.
 
     Returns ``(source_or_None, decision)`` where ``decision`` is the audit/
     observability record of how the effective state was resolved.
     """
+    import os
+
+    environ = env if env is not None else dict(os.environ)
+
     effective = continuous_mode and not continuous_kill_switch
-    decision = {
+    decision: dict[str, bool | str | None] = {
         "continuous_mode_requested": continuous_mode,
         "continuous_kill_switch": continuous_kill_switch,
         "continuous_effective": effective,
     }
     if not effective:
         return None, decision
-    # Empty driver: wired into the tick path but produces no due runs until a
-    # future cycle registers schedulers. This is the "wire, not activate" state.
-    return ContinuousTriggerSource(ContinuousDriver()), decision
+
+    driver = ContinuousDriver()
+
+    # Task 14 opt-in: register ScanScheduler when NEXUS_CONTINUOUS_SCAN=1.
+    # Default OFF — empty driver produces no due runs (unchanged behaviour).
+    scan_enabled = environ.get(_ENV_CONTINUOUS_SCAN, "").strip() == "1"
+    decision["scan_scheduler_registered"] = scan_enabled
+    if scan_enabled and customer_id:
+        from datetime import timedelta
+
+        from nexus_runtime.scan_scheduler import ScanScheduler
+
+        # Cadence: use the resolved per-tenant cadence when available; fall back to daily.
+        cadence_seconds = _DEFAULT_SCAN_CADENCE_SECONDS
+        if workspace_root is not None:
+            tenant_cadence = resolve_cadence(
+                workspace_root=workspace_root,
+                customer_id=customer_id,
+                env=environ,
+            )
+            if tenant_cadence is not None:
+                cadence_seconds = tenant_cadence.interval_seconds
+
+        driver.register(
+            "scan",
+            ScanScheduler(tenants=[customer_id], cadence=timedelta(seconds=cadence_seconds)),
+        )
+        _LOG.info(
+            "supervisor.continuous.scan_scheduler_registered customer_id=%s cadence_seconds=%d",
+            customer_id,
+            cadence_seconds,
+        )
+
+    return ContinuousTriggerSource(driver), decision
 
 
 @main.command("run")
@@ -315,6 +372,8 @@ def run_cmd(
     continuous_source, decision = _resolve_continuous_source(
         continuous_mode=continuous_mode,
         continuous_kill_switch=continuous_kill_switch,
+        customer_id=customer_id,
+        workspace_root=workspace_root,
     )
     # Track D D-2: resolve the per-tenant cadence (inert — surfaced in the decision
     # record, NOT registered with any driver; activation is v0.4).
