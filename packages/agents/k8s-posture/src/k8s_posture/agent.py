@@ -56,6 +56,7 @@ from k8s_posture.tools.cluster_workloads import read_cluster_workloads
 from k8s_posture.tools.kube_bench import KubeBenchFinding, read_kube_bench
 from k8s_posture.tools.manifests import ManifestFinding, read_manifests
 from k8s_posture.tools.polaris import PolarisFinding, read_polaris
+from k8s_posture.tools.privileged_pods import PrivilegedWorkload
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -123,13 +124,14 @@ async def run(
         cluster_namespace: Optional namespace scope for live-cluster ingest (Q3).
             `None` → cluster-wide list APIs; a string → namespace-scoped APIs.
             Only honoured when `kubeconfig` or `in_cluster` is set.
-        semantic_store: v0.4 Stage 1.3 (D.6) opt-in fleet-graph sink. When set AND a
-            live cluster source (`kubeconfig` / `in_cluster`) is configured, the cluster
-            inventory (namespaces + service accounts + RBAC, plus the IRSA bridge from a
-            ServiceAccount to its assumed IAM role) is discovered via
-            `read_cluster_inventory` and written via `KnowledgeGraphWriter`. Default None
-            is inert — no graph writes, `findings.json` byte-identical. Offline
-            feed/manifest scans have no cluster to enumerate, so nothing is written.
+        semantic_store: v0.4 Stage 1.3 (D.6) opt-in fleet-graph sink. When set, the
+            agent writes to the fleet graph. For a LIVE cluster source (`kubeconfig` /
+            `in_cluster`) the full inventory (namespaces + service accounts + RBAC, plus
+            the IRSA bridge) is discovered via `read_cluster_inventory` and written.
+            For OFFLINE feeds (manifest_dir / kube_bench_feed / polaris_feed) privileged
+            workloads are derived from manifest findings (rule_id == "privileged-container")
+            and written; no inventory walk (no live cluster to enumerate). Default None is
+            inert — no graph writes, `findings.json` byte-identical.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -180,22 +182,46 @@ async def run(
             cluster_namespace=cluster_namespace,
         )
 
-        # v0.4 Stage 1.3: discover the live cluster inventory (namespaces + service
-        # accounts + RBAC) and write it to the fleet graph, including the IRSA bridge
-        # (ServiceAccount -> assumed IAM role IDENTITY node — the same node D.2 writes).
-        # Opt-in + live-only: runs only when a SemanticStore is injected AND a live
-        # cluster source is configured (offline feed/manifest scans have no cluster to
-        # enumerate). Default None is inert, so findings.json + report.md stay
-        # byte-identical.
-        if semantic_store is not None and (kubeconfig is not None or in_cluster):
-            inventory = await ctx.call_tool(
-                "read_cluster_inventory",
-                kubeconfig=kubeconfig,
-                in_cluster=in_cluster,
-                cluster_id=_cluster_context,
-            )
+        # v0.4 Stage 1.3 / Task 8: write the fleet graph when a SemanticStore is injected.
+        #
+        # LIVE path (kubeconfig / in_cluster): discover the full cluster inventory
+        # (namespaces + service accounts + RBAC) via read_cluster_inventory and write it,
+        # then derive privileged workloads from the live manifest findings.
+        #
+        # OFFLINE path (manifest_dir / kube_bench_feed / polaris_feed): no live cluster
+        # to enumerate, so record_inventory is skipped. Privileged workloads ARE derived
+        # from manifest_records (ManifestFinding with rule_id == "privileged-container").
+        #
+        # Guard relaxed from "live-only" to "store present" so offline feeds also populate
+        # the graph. Default None is inert — findings.json + report.md stay byte-identical.
+        if semantic_store is not None:
             kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
-            await kg.record_inventory(inventory)
+            # cluster_id for offline scans falls back to "offline"; live scans use the
+            # resolved context (kubeconfig path or "in-cluster").
+            cluster_id = _cluster_context or "offline"
+
+            if kubeconfig is not None or in_cluster:
+                # Live path: full inventory (namespaces / SAs / RBAC) + IRSA bridge.
+                inventory = await ctx.call_tool(
+                    "read_cluster_inventory",
+                    kubeconfig=kubeconfig,
+                    in_cluster=in_cluster,
+                    cluster_id=_cluster_context,
+                )
+                await kg.record_inventory(inventory)
+
+            # Privileged workloads: derived from manifest findings (both live and offline).
+            # ManifestFindings with rule_id == "privileged-container" identify pods with
+            # securityContext.privileged=True — the only source of this signal available
+            # from the offline feed. image_ref is stored in unmapped["image"] when the
+            # manifest reader emits it; falls back to a synthetic key so the node is still
+            # written and the pod → RUNS_IMAGE edge resolves at crawl time.
+            privileged = _privileged_from_manifest_findings(manifest_records, cluster_id)
+            if privileged:
+                await kg.record_privileged_workloads(cluster_id, privileged)
+
+            # ponytail: POD_CAN_REACH needs live-cluster reachability data; feed-driven
+            # inventory lacks it — network-policy evaluation requires the live API server.
 
         # Stage 2/3: NORMALIZE + SCORE.
         kb_findings = normalize_kube_bench(
@@ -305,6 +331,42 @@ async def _ingest(
     polaris: Sequence[PolarisFinding] = polaris_task.result() if polaris_task else ()
     manifest: Sequence[ManifestFinding] = workload_task.result() if workload_task else ()
     return kb, polaris, manifest
+
+
+def _privileged_from_manifest_findings(
+    manifest_records: Sequence[ManifestFinding],
+    cluster_id: str,
+) -> list[PrivilegedWorkload]:
+    """Derive PrivilegedWorkload entries from manifest findings.
+
+    ManifestFindings with rule_id == "privileged-container" identify pods whose
+    containers have securityContext.privileged=True. The manifest analyser stores the
+    container image in unmapped["image"] when present; otherwise a synthetic key is used
+    so the pod K8S_OBJECT node is still written and can be joined later.
+    """
+    seen: set[tuple[str, str]] = set()  # (namespace, workload_name) dedup
+    out: list[PrivilegedWorkload] = []
+    for f in manifest_records:
+        if f.rule_id != "privileged-container":
+            continue
+        key = (f.namespace, f.workload_name)
+        if key in seen:
+            continue
+        seen.add(key)
+        # image_ref: prefer the stored image from unmapped; fall back to a stable synthetic
+        # key so the RUNS_IMAGE edge can be added once the image is known at query time.
+        image_ref = str(f.unmapped.get("image") or "") or (
+            f"manifest-scan/{cluster_id}/{f.namespace}/{f.workload_name}"
+        )
+        out.append(
+            PrivilegedWorkload(
+                namespace=f.namespace,
+                name=f.workload_name,
+                image_ref=image_ref,
+                service_account="default",
+            )
+        )
+    return out
 
 
 __all__ = ["build_registry", "run"]
