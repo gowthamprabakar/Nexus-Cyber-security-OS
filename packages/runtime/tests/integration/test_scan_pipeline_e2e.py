@@ -276,24 +276,6 @@ def _admin_user_with_akia() -> IamUser:
     )
 
 
-def _ecs_workload_with_secret() -> object:
-    """ECS workload whose env embeds the AKIA key — cloud-posture writes STORES_SECRET.
-
-    cloud-posture writes:
-      CLOUD_RESOURCE(service_arn, is_public=True) --RUNS_IMAGE--> CLOUD_RESOURCE(_IMAGE_REF)
-      CLOUD_RESOURCE(service_arn) --STORES_SECRET--> SECRET(_AKIA_KEY)
-    """
-    from cloud_posture.tools.aws_ecs import EcsWorkload
-
-    return EcsWorkload(
-        service_arn=_ECS_ARN,
-        image_ref=_IMAGE_REF,
-        is_public=True,
-        task_role_arn="",
-        env_values=(_AKIA_KEY,),
-    )
-
-
 @pytest.mark.asyncio
 async def test_scan_run_stored_secret_to_data_fires(
     tmp_path: Path,
