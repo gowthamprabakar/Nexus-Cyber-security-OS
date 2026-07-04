@@ -556,3 +556,75 @@ async def test_scan_run_exposed_ai_with_sensitive_data_fires(
         "AI_SERVICE --HAS_ACCESS_TO--> arn:aws:s3:::acme-pii; "
         "data-security wrote CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION."
     )
+
+
+# ---------------------------------------------------------------------------
+# G-4: e2e proof — find_kms_key_access fires through scan_run
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scan_run_kms_key_access_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G-4: find_kms_key_access fires through scan_run with all three legs wired.
+
+    Three legs cooperate in the shared SemanticStore:
+      1. cloud-posture (record_kms_keys) writes
+             CLOUD_RESOURCE{kind=kms-key, external_id=_KMS_ARN}
+      2. cloud-posture (record_kms_protected_data) writes
+             CLOUD_RESOURCE(kms-key) --EXPOSES_DATA--> DATA_CLASSIFICATION
+      3. identity (AdministratorAccess admin role) writes
+             IDENTITY(AdminRole) --HAS_ACCESS_TO--> CLOUD_RESOURCE(_KMS_ARN)
+
+    The detector walk:
+      IDENTITY --HAS_ACCESS_TO--> CLOUD_RESOURCE{kind=kms-key} --EXPOSES_DATA--> DATA_CLASSIFICATION
+    → path_type == "kms_key_access"
+
+    Join key: _KMS_ARN is the external_id for the kms-key node (written by record_kms_keys
+    keyed by key_arn) AND the first element of the kms_protected_data tuple AND the target
+    of identity's HAS_ACCESS_TO expansion (which covers all CLOUD_RESOURCE nodes for admins).
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_kms import KmsKey
+
+    # The identity listing must be present so identity writes HAS_ACCESS_TO
+    # against the kms-key CLOUD_RESOURCE node.  The admin role covers all
+    # CLOUD_RESOURCE nodes via the wildcard-expand in _write_access_edges.
+    listing = _admin_identity_listing()
+
+    sources = ScanSources(
+        identity_listing=listing,
+        cloud_kms_keys=(
+            KmsKey(
+                key_arn=_KMS_ARN,
+                is_public=False,  # not about public exposure; about access to data-protecting key
+            ),
+        ),
+        cloud_kms_protected_data=((_KMS_ARN, "pii"),),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "kms_key_access" in path_types, (
+        f"kms_key_access path not confirmed; got path_types={path_types}. "
+        f"Check join keys: cloud-posture record_kms_keys external_id={_KMS_ARN!r}; "
+        f"cloud-posture record_kms_protected_data first tuple element={_KMS_ARN!r}; "
+        f"identity admin role {_ADMIN_ROLE_ARN!r} expands HAS_ACCESS_TO all CLOUD_RESOURCE nodes."
+    )

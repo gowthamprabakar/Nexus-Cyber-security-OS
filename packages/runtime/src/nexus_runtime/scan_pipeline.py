@@ -6,9 +6,13 @@ in the task brief).  A bad feeder degrades coverage, never aborts: every feeder
 call is wrapped in try/except and the partial graph is always passed to analyze.
 
 Dependency order (load-bearing — mirrors correlation.py comment + plan):
-  data-security → identity → cloud-posture (Task 9) → vulnerability →
+  data-security → cloud-posture (Task 9, G-4) → identity → vulnerability →
   k8s-posture → network-threat → threat-intel → runtime-threat → aispm →
   appsec → analyze
+
+  cloud-posture is promoted ahead of identity (G-4) so that kms-key / EC2 /
+  ECS CLOUD_RESOURCE nodes exist when identity expands admin HAS_ACCESS_TO
+  edges — the kms_key_access detector requires kms-key written before identity.
 
 This first cut builds only the data-security and identity feeders (TDD:
 the Task 1 test exercises data-security; Task 3 exercises identity).  The
@@ -177,6 +181,7 @@ class ScanSources:
     cloud_ec2_workloads: tuple[Ec2Workload, ...] | None = None
     cloud_ecs_workloads: tuple[EcsWorkload, ...] | None = None
     cloud_kms_keys: tuple[KmsKey, ...] | None = None
+    cloud_kms_protected_data: tuple[tuple[str, str], ...] | None = None
     cloud_rds_instances: tuple[RdsInstance, ...] | None = None
 
 
@@ -260,8 +265,10 @@ async def scan_run(
     partial graph so coverage degradation is surfaced, not a hard abort.
 
     Feeder dependency order is enforced by the ``await`` sequence below
-    (data-security must write CLOUD_RESOURCE + EXPOSES_DATA before identity
-    can write HAS_ACCESS_TO; all writes precede analyze).
+    (data-security + cloud-posture must write CLOUD_RESOURCE nodes before
+    identity expands HAS_ACCESS_TO; all writes precede analyze).
+    cloud-posture is ahead of identity so kms-key nodes exist when identity
+    writes admin HAS_ACCESS_TO edges (G-4 / kms_key_access detector).
     """
     store = SemanticStore(session_factory)
     feeders: list[FeederOutcome] = []
@@ -279,7 +286,10 @@ async def scan_run(
 
     # ------------------------------------------------------------------
     # Dependency order (load-bearing — MUST NOT be reordered):
-    # data-security writes CLOUD_RESOURCE nodes before identity reads them.
+    # data-security + cloud-posture write CLOUD_RESOURCE nodes before
+    # identity reads them.  cloud-posture is promoted ahead of identity so
+    # that kms-key / EC2 / ECS nodes exist when identity expands admin
+    # HAS_ACCESS_TO edges — the kms_key_access detector (G-4) requires this.
     # ------------------------------------------------------------------
 
     # 1. data-security
@@ -300,30 +310,15 @@ async def scan_run(
         ),
     )
 
-    # 2. identity
-    await _feed(
-        "identity",
-        sources.identity_listing is not None,
-        lambda: identity_run(
-            _contract(
-                tenant,
-                "identity",
-                _ID_TOOLS,
-                workspace_root / "identity",
-                ["findings.json", "summary.md"],
-            ),
-            iam_listing=sources.identity_listing,
-            semantic_store=store,
-        ),
-    )
-
-    # 3. cloud-posture (after identity; uses injectable workload seam from Task 9 / G-1)
+    # 2. cloud-posture (before identity so kms-key / EC2 / ECS nodes exist when
+    #    identity expands admin HAS_ACCESS_TO; uses injectable workload seam from Task 9 / G-1)
     await _feed(
         "cloud-posture",
         (
             sources.cloud_ec2_workloads is not None
             or sources.cloud_ecs_workloads is not None
             or sources.cloud_kms_keys is not None
+            or sources.cloud_kms_protected_data is not None
             or sources.cloud_rds_instances is not None
         ),
         lambda: cloud_posture_run(
@@ -337,7 +332,26 @@ async def scan_run(
             ec2_workloads=sources.cloud_ec2_workloads,
             ecs_workloads=sources.cloud_ecs_workloads,
             kms_keys=sources.cloud_kms_keys,
+            kms_protected_data=sources.cloud_kms_protected_data,
             rds_instances=sources.cloud_rds_instances,
+            semantic_store=store,
+        ),
+    )
+
+    # 3. identity (after data-security and cloud-posture so HAS_ACCESS_TO expansion
+    #    covers all CLOUD_RESOURCE nodes — both bucket and kms-key nodes)
+    await _feed(
+        "identity",
+        sources.identity_listing is not None,
+        lambda: identity_run(
+            _contract(
+                tenant,
+                "identity",
+                _ID_TOOLS,
+                workspace_root / "identity",
+                ["findings.json", "summary.md"],
+            ),
+            iam_listing=sources.identity_listing,
             semantic_store=store,
         ),
     )
