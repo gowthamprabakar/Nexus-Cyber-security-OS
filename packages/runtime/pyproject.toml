@@ -10,6 +10,13 @@ dependencies = [
     "nexus-identity",
     "nexus-investigation-agent",
     "nexus-audit-agent",
+    "nexus-cloud-posture",
+    "nexus-vulnerability",
+    "nexus-k8s-posture-agent",
+    "nexus-network-threat-agent",
+    "nexus-threat-intel-agent",
+    "nexus-runtime-threat",
+    "nexus-appsec-agent",
     "python-ulid>=3.0.0",
 ]
 
@@ -27,6 +34,13 @@ nexus-data-security-agent = { workspace = true }
 nexus-identity = { workspace = true }
 nexus-investigation-agent = { workspace = true }
 nexus-audit-agent = { workspace = true }
+nexus-cloud-posture = { workspace = true }
+nexus-vulnerability = { workspace = true }
+nexus-k8s-posture-agent = { workspace = true }
+nexus-network-threat-agent = { workspace = true }
+nexus-threat-intel-agent = { workspace = true }
+nexus-runtime-threat = { workspace = true }
+nexus-appsec-agent = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -131,6 +131,38 @@ ignore_missing_imports = true
 module = ["azure", "azure.*", "google", "google.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["openai", "openai.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["dspy", "dspy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["fastapi", "fastapi.*"]
+ignore_missing_imports = true
+
+# google.cloud sub-packages expose attributes at runtime that mypy can't see via
+# ignore_missing_imports alone — suppress errors in the modules that import them.
+[[tool.mypy.overrides]]
+module = ["aispm.tools.gcp_ai"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["multi_cloud_posture.tools.gcp_discovery"]
+ignore_errors = true
+
+# fastapi-powered control-plane endpoints are not typed by fastapi stubs;
+# ignore type errors in the control-plane API layer.
+[[tool.mypy.overrides]]
+module = ["control_plane.api.scim", "control_plane.api.auth_routes"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 python_files = "test_*.py"

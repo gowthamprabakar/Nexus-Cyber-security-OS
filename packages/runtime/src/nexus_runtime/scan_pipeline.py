@@ -21,14 +21,24 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from appsec.agent import run as appsec_run
+from appsec.tools.scm_connector import ScmConnector
 from charter.contract import BudgetSpec, ExecutionContract
 from charter.memory import SemanticStore
+from cloud_posture.agent import run as cloud_posture_run
+from cloud_posture.tools.aws_ec2 import Ec2Workload
+from cloud_posture.tools.aws_ecs import EcsWorkload
 from data_security.agent import run as data_security_run
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
+from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
+from network_threat.agent import run as network_threat_run
+from runtime_threat.agent import run as runtime_threat_run
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from threat_intel.agent import run as threat_intel_run
 from ulid import ULID
+from vulnerability.agent import run as vulnerability_run
 
 # ---------------------------------------------------------------------------
 # Permitted-tool lists — copied verbatim from correlation.py (single source of
@@ -53,6 +63,54 @@ _ID_TOOLS: list[str] = [
     "detect_aws_oidc_providers",
     "detect_azure_federated_domains",
     "detect_azure_oidc_providers",
+]
+
+_CP_TOOLS: list[str] = [
+    "prowler_scan",
+    "aws_s3_list_buckets",
+    "aws_s3_describe",
+    "aws_iam_list_users_without_mfa",
+    "aws_iam_list_admin_policies",
+    "kg_upsert_asset",
+    "kg_upsert_finding",
+]
+
+_VULN_TOOLS: list[str] = [
+    "trivy_image_scan",
+    "trivy_fs_scan",
+    "trivy_host_scan",
+]
+
+_K8S_TOOLS: list[str] = [
+    "read_kube_bench",
+    "read_polaris",
+    "read_manifests",
+]
+
+_NET_TOOLS: list[str] = [
+    "read_suricata_alerts",
+    "read_vpc_flow_logs",
+    "read_dns_logs",
+]
+
+_TI_TOOLS: list[str] = [
+    "read_nvd_feed",
+    "read_cisa_kev",
+    "read_mitre_attack",
+]
+
+_RT_TOOLS: list[str] = [
+    "falco_alerts_read",
+    "tracee_alerts_read",
+    "osquery_run",
+]
+
+_APPSEC_TOOLS: list[str] = [
+    "discover_repositories",
+    "run_checkov",
+    "run_gitleaks",
+    "clone_repository",
+    "run_semgrep",
 ]
 
 
@@ -97,12 +155,11 @@ class ScanSources:
     runtime_falco_feed: Path | None = None
 
     # appsec connector
-    appsec_scm_connector: object | None = None
+    appsec_scm_connector: ScmConnector | None = None
 
     # cloud-posture injectable workload params
-    # cloud-posture feeder lands in Task 9 (needs injectable workload seam)
-    cloud_ec2_workloads: tuple[object, ...] | None = None
-    cloud_ecs_workloads: tuple[object, ...] | None = None
+    cloud_ec2_workloads: tuple[Ec2Workload, ...] | None = None
+    cloud_ecs_workloads: tuple[EcsWorkload, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +210,7 @@ def _contract(
             llm_calls=5,
             tokens=20_000,
             wall_clock_sec=120.0,
-            cloud_api_calls=50,
+            cloud_api_calls=500,
             mb_written=20,
         ),
         permitted_tools=tools,
@@ -242,10 +299,127 @@ async def scan_run(
         ),
     )
 
-    # cloud-posture feeder lands in Task 9 (needs injectable workload seam)
+    # 3. cloud-posture (after identity; uses injectable workload seam from Task 9)
+    await _feed(
+        "cloud-posture",
+        (sources.cloud_ec2_workloads is not None or sources.cloud_ecs_workloads is not None),
+        lambda: cloud_posture_run(
+            _contract(
+                tenant,
+                "cloud_posture",
+                _CP_TOOLS,
+                workspace_root / "cloud_posture",
+                ["findings.json", "summary.md"],
+            ),
+            ec2_workloads=sources.cloud_ec2_workloads,
+            ecs_workloads=sources.cloud_ecs_workloads,
+            semantic_store=store,
+        ),
+    )
 
-    # additional feeders (vuln/k8s/network/threat/runtime/appsec/cloud) added by
-    # their wiring tasks + Task 11 e2e
+    # 4. vulnerability (image_refs scan; enrich=False keeps it deterministic/offline)
+    await _feed(
+        "vulnerability",
+        bool(sources.vuln_image_refs),
+        lambda: vulnerability_run(
+            _contract(
+                tenant,
+                "vulnerability",
+                _VULN_TOOLS,
+                workspace_root / "vulnerability",
+                ["findings.json", "summary.md"],
+            ),
+            image_refs=list(sources.vuln_image_refs or ()),
+            enrich=False,
+            semantic_store=store,
+        ),
+    )
+
+    # 5. k8s-posture (manifest_dir feed)
+    await _feed(
+        "k8s-posture",
+        sources.k8s_manifest_dir is not None,
+        lambda: k8s_posture_run(
+            _contract(
+                tenant,
+                "k8s_posture",
+                _K8S_TOOLS,
+                workspace_root / "k8s_posture",
+                ["findings.json", "report.md"],
+            ),
+            manifest_dir=sources.k8s_manifest_dir,
+            semantic_store=store,
+        ),
+    )
+
+    # 6. network-threat (vpc_flow_feed)
+    await _feed(
+        "network-threat",
+        sources.network_vpc_flow_feed is not None,
+        lambda: network_threat_run(
+            _contract(
+                tenant,
+                "network_threat",
+                _NET_TOOLS,
+                workspace_root / "network_threat",
+                ["findings.json", "summary.md"],
+            ),
+            vpc_flow_feed=sources.network_vpc_flow_feed,
+            semantic_store=store,
+        ),
+    )
+
+    # 7. threat-intel (nvd + kev snapshots)
+    await _feed(
+        "threat-intel",
+        (sources.threat_nvd_snapshot is not None or sources.threat_kev_snapshot is not None),
+        lambda: threat_intel_run(
+            _contract(
+                tenant,
+                "threat_intel",
+                _TI_TOOLS,
+                workspace_root / "threat_intel",
+                ["findings.json", "summary.md"],
+            ),
+            nvd_snapshot=sources.threat_nvd_snapshot,
+            kev_snapshot=sources.threat_kev_snapshot,
+            semantic_store=store,
+        ),
+    )
+
+    # 8. runtime-threat (falco_feed)
+    await _feed(
+        "runtime-threat",
+        sources.runtime_falco_feed is not None,
+        lambda: runtime_threat_run(
+            _contract(
+                tenant,
+                "runtime_threat",
+                _RT_TOOLS,
+                workspace_root / "runtime_threat",
+                ["findings.json", "summary.md"],
+            ),
+            falco_feed=sources.runtime_falco_feed,
+            semantic_store=store,
+        ),
+    )
+
+    # 9. appsec (scm_connector)
+    await _feed(
+        "appsec",
+        sources.appsec_scm_connector is not None,
+        lambda: appsec_run(
+            _contract(
+                tenant,
+                "appsec",
+                _APPSEC_TOOLS,
+                workspace_root / "appsec",
+                ["repo_inventory.json", "findings.json", "summary.md"],
+            ),
+            scm_connector=sources.appsec_scm_connector,
+            semantic_store=store,
+        ),
+    )
 
     # ------------------------------------------------------------------
     # analyze always runs on whatever the feeders wrote (partial is fine)
