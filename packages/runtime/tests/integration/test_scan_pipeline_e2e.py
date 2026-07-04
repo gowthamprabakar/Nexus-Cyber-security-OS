@@ -367,3 +367,192 @@ async def test_scan_run_stored_secret_to_data_fires(
         f"cloud-posture ECS {_ECS_ARN!r} stores same key; "
         f"data-security bucket {_BUCKET_NAME!r} exposes PII."
     )
+
+
+# ---------------------------------------------------------------------------
+# G-3 Part A: e2e proof — newly-lit detectors fire through scan_run
+# ---------------------------------------------------------------------------
+
+_RDS_ARN = "arn:aws:rds:us-east-1:123456789012:db:prod-db"
+_KMS_ARN = "arn:aws:kms:us-east-1:123456789012:key/abcd-1234"
+
+# Account used by the aispm fake — same as the bucket's account so the canonical
+# ARN produced by s3_bucket_arn("acme-pii") matches data-security's bucket node.
+_AI_ACCOUNT_ID = "123456789012"
+
+
+class _ExposedAiReader:
+    """Fake AwsAiReader that returns one SageMaker endpoint with:
+    - network_isolated=False  → aispm writes EXPOSES_MODEL to the internet sentinel
+    - model_data_bucket="acme-pii"  → aispm writes HAS_ACCESS_TO the bucket node that
+      data-security wrote with EXPOSES_DATA (canonical key arn:aws:s3:::acme-pii).
+
+    These two edges combine with data-security's EXPOSES_DATA to form the
+    find_exposed_ai_with_sensitive_data spine:
+      AI_SERVICE --EXPOSES_MODEL--> internet
+      AI_SERVICE --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+      CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION
+    """
+
+    def sagemaker_endpoints(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "name": "sensitive-ep",
+                "data_capture_enabled": False,
+                "model_name": "m1",
+                "network_isolated": False,
+                "model_data_bucket": "acme-pii",
+            }
+        ]
+
+    def sagemaker_notebooks(self) -> list[dict[str, Any]]:
+        return []
+
+    def bedrock_logging_enabled(self) -> bool | None:
+        return True
+
+    def bedrock_guardrail_count(self) -> int:
+        return 0
+
+
+@pytest.mark.asyncio
+async def test_scan_run_exposed_database_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G-3 Part A-1: find_exposed_database fires through scan_run with a public RDS instance.
+
+    cloud-posture feeder receives a public RdsInstance via ScanSources.cloud_rds_instances.
+    record_rds_instances writes CLOUD_RESOURCE{kind=rds-instance, is_public=True}.
+    analyze → find_exposed_database → confirmed path_type == "exposed_database".
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_rds import RdsInstance
+
+    sources = ScanSources(
+        cloud_rds_instances=(
+            RdsInstance(
+                instance_arn=_RDS_ARN,
+                is_public=True,
+                engine="mysql",
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "exposed_database" in path_types, (
+        f"exposed_database path not confirmed; got path_types={path_types}. "
+        f"Check cloud-posture wrote CLOUD_RESOURCE{{kind=rds-instance, is_public=True}} "
+        f"for {_RDS_ARN!r} and find_exposed_database picked it up."
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_exposed_kms_key_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G-3 Part A-2: find_exposed_kms_key fires through scan_run with a public KMS key.
+
+    cloud-posture feeder receives a public KmsKey via ScanSources.cloud_kms_keys.
+    record_kms_keys writes CLOUD_RESOURCE{kind=kms-key, is_public=True}.
+    analyze → find_exposed_kms_key → confirmed path_type == "exposed_kms_key".
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_kms import KmsKey
+
+    sources = ScanSources(
+        cloud_kms_keys=(
+            KmsKey(
+                key_arn=_KMS_ARN,
+                is_public=True,
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "exposed_kms_key" in path_types, (
+        f"exposed_kms_key path not confirmed; got path_types={path_types}. "
+        f"Check cloud-posture wrote CLOUD_RESOURCE{{kind=kms-key, is_public=True}} "
+        f"for {_KMS_ARN!r} and find_exposed_kms_key picked it up."
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_exposed_ai_with_sensitive_data_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """G-3 Part A-3: find_exposed_ai_with_sensitive_data fires through scan_run end-to-end.
+
+    Three feeders cooperate in the shared SemanticStore:
+      1. data-security writes CLOUD_RESOURCE(acme-pii) + EXPOSES_DATA --> DATA_CLASSIFICATION
+      2. aispm writes AI_SERVICE(sensitive-ep)
+                     --EXPOSES_MODEL--> internet sentinel  (network_isolated=False)
+                     --HAS_ACCESS_TO--> CLOUD_RESOURCE(arn:aws:s3:::acme-pii)
+      3. analyze → find_exposed_ai_with_sensitive_data → confirmed "exposed_ai_sensitive_data"
+
+    The bucket ARN join: data-security keys by canonical arn:aws:s3:::acme-pii; aispm kg_writer
+    calls s3_bucket_arn("acme-pii") which produces the same string — the nodes reconcile.
+    """
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        aispm_aws_reader=_ExposedAiReader(),
+        aispm_aws_account_id=_AI_ACCOUNT_ID,
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "aispm" in feeder_names, f"aispm missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "exposed_ai_sensitive_data" in path_types, (
+        f"exposed_ai_sensitive_data path not confirmed; got path_types={path_types}. "
+        "Check: aispm wrote AI_SERVICE --EXPOSES_MODEL--> internet AND "
+        "AI_SERVICE --HAS_ACCESS_TO--> arn:aws:s3:::acme-pii; "
+        "data-security wrote CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION."
+    )

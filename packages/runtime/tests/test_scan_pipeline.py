@@ -145,11 +145,14 @@ async def test_aispm_feeder_runs_and_writes_ai_nodes(
     tmp_path: Path,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """aispm feeder fires when aws_reader is set, records ok=True, and writes AI_SERVICE nodes.
+    """aispm feeder fires when aws_reader is set and records ok=True.
 
     Uses the same _FakeAwsAiReader shape as aispm's own unit tests. The fake reports
     one SageMaker endpoint + bedrock logging on → one OCSF 2003 inference-logging finding.
-    With semantic_store wired, the KG writer upserts an ai_service node.
+    NOTE: no aispm_aws_account_id is passed here, so aispm skips the AWS discovery path
+    (aws_account_id is None) — no AI_SERVICE nodes are written. The G-3 e2e test in
+    test_scan_pipeline_e2e.py proves the full write-path including AI node writes.
+    This test proves only that the feeder plumbing (wiring, ok=True, no exception) is correct.
     """
     sources = ScanSources(aispm_aws_reader=_FakeAwsAiReader())
     result = await scan_run(

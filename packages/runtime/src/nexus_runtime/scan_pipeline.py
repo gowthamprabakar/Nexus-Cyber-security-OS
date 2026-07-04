@@ -166,6 +166,7 @@ class ScanSources:
 
     # aispm injectable readers (object | None avoids importing heavy reader protocols here)
     aispm_aws_reader: object | None = None
+    aispm_aws_account_id: str | None = None  # required to activate the AWS discovery path
     aispm_azure_reader: object | None = None
     aispm_gcp_reader: object | None = None
 
@@ -444,6 +445,7 @@ async def scan_run(
                 workspace_root / "aispm",
                 ["findings.json", "summary.md"],
             ),
+            aws_account_id=sources.aispm_aws_account_id,
             aws_reader=sources.aispm_aws_reader,  # type: ignore[arg-type]
             azure_reader=sources.aispm_azure_reader,  # type: ignore[arg-type]
             gcp_reader=sources.aispm_gcp_reader,  # type: ignore[arg-type]
