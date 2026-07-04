@@ -243,6 +243,10 @@ async def run(
                 writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
                 await writer.record_external_trust([p for p, _ in cross])
                 await writer.record_assume_grants(cross)
+            # W4: IAM user access keys → IDENTITY --OWNS--> SECRET(key_id) (path #17 convergence).
+            cred_grants = _credential_grants(listing)
+            if cred_grants:
+                await kg.record_credential_ownership(cred_grants)
 
         findings = await normalize_to_findings(
             listing,
