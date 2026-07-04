@@ -157,11 +157,6 @@ ignore_errors = true
 module = ["multi_cloud_posture.tools.gcp_discovery"]
 ignore_errors = true
 
-# fastapi-powered control-plane endpoints are not typed by fastapi stubs;
-# ignore type errors in the control-plane API layer.
-[[tool.mypy.overrides]]
-module = ["control_plane.api.scim", "control_plane.api.auth_routes"]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages"]
