@@ -7,6 +7,7 @@ no kubeconfig/in_cluster, and asserts that BOTH:
 
   (a) the inventory node lands  — proves the guard was relaxed
   (b) the privileged K8S_OBJECT node lands  — proves record_privileged_workloads was called
+  (c) image_ref equals the REAL container image, not the synthetic manifest-scan/... fallback
 
 Step 2: run before the implementation → both assertions FAIL (guard blocks offline writes).
 Step 4: run after the implementation → both PASS.
@@ -27,14 +28,13 @@ from charter.memory.models import Base
 from charter.memory.semantic import SemanticStore
 from k8s_posture import agent as agent_mod
 from k8s_posture.agent import run
-from k8s_posture.schemas import Severity
-from k8s_posture.tools.manifests import ManifestFinding
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.asyncio
 
 _TENANT = "cust_offline_kg"
 _CLUSTER_ID = "offline-test-cluster"
+_REAL_IMAGE = "ghcr.io/attack/tool:latest"
 
 
 # ---------------------------------------------------------------------------
@@ -98,47 +98,30 @@ def _privileged_pod_manifest(*, name: str, namespace: str, image: str) -> dict[s
 
 
 async def test_offline_manifest_writes_inventory_and_privileged_node(
-    tmp_path: Path, store: SemanticStore, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, store: SemanticStore
 ) -> None:
     """
     Drive run() with manifest_dir (offline) containing a privileged pod.
-    No kubeconfig, no in_cluster.
+    No kubeconfig, no in_cluster. Uses the REAL read_manifests reader — no monkeypatching.
 
     Asserts:
       (a) at least one K8S_OBJECT node lands in the store (guard relaxed — offline
           feed-driven writes now happen).
       (b) a K8S_OBJECT node with privileged=True lands (record_privileged_workloads
           was called and wrote the pod node).
+      (c) the privileged workload's image_ref is the REAL container image from the manifest
+          (not the synthetic "manifest-scan/..." fallback — proves unmapped["image"] is set
+          by the real reader's _check_container_rules for privileged-container findings).
     """
     # Build a manifest directory with one privileged pod.
     manifest_dir = tmp_path / "manifests"
     manifest_dir.mkdir()
     pod_manifest = _privileged_pod_manifest(
-        name="pwned-pod", namespace="kube-system", image="ghcr.io/attack/tool:latest"
+        name="pwned-pod", namespace="kube-system", image=_REAL_IMAGE
     )
     (manifest_dir / "pwned-pod.yaml").write_text(yaml.safe_dump(pod_manifest))
 
-    # Patch read_manifests so it returns a real privileged-container ManifestFinding
-    # (avoids needing yaml parsing in the agent path — the real reader would also work,
-    # but the patched version is faster and isolation is cleaner).
-    priv_finding = ManifestFinding(
-        rule_id="privileged-container",
-        rule_title="Privileged container",
-        severity=Severity.HIGH,
-        workload_kind="Pod",
-        workload_name="pwned-pod",
-        namespace="kube-system",
-        container_name="pwned",
-        manifest_path=str(manifest_dir / "pwned-pod.yaml"),
-        detected_at=datetime.now(UTC),
-        unmapped={"image": "ghcr.io/attack/tool:latest"},
-    )
-
-    async def fake_manifests(*, path: Path, **_: Any) -> tuple[ManifestFinding, ...]:
-        return (priv_finding,)
-
-    monkeypatch.setattr(agent_mod, "read_manifests", fake_manifests)
-
+    # No monkeypatching — the real read_manifests reader parses the YAML on disk.
     contract = _contract(tmp_path)
     await run(
         contract,
@@ -158,6 +141,24 @@ async def test_offline_manifest_writes_inventory_and_privileged_node(
         "got none — offline guard was not relaxed or privileged-workload derive is missing"
     )
     assert privileged_pods[0].properties.get("name") == "pwned-pod"
+
+    # (c) The RUNS_IMAGE edge must point to the REAL image from the manifest.
+    # record_privileged_workloads writes a CLOUD_RESOURCE node keyed by image_ref.
+    # If the reader set unmapped["image"] correctly, that node's external_id = _REAL_IMAGE.
+    # If it fell back to the synthetic key, external_id = "manifest-scan/..." instead.
+    image_nodes = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource")
+    container_image_nodes = [
+        n for n in image_nodes if n.properties.get("kind") == "container-image"
+    ]
+    assert container_image_nodes, (
+        "expected a container-image CLOUD_RESOURCE node from RUNS_IMAGE edge"
+    )
+    image_ids = [n.external_id for n in container_image_nodes]
+    assert _REAL_IMAGE in image_ids, (
+        f"expected container-image node with external_id={_REAL_IMAGE!r}, got {image_ids!r} — "
+        "real reader is not setting unmapped['image'] on privileged-container findings "
+        "(RUNS_IMAGE edge falls back to synthetic manifest-scan/... key)"
+    )
 
 
 async def test_offline_kube_bench_only_writes_nothing_to_graph(

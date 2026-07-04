@@ -370,6 +370,12 @@ def _check_container_rules(
         )
     # privileged: securityContext.privileged is true
     if sec_ctx_dict.get("privileged") is True:
+        # Capture the container image so _privileged_from_manifest_findings can build
+        # a real RUNS_IMAGE edge instead of falling back to the synthetic key.
+        _priv_unmapped: dict[str, Any] = {}
+        _img = container.get("image")
+        if _img:
+            _priv_unmapped["image"] = str(_img)
         out.append(
             _build_finding(
                 _RULES["privileged-container"],
@@ -379,6 +385,7 @@ def _check_container_rules(
                 container_name=container_name,
                 manifest_path=manifest_path,
                 detected_at=detected_at,
+                unmapped=_priv_unmapped,
             )
         )
     # allowPrivilegeEscalation: true → finding
@@ -470,6 +477,7 @@ def _build_finding(
     container_name: str,
     manifest_path: Path,
     detected_at: datetime,
+    unmapped: dict[str, Any] | None = None,
 ) -> ManifestFinding:
     return ManifestFinding(
         rule_id=rule.rule_id,
@@ -481,6 +489,7 @@ def _build_finding(
         container_name=container_name,
         manifest_path=str(manifest_path),
         detected_at=detected_at,
+        unmapped=unmapped or {},
     )
 
 

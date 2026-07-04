@@ -358,6 +358,9 @@ def _privileged_from_manifest_findings(
         image_ref = str(f.unmapped.get("image") or "") or (
             f"manifest-scan/{cluster_id}/{f.namespace}/{f.workload_name}"
         )
+        # ponytail: offline SA is approximate — serviceAccountName lives on pod_spec,
+        # not on the container, so the manifest reader can't surface it per-finding
+        # without threading pod_spec through _check_container_rules. Deferred to v0.6.
         out.append(
             PrivilegedWorkload(
                 namespace=f.namespace,
