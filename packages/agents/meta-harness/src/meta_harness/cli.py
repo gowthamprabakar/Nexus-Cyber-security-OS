@@ -588,6 +588,10 @@ def scan_cmd(
     from meta_harness.attack_path_report import render_candidates, render_report
 
     async def _run() -> None:
+        import json as _json
+
+        from meta_harness.attack_path_report import candidate_to_dict, path_to_dict
+
         factory = await build_session_factory(dsn)
         sources = ScanSources(
             ds_inventory_feed=_Path(ds_inventory_feed) if ds_inventory_feed else None,
@@ -599,12 +603,26 @@ def scan_cmd(
             sources=sources,
             workspace_root=_Path(".nexus-scan"),
         )
-        for f in res.feeders:
-            click.echo(f"feeder {f.agent}: {'ok' if f.ok else 'FAILED ' + (f.error or '')}")
-        click.echo()
-        click.echo(render_report(res.confirmed, tenant_id=customer_id, limit=limit))  # type: ignore[arg-type]
-        click.echo()
-        click.echo(render_candidates(res.candidates, tenant_id=customer_id))  # type: ignore[arg-type]
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {
+                        "feeders": [
+                            {"agent": f.agent, "ok": f.ok, "error": f.error} for f in res.feeders
+                        ],
+                        "confirmed": [path_to_dict(p) for p in res.confirmed[:limit]],  # type: ignore[arg-type]
+                        "candidates": [candidate_to_dict(c) for c in res.candidates],  # type: ignore[arg-type]
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            for f in res.feeders:
+                click.echo(f"feeder {f.agent}: {'ok' if f.ok else 'FAILED ' + (f.error or '')}")
+            click.echo()
+            click.echo(render_report(res.confirmed, tenant_id=customer_id, limit=limit))  # type: ignore[arg-type]
+            click.echo()
+            click.echo(render_candidates(res.candidates, tenant_id=customer_id))  # type: ignore[arg-type]
 
     _asyncio.run(_run())
 

@@ -286,7 +286,7 @@ def _resolve_continuous_source(
     # Task 14 opt-in: register ScanScheduler when NEXUS_CONTINUOUS_SCAN=1.
     # Default OFF — empty driver produces no due runs (unchanged behaviour).
     scan_enabled = environ.get(_ENV_CONTINUOUS_SCAN, "").strip() == "1"
-    decision["scan_scheduler_registered"] = scan_enabled
+    decision["scan_scheduler_registered"] = scan_enabled and bool(customer_id)
     if scan_enabled and customer_id:
         from datetime import timedelta
 
