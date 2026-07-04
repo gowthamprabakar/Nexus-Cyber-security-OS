@@ -217,7 +217,8 @@ async def run(
 
         # Stage 2: ENRICH — build indices, optionally persist to KG.
         kev_index = build_kev_index(kev_entries)
-        ioc_index = build_ioc_index(_build_iocs_from_feeds(nvd_records, kev_entries))
+        ioc_entities = _build_iocs_from_feeds(nvd_records, kev_entries)
+        ioc_index = build_ioc_index(ioc_entities)
         if semantic_store is not None:
             await _persist_to_semantic_store(
                 semantic_store=semantic_store,
@@ -225,6 +226,7 @@ async def run(
                 nvd_records=nvd_records,
                 kev_entries=kev_entries,
                 techniques=techniques,
+                ioc_entities=ioc_entities,
             )
 
         # Stage 3: CORRELATE — three correlators concurrent.
@@ -383,13 +385,15 @@ async def _persist_to_semantic_store(
     nvd_records: Sequence[NvdCveRecord],
     kev_entries: Sequence[KevEntry],
     techniques: Sequence[TechniqueRecord],
+    ioc_entities: Sequence[IocEntity],
 ) -> None:
     """Stage 2 KG persistence (optional v0.1).
 
-    Persists every NVD + KEV CVE as a ``CveEntity``, and every ATT&CK
-    technique as a ``TechniqueEntity``. IOCs are persisted on the
-    same opt-in path even though v0.1's index is sparse (it's the
-    contract for v0.2's richer IOC feeds).
+    Persists every NVD + KEV CVE as a ``CveEntity``, every ATT&CK
+    technique as a ``TechniqueEntity``, and every IOC from the feed-
+    derived index as an ``IocEntity`` (``entity_type="ioc"``). The IOC
+    loop fulfils the cross-agent ``link_threat_indicators`` bridge
+    (network-endpoint → IOC) that needs nodes to match against.
     """
     writer = KnowledgeGraphWriter(semantic_store, customer_id=customer_id)
     kev_by_cve = {kev.cve_id: kev for kev in kev_entries}
@@ -405,6 +409,8 @@ async def _persist_to_semantic_store(
         await writer.upsert_cve(_cve_entity_from_records(None, kev))
     for tech in techniques:
         await writer.upsert_technique(_technique_entity_from_record(tech))
+    for ioc in ioc_entities:
+        await writer.upsert_ioc(ioc)
 
 
 def _cve_entity_from_records(nvd: NvdCveRecord | None, kev: KevEntry | None) -> CveEntity:
