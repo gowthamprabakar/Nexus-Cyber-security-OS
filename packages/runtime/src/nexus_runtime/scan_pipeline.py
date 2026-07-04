@@ -28,6 +28,8 @@ from charter.memory import SemanticStore
 from cloud_posture.agent import run as cloud_posture_run
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
+from cloud_posture.tools.aws_kms import KmsKey
+from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
@@ -160,6 +162,8 @@ class ScanSources:
     # cloud-posture injectable workload params
     cloud_ec2_workloads: tuple[Ec2Workload, ...] | None = None
     cloud_ecs_workloads: tuple[EcsWorkload, ...] | None = None
+    cloud_kms_keys: tuple[KmsKey, ...] | None = None
+    cloud_rds_instances: tuple[RdsInstance, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,10 +303,15 @@ async def scan_run(
         ),
     )
 
-    # 3. cloud-posture (after identity; uses injectable workload seam from Task 9)
+    # 3. cloud-posture (after identity; uses injectable workload seam from Task 9 / G-1)
     await _feed(
         "cloud-posture",
-        (sources.cloud_ec2_workloads is not None or sources.cloud_ecs_workloads is not None),
+        (
+            sources.cloud_ec2_workloads is not None
+            or sources.cloud_ecs_workloads is not None
+            or sources.cloud_kms_keys is not None
+            or sources.cloud_rds_instances is not None
+        ),
         lambda: cloud_posture_run(
             _contract(
                 tenant,
@@ -313,6 +322,8 @@ async def scan_run(
             ),
             ec2_workloads=sources.cloud_ec2_workloads,
             ecs_workloads=sources.cloud_ecs_workloads,
+            kms_keys=sources.cloud_kms_keys,
+            rds_instances=sources.cloud_rds_instances,
             semantic_store=store,
         ),
     )

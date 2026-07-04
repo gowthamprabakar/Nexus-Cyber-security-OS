@@ -62,6 +62,8 @@ from cloud_posture.summarizer import render_summary
 from cloud_posture.tools import aws_account_discovery, aws_iam, aws_s3, prowler
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
+from cloud_posture.tools.aws_kms import KmsKey
+from cloud_posture.tools.aws_rds import RdsInstance
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 from cloud_posture.tools.stored_secrets import stored_secret_grants
 
@@ -343,6 +345,8 @@ async def run(
     discover_all_regions: bool = False,
     ec2_workloads: Sequence[Ec2Workload] | None = None,
     ecs_workloads: Sequence[EcsWorkload] | None = None,
+    kms_keys: Sequence[KmsKey] | None = None,
+    rds_instances: Sequence[RdsInstance] | None = None,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -360,6 +364,9 @@ async def run(
     (offline eval, pipeline injection, tests). When None AND live clients are
     not present (the current offline path), topology writes are skipped and
     findings.json stays byte-identical to pre-Task-9.
+
+    G-1 extension: `kms_keys` / `rds_instances` follow the same seam — when
+    provided, written directly to the KG; when None, skipped (no-op).
     """
     del llm_provider  # reserved for future iterations
 
@@ -471,11 +478,14 @@ async def run(
             # provided (offline/pipeline/test), write them directly without hitting live
             # AWS readers. When None, no topology writes occur (live-reader wiring lands
             # in Task 11 where the pipeline's cloud-posture feeder is wired end-to-end).
+            # G-1 extension: kms_keys / rds_instances use the same seam.
             await _write_topology_to_kg(
                 semantic_store,
                 contract.customer_id,
                 ec2_workloads=ec2_workloads,
                 ecs_workloads=ecs_workloads,
+                kms_keys=kms_keys,
+                rds_instances=rds_instances,
             )
 
         # 6. Write outputs
@@ -525,8 +535,10 @@ async def _write_topology_to_kg(
     *,
     ec2_workloads: Sequence[Ec2Workload] | None,
     ecs_workloads: Sequence[EcsWorkload] | None,
+    kms_keys: Sequence[KmsKey] | None,
+    rds_instances: Sequence[RdsInstance] | None,
 ) -> None:
-    """Write EC2/ECS topology nodes+edges into the KG when workloads are provided.
+    """Write EC2/ECS/KMS/RDS topology nodes+edges into the KG when workloads are provided.
 
     NEX-004a injectable seam: when the caller supplies workloads (offline / pipeline /
     test), they are written directly via KnowledgeGraphWriter without hitting live AWS
@@ -534,6 +546,9 @@ async def _write_topology_to_kg(
 
     The live-reader path (read_ec2_workloads / read_ecs_workloads) is wired in Task 11
     where the scan_pipeline's cloud-posture feeder exercises the full fleet end-to-end.
+
+    G-1 extension: kms_keys / rds_instances follow the same seam — written when provided,
+    no-op when None. Wires `find_exposed_kms_key` / `find_exposed_database` detectors.
     """
     kg = KnowledgeGraphWriter(semantic_store, customer_id)
     if ec2_workloads is not None:
@@ -548,3 +563,7 @@ async def _write_topology_to_kg(
         )
         if grants:
             await kg.record_stored_secrets(grants)
+    if kms_keys is not None:
+        await kg.record_kms_keys(kms_keys)
+    if rds_instances is not None:
+        await kg.record_rds_instances(rds_instances)
