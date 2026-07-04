@@ -32,6 +32,9 @@ class EcsWorkload:
     image_ref: str
     is_public: bool
     task_role_arn: str = ""
+    #: Container env values pulled from containerDefinitions[].environment[].value.
+    #: Transient inputs to stored_secret_grants — never persisted as plaintext node properties.
+    env_values: tuple[str, ...] = ()
 
 
 def _sg_allows_public(ec2: object, sg_ids: list[str]) -> bool:
@@ -50,12 +53,23 @@ def _sg_allows_public(ec2: object, sg_ids: list[str]) -> bool:
     return False
 
 
-def _task_def_image_and_role(ecs: object, task_def_arn: str) -> tuple[str, str]:
-    """A service's task definition → (first container image ref, taskRoleArn). "" when absent."""
+def _task_def_image_and_role(ecs: object, task_def_arn: str) -> tuple[str, str, tuple[str, ...]]:
+    """A service's task definition → (first container image ref, taskRoleArn, env_values).
+
+    ``env_values`` is the flat collection of all ``environment[].value`` strings across
+    every container definition. These are transient inputs to ``stored_secret_grants`` —
+    they must never be persisted as plaintext node properties.
+    """
     task_def = ecs.describe_task_definition(taskDefinition=task_def_arn)["taskDefinition"]  # type: ignore[attr-defined]
     containers = task_def.get("containerDefinitions") or []
     image = str(containers[0].get("image", "")) if containers else ""
-    return image, str(task_def.get("taskRoleArn", ""))
+    env_values: list[str] = []
+    for ctr in containers:
+        for env_entry in ctr.get("environment") or []:
+            val = env_entry.get("value")
+            if val is not None:
+                env_values.append(str(val))
+    return image, str(task_def.get("taskRoleArn", "")), tuple(env_values)
 
 
 def _service_is_public(
@@ -94,7 +108,9 @@ def read_ecs_workloads(
                 "services", []
             )
             for svc in services:
-                image_ref, task_role_arn = _task_def_image_and_role(ecs, svc["taskDefinition"])
+                image_ref, task_role_arn, env_values = _task_def_image_and_role(
+                    ecs, svc["taskDefinition"]
+                )
                 if not image_ref:
                     continue
                 workloads.append(
@@ -103,6 +119,7 @@ def read_ecs_workloads(
                         image_ref=image_ref,
                         is_public=_service_is_public(ec2, svc, lb_exposed_target_groups),
                         task_role_arn=task_role_arn,
+                        env_values=env_values,
                     )
                 )
     return workloads
