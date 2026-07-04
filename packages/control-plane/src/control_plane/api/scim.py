@@ -54,9 +54,9 @@ def make_scim_router(
         expected = "sha256=" + hmac.new(hmac_secret, body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(header_value, expected):
             raise HTTPException(status_code=401, detail="invalid SCIM signature")
-        return body  # type: ignore[no-any-return]
+        return body
 
-    @router.post("/Users", status_code=201)  # type: ignore[untyped-decorator]
+    @router.post("/Users", status_code=201)
     async def create_user(
         body: bytes = Depends(verify_hmac),
     ) -> JSONResponse:
@@ -85,7 +85,7 @@ def make_scim_router(
             content=_user_to_scim(user_row),
         )
 
-    @router.get("/Users/{user_id}")  # type: ignore[untyped-decorator]
+    @router.get("/Users/{user_id}")
     async def get_user(user_id: str) -> JSONResponse:
         async with session_factory() as session:
             row = await session.get(UserRow, user_id)
@@ -93,7 +93,7 @@ def make_scim_router(
             raise HTTPException(status_code=404, detail="user not found")
         return JSONResponse(content=_user_to_scim(row))
 
-    @router.patch("/Users/{user_id}")  # type: ignore[untyped-decorator]
+    @router.patch("/Users/{user_id}")
     async def patch_user(user_id: str, body: bytes = Depends(verify_hmac)) -> Response:
         payload = _decode_json(body)
         ops = _parse_patch_ops(payload)
@@ -112,7 +112,7 @@ def make_scim_router(
                 await session.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.delete("/Users/{user_id}", status_code=204)  # type: ignore[untyped-decorator]
+    @router.delete("/Users/{user_id}", status_code=204)
     async def delete_user(user_id: str, _: bytes = Depends(verify_hmac)) -> Response:
         async with session_factory() as session:
             row = await session.get(UserRow, user_id)
