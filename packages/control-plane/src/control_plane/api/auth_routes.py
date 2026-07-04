@@ -85,7 +85,7 @@ def make_auth_router(
 
     # ---------------------------- /auth/login -------------------------
 
-    @router.get("/auth/login")  # type: ignore[untyped-decorator]
+    @router.get("/auth/login")
     async def login() -> RedirectResponse:
         await audit_emit("auth.login.initiated", {})
         params = urlencode(
@@ -104,7 +104,7 @@ def make_auth_router(
 
     # ---------------------------- /auth/callback ----------------------
 
-    @router.get("/auth/callback")  # type: ignore[untyped-decorator]
+    @router.get("/auth/callback")
     async def callback(code: str) -> Response:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -145,7 +145,7 @@ def make_auth_router(
 
     _CurrentToken = Depends(current_token)
 
-    @router.get("/auth/me")  # type: ignore[untyped-decorator]
+    @router.get("/auth/me")
     async def me(verified: VerifiedToken = _CurrentToken) -> dict[str, Any]:
         return {
             "sub": verified.sub,
@@ -157,7 +157,7 @@ def make_auth_router(
 
     # ---------------------------- /tenants/me -------------------------
 
-    @router.get("/tenants/me")  # type: ignore[untyped-decorator]
+    @router.get("/tenants/me")
     async def get_my_tenant(verified: VerifiedToken = _CurrentToken) -> dict[str, Any]:
         async with session_factory() as session:
             tenant = await session.get(TenantRow, verified.tenant_id)
@@ -167,7 +167,7 @@ def make_auth_router(
 
     # ---------------------------- POST /tenants -----------------------
 
-    @router.post("/tenants", status_code=201)  # type: ignore[untyped-decorator]
+    @router.post("/tenants", status_code=201)
     async def create_tenant(
         body: CreateTenantBody,
         verified: VerifiedToken = _CurrentToken,
@@ -236,10 +236,10 @@ def _extract_token(request: Request) -> str:
     if auth.startswith("Bearer "):
         token = auth[len("Bearer ") :].strip()
         if token:
-            return token  # type: ignore[no-any-return]
+            return token
     cookie = request.cookies.get(SESSION_COOKIE_NAME)
     if cookie:
-        return cookie  # type: ignore[no-any-return]
+        return cookie
     raise HTTPException(status_code=401, detail="missing bearer token or session cookie")
 
 
