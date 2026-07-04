@@ -182,4 +182,17 @@ async def test_scan_run_e2e_on_real_postgres(
     )
 
     assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    # Both feeders must be present — guards against a silently-dropped feeder making
+    # ``all(f.ok)`` vacuously true over a shorter list (mirrors the SQLite e2e).
+    feeder_names = {f.agent for f in res.feeders}
+    assert "data-security" in feeder_names, f"data-security feeder missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity feeder missing from {feeder_names}"
+
     assert res.confirmed, "operating path must produce a ranked path on real Postgres"
+
+    # Ranking invariant: severity non-increasing (worst-first), same as the SQLite e2e.
+    severities = [p.severity for p in res.confirmed]
+    assert severities == sorted(severities, reverse=True), (
+        f"attack paths must be sorted worst-first by severity; got {severities}"
+    )
