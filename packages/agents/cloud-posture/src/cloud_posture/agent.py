@@ -35,6 +35,7 @@ import asyncio
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,6 +60,8 @@ from cloud_posture.schemas import (
 )
 from cloud_posture.summarizer import render_summary
 from cloud_posture.tools import aws_account_discovery, aws_iam, aws_s3, prowler
+from cloud_posture.tools.aws_ec2 import Ec2Workload
+from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 
 NLAH_VERSION = "0.1.0"
@@ -337,6 +340,8 @@ async def run(
     discover_account: bool = False,
     regions: list[str] | None = None,
     discover_all_regions: bool = False,
+    ec2_workloads: Sequence[Ec2Workload] | None = None,
+    ecs_workloads: Sequence[EcsWorkload] | None = None,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -348,6 +353,12 @@ async def run(
     `llm_provider` is accepted to keep the call signature stable across
     later agents that DO drive their loops via LLM. Cloud Posture v0.1
     does not call it.
+
+    NEX-004a injectable topology seam (Task 9, mirrors identity's iam_listing):
+    `ec2_workloads` / `ecs_workloads` bypass the live AWS readers when provided
+    (offline eval, pipeline injection, tests). When None AND live clients are
+    not present (the current offline path), topology writes are skipped and
+    findings.json stays byte-identical to pre-Task-9.
     """
     del llm_provider  # reserved for future iterations
 
@@ -455,6 +466,16 @@ async def run(
         # 5. Knowledge-graph persistence (best-effort; only if SemanticStore provided)
         if semantic_store is not None:
             await _upsert_findings_to_kg(ctx, findings)
+            # NEX-004a: EC2/ECS topology injectable seam (Task 9). When workloads are
+            # provided (offline/pipeline/test), write them directly without hitting live
+            # AWS readers. When None, no topology writes occur (live-reader wiring lands
+            # in Task 11 where the pipeline's cloud-posture feeder is wired end-to-end).
+            await _write_topology_to_kg(
+                semantic_store,
+                contract.customer_id,
+                ec2_workloads=ec2_workloads,
+                ecs_workloads=ecs_workloads,
+            )
 
         # 6. Write outputs
         ctx.write_output(
@@ -495,3 +516,26 @@ async def _upsert_findings_to_kg(ctx: Charter, findings: list[CloudPostureFindin
             severity=finding.severity.value,
             affected_arns=[str(r.get("uid", "")) for r in finding.resources if r.get("uid")],
         )
+
+
+async def _write_topology_to_kg(
+    semantic_store: SemanticStore,
+    customer_id: str,
+    *,
+    ec2_workloads: Sequence[Ec2Workload] | None,
+    ecs_workloads: Sequence[EcsWorkload] | None,
+) -> None:
+    """Write EC2/ECS topology nodes+edges into the KG when workloads are provided.
+
+    NEX-004a injectable seam: when the caller supplies workloads (offline / pipeline /
+    test), they are written directly via KnowledgeGraphWriter without hitting live AWS
+    readers. When None, this is a no-op — findings.json stays byte-identical.
+
+    The live-reader path (read_ec2_workloads / read_ecs_workloads) is wired in Task 11
+    where the scan_pipeline's cloud-posture feeder exercises the full fleet end-to-end.
+    """
+    kg = KnowledgeGraphWriter(semantic_store, customer_id)
+    if ec2_workloads is not None:
+        await kg.record_ec2_workloads(ec2_workloads)
+    if ecs_workloads is not None:
+        await kg.record_workloads(ecs_workloads)
