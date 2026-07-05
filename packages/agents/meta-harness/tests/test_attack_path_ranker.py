@@ -156,10 +156,13 @@ async def test_empty_graph_returns_no_paths():
 
 @pytest.mark.asyncio
 async def test_kev_epss_carried_on_attack_path():
-    """A CVE node with kev_listed=True and epss_score surfaces those values on AttackPath.
+    """A CVE node with kev=True and epss_score surfaces those values on AttackPath.
 
     The worst-KEV aggregation rule: kev=True if ANY CVE on the path is KEV-listed;
     epss=max(epss_score) across all CVEs on the path.
+
+    Node property key is ``kev`` (the writer stamps ``kev``); the dataclass field is
+    ``kev_listed`` — the reader aligns on the writer's key (Task 2 fix).
     """
     t = "t"
     async with in_memory_semantic_store() as store:
@@ -167,13 +170,13 @@ async def test_kev_epss_carried_on_attack_path():
             store, t, _R, "arn:ecs:svc/kev-test", {"kind": "ecs-service", "is_public": True}
         )
         image = await _node(store, t, _R, "myreg/kev-app:1.0", {"kind": "container-image"})
-        # KEV-listed CVE with an EPSS score.
+        # KEV-listed CVE with an EPSS score (property key is "kev", matching the writer).
         cve_kev = await _node(
             store,
             t,
             _CVE,
             "CVE-2021-44228",
-            {"severity": "CRITICAL", "kev_listed": True, "epss_score": 0.975},
+            {"severity": "CRITICAL", "kev": True, "epss_score": 0.975},
         )
         # A second CVE on the same image — not KEV-listed but has an EPSS score.
         cve_non_kev = await _node(
@@ -181,7 +184,7 @@ async def test_kev_epss_carried_on_attack_path():
             t,
             _CVE,
             "CVE-2022-22965",
-            {"severity": "HIGH", "kev_listed": False, "epss_score": 0.42},
+            {"severity": "HIGH", "kev": False, "epss_score": 0.42},
         )
         await _edge(store, t, workload, image, EdgeType.RUNS_IMAGE.value)
         await _edge(store, t, image, cve_kev, EdgeType.VULNERABLE_TO.value)

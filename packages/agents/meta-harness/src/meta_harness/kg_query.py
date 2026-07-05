@@ -677,7 +677,7 @@ class KgQuery:
                             image_id=runs.dst_entity_id,
                             cve_id=cve.external_id,
                             severity=str(cve.properties.get("severity", "")),
-                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            kev_listed=bool(cve.properties.get("kev", False)),
                             epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
@@ -784,7 +784,7 @@ class KgQuery:
                             data_classification_id=dc.entity_id,
                             data_type=str(dc.properties.get("data_type", "")),
                             severity=str(cve.properties.get("severity", "")),
-                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            kev_listed=bool(cve.properties.get("kev", False)),
                             epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
@@ -847,7 +847,7 @@ class KgQuery:
                             image_id=runs.dst_entity_id,
                             cve_id=cve.external_id,
                             severity=str(cve.properties.get("severity", "")),
-                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            kev_listed=bool(cve.properties.get("kev", False)),
                             epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
@@ -879,7 +879,7 @@ class KgQuery:
                         host_id=host.entity_id,
                         cve_id=cve.external_id,
                         severity=str(cve.properties.get("severity", "")),
-                        kev_listed=bool(cve.properties.get("kev_listed", False)),
+                        kev_listed=bool(cve.properties.get("kev", False)),
                         epss_score=_float_or_none(cve.properties.get("epss_score")),
                     )
                 )
@@ -1325,7 +1325,7 @@ class KgQuery:
                                     image_id=runs.dst_entity_id,
                                     cve_id=cve.external_id,
                                     severity=str(cve.properties.get("severity", "")),
-                                    kev_listed=bool(cve.properties.get("kev_listed", False)),
+                                    kev_listed=bool(cve.properties.get("kev", False)),
                                     epss_score=_float_or_none(cve.properties.get("epss_score")),
                                 )
                             )
@@ -1419,7 +1419,7 @@ class KgQuery:
                                     target_id=towner.dst_entity_id,
                                     cve_id=cve.external_id,
                                     severity=str(cve.properties.get("severity", "")),
-                                    kev_listed=bool(cve.properties.get("kev_listed", False)),
+                                    kev_listed=bool(cve.properties.get("kev", False)),
                                     epss_score=_float_or_none(cve.properties.get("epss_score")),
                                 )
                             )
