@@ -144,6 +144,8 @@ class InternetExposedVulnerableWorkload:
     image_id: str
     cve_id: str
     severity: str
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +175,8 @@ class CrownJewelExposure:
     data_classification_id: str
     data_type: str
     severity: str = ""  # the CVE's severity label (CRITICAL/HIGH/…), for worst-CVE rollup
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +189,8 @@ class PrivilegedVulnerableWorkload:
     image_id: str
     cve_id: str
     severity: str
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +205,8 @@ class LateralMovement:
     target_id: str
     cve_id: str
     severity: str
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +218,8 @@ class HostVulnerableWorkload:
     host_id: str
     cve_id: str
     severity: str
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,6 +393,8 @@ class RuntimeExploitVulnerableWorkload:
     image_id: str
     cve_id: str
     severity: str
+    kev_listed: bool = False  # True if the CVE is CISA KEV-listed
+    epss_score: float | None = None  # EPSS probability score for this CVE (0..1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,6 +425,16 @@ def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
     return depth
+
+
+def _float_or_none(value: object) -> float | None:
+    """Return ``float(value)`` when value is a number, else None.
+
+    CVE properties stored as int/float are both valid; None/missing stays None.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
 
 
 class KgQuery:
@@ -655,6 +677,8 @@ class KgQuery:
                             image_id=runs.dst_entity_id,
                             cve_id=cve.external_id,
                             severity=str(cve.properties.get("severity", "")),
+                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
         return hits
@@ -760,6 +784,8 @@ class KgQuery:
                             data_classification_id=dc.entity_id,
                             data_type=str(dc.properties.get("data_type", "")),
                             severity=str(cve.properties.get("severity", "")),
+                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
         return hits
@@ -821,6 +847,8 @@ class KgQuery:
                             image_id=runs.dst_entity_id,
                             cve_id=cve.external_id,
                             severity=str(cve.properties.get("severity", "")),
+                            kev_listed=bool(cve.properties.get("kev_listed", False)),
+                            epss_score=_float_or_none(cve.properties.get("epss_score")),
                         )
                     )
         return hits
@@ -851,6 +879,8 @@ class KgQuery:
                         host_id=host.entity_id,
                         cve_id=cve.external_id,
                         severity=str(cve.properties.get("severity", "")),
+                        kev_listed=bool(cve.properties.get("kev_listed", False)),
+                        epss_score=_float_or_none(cve.properties.get("epss_score")),
                     )
                 )
         return hits
@@ -1295,6 +1325,8 @@ class KgQuery:
                                     image_id=runs.dst_entity_id,
                                     cve_id=cve.external_id,
                                     severity=str(cve.properties.get("severity", "")),
+                                    kev_listed=bool(cve.properties.get("kev_listed", False)),
+                                    epss_score=_float_or_none(cve.properties.get("epss_score")),
                                 )
                             )
         return hits
@@ -1387,6 +1419,8 @@ class KgQuery:
                                     target_id=towner.dst_entity_id,
                                     cve_id=cve.external_id,
                                     severity=str(cve.properties.get("severity", "")),
+                                    kev_listed=bool(cve.properties.get("kev_listed", False)),
+                                    epss_score=_float_or_none(cve.properties.get("epss_score")),
                                 )
                             )
         return hits
