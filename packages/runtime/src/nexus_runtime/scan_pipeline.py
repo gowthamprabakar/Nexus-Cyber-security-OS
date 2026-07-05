@@ -148,6 +148,11 @@ class ScanSources:
 
     # vulnerability feeds
     vuln_image_refs: tuple[str, ...] | None = None
+    # host-scan feed: vuln_host_target is the trivy target path/mode object;
+    # vuln_host_target_arn (when set) keys the resulting VULNERABLE_TO node on the
+    # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
+    vuln_host_target: object | None = None
+    vuln_host_target_arn: str | None = None
 
     # k8s-posture feeds
     k8s_kube_bench_feed: Path | None = None
@@ -347,10 +352,10 @@ async def scan_run(
         ),
     )
 
-    # 4. vulnerability (image_refs scan; enrich=False keeps it deterministic/offline)
+    # 4. vulnerability (image_refs scan or host scan; enrich=False keeps it deterministic/offline)
     await _feed(
         "vulnerability",
-        bool(sources.vuln_image_refs),
+        bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
         lambda: vulnerability_run(
             _contract(
                 tenant,
@@ -360,6 +365,8 @@ async def scan_run(
                 ["findings.json", "summary.md"],
             ),
             image_refs=list(sources.vuln_image_refs or ()),
+            host_target=sources.vuln_host_target,  # type: ignore[arg-type]
+            host_target_arn=sources.vuln_host_target_arn,
             enrich=False,
             semantic_store=store,
         ),

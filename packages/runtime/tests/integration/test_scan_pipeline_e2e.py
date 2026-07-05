@@ -743,3 +743,99 @@ async def test_scan_run_rbac_privilege_escalation_fires(
         f"expected rbac_privilege_escalation in confirmed paths; got "
         f"{[p.path_type for p in res.confirmed]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (last-three-detectors): host-scan ARN attribution →
+# find_internet_exposed_host_vulnerable
+# ---------------------------------------------------------------------------
+
+_HOST_INSTANCE_ARN = "arn:aws:ec2:us-east-1:111122223333:instance/i-abc"
+_HOST_TENANT = "t-host-vuln"
+
+
+def _patch_trivy_host_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fake trivy_host_scan: returns one CRITICAL CVE for any target.
+
+    The _artifact_name is intentionally NOT set here — agent.run() will override it
+    with host_target_arn when provided, which is the behaviour under test.
+    """
+    from vulnerability.tools import trivy as trivy_mod
+
+    async def fake_host_scan(target: str, **_kw: Any) -> trivy_mod.TrivyResult:
+        return trivy_mod.TrivyResult(
+            raw_findings=[
+                {
+                    "VulnerabilityID": "CVE-2024-99999",
+                    "PkgName": "openssh-server",
+                    "InstalledVersion": "8.9p1",
+                    "Severity": "CRITICAL",
+                    "Title": "OpenSSH RCE",
+                    "_target": "/mnt/rootfs (alpine 3.18)",
+                    "_class": "os-pkgs",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(trivy_mod, "trivy_host_scan", fake_host_scan)
+
+
+@pytest.mark.asyncio
+async def test_scan_run_internet_exposed_host_vulnerable_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 3: host-scan ARN attribution fires find_internet_exposed_host_vulnerable.
+
+    Two feeders cooperate in the shared SemanticStore:
+      1. cloud-posture receives a public Ec2Workload(instance_arn=_HOST_INSTANCE_ARN, is_public=True)
+         via ScanSources.cloud_ec2_workloads.  record_ec2_workloads writes
+         CLOUD_RESOURCE{instance_arn, is_public=True} keyed on instance_arn.
+      2. vulnerability receives a host-scan source (vuln_host_target="/mnt/rootfs") with
+         vuln_host_target_arn=_HOST_INSTANCE_ARN.  agent.run() relabels the host-scan
+         raw findings so their _artifact_name == _HOST_INSTANCE_ARN before writing to the
+         KnowledgeGraphWriter.  record_scan_results then mints a CLOUD_RESOURCE node
+         keyed on instance_arn with a VULNERABLE_TO edge.
+
+    The join key is _HOST_INSTANCE_ARN in both feeders.  The cloud-posture node carries
+    is_public=True; the vuln node carries VULNERABLE_TO; they are the SAME node.
+    analyze → find_internet_exposed_host_vulnerable → confirmed path_type.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy_host_scan(monkeypatch)
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+
+    sources = ScanSources(
+        cloud_ec2_workloads=(
+            Ec2Workload(
+                instance_arn=_HOST_INSTANCE_ARN,
+                is_public=True,
+            ),
+        ),
+        vuln_host_target="/mnt/rootfs",
+        vuln_host_target_arn=_HOST_INSTANCE_ARN,
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_HOST_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "internet_exposed_host_vulnerable" in path_types, (
+        f"internet_exposed_host_vulnerable path not confirmed; got path_types={path_types}. "
+        f"Join-key check: cloud-posture instance_arn={_HOST_INSTANCE_ARN!r} (is_public=True); "
+        f"vuln host_target_arn={_HOST_INSTANCE_ARN!r} must relabel _artifact_name so the "
+        f"VULNERABLE_TO node keys on the SAME ARN as the cloud-posture is_public node."
+    )
