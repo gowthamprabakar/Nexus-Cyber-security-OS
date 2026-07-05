@@ -984,3 +984,132 @@ async def test_scan_run_multicloud_exposed_kms_and_db_fire(
         f"Check multi-cloud-posture wrote CLOUD_RESOURCE{{kind=rds-instance, is_public=True}} "
         f"for {_GCP_SQL_INSTANCE_ID!r} and find_exposed_database picked it up."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (Tier-3): expected-loss ordering — crown-jewel outranks single-store
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_crown_jewel_outranks_single_store_by_expected_loss(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Task 4 (B3): analyze returns confirmed paths ordered by expected loss, not flat severity.
+
+    Two ``fine_grained_data`` paths (severity=60, count=1) are inserted into a shared graph:
+      - crown-jewel principal "zzz-crown" reaches 5 data stores  → blast=5, higher expected loss
+      - single-store principal "aaa-single" reaches 1 data store → blast=1, lower expected loss
+
+    Titles are chosen so that alphabetically "aaa-single" PRECEDES "zzz-crown": the old
+    flat-severity sort (``-severity, -count, title``) resolves the tie by title and puts
+    single-store FIRST.  After wiring ``rank_by_expected_loss`` into ``analyze``, the
+    crown-jewel path's higher blast radius should put it FIRST instead.
+
+    This test proves the wire: it FAILS on the pre-wiring flat sort and PASSES after.
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from meta_harness.scan import analyze
+
+    _T4 = "t-crown-jewel-rank"
+    store = SemanticStore(session_factory)
+
+    _R = NodeCategory.CLOUD_RESOURCE.value
+    _ID = NodeCategory.IDENTITY.value
+    _DC = NodeCategory.DATA_CLASSIFICATION.value
+
+    # --- Single-store principal inserted FIRST so it appears first in the flat-sort groups dict ---
+    # Under the old flat-severity sort (stable, equal keys), insertion order is preserved and
+    # single-store comes first.  After wiring rank_by_expected_loss, crown-jewel (blast=5) wins.
+    ss_principal = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/aaa-single",
+        properties={},
+    )
+    ss_res = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_R,
+        external_id="arn:aws:s3:::single-bucket",
+        properties={"is_public": True},
+    )
+    ss_dc = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_DC,
+        external_id="arn:aws:s3:::single-bucket/pii",
+        properties={"data_type": "ssn"},
+    )
+    await store.add_relationship(
+        tenant_id=_T4,
+        src_entity_id=ss_principal,
+        dst_entity_id=ss_res,
+        relationship_type=EdgeType.HAS_ACCESS_TO.value,
+        properties={},
+    )
+    await store.add_relationship(
+        tenant_id=_T4,
+        src_entity_id=ss_res,
+        dst_entity_id=ss_dc,
+        relationship_type=EdgeType.EXPOSES_DATA.value,
+        properties={},
+    )
+
+    # --- Crown-jewel principal inserted SECOND, so it appears LAST under the old flat-sort ---
+    # Both paths: fine_grained_data, sev=60, count=1, same title — equal flat-sort keys.
+    # Old stable sort preserves insertion order → single-store (inserted first) wins flat-sort.
+    # rank_by_expected_loss gives crown-jewel blast=5 vs single-store blast=1, so crown-jewel wins.
+    cj_principal = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/zzz-crown",
+        properties={},
+    )
+    for i in range(5):
+        cj_res = await store.upsert_entity(
+            tenant_id=_T4,
+            entity_type=_R,
+            external_id=f"arn:aws:s3:::crown-bucket-{i}",
+            properties={"is_public": True},
+        )
+        cj_dc = await store.upsert_entity(
+            tenant_id=_T4,
+            entity_type=_DC,
+            external_id=f"arn:aws:s3:::crown-bucket-{i}/pii",
+            properties={"data_type": "ssn"},
+        )
+        await store.add_relationship(
+            tenant_id=_T4,
+            src_entity_id=cj_principal,
+            dst_entity_id=cj_res,
+            relationship_type=EdgeType.HAS_ACCESS_TO.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=_T4,
+            src_entity_id=cj_res,
+            dst_entity_id=cj_dc,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
+        )
+
+    # --- Run analyze and check ordering ---
+    result = await analyze(store, _T4)
+
+    assert result.confirmed, "expected at least two confirmed attack paths"
+    assert len(result.confirmed) >= 2, (
+        f"expected at least 2 confirmed paths; got {[p.title for p in result.confirmed]}"
+    )
+
+    # Both path types are fine_grained_data (sev=60, count=1).
+    # All titles are identical ("Principal has access to public ssn data") — ties on severity+count+title.
+    # Under the OLD flat-severity sort: single-store (ss_principal, inserted first) wins stable tie.
+    # Under rank_by_expected_loss: crown-jewel (blast=5 via 5 data stores) outranks single-store
+    # (blast=1 via 1 data store).  Crown-jewel path must be confirmed[0].
+    first = result.confirmed[0]
+    assert cj_principal in first.entities, (
+        f"crown-jewel path (entity={cj_principal!r}, blast=5) must be confirmed[0] under "
+        f"expected-loss ordering. Got confirmed[0]: entities={first.entities!r}. "
+        f"All confirmed paths: {[(p.entities,) for p in result.confirmed]}. "
+        "If this fails, analyze() is still using flat-severity sort instead of rank_by_expected_loss."
+    )

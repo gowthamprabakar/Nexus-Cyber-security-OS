@@ -250,10 +250,17 @@ async def build_report_card(
     # row: (severity, path_type, title, chain, entset, kev, blast, sink_id, route_p)
     rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int, str, float]] = []
 
+    # Use rank_by_expected_loss for named paths: provides real kev/epss (no kev=False hard-code)
+    # and broadened blast (covers resource-node paths).  Results are keyed by object id to
+    # look up per-path blast without a second _blast_local call.
+    named_paths = await AttackPathRanker(kq).find_all()
+    ranked_named = await rank_by_expected_loss(named_paths, store, tenant)
+    _named_blast: dict[int, int] = {id(p): blast for p, _el, blast in ranked_named}
+
     named_entities_by_type: dict[str, set[str]] = {}
-    for ap in await AttackPathRanker(kq).find_all():
+    for ap in named_paths:
         chain = await _labels(ap.entities)
-        route_p = leaf_probability(ap.severity, kev=False)
+        route_p = leaf_probability(ap.severity, kev=ap.kev, epss=ap.epss)
         rows.append(
             (
                 ap.severity,
@@ -261,8 +268,8 @@ async def build_report_card(
                 ap.title,
                 chain,
                 frozenset(chain),
-                False,
-                _blast_local(ap.entities),
+                ap.kev,
+                _named_blast.get(id(ap), _blast_local(ap.entities)),
                 ap.sink_id,
                 route_p,
             )
