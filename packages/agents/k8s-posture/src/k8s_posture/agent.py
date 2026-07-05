@@ -377,15 +377,15 @@ def _privileged_from_manifest_findings(
         image_ref = str(f.unmapped.get("image") or "") or (
             f"manifest-scan/{cluster_id}/{f.namespace}/{f.workload_name}"
         )
-        # ponytail: offline SA is approximate — serviceAccountName lives on pod_spec,
-        # not on the container, so the manifest reader can't surface it per-finding
-        # without threading pod_spec through _check_container_rules. Deferred to v0.6.
+        # service_account: read the real SA name surfaced by manifests.py from pod_spec
+        # (stored in unmapped["service_account"]). Falls back to "default" when absent,
+        # preserving behaviour for findings written before this field was added.
         out.append(
             PrivilegedWorkload(
                 namespace=f.namespace,
                 name=f.workload_name,
                 image_ref=image_ref,
-                service_account="default",
+                service_account=str(f.unmapped.get("service_account") or "default"),
             )
         )
     return out

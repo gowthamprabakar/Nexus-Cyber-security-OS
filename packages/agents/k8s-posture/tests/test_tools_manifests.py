@@ -492,3 +492,53 @@ async def test_missing_workload_name_dropped(tmp_path: Path) -> None:
 
     out = await read_manifests(path=tmp_path)
     assert all(f.workload_name == "good" for f in out)
+
+
+# ---------------------------------------------------------------------------
+# T2: serviceAccountName surfaces in privileged-container unmapped (IRSA join)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_privileged_container_surfaces_service_account(tmp_path: Path) -> None:
+    """A privileged pod with serviceAccountName: irsa-sa stores it in unmapped["service_account"].
+
+    This is the IRSA-join key: _privileged_from_manifest_findings reads unmapped["service_account"]
+    to build the USES_SERVICE_ACCOUNT edge pointing at the real SA instead of "default".
+    """
+    privileged_container = {
+        "name": "app",
+        "image": "app:v1",
+        "securityContext": {"privileged": True},
+    }
+    pod = _pod(container=privileged_container, serviceAccountName="irsa-sa")
+    _write_manifest(tmp_path, "pod", pod)
+
+    out = await read_manifests(path=tmp_path)
+    priv = [f for f in out if f.rule_id == "privileged-container"]
+    assert len(priv) == 1
+    assert priv[0].unmapped.get("service_account") == "irsa-sa", (
+        f"expected unmapped['service_account']='irsa-sa', got {priv[0].unmapped}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_privileged_container_defaults_service_account_when_absent(tmp_path: Path) -> None:
+    """A privileged pod without serviceAccountName stores 'default' in unmapped["service_account"].
+
+    Preserves existing behaviour for pods that don't set serviceAccountName explicitly.
+    """
+    privileged_container = {
+        "name": "app",
+        "image": "app:v1",
+        "securityContext": {"privileged": True},
+    }
+    pod = _pod(container=privileged_container)  # no serviceAccountName
+    _write_manifest(tmp_path, "pod", pod)
+
+    out = await read_manifests(path=tmp_path)
+    priv = [f for f in out if f.rule_id == "privileged-container"]
+    assert len(priv) == 1
+    assert priv[0].unmapped.get("service_account") == "default", (
+        f"expected unmapped['service_account']='default', got {priv[0].unmapped}"
+    )

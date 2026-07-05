@@ -170,6 +170,9 @@ def _analyse_manifest(
     auto_mount = manifest.get("spec") if kind == "Pod" else None  # for SA-token rule
     # `automountServiceAccountToken` can live on the pod template OR the pod-spec itself.
 
+    # serviceAccountName is a pod-spec field; default "default" when absent (K8s behaviour).
+    sa_name = str(pod_spec.get("serviceAccountName") or "default")
+
     out: list[ManifestFinding] = []
     out.extend(
         _check_pod_level_rules(
@@ -195,6 +198,7 @@ def _analyse_manifest(
                     namespace=namespace,
                     manifest_path=manifest_path,
                     detected_at=detected_at,
+                    service_account_name=sa_name,
                 )
             )
 
@@ -212,6 +216,7 @@ def _analyse_manifest(
                     namespace=namespace,
                     manifest_path=manifest_path,
                     detected_at=detected_at,
+                    service_account_name=sa_name,
                 )
             )
 
@@ -348,6 +353,7 @@ def _check_container_rules(
     namespace: str,
     manifest_path: Path,
     detected_at: datetime,
+    service_account_name: str = "default",
 ) -> list[ManifestFinding]:
     out: list[ManifestFinding] = []
     container_name = str(container.get("name", "")) or "container"
@@ -370,12 +376,14 @@ def _check_container_rules(
         )
     # privileged: securityContext.privileged is true
     if sec_ctx_dict.get("privileged") is True:
-        # Capture the container image so _privileged_from_manifest_findings can build
-        # a real RUNS_IMAGE edge instead of falling back to the synthetic key.
+        # Capture the container image and pod serviceAccountName so
+        # _privileged_from_manifest_findings can build real RUNS_IMAGE and
+        # USES_SERVICE_ACCOUNT edges instead of falling back to synthetic keys.
         _priv_unmapped: dict[str, Any] = {}
         _img = container.get("image")
         if _img:
             _priv_unmapped["image"] = str(_img)
+        _priv_unmapped["service_account"] = service_account_name
         out.append(
             _build_finding(
                 _RULES["privileged-container"],
