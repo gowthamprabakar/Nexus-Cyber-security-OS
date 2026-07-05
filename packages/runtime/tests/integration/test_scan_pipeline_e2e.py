@@ -1116,3 +1116,89 @@ async def test_crown_jewel_outranks_single_store_by_expected_loss(
         f"All confirmed paths: {[(p.entities,) for p in result.confirmed]}. "
         "If this fails, analyze() is still using flat-severity sort instead of rank_by_expected_loss."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (Cycle 1): injectable kev/epss maps → KEV flag reaches confirmed path
+# ---------------------------------------------------------------------------
+
+# CVE id produced by the existing _patch_trivy stub (Log4Shell) — verbatim, no typos.
+_KEV_CVE_ID = "CVE-2021-44228"
+
+# Tenant isolated from other e2e tests (no cross-contamination via shared SQLite).
+_KEV_TENANT = "t-kev-e2e"
+
+# ECS workload ARN — distinct from _ECS_ARN used in Task 11 to avoid tenant bleed.
+_KEV_ECS_ARN = "arn:aws:ecs:us-east-1:123456789012:service/cluster/kev-svc"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_kev_reaches_confirmed_path(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 4 (Cycle 1): vuln_kev_cve_ids injected through ScanSources reaches a KEV-flagged
+    confirmed attack path.
+
+    Seeding pattern mirrors test_scan_run_stored_secret_to_data_fires (Task 11):
+      - cloud-posture ECS workload (is_public=True, image_ref=_IMAGE_REF)
+          writes CLOUD_RESOURCE{is_public} --RUNS_IMAGE--> image-node
+      - vulnerability trivy stub (image_ref=_IMAGE_REF, _patch_trivy)
+          writes image-node --VULNERABLE_TO--> CVE-2021-44228
+
+    With vuln_kev_cve_ids=frozenset({_KEV_CVE_ID}), the vulnerability kg_writer
+    stamps kev=True on the VULNERABLE_TO edge for CVE-2021-44228.
+
+    analyze → find_internet_exposed_vulnerable_workload → AttackPath.kev is True.
+
+    This proves the injectable seam is wired end-to-end: without the ScanSources fields
+    (Task 4 Step 2), this test fails with AttributeError; with the fields but without
+    passing them through the feeder, p.kev stays False.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy(monkeypatch)
+
+    from cloud_posture.tools.aws_ecs import EcsWorkload
+
+    sources = ScanSources(
+        cloud_ecs_workloads=(
+            EcsWorkload(
+                service_arn=_KEV_ECS_ARN,
+                image_ref=_IMAGE_REF,
+                is_public=True,
+                task_role_arn="",
+                env_values=(),
+            ),
+        ),
+        vuln_image_refs=(_IMAGE_REF,),
+        vuln_kev_cve_ids=frozenset({_KEV_CVE_ID}),
+        vuln_epss_scores={_KEV_CVE_ID: 0.95},
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_KEV_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    # Guard: both feeders must have completed without error.
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture feeder missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability feeder missing from {feeder_names}"
+
+    # Core assertion: at least one confirmed path must carry kev=True.
+    kev_paths = [p for p in res.confirmed if p.kev]
+    assert kev_paths, (
+        f"a KEV-flagged confirmed path must exist after injecting vuln_kev_cve_ids={{{_KEV_CVE_ID!r}}}; "
+        f"got confirmed paths: {[(p.path_type, p.kev) for p in res.confirmed]}. "
+        "Check that ScanSources.vuln_kev_cve_ids is wired through vulnerability_run(kev_cve_ids=...)."
+    )
+
+    # Sanity: the KEV path is the internet_exposed_vulnerable archetype we seeded.
+    assert any(p.path_type == "internet_exposed_vulnerable" for p in kev_paths), (
+        f"expected internet_exposed_vulnerable among KEV paths; got {[p.path_type for p in kev_paths]}"
+    )

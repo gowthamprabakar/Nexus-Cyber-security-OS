@@ -21,6 +21,7 @@ remaining feeders are wired by their own tasks listed below.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -169,6 +170,11 @@ class ScanSources:
     # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
     vuln_host_target: object | None = None
     vuln_host_target_arn: str | None = None
+    # injectable exploitability maps — passed through to vulnerability_run so the
+    # kg_writer stamps kev=True / epss scores on VULNERABLE_TO edges.  When None,
+    # unchanged behavior (enrich=False offline run gets no enrichment).
+    vuln_kev_cve_ids: frozenset[str] | None = None
+    vuln_epss_scores: Mapping[str, float] | None = None
 
     # k8s-posture feeds
     k8s_kube_bench_feed: Path | None = None
@@ -427,6 +433,8 @@ async def scan_run(
             host_target=sources.vuln_host_target,  # type: ignore[arg-type]
             host_target_arn=sources.vuln_host_target_arn,
             enrich=False,
+            kev_cve_ids=sources.vuln_kev_cve_ids,
+            epss_scores=sources.vuln_epss_scores,
             semantic_store=store,
         ),
     )
