@@ -172,6 +172,9 @@ async def rank_by_expected_loss(
     paths: list[AttackPath],
     store: SemanticStore,
     tenant_id: str,
+    *,
+    principal_reach: dict[str, set[str]] | None = None,
+    resource_reach: dict[str, set[str]] | None = None,
 ) -> list[tuple[AttackPath, float, int]]:
     """Rank *paths* by expected loss = P(sink compromised) x blast_radius.
 
@@ -187,13 +190,22 @@ async def rank_by_expected_loss(
       sink context available, so we treat it as an independent route to its own sink).
     - ``blast = _blast(path.entities, ...)``: broadened to cover resource-node paths (see _blast).
     - ``expected_loss = sink_p x blast``.
+
+    ``principal_reach`` and ``resource_reach`` are optional pre-built maps from
+    ``find_fine_grained_data_exposure``; when provided the ranker skips its own query so callers
+    that already hold those maps (e.g. ``build_report_card``) avoid the duplicate DB round-trip.
     """
-    kq = KgQuery(store, tenant_id)
-    principal_reach: dict[str, set[str]] = {}
-    resource_reach: dict[str, set[str]] = {}
-    for fg in await kq.find_fine_grained_data_exposure():
-        principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
-        resource_reach.setdefault(fg.resource_id, set()).add(fg.data_classification_id)
+    if principal_reach is None or resource_reach is None:
+        kq = KgQuery(store, tenant_id)
+        _pr: dict[str, set[str]] = {}
+        _rr: dict[str, set[str]] = {}
+        for fg in await kq.find_fine_grained_data_exposure():
+            _pr.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
+            _rr.setdefault(fg.resource_id, set()).add(fg.data_classification_id)
+        if principal_reach is None:
+            principal_reach = _pr
+        if resource_reach is None:
+            resource_reach = _rr
 
     # Compute per-path route_p and blast, then group by sink_id for noisy-OR.
     scored: list[tuple[AttackPath, float, int]] = []
@@ -238,23 +250,29 @@ async def build_report_card(
             out.append(ent.external_id if ent is not None else eid)
         return tuple(out)
 
+    # Build reach maps once; reuse for rank_by_expected_loss (named paths) AND generic-path blast.
+    # This avoids the duplicate find_fine_grained_data_exposure query that rank_by_expected_loss
+    # would otherwise issue independently.
     principal_reach: dict[str, set[str]] = {}
     resource_reach: dict[str, set[str]] = {}
     for fg in await kq.find_fine_grained_data_exposure():
         principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
         resource_reach.setdefault(fg.resource_id, set()).add(fg.data_classification_id)
 
-    def _blast_local(entity_ids: tuple[str, ...]) -> int:
-        return _blast(entity_ids, principal_reach, resource_reach)
-
     # row: (severity, path_type, title, chain, entset, kev, blast, sink_id, route_p)
     rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int, str, float]] = []
 
     # Use rank_by_expected_loss for named paths: provides real kev/epss (no kev=False hard-code)
-    # and broadened blast (covers resource-node paths).  Results are keyed by object id to
-    # look up per-path blast without a second _blast_local call.
+    # and broadened blast (covers resource-node paths).  Pass pre-built reach maps to skip the
+    # duplicate DB query.  Results are keyed by object id to look up per-path blast directly.
     named_paths = await AttackPathRanker(kq).find_all()
-    ranked_named = await rank_by_expected_loss(named_paths, store, tenant)
+    ranked_named = await rank_by_expected_loss(
+        named_paths,
+        store,
+        tenant,
+        principal_reach=principal_reach,
+        resource_reach=resource_reach,
+    )
     _named_blast: dict[int, int] = {id(p): blast for p, _el, blast in ranked_named}
 
     named_entities_by_type: dict[str, set[str]] = {}
@@ -269,7 +287,7 @@ async def build_report_card(
                 chain,
                 frozenset(chain),
                 ap.kev,
-                _named_blast.get(id(ap), _blast_local(ap.entities)),
+                _named_blast[id(ap)],
                 ap.sink_id,
                 route_p,
             )
@@ -292,7 +310,7 @@ async def build_report_card(
                 chain,
                 frozenset(chain),
                 cand.path.sink_kev,
-                _blast_local(cand.path.node_ids),
+                _blast(cand.path.node_ids, principal_reach, resource_reach),
                 cand.path.sink_id,
                 route_p,
             )

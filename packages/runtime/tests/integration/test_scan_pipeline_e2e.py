@@ -15,7 +15,7 @@ path and surfaces it as a ``fine_grained_data`` confirmed attack path (severity=
 Assertions:
   - all feeders ok=True (both agent run()s completed without exception)
   - res.confirmed is non-empty (the path formed from real run()s)
-  - severity is non-increasing (ranking invariant)
+  - fine_grained_data path_type is present (the expected archetype for this fixture)
 
 NOTE: SQLite does not enforce RLS; DB-level tenant isolation is proven by the
 gated Postgres test, not here.
@@ -160,6 +160,7 @@ async def test_scan_run_yields_ranked_public_data_path(
 
     This is the Phase-1 operating-path proof — the keystone regression guard.
     Task 11 extends it once the dormant writers land.
+    Ordering by expected_loss (not severity) is proven by test_crown_jewel_outranks_single_store_by_expected_loss.
     """
     feeds_dir = tmp_path / "feeds"
     inv, obj = _write_public_pii_inventory(feeds_dir)
@@ -193,11 +194,13 @@ async def test_scan_run_yields_ranked_public_data_path(
         "analyze should find fine_grained_data or public_unencrypted"
     )
 
-    # Ranking invariant: severity is non-increasing (worst-first order).
-    # AttackPath.severity is the rank key; find_all() sorts by (-severity, -count, title).
-    severities = [p.severity for p in res.confirmed]
-    assert severities == sorted(severities, reverse=True), (
-        f"attack paths must be sorted worst-first by severity; got {severities}"
+    # The operating path must surface the expected fine_grained_data path type.
+    # (Ordering is by expected_loss, proven by test_crown_jewel_outranks_single_store_by_expected_loss;
+    # this test's job is "the path forms from real run()s", so we assert the path is present.)
+    assert any(p.path_type == "fine_grained_data" for p in res.confirmed), (
+        f"expected fine_grained_data path from real run()s — "
+        f"data-security wrote EXPOSES_DATA, identity wrote HAS_ACCESS_TO; "
+        f"got path_types={[p.path_type for p in res.confirmed]}"
     )
 
 
