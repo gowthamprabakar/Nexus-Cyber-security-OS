@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from meta_harness.attack_paths import _SEVERITY, AttackPathRanker
+from meta_harness.attack_paths import _SEVERITY, AttackPath, AttackPathRanker
 from meta_harness.belief import route_probability, sink_probability
 from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
@@ -144,6 +144,86 @@ def _generic_title(path_type: str, path: GenericPath) -> str:
     return titles.get(path_type, f"Novel attack path ({' → '.join(path.edge_signature)})")
 
 
+def _blast(
+    entity_ids: tuple[str, ...],
+    principal_reach: dict[str, set[str]],
+    resource_reach: dict[str, set[str]],
+) -> int:
+    """Count distinct data-classification stores reachable from any entity in *entity_ids*.
+
+    Two lookup sources (both built from ``find_fine_grained_data_exposure``):
+    - *principal_reach* — IDENTITY → set[DATA_CLASSIFICATION]; covers paths whose entities include
+      the principal node (e.g. fine_grained_data, escalation_method_to_data, crown_jewel).
+    - *resource_reach* — CLOUD_RESOURCE → set[DATA_CLASSIFICATION]; broadens blast to paths
+      whose entities contain resource nodes rather than identity nodes (e.g. exposed_database,
+      exposed_kms_key, public_secret, stored_secret_to_data).  Without this, those path types
+      would always fall back to blast=1 regardless of how many stores the resource exposes.
+
+    Falls back to 1 when neither map contains any of the entity_ids (genuinely unknown reach).
+    """
+    reached: set[str] = set()
+    for eid in entity_ids:
+        reached |= principal_reach.get(eid, set())
+        reached |= resource_reach.get(eid, set())
+    return max(len(reached), 1)
+
+
+async def rank_by_expected_loss(
+    paths: list[AttackPath],
+    store: SemanticStore,
+    tenant_id: str,
+) -> list[tuple[AttackPath, float, int]]:
+    """Rank *paths* by expected loss = P(sink compromised) x blast_radius.
+
+    Returns ``(path, expected_loss, blast_radius)`` ordered by ``-expected_loss``;
+    tie-breaks: ``-route_p`` then ``title`` (matching ``build_report_card``'s sort key).
+    Every input path appears in the output — the ranker is total.
+
+    Scoring:
+    - ``route_p = leaf_probability(p.severity, kev=p.kev, epss=p.epss)``
+      Uses the REAL per-path KEV/EPSS (not the hard-coded ``kev=False`` in build_report_card).
+    - Paths sharing a ``sink_id`` are grouped; ``sink_p = noisy-OR`` of their route_ps.
+      A path with empty ``sink_id`` uses its own ``route_p`` as ``sink_p`` (fallback: no shared
+      sink context available, so we treat it as an independent route to its own sink).
+    - ``blast = _blast(path.entities, ...)``: broadened to cover resource-node paths (see _blast).
+    - ``expected_loss = sink_p x blast``.
+    """
+    kq = KgQuery(store, tenant_id)
+    principal_reach: dict[str, set[str]] = {}
+    resource_reach: dict[str, set[str]] = {}
+    for fg in await kq.find_fine_grained_data_exposure():
+        principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
+        resource_reach.setdefault(fg.resource_id, set()).add(fg.data_classification_id)
+
+    # Compute per-path route_p and blast, then group by sink_id for noisy-OR.
+    scored: list[tuple[AttackPath, float, int]] = []
+    routes_by_sink: dict[str, list[float]] = {}
+    for p in paths:
+        route_p = leaf_probability(p.severity, kev=p.kev, epss=p.epss)
+        blast = _blast(p.entities, principal_reach, resource_reach)
+        scored.append((p, route_p, blast))
+        if p.sink_id:
+            routes_by_sink.setdefault(p.sink_id, []).append(route_p)
+
+    def _sink_p(path: AttackPath, route_p: float) -> float:
+        # A path without a sink_id has no shared-sink context; use its own route_p as a proxy.
+        if path.sink_id:
+            return sink_probability(routes_by_sink[path.sink_id])
+        return route_p  # fallback: no shared sink — independent route
+
+    result: list[tuple[AttackPath, float, int]] = [
+        (p, _sink_p(p, rp) * blast, blast) for p, rp, blast in scored
+    ]
+    result.sort(
+        key=lambda t: (
+            -t[1],
+            -leaf_probability(t[0].severity, kev=t[0].kev, epss=t[0].epss),
+            t[0].title,
+        )
+    )
+    return result
+
+
 async def build_report_card(
     store: SemanticStore, tenant: str, *, top_n: int = 10
 ) -> list[AttackPathCard]:
@@ -164,14 +244,13 @@ async def build_report_card(
         return tuple(out)
 
     principal_reach: dict[str, set[str]] = {}
+    resource_reach: dict[str, set[str]] = {}
     for fg in await kq.find_fine_grained_data_exposure():
         principal_reach.setdefault(fg.principal_id, set()).add(fg.data_classification_id)
+        resource_reach.setdefault(fg.resource_id, set()).add(fg.data_classification_id)
 
-    def _blast(entity_ids: tuple[str, ...]) -> int:
-        reached: set[str] = set()
-        for eid in entity_ids:
-            reached |= principal_reach.get(eid, set())
-        return max(len(reached), 1)
+    def _blast_local(entity_ids: tuple[str, ...]) -> int:
+        return _blast(entity_ids, principal_reach, resource_reach)
 
     # row: (severity, path_type, title, chain, entset, kev, blast, sink_id, route_p)
     rows: list[tuple[int, str, str, tuple[str, ...], frozenset[str], bool, int, str, float]] = []
@@ -188,7 +267,7 @@ async def build_report_card(
                 chain,
                 frozenset(chain),
                 False,
-                _blast(ap.entities),
+                _blast_local(ap.entities),
                 ap.sink_id,
                 route_p,
             )
@@ -211,7 +290,7 @@ async def build_report_card(
                 chain,
                 frozenset(chain),
                 cand.path.sink_kev,
-                _blast(cand.path.node_ids),
+                _blast_local(cand.path.node_ids),
                 cand.path.sink_id,
                 route_p,
             )
@@ -287,6 +366,7 @@ async def render_tenant_report_card(store: SemanticStore, tenant: str, *, top_n:
 __all__ = [
     "AttackPathCard",
     "build_report_card",
+    "rank_by_expected_loss",
     "render_report_card",
     "render_tenant_report_card",
 ]
