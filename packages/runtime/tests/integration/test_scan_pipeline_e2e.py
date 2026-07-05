@@ -556,3 +556,38 @@ async def test_scan_run_exposed_ai_with_sensitive_data_fires(
         "AI_SERVICE --HAS_ACCESS_TO--> arn:aws:s3:::acme-pii; "
         "data-security wrote CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (last-three-detectors): k8s ClusterInventory seam →
+# find_rbac_privilege_escalation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scan_run_rbac_privilege_escalation_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A wildcard-admin ClusterRole bound to a service account → find_rbac_privilege_escalation.
+
+    k8s-posture run() receives a canned ClusterReader (no live cluster) via
+    ScanSources.k8s_cluster_reader.  The feeder calls inventory_from_reader →
+    record_inventory, which writes the SA→BINDS→ClusterRole edges into the shared
+    graph.  analyze → find_rbac_privilege_escalation → confirmed path.
+    """
+    from fleet_testkit.k8s_workloads import cluster_admin_rbac_reader
+
+    reader = cluster_admin_rbac_reader(namespace="prod", sa_name="deployer", admin=True)
+    sources = ScanSources(k8s_cluster_reader=reader)
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-rbac",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+    assert any(p.path_type == "rbac_privilege_escalation" for p in res.confirmed), (
+        f"expected rbac_privilege_escalation in confirmed paths; got "
+        f"{[p.path_type for p in res.confirmed]}"
+    )
