@@ -211,17 +211,12 @@ async def rank_by_expected_loss(
             return sink_probability(routes_by_sink[path.sink_id])
         return route_p  # fallback: no shared sink — independent route
 
-    result: list[tuple[AttackPath, float, int]] = [
-        (p, _sink_p(p, rp) * blast, blast) for p, rp, blast in scored
+    # Build with route_p included as a 4th element for tie-breaking; drop it before returning.
+    with_rp: list[tuple[AttackPath, float, int, float]] = [
+        (p, _sink_p(p, rp) * blast, blast, rp) for p, rp, blast in scored
     ]
-    result.sort(
-        key=lambda t: (
-            -t[1],
-            -leaf_probability(t[0].severity, kev=t[0].kev, epss=t[0].epss),
-            t[0].title,
-        )
-    )
-    return result
+    with_rp.sort(key=lambda t: (-t[1], -t[3], t[0].title))
+    return [(p, el, blast) for p, el, blast, _rp in with_rp]
 
 
 async def build_report_card(

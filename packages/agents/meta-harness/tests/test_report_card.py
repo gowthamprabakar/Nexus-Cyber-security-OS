@@ -191,7 +191,12 @@ async def test_rank_by_expected_loss_high_blast_ranks_first() -> None:
 
 @pytest.mark.asyncio
 async def test_rank_by_expected_loss_kev_outranks_non_kev_at_equal_severity_and_blast() -> None:
-    """A KEV path must outrank an identical-severity/blast non-KEV path — proving KEV lift."""
+    """A KEV path must outrank an identical-severity/blast non-KEV path — proving the KEV lift.
+
+    Title ordering is deliberately adversarial: "aaa exposure" (non-KEV) sorts BEFORE "zzz exposure"
+    (KEV) alphabetically, so only the KEV lift (via leaf_probability(kev=True)) can put the KEV path
+    first. If kev isn't threaded through leaf_probability, this test fails.
+    """
     tenant = "rl-kev-lift"
     async with in_memory_semantic_store() as store:
         # Both paths: principal reaches 1 data store (equal blast)
@@ -201,7 +206,7 @@ async def test_rank_by_expected_loss_kev_outranks_non_kev_at_equal_severity_and_
         path_kev = AttackPath(
             path_type="internet_exposed_vulnerable",
             severity=_SEV,
-            title="KEV path",
+            title="zzz exposure",  # sorts LAST alphabetically — only KEV lift can push it first
             entities=(principalK,),
             sink_id=dcsK[0],
             kev=True,
@@ -210,7 +215,7 @@ async def test_rank_by_expected_loss_kev_outranks_non_kev_at_equal_severity_and_
         path_non_kev = AttackPath(
             path_type="internet_exposed_vulnerable",
             severity=_SEV,
-            title="non-KEV path",
+            title="aaa exposure",  # sorts FIRST alphabetically — would win without KEV lift
             entities=(principalN,),
             sink_id=dcsN[0],
             kev=False,
@@ -222,6 +227,81 @@ async def test_rank_by_expected_loss_kev_outranks_non_kev_at_equal_severity_and_
         assert len(ranked) == 2, "ranker must be total"
         first_path, first_loss, _blast = ranked[0]
 
-        assert first_path.title == "KEV path", (
-            f"KEV path must rank first, but got: {first_path.title} (loss={first_loss:.4f})"
+        assert first_path.title == "zzz exposure", (
+            f"KEV path ('zzz exposure') must rank first despite alphabetical disadvantage, "
+            f"but got: {first_path.title!r} (loss={first_loss:.4f}). "
+            f"KEV lift is not flowing through leaf_probability."
+        )
+
+
+@pytest.mark.asyncio
+async def test_rank_by_expected_loss_resource_reach_blast_not_fallback() -> None:
+    """_blast must count data stores via resource_reach, not fall back to 1 for resource-entity paths.
+
+    Topology: one principal --> HAS_ACCESS_TO --> resource --> EXPOSES_DATA --> dc_i (x N).
+    find_fine_grained_data_exposure populates resource_reach[resource_id] = {dc_0, ..., dc_{N-1}}.
+    The AttackPath's entities contain ONLY the resource_id (not the principal).
+    Before the broadening, _blast would miss resource_reach and return blast=1.
+    After the broadening, _blast returns N.
+    """
+    tenant = "rl-resource-reach"
+    N = 4  # number of distinct data stores the resource exposes
+    async with in_memory_semantic_store() as store:
+        # Create a CLOUD_RESOURCE node (the "exposed database")
+        resource_id = await store.upsert_entity(
+            tenant_id=tenant,
+            entity_type=_R2,
+            external_id="arn:aws:rds::123:db/exposed-db",
+            properties={"is_public": True},
+        )
+        # Create a principal that has access to the resource (needed so find_fine_grained_data_exposure
+        # traverses the resource and populates resource_reach).
+        principal_id = await store.upsert_entity(
+            tenant_id=tenant,
+            entity_type=_ID2,
+            external_id="arn:aws:iam::123:role/reader",
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=tenant,
+            src_entity_id=principal_id,
+            dst_entity_id=resource_id,
+            relationship_type=EdgeType.HAS_ACCESS_TO.value,
+            properties={},
+        )
+        # Wire resource --EXPOSES_DATA--> dc_i (x N distinct data stores)
+        for i in range(N):
+            dc_id = await store.upsert_entity(
+                tenant_id=tenant,
+                entity_type=_DC2,
+                external_id=f"arn:aws:s3:::crown/pii-{i}",
+                properties={"data_type": "ssn"},
+            )
+            await store.add_relationship(
+                tenant_id=tenant,
+                src_entity_id=resource_id,
+                dst_entity_id=dc_id,
+                relationship_type=EdgeType.EXPOSES_DATA.value,
+                properties={},
+            )
+
+        # The path's entities contain the RESOURCE node only (exposed_database shape).
+        # If _blast only checked principal_reach, it would return 1 (resource_id not in principal_reach).
+        path = AttackPath(
+            path_type="exposed_database",
+            severity=_SEV,
+            title="exposed db reaches N data stores",
+            entities=(resource_id,),
+            sink_id="",
+            kev=False,
+            epss=None,
+        )
+
+        ranked = await rank_by_expected_loss([path], store, tenant)
+
+        assert len(ranked) == 1
+        _, _el, blast = ranked[0]
+        assert blast == N, (
+            f"resource_reach blast must be {N} (one per data store), got {blast}. "
+            f"_blast is not traversing resource_reach for entity {resource_id!r}."
         )
