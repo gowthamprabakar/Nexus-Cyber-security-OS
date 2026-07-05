@@ -911,3 +911,76 @@ async def test_scan_run_kms_key_access_fires(
         f"cloud-posture record_kms_protected_data first tuple element={_KMS_ARN!r}; "
         f"identity admin role {_ADMIN_ROLE_ARN!r} expands HAS_ACCESS_TO all CLOUD_RESOURCE nodes."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (Tier-3): multi-cloud-posture seam → cross-cloud exposed_kms_key +
+# exposed_database detectors fire via the mc_* injectable sources
+# ---------------------------------------------------------------------------
+
+_AZURE_KV_KEY_ID = "https://my-vault.vault.azure.net/keys/my-key/abc123"
+_GCP_SQL_INSTANCE_ID = "projects/my-project/instances/my-sql-instance"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_multicloud_exposed_kms_and_db_fire(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Injected Azure KMS key + GCP SQL instance (both public) → exposed_kms_key + exposed_database.
+
+    multi-cloud-posture feeder receives:
+      - mc_kms_keys: one public Azure Key Vault key →
+          record_kms_keys writes CLOUD_RESOURCE{kind=kms-key, is_public=True}
+      - mc_sql_instances: one public GCP Cloud SQL instance →
+          record_sql_instances writes CLOUD_RESOURCE{kind=rds-instance, is_public=True}
+
+    analyze → find_exposed_kms_key → confirmed path_type == "exposed_kms_key"
+    analyze → find_exposed_database → confirmed path_type == "exposed_database"
+
+    This proves the cross-cloud seam: the same cloud-agnostic detectors that fire
+    for AWS (cloud-posture) now fire for Azure/GCP via multi-cloud-posture.
+    """
+    from multi_cloud_posture.tools.kg_writer import KmsKeyRecord, SqlInstanceRecord
+
+    sources = ScanSources(
+        mc_kms_keys=(
+            KmsKeyRecord(
+                key_id=_AZURE_KV_KEY_ID,
+                is_public=True,
+            ),
+        ),
+        mc_sql_instances=(
+            SqlInstanceRecord(
+                instance_id=_GCP_SQL_INSTANCE_ID,
+                is_public=True,
+                engine="postgres",
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-mc",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "multi-cloud-posture" in feeder_names, (
+        f"multi-cloud-posture feeder missing from {feeder_names}"
+    )
+
+    types = {p.path_type for p in res.confirmed}
+    assert "exposed_kms_key" in types, (
+        f"exposed_kms_key not confirmed; got path_types={types}. "
+        f"Check multi-cloud-posture wrote CLOUD_RESOURCE{{kind=kms-key, is_public=True}} "
+        f"for {_AZURE_KV_KEY_ID!r} and find_exposed_kms_key picked it up."
+    )
+    assert "exposed_database" in types, (
+        f"exposed_database not confirmed; got path_types={types}. "
+        f"Check multi-cloud-posture wrote CLOUD_RESOURCE{{kind=rds-instance, is_public=True}} "
+        f"for {_GCP_SQL_INSTANCE_ID!r} and find_exposed_database picked it up."
+    )

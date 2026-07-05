@@ -204,3 +204,76 @@ async def test_run_is_tenant_scoped(
         tenant_id=_OTHER, entity_type=NodeCategory.CLOUD_RESOURCE.value
     )
     assert other == []
+
+
+# -------------------------- mc_* injectable seam -------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_mc_kms_keys_writes_kms_node(tmp_path: Path, store: SemanticStore) -> None:
+    """B-1: mc_kms_keys=[(key_id, is_public=True)] writes CLOUD_RESOURCE{kind=kms-key}.
+
+    No feed files needed — no readers are called when only mc_* params are provided.
+    The agent must NOT fail when all four feed paths are None.
+    """
+    from multi_cloud_posture.tools.kg_writer import KmsKeyRecord
+
+    key_id = "https://my-vault.vault.azure.net/keys/my-key/abc123"
+
+    await run(
+        _contract(tmp_path),
+        mc_kms_keys=(KmsKeyRecord(key_id=key_id, is_public=True),),
+        semantic_store=store,
+    )
+
+    resources = await store.list_entities_by_type(
+        tenant_id=_TENANT, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    kms_nodes = [r for r in resources if r.properties.get("kind") == "kms-key"]
+    assert kms_nodes, (
+        f"expected a CLOUD_RESOURCE{{kind=kms-key}} node for key_id={key_id!r}; "
+        f"got resources={[r.external_id for r in resources]}"
+    )
+    kms_node = kms_nodes[0]
+    assert kms_node.external_id == key_id
+    assert kms_node.properties.get("is_public") is True
+
+
+@pytest.mark.asyncio
+async def test_run_mc_sql_instances_writes_rds_node(tmp_path: Path, store: SemanticStore) -> None:
+    """B-2: mc_sql_instances=[(instance_id, is_public=True)] writes CLOUD_RESOURCE{kind=rds-instance}."""
+    from multi_cloud_posture.tools.kg_writer import SqlInstanceRecord
+
+    instance_id = "projects/my-project/instances/my-sql-instance"
+
+    await run(
+        _contract(tmp_path),
+        mc_sql_instances=(
+            SqlInstanceRecord(instance_id=instance_id, is_public=True, engine="postgres"),
+        ),
+        semantic_store=store,
+    )
+
+    resources = await store.list_entities_by_type(
+        tenant_id=_TENANT, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    sql_nodes = [r for r in resources if r.properties.get("kind") == "rds-instance"]
+    assert sql_nodes, (
+        f"expected a CLOUD_RESOURCE{{kind=rds-instance}} node for instance_id={instance_id!r}; "
+        f"got resources={[r.external_id for r in resources]}"
+    )
+    sql_node = sql_nodes[0]
+    assert sql_node.external_id == instance_id
+    assert sql_node.properties.get("is_public") is True
+
+
+@pytest.mark.asyncio
+async def test_run_mc_kms_keys_none_skips_writes(tmp_path: Path, store: SemanticStore) -> None:
+    """None mc_* params → no KMS/SQL/VM writes (existing no-op guarantee preserved)."""
+    await run(_contract(tmp_path), semantic_store=store)  # all mc_* default to None
+
+    resources = await store.list_entities_by_type(
+        tenant_id=_TENANT, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    # No mc_* provided, no feeds provided → nothing written.
+    assert resources == []

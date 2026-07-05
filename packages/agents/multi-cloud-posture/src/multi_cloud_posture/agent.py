@@ -59,7 +59,12 @@ from multi_cloud_posture.tools.azure_discovery import (
 from multi_cloud_posture.tools.gcp_discovery import discover_project_id, discover_regions
 from multi_cloud_posture.tools.gcp_iam import GcpIamFinding, read_gcp_iam_findings
 from multi_cloud_posture.tools.gcp_scc import GcpSccFinding, read_gcp_findings
-from multi_cloud_posture.tools.kg_writer import KnowledgeGraphWriter
+from multi_cloud_posture.tools.kg_writer import (
+    KmsKeyRecord,
+    KnowledgeGraphWriter,
+    SqlInstanceRecord,
+    VmInstanceRecord,
+)
 
 DEFAULT_NLAH_VERSION = "0.1.0"
 
@@ -130,6 +135,9 @@ async def run(
     gcp_project_id: str | None = None,
     gcp_regions: list[str] | None = None,
     semantic_store: SemanticStore | None = None,
+    mc_kms_keys: Sequence[KmsKeyRecord] | None = None,
+    mc_sql_instances: Sequence[SqlInstanceRecord] | None = None,
+    mc_vm_instances: Sequence[VmInstanceRecord] | None = None,
 ) -> FindingsReport:
     """Run the Multi-Cloud Posture Agent end-to-end under the runtime charter.
 
@@ -153,6 +161,15 @@ async def run(
         gcp_regions: Explicit GCP regions (precedence via
             `region_scope.resolve_scan_regions`); all discovered when None.
             Reserved — consumed by the live GCP readers.
+        mc_kms_keys: Optional Azure/GCP KMS-key records to write as
+            ``CLOUD_RESOURCE{kind=kms-key}`` spine nodes (B-1 injectable seam).
+            Enables ``find_exposed_kms_key`` for Azure/GCP. No-op when None.
+        mc_sql_instances: Optional Azure SQL / GCP Cloud SQL records to write
+            as ``CLOUD_RESOURCE{kind=rds-instance}`` spine nodes (B-2 injectable
+            seam). Enables ``find_exposed_database`` cross-cloud. No-op when None.
+        mc_vm_instances: Optional Azure VM / GCP Compute Engine records to write
+            as ``CLOUD_RESOURCE{kind=vm-instance}`` spine nodes (B-2 injectable
+            seam). No-op when None.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -218,6 +235,16 @@ async def run(
         # SemanticStore is injected. Inert (no writes) otherwise — findings.json byte-identical.
         if semantic_store is not None:
             await _upsert_findings_to_kg(ctx, [*azure_findings, *gcp_findings])
+            # B-1/B-2 injectable seam: write Azure/GCP KMS/SQL/VM spine nodes so the
+            # cloud-agnostic detectors (find_exposed_kms_key / find_exposed_database) fire
+            # cross-cloud without any detector change. Mirrors cloud-posture's G-1 seam.
+            await _write_mc_topology_to_kg(
+                semantic_store,
+                contract.customer_id,
+                mc_kms_keys=mc_kms_keys,
+                mc_sql_instances=mc_sql_instances,
+                mc_vm_instances=mc_vm_instances,
+            )
 
         ctx.write_output(
             "findings.json",
@@ -231,6 +258,33 @@ async def run(
         ctx.assert_complete()
 
     return report
+
+
+async def _write_mc_topology_to_kg(
+    semantic_store: SemanticStore,
+    customer_id: str,
+    *,
+    mc_kms_keys: Sequence[KmsKeyRecord] | None,
+    mc_sql_instances: Sequence[SqlInstanceRecord] | None,
+    mc_vm_instances: Sequence[VmInstanceRecord] | None,
+) -> None:
+    """Write Azure/GCP KMS/SQL/VM topology nodes into the KG when records are provided.
+
+    B-1/B-2 injectable seam: when the caller supplies records (offline / pipeline /
+    test), they are written directly via KnowledgeGraphWriter without hitting live
+    Azure/GCP readers. When None, this is a no-op — findings.json stays byte-identical.
+
+    Mirrors cloud-posture's ``_write_topology_to_kg`` (G-1 seam). Enables:
+    - ``find_exposed_kms_key`` for Azure Key Vault / GCP Cloud KMS keys (kind=kms-key)
+    - ``find_exposed_database`` for Azure SQL / GCP Cloud SQL (kind=rds-instance)
+    """
+    kg = KnowledgeGraphWriter(semantic_store, customer_id)
+    if mc_kms_keys is not None:
+        await kg.record_kms_keys(mc_kms_keys)
+    if mc_sql_instances is not None:
+        await kg.record_sql_instances(mc_sql_instances)
+    if mc_vm_instances is not None:
+        await kg.record_vm_instances(mc_vm_instances)
 
 
 async def _upsert_findings_to_kg(ctx: Charter, findings: list[CloudPostureFinding]) -> None:
