@@ -346,6 +346,7 @@ async def run(
     ec2_workloads: Sequence[Ec2Workload] | None = None,
     ecs_workloads: Sequence[EcsWorkload] | None = None,
     kms_keys: Sequence[KmsKey] | None = None,
+    kms_protected_data: Sequence[tuple[str, str]] | None = None,
     rds_instances: Sequence[RdsInstance] | None = None,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
@@ -367,6 +368,11 @@ async def run(
 
     G-1 extension: `kms_keys` / `rds_instances` follow the same seam — when
     provided, written directly to the KG; when None, skipped (no-op).
+
+    G-4 extension: `kms_protected_data` supplies the EXPOSES_DATA leg for the
+    `kms_key_access` detector (NEX-202a). Each tuple is ``(kms_key_arn, data_type)``
+    — the key protects data of that type. When provided, written via
+    `record_kms_protected_data`; when None, skipped (no-op).
     """
     del llm_provider  # reserved for future iterations
 
@@ -485,6 +491,7 @@ async def run(
                 ec2_workloads=ec2_workloads,
                 ecs_workloads=ecs_workloads,
                 kms_keys=kms_keys,
+                kms_protected_data=kms_protected_data,
                 rds_instances=rds_instances,
             )
 
@@ -536,6 +543,7 @@ async def _write_topology_to_kg(
     ec2_workloads: Sequence[Ec2Workload] | None,
     ecs_workloads: Sequence[EcsWorkload] | None,
     kms_keys: Sequence[KmsKey] | None,
+    kms_protected_data: Sequence[tuple[str, str]] | None,
     rds_instances: Sequence[RdsInstance] | None,
 ) -> None:
     """Write EC2/ECS/KMS/RDS topology nodes+edges into the KG when workloads are provided.
@@ -549,6 +557,9 @@ async def _write_topology_to_kg(
 
     G-1 extension: kms_keys / rds_instances follow the same seam — written when provided,
     no-op when None. Wires `find_exposed_kms_key` / `find_exposed_database` detectors.
+
+    G-4 extension: kms_protected_data supplies the EXPOSES_DATA leg (kms-key → data) for
+    the `find_kms_key_access` detector (NEX-202a). Written when provided, no-op when None.
     """
     kg = KnowledgeGraphWriter(semantic_store, customer_id)
     if ec2_workloads is not None:
@@ -565,5 +576,7 @@ async def _write_topology_to_kg(
             await kg.record_stored_secrets(grants)
     if kms_keys is not None:
         await kg.record_kms_keys(kms_keys)
+    if kms_protected_data is not None:
+        await kg.record_kms_protected_data(kms_protected_data)
     if rds_instances is not None:
         await kg.record_rds_instances(rds_instances)
