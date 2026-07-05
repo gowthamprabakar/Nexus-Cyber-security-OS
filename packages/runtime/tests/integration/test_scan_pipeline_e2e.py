@@ -559,6 +559,289 @@ async def test_scan_run_exposed_ai_with_sensitive_data_fires(
 
 
 # ---------------------------------------------------------------------------
+# Task 2 (last-three-detectors): real serviceAccountName → find_k8s_escape_to_cloud_data
+# ---------------------------------------------------------------------------
+
+# IRSA role ARN — shared between the SA annotation and the identity listing.
+_IRSA_ROLE_ARN = "arn:aws:iam::123456789012:role/pod-role"
+_IRSA_SA_NAME = "irsa-sa"
+_IRSA_NAMESPACE = "default"
+
+
+class _IrsaClusterReader:
+    """A fake ClusterReader whose SA 'irsa-sa' carries the IRSA annotation.
+
+    The SA annotation ``eks.amazonaws.com/role-arn: _IRSA_ROLE_ARN`` is the bridge
+    that record_inventory writes as an IRSA_MAPPING edge (SA → IDENTITY(role_arn)).
+    """
+
+    def list_namespaces(self) -> list[dict]:  # type: ignore[type-arg]
+        return [{"metadata": {"name": _IRSA_NAMESPACE}}]
+
+    def list_service_accounts(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "metadata": {
+                    "name": _IRSA_SA_NAME,
+                    "namespace": _IRSA_NAMESPACE,
+                    "annotations": {"eks.amazonaws.com/role-arn": _IRSA_ROLE_ARN},
+                }
+            }
+        ]
+
+    def list_roles(self) -> list[dict]:  # type: ignore[type-arg]
+        return []
+
+    def list_role_bindings(self) -> list[dict]:  # type: ignore[type-arg]
+        return []
+
+
+def _write_privileged_irsa_pod(manifest_dir: Path) -> None:
+    """Write a privileged pod manifest with serviceAccountName: irsa-sa."""
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    pod = {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {"name": "irsa-pod", "namespace": _IRSA_NAMESPACE},
+        "spec": {
+            "serviceAccountName": _IRSA_SA_NAME,
+            "containers": [
+                {
+                    "name": "app",
+                    "image": "app:v1",
+                    "securityContext": {"privileged": True},
+                }
+            ],
+        },
+    }
+    import yaml
+
+    (manifest_dir / "irsa-pod.yaml").write_text(yaml.safe_dump(pod), encoding="utf-8")
+
+
+def _irsa_identity_listing() -> IdentityListing:
+    """A role at _IRSA_ROLE_ARN with AdministratorAccess.
+
+    identity's _synthesize_admin_grants detects AdministratorAccess and writes
+    HAS_ACCESS_TO every CLOUD_RESOURCE node — including the public PII bucket that
+    data-security wrote. The role ARN must match the IRSA annotation on the SA.
+    """
+    role = IamRole(
+        arn=_IRSA_ROLE_ARN,
+        name="pod-role",
+        role_id="AROA-PODROLE",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    return IdentityListing(users=(), roles=(role,), groups=())
+
+
+@pytest.mark.asyncio
+async def test_scan_run_k8s_escape_to_cloud_data_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """T2: real serviceAccountName wires the privileged-pod → IRSA → data path (C-2).
+
+    Four feeders cooperate in the shared SemanticStore:
+      1. data-security writes CLOUD_RESOURCE(acme-pii, is_public=True)
+                              --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+      2. identity writes IDENTITY(pod-role)
+                         --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+         (AdministratorAccess expands to all resources)
+      3. k8s-posture (manifest_dir) reads irsa-pod.yaml with serviceAccountName=irsa-sa
+         → ManifestFinding(privileged-container, unmapped["service_account"]="irsa-sa")
+         → record_privileged_workloads writes
+             K8S_OBJECT(irsa-pod)
+               --USES_SERVICE_ACCOUNT-->
+             K8S_OBJECT(SA:offline/default/irsa-sa)
+      4. k8s-posture (cluster_reader) calls record_inventory for _IrsaClusterReader
+         → writes K8S_OBJECT(SA:offline/default/irsa-sa)
+               --IRSA_MAPPING--> IDENTITY(arn:.../pod-role)
+
+    The full chain:
+      K8S_OBJECT(irsa-pod, privileged=True)
+        --USES_SERVICE_ACCOUNT--> K8S_OBJECT(irsa-sa)
+        --IRSA_MAPPING--> IDENTITY(pod-role)
+        --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+        --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+
+    All join keys must match: SA name "irsa-sa" (manifest ↔ inventory),
+    role ARN _IRSA_ROLE_ARN (inventory ↔ identity), bucket key (identity ↔ ds).
+    """
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    manifest_dir = tmp_path / "manifests"
+    _write_privileged_irsa_pod(manifest_dir)
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=_irsa_identity_listing(),
+        k8s_manifest_dir=manifest_dir,
+        k8s_cluster_reader=_IrsaClusterReader(),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-k8s-escape",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "k8s-posture" in feeder_names, f"k8s-posture missing from {feeder_names}"
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "k8s_escape_to_cloud_data" in path_types, (
+        f"k8s_escape_to_cloud_data not confirmed; got path_types={path_types}. "
+        f"Join-key check: SA name {_IRSA_SA_NAME!r} (manifest serviceAccountName must "
+        f"equal inventory SA name); role ARN {_IRSA_ROLE_ARN!r} (IRSA annotation must "
+        f"equal identity role ARN); bucket {_BUCKET_NAME!r} (identity HAS_ACCESS_TO must "
+        f"reach the same CLOUD_RESOURCE data-security wrote with EXPOSES_DATA)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (last-three-detectors): k8s ClusterInventory seam →
+# find_rbac_privilege_escalation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scan_run_rbac_privilege_escalation_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A wildcard-admin ClusterRole bound to a service account → find_rbac_privilege_escalation.
+
+    k8s-posture run() receives a canned ClusterReader (no live cluster) via
+    ScanSources.k8s_cluster_reader.  The feeder calls inventory_from_reader →
+    record_inventory, which writes the SA→BINDS→ClusterRole edges into the shared
+    graph.  analyze → find_rbac_privilege_escalation → confirmed path.
+    """
+    from fleet_testkit.k8s_workloads import cluster_admin_rbac_reader
+
+    reader = cluster_admin_rbac_reader(namespace="prod", sa_name="deployer", admin=True)
+    sources = ScanSources(k8s_cluster_reader=reader)
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-rbac",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+    assert any(p.path_type == "rbac_privilege_escalation" for p in res.confirmed), (
+        f"expected rbac_privilege_escalation in confirmed paths; got "
+        f"{[p.path_type for p in res.confirmed]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (last-three-detectors): host-scan ARN attribution →
+# find_internet_exposed_host_vulnerable
+# ---------------------------------------------------------------------------
+
+_HOST_INSTANCE_ARN = "arn:aws:ec2:us-east-1:111122223333:instance/i-abc"
+_HOST_TENANT = "t-host-vuln"
+
+
+def _patch_trivy_host_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fake trivy_host_scan: returns one CRITICAL CVE for any target.
+
+    The _artifact_name is intentionally NOT set here — agent.run() will override it
+    with host_target_arn when provided, which is the behaviour under test.
+    """
+    from vulnerability.tools import trivy as trivy_mod
+
+    async def fake_host_scan(target: str, **_kw: Any) -> trivy_mod.TrivyResult:
+        return trivy_mod.TrivyResult(
+            raw_findings=[
+                {
+                    "VulnerabilityID": "CVE-2024-99999",
+                    "PkgName": "openssh-server",
+                    "InstalledVersion": "8.9p1",
+                    "Severity": "CRITICAL",
+                    "Title": "OpenSSH RCE",
+                    "_target": "/mnt/rootfs (alpine 3.18)",
+                    "_class": "os-pkgs",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(trivy_mod, "trivy_host_scan", fake_host_scan)
+
+
+@pytest.mark.asyncio
+async def test_scan_run_internet_exposed_host_vulnerable_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 3: host-scan ARN attribution fires find_internet_exposed_host_vulnerable.
+
+    Two feeders cooperate in the shared SemanticStore:
+      1. cloud-posture receives a public Ec2Workload(instance_arn=_HOST_INSTANCE_ARN, is_public=True)
+         via ScanSources.cloud_ec2_workloads.  record_ec2_workloads writes
+         CLOUD_RESOURCE{instance_arn, is_public=True} keyed on instance_arn.
+      2. vulnerability receives a host-scan source (vuln_host_target="/mnt/rootfs") with
+         vuln_host_target_arn=_HOST_INSTANCE_ARN.  agent.run() relabels the host-scan
+         raw findings so their _artifact_name == _HOST_INSTANCE_ARN before writing to the
+         KnowledgeGraphWriter.  record_scan_results then mints a CLOUD_RESOURCE node
+         keyed on instance_arn with a VULNERABLE_TO edge.
+
+    The join key is _HOST_INSTANCE_ARN in both feeders.  The cloud-posture node carries
+    is_public=True; the vuln node carries VULNERABLE_TO; they are the SAME node.
+    analyze → find_internet_exposed_host_vulnerable → confirmed path_type.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy_host_scan(monkeypatch)
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+
+    sources = ScanSources(
+        cloud_ec2_workloads=(
+            Ec2Workload(
+                instance_arn=_HOST_INSTANCE_ARN,
+                is_public=True,
+            ),
+        ),
+        vuln_host_target="/mnt/rootfs",
+        vuln_host_target_arn=_HOST_INSTANCE_ARN,
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_HOST_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "internet_exposed_host_vulnerable" in path_types, (
+        f"internet_exposed_host_vulnerable path not confirmed; got path_types={path_types}. "
+        f"Join-key check: cloud-posture instance_arn={_HOST_INSTANCE_ARN!r} (is_public=True); "
+        f"vuln host_target_arn={_HOST_INSTANCE_ARN!r} must relabel _artifact_name so the "
+        f"VULNERABLE_TO node keys on the SAME ARN as the cloud-posture is_public node."
+    )
+
+
+# ---------------------------------------------------------------------------
 # G-4: e2e proof — find_kms_key_access fires through scan_run
 # ---------------------------------------------------------------------------
 

@@ -161,6 +161,52 @@ async def test_offline_manifest_writes_inventory_and_privileged_node(
     )
 
 
+async def test_offline_cluster_reader_writes_rbac_nodes(
+    tmp_path: Path, store: SemanticStore
+) -> None:
+    """ClusterReader seam: offline run() with cluster_reader writes SA + role nodes.
+
+    No kubeconfig, no in_cluster, no manifest_dir.  The injectable ClusterReader is the
+    only source.  Asserts that record_inventory fired (K8S_OBJECT nodes landed) and that
+    the SA node is present for the expected namespace/name.
+    """
+    from fleet_testkit.k8s_workloads import cluster_admin_rbac_reader
+
+    reader = cluster_admin_rbac_reader(namespace="test-ns", sa_name="admin-sa", admin=True)
+    contract = _contract(tmp_path)
+    await run(
+        contract,
+        cluster_reader=reader,
+        semantic_store=store,
+        # no manifest_dir, no kubeconfig, no in_cluster
+    )
+
+    objects = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="k8s_object")
+    assert objects, "expected K8S_OBJECT nodes written via cluster_reader seam, got none"
+
+    sa_nodes = [o for o in objects if o.properties.get("kind") == "service-account"]
+    assert sa_nodes, "expected a service-account K8S_OBJECT node from record_inventory"
+    assert any(
+        o.properties.get("name") == "admin-sa" and o.properties.get("namespace") == "test-ns"
+        for o in sa_nodes
+    ), f"expected SA admin-sa in test-ns; got {[o.properties for o in sa_nodes]}"
+
+
+async def test_offline_cluster_reader_none_skips_cleanly(
+    tmp_path: Path, store: SemanticStore
+) -> None:
+    """cluster_reader=None (default) → no K8S_OBJECT nodes written (existing tests stay green)."""
+    await run(
+        _contract(tmp_path),
+        semantic_store=store,
+        # no cluster_reader, no manifest_dir, no feeds
+    )
+    objects = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="k8s_object")
+    assert objects == [], (
+        "expected no K8S_OBJECT nodes when cluster_reader is None and no feeds are provided"
+    )
+
+
 async def test_offline_kube_bench_only_writes_nothing_to_graph(
     tmp_path: Path, store: SemanticStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:

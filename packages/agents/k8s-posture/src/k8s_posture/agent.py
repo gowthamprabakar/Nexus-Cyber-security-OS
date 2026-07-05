@@ -51,7 +51,7 @@ from k8s_posture.normalizers.manifest import normalize_manifest
 from k8s_posture.normalizers.polaris import normalize_polaris
 from k8s_posture.schemas import FindingsReport
 from k8s_posture.summarizer import render_summary
-from k8s_posture.tools.cluster_inventory import read_cluster_inventory
+from k8s_posture.tools.cluster_inventory import inventory_from_reader, read_cluster_inventory
 from k8s_posture.tools.cluster_workloads import read_cluster_workloads
 from k8s_posture.tools.kube_bench import KubeBenchFinding, read_kube_bench
 from k8s_posture.tools.manifests import ManifestFinding, read_manifests
@@ -104,6 +104,7 @@ async def run(
     in_cluster: bool = False,
     cluster_namespace: str | None = None,
     semantic_store: SemanticStore | None = None,
+    cluster_reader: object | None = None,
 ) -> FindingsReport:
     """Run the Kubernetes Posture Agent end-to-end under the runtime charter.
 
@@ -132,6 +133,13 @@ async def run(
             workloads are derived from manifest findings (rule_id == "privileged-container")
             and written; no inventory walk (no live cluster to enumerate). Default None is
             inert — no graph writes, `findings.json` byte-identical.
+        cluster_reader: Optional injectable ``ClusterReader`` for the offline path.
+            When ``semantic_store`` is set and the scan is offline (no ``kubeconfig`` /
+            ``in_cluster``), passing a ``ClusterReader`` causes ``inventory_from_reader`` +
+            ``record_inventory`` to run, writing namespaces / service-accounts / RBAC nodes
+            and edges (the same data the live path writes).  Ignored when
+            ``semantic_store is None``.  Skipped cleanly when ``None`` (existing offline
+            tests stay green).
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -209,6 +217,17 @@ async def run(
                     cluster_id=_cluster_context,
                 )
                 await kg.record_inventory(inventory)
+            elif cluster_reader is not None:
+                # Offline path with an injectable ClusterReader seam: build the typed
+                # inventory snapshot from the canned/fake reader and write it to the graph.
+                # cluster_id must match the one used by record_privileged_workloads so SA
+                # nodes share the same key prefix (both use _cluster_context or "offline").
+                await kg.record_inventory(
+                    inventory_from_reader(
+                        cluster_reader,  # type: ignore[arg-type]
+                        cluster_id=cluster_id,
+                    )
+                )
 
             # Privileged workloads: derived from manifest findings (both live and offline).
             # ManifestFindings with rule_id == "privileged-container" identify pods with
@@ -358,15 +377,15 @@ def _privileged_from_manifest_findings(
         image_ref = str(f.unmapped.get("image") or "") or (
             f"manifest-scan/{cluster_id}/{f.namespace}/{f.workload_name}"
         )
-        # ponytail: offline SA is approximate — serviceAccountName lives on pod_spec,
-        # not on the container, so the manifest reader can't surface it per-finding
-        # without threading pod_spec through _check_container_rules. Deferred to v0.6.
+        # service_account: read the real SA name surfaced by manifests.py from pod_spec
+        # (stored in unmapped["service_account"]). Falls back to "default" when absent,
+        # preserving behaviour for findings written before this field was added.
         out.append(
             PrivilegedWorkload(
                 namespace=f.namespace,
                 name=f.workload_name,
                 image_ref=image_ref,
-                service_account="default",
+                service_account=str(f.unmapped.get("service_account") or "default"),
             )
         )
     return out

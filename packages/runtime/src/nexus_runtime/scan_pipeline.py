@@ -152,6 +152,11 @@ class ScanSources:
 
     # vulnerability feeds
     vuln_image_refs: tuple[str, ...] | None = None
+    # host-scan feed: vuln_host_target is the trivy target path/mode object;
+    # vuln_host_target_arn (when set) keys the resulting VULNERABLE_TO node on the
+    # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
+    vuln_host_target: object | None = None
+    vuln_host_target_arn: str | None = None
 
     # k8s-posture feeds
     k8s_kube_bench_feed: Path | None = None
@@ -183,6 +188,11 @@ class ScanSources:
     cloud_kms_keys: tuple[KmsKey, ...] | None = None
     cloud_kms_protected_data: tuple[tuple[str, str], ...] | None = None
     cloud_rds_instances: tuple[RdsInstance, ...] | None = None
+
+    # k8s-posture injectable cluster reader (ClusterReader protocol, or None).
+    # When set, the offline k8s-posture path calls inventory_from_reader → record_inventory,
+    # writing SA/RBAC nodes into the fleet graph (lights find_rbac_privilege_escalation).
+    k8s_cluster_reader: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -356,10 +366,10 @@ async def scan_run(
         ),
     )
 
-    # 4. vulnerability (image_refs scan; enrich=False keeps it deterministic/offline)
+    # 4. vulnerability (image_refs scan or host scan; enrich=False keeps it deterministic/offline)
     await _feed(
         "vulnerability",
-        bool(sources.vuln_image_refs),
+        bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
         lambda: vulnerability_run(
             _contract(
                 tenant,
@@ -369,15 +379,17 @@ async def scan_run(
                 ["findings.json", "summary.md"],
             ),
             image_refs=list(sources.vuln_image_refs or ()),
+            host_target=sources.vuln_host_target,  # type: ignore[arg-type]
+            host_target_arn=sources.vuln_host_target_arn,
             enrich=False,
             semantic_store=store,
         ),
     )
 
-    # 5. k8s-posture (manifest_dir feed)
+    # 5. k8s-posture (manifest_dir feed or injectable cluster_reader)
     await _feed(
         "k8s-posture",
-        sources.k8s_manifest_dir is not None,
+        sources.k8s_manifest_dir is not None or sources.k8s_cluster_reader is not None,
         lambda: k8s_posture_run(
             _contract(
                 tenant,
@@ -387,6 +399,7 @@ async def scan_run(
                 ["findings.json", "report.md"],
             ),
             manifest_dir=sources.k8s_manifest_dir,
+            cluster_reader=sources.k8s_cluster_reader,
             semantic_store=store,
         ),
     )
