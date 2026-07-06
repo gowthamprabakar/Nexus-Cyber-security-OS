@@ -1202,3 +1202,223 @@ async def test_scan_run_kev_reaches_confirmed_path(
     assert any(p.path_type == "internet_exposed_vulnerable" for p in kev_paths), (
         f"expected internet_exposed_vulnerable among KEV paths; got {[p.path_type for p in kev_paths]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 3 Task 3: cross-scan e2e + guard — ATTACK_PATH durability proof
+# ---------------------------------------------------------------------------
+
+_C3_TENANT = "t-c3-attack-path-durability"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_persists_attack_path_node_and_emits_ocsf(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cycle 3 P3 cross-scan e2e: scan_run persists ATTACK_PATH nodes + emits OCSF 2005 findings.
+
+    Scene: fine_grained_data / stored_secret (public PII bucket + admin identity) — the
+    same scene as test_scan_run_yields_ranked_public_data_path.
+
+    Run 1 assertions:
+      (a) res.ocsf_findings is non-empty; every entry has class_uid == 2005.
+      (b) At least one ATTACK_PATH node exists in the store for the tenant.
+      (c) The ATTACK_PATH node carries path_type, expected_loss, first_seen, last_seen.
+
+    Run 2 (same store, same sources) assertions — cross-scan dedup proof:
+      (d) STILL exactly one ATTACK_PATH node per path (no duplicate).
+      (e) first_seen is UNCHANGED from Run 1.
+      (f) last_seen is bumped (Run 2 timestamp > Run 1 timestamp).
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+    listing = _admin_identity_listing()
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+    )
+
+    # ---- Run 1 ----
+    _now1 = datetime(2026, 7, 6, 10, 0, 0, tzinfo=UTC)
+
+    # Patch datetime.now in scan_pipeline so Run 1 uses _now1.
+    from unittest.mock import patch
+
+    import nexus_runtime.scan_pipeline as _sp_mod
+
+    with patch.object(_sp_mod, "datetime") as mock_dt:
+        mock_dt.now.return_value = _now1
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        res1 = await scan_run(
+            session_factory=session_factory,
+            tenant=_C3_TENANT,
+            sources=sources,
+            workspace_root=tmp_path / "ws1",
+        )
+
+    # (a) OCSF findings present + all class_uid == 2005
+    assert res1.ocsf_findings, (
+        "expected non-empty ocsf_findings from scan_run — persist=True should emit OCSF 2005 findings"
+    )
+    for finding in res1.ocsf_findings:
+        # findings are wrapped in NexusEnvelope; the payload is in finding["payload"]
+        payload = finding.get("payload", finding)
+        assert payload.get("class_uid") == 2005, (
+            f"each finding must have class_uid==2005 (OCSF Incident Finding); got {payload.get('class_uid')}"
+        )
+
+    # (b) ATTACK_PATH node exists in the store
+    store = SemanticStore(session_factory)
+    nodes_after_run1 = await store.list_entities_by_type(
+        tenant_id=_C3_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+    assert nodes_after_run1, (
+        "expected at least one ATTACK_PATH node in the store after scan_run with persist=True"
+    )
+
+    # (c) Each node carries the expected properties
+    for node in nodes_after_run1:
+        props = node.properties
+        assert "path_type" in props, f"ATTACK_PATH node missing path_type; props={props}"
+        assert "expected_loss" in props, f"ATTACK_PATH node missing expected_loss; props={props}"
+        assert "first_seen" in props, f"ATTACK_PATH node missing first_seen; props={props}"
+        assert "last_seen" in props, f"ATTACK_PATH node missing last_seen; props={props}"
+
+    # Record first_seen values from Run 1 for cross-scan comparison.
+    first_seen_by_id = {node.entity_id: node.properties["first_seen"] for node in nodes_after_run1}
+    last_seen_by_id_run1 = {
+        node.entity_id: node.properties["last_seen"] for node in nodes_after_run1
+    }
+
+    # ---- Run 2 (same store, same sources, later timestamp) ----
+    _now2 = datetime(2026, 7, 6, 11, 0, 0, tzinfo=UTC)  # 1 hour later
+
+    with patch.object(_sp_mod, "datetime") as mock_dt2:
+        mock_dt2.now.return_value = _now2
+        mock_dt2.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        res2 = await scan_run(
+            session_factory=session_factory,
+            tenant=_C3_TENANT,
+            sources=sources,
+            workspace_root=tmp_path / "ws2",
+        )
+
+    nodes_after_run2 = await store.list_entities_by_type(
+        tenant_id=_C3_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+
+    # (d) No duplicate nodes: same count (or equal node ids)
+    assert len(nodes_after_run2) == len(nodes_after_run1), (
+        f"cross-scan dedup failed: Run 1 had {len(nodes_after_run1)} ATTACK_PATH node(s), "
+        f"Run 2 has {len(nodes_after_run2)} — expected no new duplicates."
+    )
+    ids_run2 = {node.entity_id for node in nodes_after_run2}
+    ids_run1 = {node.entity_id for node in nodes_after_run1}
+    assert ids_run2 == ids_run1, (
+        f"cross-scan dedup failed: node ids changed between runs. "
+        f"Run 1 ids={ids_run1}, Run 2 ids={ids_run2}"
+    )
+
+    # (e) first_seen unchanged
+    for node in nodes_after_run2:
+        orig_first_seen = first_seen_by_id.get(node.entity_id)
+        assert node.properties["first_seen"] == orig_first_seen, (
+            f"first_seen was mutated on second scan for node {node.entity_id!r}: "
+            f"expected {orig_first_seen!r}, got {node.properties['first_seen']!r}"
+        )
+
+    # (f) last_seen bumped
+    for node in nodes_after_run2:
+        run1_last = last_seen_by_id_run1.get(node.entity_id)
+        run2_last = node.properties.get("last_seen")
+        assert run2_last is not None, f"last_seen missing on node {node.entity_id!r} after Run 2"
+        assert run2_last > run1_last, (  # type: ignore[operator]
+            f"last_seen not bumped for node {node.entity_id!r}: "
+            f"Run 1 last_seen={run1_last!r}, Run 2 last_seen={run2_last!r}"
+        )
+
+    # Run 2 also emits findings.
+    assert res2.ocsf_findings, "expected non-empty ocsf_findings from second scan_run"
+
+
+@pytest.mark.asyncio
+async def test_analyze_default_persist_false_writes_no_attack_path_nodes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cycle 3 P3 guard: analyze() with default persist=False writes NO ATTACK_PATH nodes.
+
+    Proves that every existing caller is byte-unaffected — the default is the safe no-op path.
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from meta_harness.scan import analyze
+
+    _GUARD_TENANT = "t-c3-guard-no-persist"
+    store = SemanticStore(session_factory)
+
+    # Seed a minimal graph that forms a confirmed path (fine_grained_data).
+    _R = NodeCategory.CLOUD_RESOURCE.value
+    _ID = NodeCategory.IDENTITY.value
+    _DC = NodeCategory.DATA_CLASSIFICATION.value
+
+    principal = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/GuardRole",
+        properties={},
+    )
+    resource = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_R,
+        external_id="arn:aws:s3:::guard-bucket",
+        properties={"is_public": True},
+    )
+    dc = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_DC,
+        external_id="arn:aws:s3:::guard-bucket/pii",
+        properties={"data_type": "ssn"},
+    )
+    await store.add_relationship(
+        tenant_id=_GUARD_TENANT,
+        src_entity_id=principal,
+        dst_entity_id=resource,
+        relationship_type=EdgeType.HAS_ACCESS_TO.value,
+        properties={},
+    )
+    await store.add_relationship(
+        tenant_id=_GUARD_TENANT,
+        src_entity_id=resource,
+        dst_entity_id=dc,
+        relationship_type=EdgeType.EXPOSES_DATA.value,
+        properties={},
+    )
+
+    # Call analyze() with the DEFAULT (persist=False).
+    result = await analyze(store, _GUARD_TENANT)
+
+    # The path must still be confirmed (analyze returns it) — we are only checking side-effects.
+    assert result.confirmed, "expected at least one confirmed path (scene is fine_grained_data)"
+
+    # Guard: ocsf_findings must be empty (persist=False → no emission).
+    assert result.ocsf_findings == [], (
+        f"persist=False must produce ocsf_findings=[] but got {result.ocsf_findings!r}"
+    )
+
+    # Guard: NO ATTACK_PATH nodes must have been written.
+    nodes = await store.list_entities_by_type(
+        tenant_id=_GUARD_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+    assert len(nodes) == 0, (
+        f"persist=False (default) must write 0 ATTACK_PATH nodes, but found {len(nodes)}: "
+        f"{[n.entity_id for n in nodes]}"
+    )

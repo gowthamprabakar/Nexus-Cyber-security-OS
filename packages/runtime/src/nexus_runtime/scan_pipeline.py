@@ -22,9 +22,10 @@ remaining feeders are wired by their own tasks listed below.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from aispm.agent import run as aispm_run
 from appsec.agent import run as appsec_run
@@ -237,6 +238,7 @@ class ScanRunResult:
     confirmed: list[object]  # list[meta_harness.attack_paths.AttackPath]
     candidates: list[object]  # list[meta_harness.path_engine.CandidatePath]
     feeders: list[FeederOutcome]  # one per EXECUTED feeder (skipped feeders absent)
+    ocsf_findings: list[dict[str, Any]] = field(default_factory=list)  # OCSF 2005 Incident Findings
 
 
 # ---------------------------------------------------------------------------
@@ -553,12 +555,13 @@ async def scan_run(
     # ------------------------------------------------------------------
     # analyze always runs on whatever the feeders wrote (partial is fine)
     # ------------------------------------------------------------------
-    scan_result = await analyze(store, tenant)
+    scan_result = await analyze(store, tenant, persist=True, now=datetime.now(UTC))
 
     return ScanRunResult(
         confirmed=list(scan_result.confirmed),
         candidates=list(scan_result.candidates),
         feeders=feeders,
+        ocsf_findings=scan_result.ocsf_findings,
     )
 
 
