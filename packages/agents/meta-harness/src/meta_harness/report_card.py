@@ -67,6 +67,11 @@ _DEFAULT_FIX = "Review this exposure and apply least privilege."
 _DEFAULT_SEVERITY = 50
 
 
+#: Tunable expert prior — a principal that can DESTROY (not just read) data has a higher blast
+#: radius: the attacker can ransom/wipe, not merely exfiltrate.  Applied once per path when any
+#: entity in principal_reach carries destructive_permissions=True.
+_DESTRUCTIVE_LIFT: float = 1.5
+
 #: path_types that begin at an internet-facing exposure (reachable from outside → more exploitable).
 _INTERNET_FACING: frozenset[str] = frozenset(
     {
@@ -227,6 +232,17 @@ async def rank_by_expected_loss(
             p.severity, kev=p.kev, epss=p.epss, logging_disabled=logging_disabled
         )
         blast = _blast(p.entities, principal_reach, resource_reach)
+        # Cycle 8 Task 2 — destructive-permissions blast lift: if any principal entity in this
+        # path (those that appear in principal_reach, i.e. IDENTITY nodes the reach map covers)
+        # carries destructive_permissions=True, multiply blast by _DESTRUCTIVE_LIFT (x1.5).
+        # Applied at most once per path (one multiplication regardless of how many destructive
+        # principals appear). Absent the property → blast unchanged → all existing tests stay green.
+        for eid in p.entities:
+            if eid in principal_reach:
+                ent = await store.get_entity(tenant_id=tenant_id, entity_id=eid)
+                if ent is not None and ent.properties.get("destructive_permissions"):
+                    blast = round(blast * _DESTRUCTIVE_LIFT)
+                    break  # cap: apply once per path
         scored.append((p, route_p, blast))
         if p.sink_id:
             routes_by_sink.setdefault(p.sink_id, []).append(route_p)
@@ -405,6 +421,7 @@ async def render_tenant_report_card(store: SemanticStore, tenant: str, *, top_n:
 
 
 __all__ = [
+    "_DESTRUCTIVE_LIFT",
     "AttackPathCard",
     "build_report_card",
     "rank_by_expected_loss",

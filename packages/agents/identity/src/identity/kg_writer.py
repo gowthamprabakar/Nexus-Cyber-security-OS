@@ -196,5 +196,21 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         for principal_arn in principal_arns:
             await self.upsert_node(NodeCategory.IDENTITY, principal_arn, {"external_trust": True})
 
+    async def record_destructive_principals(self, principal_arns: Sequence[str]) -> None:
+        """Mark IDENTITY principals as holding destructive permissions (Cycle 8 Task 2).
+
+        Each ARN is upserted with ``destructive_permissions=True`` — properties merge, so this
+        decorates the principal node ``record_listing`` already wrote without dropping its
+        name/type.  The blast multiplier in ``report_card.rank_by_expected_loss`` reads this
+        property to apply ``_DESTRUCTIVE_LIFT`` (x1.5) when the path's principal can destroy
+        data, not merely read it.  ``principal_arns`` is computed by the agent driver from the
+        offline destructive-permissions analysis (``_destructive_principal_arns``); the writer
+        only persists.
+        """
+        for principal_arn in principal_arns:
+            await self.upsert_node(
+                NodeCategory.IDENTITY, principal_arn, {"destructive_permissions": True}
+            )
+
 
 __all__ = ["KnowledgeGraphWriter"]
