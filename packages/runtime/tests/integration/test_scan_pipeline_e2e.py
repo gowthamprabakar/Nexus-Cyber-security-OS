@@ -1604,3 +1604,112 @@ async def test_scan_run_rbac_escalation_to_cloud_data_fires_and_subsumes(
         f"got bare_rbac={bare_rbac!r}. "
         "Check the subsume guard in attack_paths.find_all."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 (cycle3-moat-productization): exposed_kms_key_over_data fires
+# + subsumes bare exposed_kms_key for the same key (P4b).
+# ---------------------------------------------------------------------------
+
+# Use a distinct KMS ARN to avoid tenant bleed with the G-3 / G-4 tests above.
+_P4B_KMS_ARN = "arn:aws:kms:us-east-1:999988887777:key/p4b-key"
+_P4B_TENANT = "t-p4b-kms-over-data"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_exposed_kms_key_over_data_fires_and_subsumes(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P4b: public KMS key that protects classified data fires exposed_kms_key_over_data
+    and the same key is NOT also emitted as a bare exposed_kms_key (subject-scoped subsume).
+
+    Two cloud-posture legs cooperate in the shared SemanticStore:
+      1. record_kms_keys writes
+             CLOUD_RESOURCE{kind=kms-key, is_public=True, external_id=_P4B_KMS_ARN}
+      2. record_kms_protected_data writes
+             CLOUD_RESOURCE(kms-key) --EXPOSES_DATA--> DATA_CLASSIFICATION
+
+    The detector walk for find_exposed_kms_key_over_data (path P4b):
+      CLOUD_RESOURCE{kind=kms-key, is_public=True} --EXPOSES_DATA--> DATA_CLASSIFICATION
+    → path_type == "exposed_kms_key_over_data"
+
+    Subsume assertion: the same kms-key node must NOT appear in any confirmed
+    "exposed_kms_key" path (the deeper combo subsumed it).  This is checked
+    subject-scoped (by the key's entity_id) — not with a global path_type assertion —
+    so a second bare-public key added to the same scene would not falsely fail.
+
+    Join keys:
+      - record_kms_keys: external_id == _P4B_KMS_ARN (key_arn, written by cloud-posture)
+      - record_kms_protected_data: first tuple element == _P4B_KMS_ARN (same key node upserted)
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_kms import KmsKey
+
+    sources = ScanSources(
+        cloud_kms_keys=(
+            KmsKey(
+                key_arn=_P4B_KMS_ARN,
+                is_public=True,
+            ),
+        ),
+        cloud_kms_protected_data=((_P4B_KMS_ARN, "pii"),),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_P4B_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+
+    # The deep combo must fire.
+    assert "exposed_kms_key_over_data" in path_types, (
+        f"exposed_kms_key_over_data path not confirmed; got path_types={path_types}. "
+        f"Check: cloud-posture record_kms_keys wrote CLOUD_RESOURCE{{kind=kms-key, "
+        f"is_public=True}} for {_P4B_KMS_ARN!r}; record_kms_protected_data wrote "
+        f"CLOUD_RESOURCE(_P4B_KMS_ARN) --EXPOSES_DATA--> DATA_CLASSIFICATION; "
+        "find_exposed_kms_key_over_data must find the intersection."
+    )
+
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    # Subject-scoped subsume proof: resolve the key node entity_id from the store,
+    # then assert no confirmed exposed_kms_key path contains that entity_id in .entities.
+    # Using subject-scoped check (not global "exposed_kms_key not in path_types") so that
+    # a second bare-public key in the same scene would not break this assertion.
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    store = SemanticStore(session_factory)
+    kms_nodes = await store.list_entities_by_type(
+        tenant_id=_P4B_TENANT,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+    )
+    combo_key_ids = {n.entity_id for n in kms_nodes if n.external_id == _P4B_KMS_ARN}
+    assert combo_key_ids, (
+        f"could not find CLOUD_RESOURCE node with external_id={_P4B_KMS_ARN!r} in store — "
+        "the kms-key was not written by cloud-posture record_kms_keys"
+    )
+
+    bare_exposed = [
+        p
+        for p in res.confirmed
+        if p.path_type == "exposed_kms_key" and combo_key_ids.intersection(p.entities)
+    ]
+    assert not bare_exposed, (
+        f"combo kms-key {_P4B_KMS_ARN!r} (entity ids={combo_key_ids!r}) must be subsumed — "
+        f"it must not also appear as a bare exposed_kms_key path; "
+        f"got bare_exposed={bare_exposed!r}. "
+        "Check the subsumed_kms_keys guard in attack_paths.find_all."
+    )
