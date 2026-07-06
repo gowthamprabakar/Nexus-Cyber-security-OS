@@ -35,6 +35,9 @@ _TENANT = "acme"
 
 def _make_path(
     path_type: str = "crown_jewel",
+    # NOTE: real production paths carry graph ULIDs (from the ranker) as entities, not ARN strings.
+    # Tests that use the default strings are exercising field serialisation only; the cross-scan
+    # dedup test seeds real nodes and passes their ULIDs to exercise the production key path.
     entities: tuple[str, ...] = ("arn:role/a", "arn:bucket/b"),
     evidence: tuple[str, ...] = ("CVE-2021-1234",),
     severity: int = 95,
@@ -141,9 +144,26 @@ async def test_persist_creates_contributes_to_edges() -> None:
 
 @pytest.mark.asyncio
 async def test_cross_scan_dedup_preserves_first_seen_and_bumps_last_seen() -> None:
-    """Cross-scan dedup (ADR-022): second persist → same node, first_seen unchanged, last_seen bumped."""
-    path = _make_path()
+    """Cross-scan dedup (ADR-022): second persist → same node, first_seen unchanged, last_seen bumped.
+
+    Uses real seeded graph ULIDs as entities (mirroring production where the ranker stores
+    graph entity_ids, not raw ARN strings) so the dedup key exercises the real production path.
+    """
     async with in_memory_semantic_store() as store:
+        # Seed real graph nodes; capture their ULIDs — production paths use these, not ARN strings.
+        role_eid = await store.upsert_entity(
+            tenant_id=_TENANT,
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id="arn:role/dedup-a",
+            properties={},
+        )
+        bucket_eid = await store.upsert_entity(
+            tenant_id=_TENANT,
+            entity_type=NodeCategory.CLOUD_RESOURCE.value,
+            external_id="arn:bucket/dedup-b",
+            properties={},
+        )
+        path = _make_path(entities=(role_eid, bucket_eid))
         writer = AttackPathWriter(store, _TENANT)
 
         # First scan at T1.
@@ -214,3 +234,75 @@ async def test_persist_multiple_paths() -> None:
         assert len(nodes) == 2
         types = {n.properties["path_type"] for n in nodes}
         assert types == {"crown_jewel", "public_secret"}
+
+
+@pytest.mark.asyncio
+async def test_persist_writes_part_of_path_edge_when_sink_id_set() -> None:
+    """When path.sink_id is non-empty, a PART_OF_PATH edge is written from the ATTACK_PATH node
+    to the sink node, enabling 'what paths reach this data?' graph traversal.
+    """
+    async with in_memory_semantic_store() as store:
+        # Seed a data-classification node as the sink.
+        sink_eid = await store.upsert_entity(
+            tenant_id=_TENANT,
+            entity_type=NodeCategory.DATA_CLASSIFICATION.value,
+            external_id="dc:pii-bucket",
+            properties={},
+        )
+        path = _make_path(sink_id=sink_eid)
+
+        writer = AttackPathWriter(store, _TENANT)
+        await writer.persist(_ranked(path), now=_T1)
+
+        # Locate the ATTACK_PATH node.
+        ap_nodes = await store.list_entities_by_type(
+            tenant_id=_TENANT, entity_type=NodeCategory.ATTACK_PATH.value
+        )
+        assert len(ap_nodes) == 1
+        ap_node_id = ap_nodes[0].entity_id
+
+        # Verify PART_OF_PATH edge from ATTACK_PATH node → sink node.
+        rels = await store.get_relationships_from(
+            tenant_id=_TENANT,
+            src_entity_id=ap_node_id,
+            edge_types=(EdgeType.PART_OF_PATH.value,),
+        )
+        assert any(r.dst_entity_id == sink_eid for r in rels), (
+            f"expected PART_OF_PATH edge from ATTACK_PATH node {ap_node_id!r} → sink {sink_eid!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_one_bad_path_does_not_abort_remaining_paths() -> None:
+    """Best-effort per-path contract: a failing path is skipped with a warning; others persist normally."""
+    from unittest.mock import patch
+
+    path_good_a = _make_path(path_type="crown_jewel", entities=("arn:role/ok-a",), title="Good A")
+    path_bad = _make_path(path_type="public_secret", entities=("arn:secret/bad",), title="Bad")
+    path_good_b = _make_path(
+        path_type="k8s_escape_to_cloud_data", entities=("arn:sa/ok-b",), title="Good B"
+    )
+    ranked = [(path_good_a, 100_000.0, 5), (path_bad, 50_000.0, 3), (path_good_b, 75_000.0, 4)]
+
+    async with in_memory_semantic_store() as store:
+        writer = AttackPathWriter(store, _TENANT)
+
+        # Patch _persist_one to raise on the bad path only.
+        original_persist_one = writer._persist_one
+
+        async def _patched(path, expected_loss, blast, *, now):  # type: ignore[no-untyped-def]
+            if path.path_type == "public_secret":
+                raise RuntimeError("simulated write failure")
+            return await original_persist_one(path, expected_loss, blast, now=now)
+
+        with patch.object(writer, "_persist_one", side_effect=_patched):
+            await writer.persist(ranked, now=_T1)
+
+        # Both good paths must have been persisted; the bad one is skipped.
+        nodes = await store.list_entities_by_type(
+            tenant_id=_TENANT, entity_type=NodeCategory.ATTACK_PATH.value
+        )
+        persisted_types = {n.properties["path_type"] for n in nodes}
+        assert "crown_jewel" in persisted_types, "Good path A must be persisted"
+        assert "k8s_escape_to_cloud_data" in persisted_types, "Good path B must be persisted"
+        assert "public_secret" not in persisted_types, "Bad path must have been skipped"
