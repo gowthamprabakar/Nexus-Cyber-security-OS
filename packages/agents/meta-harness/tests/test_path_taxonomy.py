@@ -110,6 +110,7 @@ _OUT_OF_MODEL = {
     "lateral_movement",
     "lateral_reachable",
     "cicd_compromise",
+    "supply_chain_sbom",  # 4-hop via SBOM_PACKAGE — first-sink walker stops at CVE_FINDING
 }
 
 

@@ -1245,3 +1245,119 @@ async def test_scan_run_lateral_reachable_peering_fires(
         f"expected 'vpc_peering' in lateral_reachable title; "
         f"got titles: {[p.title for p in lr_paths]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 2 Task 4: supply_chain_sbom fires + subsumed internet_exposed_vulnerable
+# ---------------------------------------------------------------------------
+
+_SBOM_ECS_ARN = "arn:aws:ecs:us-east-1:111122223333:service/cluster/sbom-svc"
+_SBOM_IMG = "myreg/sbom-app:v2.0.0"
+_SBOM_TENANT = "t-supply-chain-sbom"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_supply_chain_sbom_fires_and_subsumed(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cycle 2 Task 4: supply_chain_sbom fires through scan_run and subsumed the image-level path.
+
+    Two feeders cooperate in the shared SemanticStore:
+      1. cloud-posture (record_workloads) writes
+             CLOUD_RESOURCE{external_id=_SBOM_ECS_ARN, is_public=True}
+             --RUNS_IMAGE--> CLOUD_RESOURCE{external_id=_SBOM_IMG}
+      2. vulnerability (trivy image scan) writes (for _SBOM_IMG):
+             CLOUD_RESOURCE{external_id=_SBOM_IMG} --VULNERABLE_TO--> CVE  (record_scan_results)
+             CLOUD_RESOURCE{external_id=_SBOM_IMG}
+               --CONTAINS_PACKAGE--> SBOM_PACKAGE{name=log4j-core}
+               --VULNERABLE_TO--> CVE  (record_sbom_packages)
+
+    The detector chain:
+      CLOUD_RESOURCE(ecs, is_public=True)
+        --RUNS_IMAGE--> CLOUD_RESOURCE(image)
+        --CONTAINS_PACKAGE--> SBOM_PACKAGE{name=log4j-core}
+        --VULNERABLE_TO--> CVE(CVE-2021-44228)
+    → path_type == "supply_chain_sbom", title contains "log4j-core"
+
+    Subsume: the same workload's internet_exposed_vulnerable path (image-level CVE via
+    RUNS_IMAGE → VULNERABLE_TO) must NOT appear as a separate confirmed path.
+
+    Join key: cloud-posture record_workloads keys the image node on image_ref;
+    vulnerability trivy_scan sets _artifact_name to image_ref — same external_id.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    # Trivy stub: emits one CRITICAL CVE with a PkgName so record_sbom_packages fires.
+    async def fake_trivy_sbom(image_ref: str, **_kw: Any) -> trivy_module.TrivyResult:
+        return trivy_module.TrivyResult(
+            raw_findings=[
+                {
+                    "VulnerabilityID": "CVE-2021-44228",
+                    "PkgName": "log4j-core",
+                    "InstalledVersion": "2.14.0",
+                    "FixedVersion": "2.16.0",
+                    "Severity": "CRITICAL",
+                    "Title": "Log4Shell RCE",
+                    "_target": f"{image_ref} (debian 12)",
+                    "_class": "lang-pkgs",
+                    "_artifact_name": image_ref,
+                }
+            ]
+        )
+
+    monkeypatch.setattr(trivy_module, "trivy_image_scan", fake_trivy_sbom)
+
+    from cloud_posture.tools.aws_ecs import EcsWorkload
+
+    sources = ScanSources(
+        cloud_ecs_workloads=(
+            EcsWorkload(
+                service_arn=_SBOM_ECS_ARN,
+                image_ref=_SBOM_IMG,
+                is_public=True,
+                task_role_arn="",
+                env_values=(),
+            ),
+        ),
+        vuln_image_refs=(_SBOM_IMG,),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_SBOM_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    # All feeders must complete without exception.
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+
+    # supply_chain_sbom must fire — the named SBOM dependency.
+    assert "supply_chain_sbom" in path_types, (
+        f"supply_chain_sbom path not confirmed; got path_types={path_types}. "
+        f"Check: cloud-posture wrote CLOUD_RESOURCE(is_public=True) --RUNS_IMAGE--> image; "
+        f"vulnerability wrote CONTAINS_PACKAGE --> SBOM_PACKAGE(log4j-core) --VULNERABLE_TO--> CVE."
+    )
+
+    # The supply_chain_sbom title must name the vulnerable package.
+    sbom_paths = [p for p in res.confirmed if p.path_type == "supply_chain_sbom"]
+    assert any("log4j-core" in p.title for p in sbom_paths), (
+        f"supply_chain_sbom title must mention the package name 'log4j-core'; "
+        f"got titles: {[p.title for p in sbom_paths]}"
+    )
+
+    # internet_exposed_vulnerable must NOT appear — subsumed by the SBOM path.
+    assert "internet_exposed_vulnerable" not in path_types, (
+        f"internet_exposed_vulnerable must be subsumed by supply_chain_sbom for the same "
+        f"workload ({_SBOM_ECS_ARN!r}); got path_types={path_types}. "
+        "Check that find_all skips workloads already in subsumed_sbom_workloads."
+    )

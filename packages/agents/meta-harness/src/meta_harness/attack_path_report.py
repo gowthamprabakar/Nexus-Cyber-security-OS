@@ -43,6 +43,7 @@ _LABELS = {
     "resource_based_data": "Resource-based access",
     "fine_grained_data": "Over-permissioned access",
     "iac_misconfig_deployed": "Misconfigured IaC deployed",
+    "supply_chain_sbom": "Vulnerable dependency (SBOM)",
 }
 
 

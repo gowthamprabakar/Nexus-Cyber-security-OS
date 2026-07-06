@@ -426,6 +426,34 @@ class ResourceBasedDataExposure:
     data_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class SupplyChainSbom:
+    """A public workload running an image whose SBOM package has a CVE (supply-chain, NEX-305).
+
+    Package-level attribution over :class:`InternetExposedVulnerableWorkload` (which stops at
+    image→CVE): the full chain is ``public workload --RUNS_IMAGE--> image
+    --CONTAINS_PACKAGE--> SBOM_PACKAGE --VULNERABLE_TO--> CVE``.
+    ``package_name`` names the specific dependency to bump — remediation granularity."""
+
+    workload_id: str
+    image_id: str
+    package_name: str
+    cve_id: str
+    severity: str
+    kev_listed: bool = False
+    epss_score: float | None = None
+
+
+def _float_or_none(v: object) -> float | None:
+    """Coerce a raw property value to float, returning None on failure."""
+    if v is None:
+        return None
+    try:
+        return float(v)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def _validate_depth(depth: int) -> int:
     if depth < 1 or depth > MAX_TRAVERSAL_DEPTH:
         raise ValueError(f"depth must be in [1, {MAX_TRAVERSAL_DEPTH}], got {depth}")
@@ -1466,6 +1494,50 @@ class KgQuery:
                             )
         return hits
 
+    async def find_supply_chain_sbom(self) -> list[SupplyChainSbom]:
+        """Public workload runs an image whose SBOM package has a CVE (dependency-level supply chain).
+
+        Package granularity over :meth:`find_internet_exposed_vulnerable_workload` (which stops at
+        image→CVE): the full chain is ``public workload --RUNS_IMAGE--> image
+        --CONTAINS_PACKAGE--> SBOM_PACKAGE --VULNERABLE_TO--> CVE``.
+        ``package_name`` names the specific dependency to bump (Log4Shell shape).
+        One hit per (public workload, package, CVE). Read-only; self-seeded (NEX-305)."""
+        hits: list[SupplyChainSbom] = []
+        for workload in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if workload.properties.get("is_public") is not True:
+                continue
+            for runs in await self._edges_from(workload.entity_id, (EdgeType.RUNS_IMAGE.value,)):
+                for contains in await self._edges_from(
+                    runs.dst_entity_id, (EdgeType.CONTAINS_PACKAGE.value,)
+                ):
+                    pkg = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=contains.dst_entity_id
+                    )
+                    if pkg is None:
+                        continue
+                    for vuln in await self._edges_from(
+                        pkg.entity_id, (EdgeType.VULNERABLE_TO.value,)
+                    ):
+                        cve = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                        )
+                        if cve is None:
+                            continue
+                        hits.append(
+                            SupplyChainSbom(
+                                workload_id=workload.entity_id,
+                                image_id=runs.dst_entity_id,
+                                package_name=str(pkg.properties.get("name", "")),
+                                cve_id=cve.external_id,
+                                severity=str(cve.properties.get("severity", "")),
+                                kev_listed=bool(cve.properties.get("kev", False)),
+                                epss_score=_float_or_none(cve.properties.get("epss_score")),
+                            )
+                        )
+        return hits
+
     async def _edges_from(
         self, entity_id: str, edge_types: tuple[str, ...] | None
     ) -> list[RelationshipRow]:
@@ -1494,5 +1566,6 @@ __all__ = [
     "PublicUnencryptedExposure",
     "ResourceBasedDataExposure",
     "StoredSecretToData",
+    "SupplyChainSbom",
     "ToxicCombination",
 ]

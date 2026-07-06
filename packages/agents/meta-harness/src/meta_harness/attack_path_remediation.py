@@ -170,6 +170,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "actions in CloudTrail to confirm no escalation has already occurred.",
         auto_fixable=False,
     ),
+    "supply_chain_sbom": FixAdvice(
+        "Upgrade the vulnerable dependency to a patched version, then rebuild and redeploy the "
+        "image; also restrict the workload's internet exposure so the vulnerable service is not "
+        "reachable from 0.0.0.0/0 while the patch is applied.",
+        auto_fixable=False,
+    ),
 }
 
 
