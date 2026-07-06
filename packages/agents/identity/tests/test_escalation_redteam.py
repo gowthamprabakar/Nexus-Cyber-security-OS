@@ -136,7 +136,8 @@ def test_trap_policy_rewrite_on_unattached_policy():
 
 
 def test_trap_pass_non_admin_role():
-    # PassRole + launch, but the passable role is NOT admin → no escalation.
+    # PassRole + launch, but the passable role is NOT admin → no PASS_PRIVILEGED_ROLE edge.
+    # (A lambda_pass_role edge IS expected for the non-admin role — that is intentional deepening.)
     listing = _listing(
         _attacker([("iam:PassRole", _PLAIN_ROLE), ("lambda:CreateFunction", "*")]),
         roles=(
@@ -151,7 +152,8 @@ def test_trap_pass_non_admin_role():
             ),
         ),
     )
-    assert all(t != _PLAIN_ROLE for t, _m in _methods(listing))
+    # The non-admin role must NOT be emitted with method pass_privileged_role (admin-only method).
+    assert all(m != "pass_privileged_role" for t, m in _methods(listing) if t == _PLAIN_ROLE)
 
 
 def test_trap_attach_scoped_to_other_specific_resource():
