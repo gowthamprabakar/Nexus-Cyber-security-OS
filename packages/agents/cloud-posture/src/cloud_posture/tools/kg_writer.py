@@ -260,5 +260,21 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             )
             await self.add_edge(resource_node or "", secret_node or "", EdgeType.STORES_SECRET)
 
+    async def record_gcp_stored_secrets(self, grants: Iterable[tuple[str, str]]) -> None:
+        """Write CLOUD_RESOURCE --STORES_SECRET--> SECRET(fingerprint) for GCP SA keys (W6 GCP).
+
+        Each grant is ``(resource_arn, fingerprint)`` where ``fingerprint`` is
+        ``secret_fingerprint(private_key_id)`` — the SAME hash identity writes via
+        ``record_sa_credential_ownership``. The SECRET node converges with identity's OWNED_BY edge
+        so the walk ``workload --STORES_SECRET--> secret --OWNED_BY--> SA --HAS_ACCESS_TO--> data``
+        emerges. The raw key material never crosses; only the fingerprint of the non-secret id.
+        """
+        for resource_arn, fingerprint in grants:
+            resource_node = await self.upsert_node(NodeCategory.CLOUD_RESOURCE, resource_arn, {})
+            secret_node = await self.upsert_node(
+                NodeCategory.SECRET, fingerprint, {"kind": "gcp-sa-key"}
+            )
+            await self.add_edge(resource_node or "", secret_node or "", EdgeType.STORES_SECRET)
+
 
 __all__ = ["KnowledgeGraphWriter"]

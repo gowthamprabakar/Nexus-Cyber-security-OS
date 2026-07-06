@@ -65,7 +65,7 @@ from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
 from cloud_posture.tools.aws_rds import RdsInstance
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
-from cloud_posture.tools.stored_secrets import stored_secret_grants
+from cloud_posture.tools.stored_secrets import gcp_stored_secret_grants, stored_secret_grants
 
 NLAH_VERSION = "0.1.0"
 DEFAULT_AWS_ACCOUNT_ID = "111122223333"
@@ -566,14 +566,19 @@ async def _write_topology_to_kg(
         await kg.record_ec2_workloads(ec2_workloads)
     if ecs_workloads is not None:
         await kg.record_workloads(ecs_workloads)
-        # W6: detect stored secrets in ECS container env values. Only AKIA/ASIA
+        # W6 (AWS): detect stored secrets in ECS container env values. Only AKIA/ASIA
         # key IDs are emitted in cleartext; non-AWS credentials are ignored by
         # stored_secret_grants so no raw env values bleed into the graph.
-        grants = stored_secret_grants(
-            [(w.service_arn, w.env_values) for w in ecs_workloads if w.env_values]
-        )
+        workload_envs = [(w.service_arn, w.env_values) for w in ecs_workloads if w.env_values]
+        grants = stored_secret_grants(workload_envs)
         if grants:
             await kg.record_stored_secrets(grants)
+        # W6 (GCP): detect embedded GCP SA key blobs in the same env values. Only
+        # secret_fingerprint(private_key_id) is emitted — no raw key material. The
+        # fingerprint converges with identity's record_sa_credential_ownership OWNED_BY edge.
+        gcp_grants = gcp_stored_secret_grants(workload_envs)
+        if gcp_grants:
+            await kg.record_gcp_stored_secrets(gcp_grants)
     if kms_keys is not None:
         await kg.record_kms_keys(kms_keys)
     if kms_protected_data is not None:
