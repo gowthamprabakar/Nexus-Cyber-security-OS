@@ -36,6 +36,7 @@ _LABELS = {
     "internet_exposed_host_vulnerable": "Internet-exposed vulnerable host (EC2/VM)",
     "privileged_vulnerable": "Privileged vulnerable workload",
     "rbac_privilege_escalation": "K8s RBAC privilege escalation",
+    "rbac_escalation_to_cloud_data": "K8s RBAC escalation to cloud data (cluster-admin + IRSA)",
     "public_unencrypted": "Public unencrypted data",
     "external_trust": "External trust",
     "privilege_escalation": "Privilege escalation",

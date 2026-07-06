@@ -85,6 +85,15 @@ REMEDIATION: dict[str, FixAdvice] = {
         "full-cluster-control escalation path.",
         auto_fixable=False,
     ),
+    "rbac_escalation_to_cloud_data": FixAdvice(
+        "This ServiceAccount holds full cluster control (cluster-admin binding) AND can reach "
+        "sensitive cloud data via its IRSA-mapped cloud IAM role — both legs must be fixed: "
+        "(1) Remove the cluster-admin RoleBinding from the ServiceAccount and bind a "
+        "least-privilege Role scoped to only the verbs and resources the workload needs; "
+        "(2) Scope the IRSA-mapped cloud IAM role's data access to least privilege so a "
+        "successful cluster exploit cannot pivot to cloud data.",
+        auto_fixable=False,
+    ),
     "exposed_database": FixAdvice(
         "Set the database to not publicly accessible (auto-fixable), then restrict its security "
         "group to the application subnets; a managed database should never be internet-facing.",

@@ -42,6 +42,7 @@ _FIX: dict[str, str] = {
     "internet_exposed_host_vulnerable": "Patch the host's OS package and remove the internet exposure.",
     "privileged_vulnerable": "Patch the image and drop the pod's privileged securityContext.",
     "rbac_privilege_escalation": "Remove the role-assignment-write grant from the principal; scope to least privilege.",
+    "rbac_escalation_to_cloud_data": "Remove the cluster-admin RoleBinding; scope the SA's IRSA cloud IAM role to least privilege so a cluster exploit cannot reach cloud data.",
     "public_unencrypted": "Make the resource private and enable encryption at rest.",
     "exposed_kms_key": "Add a key-policy condition restricting use and remove broad grants.",
     "external_trust": "Restrict the cross-account/external trust to known principals only.",
@@ -140,6 +141,7 @@ def _generic_title(path_type: str, path: GenericPath) -> str:
         "fine_grained_data": "An exposed principal reaches sensitive data",
         "supply_chain_sbom": "A public workload runs an image with a vulnerable dependency",
         "container_escape": "A privileged pod escapes to its cloud role and reaches data",
+        "rbac_escalation_to_cloud_data": "A cluster-admin ServiceAccount can also reach sensitive cloud data via IRSA",
     }
     return titles.get(path_type, f"Novel attack path ({' → '.join(path.edge_signature)})")
 
