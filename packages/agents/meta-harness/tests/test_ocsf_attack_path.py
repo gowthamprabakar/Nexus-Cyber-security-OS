@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from fleet_testkit.assertions import assert_ocsf_valid
 from meta_harness.attack_path_writer import attack_path_external_id
 from meta_harness.attack_paths import AttackPath
 from meta_harness.ocsf_attack_path import build_incident_finding
@@ -355,3 +356,14 @@ def test_unmapped_carries_moat_signals() -> None:
     assert abs(u["epss"] - 0.93) < 1e-9
     assert u["blast_radius"] == 12
     assert abs(u["expected_loss"] - 99_999.0) < 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Fleet L1 OCSF validator
+# ---------------------------------------------------------------------------
+
+
+def test_finding_passes_ocsf_l1_validator() -> None:
+    """Finding must pass the fleet's canonical L1 OCSF validator (class_uid 2005)."""
+    result = _build()
+    assert_ocsf_valid(result, class_uid=2005)

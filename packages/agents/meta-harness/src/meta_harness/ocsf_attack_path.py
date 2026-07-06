@@ -174,7 +174,6 @@ def build_incident_finding(
         "evidences": evidence_entries,
         # Extended fields carrying moat-specific signals.
         "risk_score": int(expected_loss),
-        "confidence": int(expected_loss),
         "unmapped": {
             "tenant_id": tenant_id,
             "path_type": path.path_type,
