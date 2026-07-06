@@ -38,8 +38,14 @@ from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
 from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
+from data_security.schemas import ClassifierLabel
+from data_security.tools.azure_blob_inventory import AzureBlobContainer
+from data_security.tools.gcs_inventory import GcsBucket
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
+from identity.tools.azure_ad import AzureAdListing
+from identity.tools.azure_rbac import AzureRoleAssignment
+from identity.tools.gcp_iam import GcpIamBinding, GcpServiceAccountKey
 from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
 from multi_cloud_posture.agent import run as multi_cloud_posture_run
@@ -160,9 +166,31 @@ class ScanSources:
     # data-security feeds
     ds_inventory_feed: Path | None = None
     ds_objects_feed: Path | None = None
+    # Cycle 4 P2 — Blob/GCS data-side (gap #13). When set, data_security.run() calls
+    # record_data_sources so CLOUD_RESOURCE(azure_blob_uri / gcs_uri) --EXPOSES_DATA-->
+    # DATA_CLASSIFICATION nodes land in the graph — the sink half of the native
+    # fine-grained path.  None → S3-only behavior unchanged.
+    ds_azure_blob_inventory: tuple[AzureBlobContainer, ...] | None = None
+    ds_gcs_inventory: tuple[GcsBucket, ...] | None = None
+    # Optional offline classifier hits for the Blob/GCS inventories above, keyed by
+    # DataSource.identifier.  When set, record_data_sources writes
+    # EXPOSES_DATA → DATA_CLASSIFICATION — required for find_fine_grained_data_exposure
+    # to fire.  Live Blob/GCS object sampling (v0.5) will populate this automatically.
+    ds_blob_gcs_classifier_hits: Mapping[str, tuple[ClassifierLabel, ...]] | None = None
 
     # identity feed
     identity_listing: IdentityListing | None = None
+    # GCP-SA identity seam (Cycle 4 P1 — gap #13 parity). When set, identity.run() calls the GCP
+    # IAM resolvers and writes the same graph edges as the AWS block (HAS_ACCESS_TO, CAN_ESCALATE_TO,
+    # OWNS/OWNED_BY for SA keys, external_trust). None → AWS-only behavior unchanged.
+    gcp_iam_bindings: tuple[GcpIamBinding, ...] | None = None
+    gcp_sa_keys: tuple[GcpServiceAccountKey, ...] | None = None
+    gcp_org_domain: str = ""
+    # Azure-MI identity seam (Cycle 4 P1b — gap #13 parity). When set, identity.run() calls the
+    # Azure resolvers and writes the same graph edges (HAS_ACCESS_TO, CAN_ESCALATE_TO, OWNS/OWNED_BY
+    # for SP credential, external_trust for guest principals). None → unchanged behavior.
+    azure_role_assignments: tuple[AzureRoleAssignment, ...] | None = None
+    azure_ad_listing: AzureAdListing | None = None
 
     # vulnerability feeds
     vuln_image_refs: tuple[str, ...] | None = None
@@ -171,6 +199,12 @@ class ScanSources:
     # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
     vuln_host_target: object | None = None
     vuln_host_target_arn: str | None = None
+    # Cycle 4 P3 — host-vuln cross-cloud multi-VM seam.  When set, the vulnerability
+    # feeder runs once per (target, arn) pair so each VM's host CVE keys on its native
+    # VM id (mc_vm_instances[].instance_id), making find_internet_exposed_host_vulnerable
+    # fire cross-cloud.  Takes precedence over the scalar vuln_host_target /
+    # vuln_host_target_arn when both are present.  None → scalar behavior unchanged.
+    vuln_host_targets: tuple[tuple[object, str], ...] | None = None
     # injectable exploitability maps — passed through to vulnerability_run so the
     # kg_writer stamps kev=True / epss scores on VULNERABLE_TO edges.  When None,
     # unchanged behavior (enrich=False offline run gets no enrichment).
@@ -333,7 +367,9 @@ async def scan_run(
     # 1. data-security
     await _feed(
         "data-security",
-        sources.ds_inventory_feed is not None,
+        sources.ds_inventory_feed is not None
+        or sources.ds_azure_blob_inventory is not None
+        or sources.ds_gcs_inventory is not None,
         lambda: data_security_run(
             _contract(
                 tenant,
@@ -344,6 +380,9 @@ async def scan_run(
             ),
             s3_inventory_feed=sources.ds_inventory_feed,
             s3_objects_feed=sources.ds_objects_feed,
+            azure_blob_inventory=sources.ds_azure_blob_inventory,
+            gcs_inventory=sources.ds_gcs_inventory,
+            blob_gcs_classifier_hits=sources.ds_blob_gcs_classifier_hits,
             semantic_store=store,
         ),
     )
@@ -405,7 +444,11 @@ async def scan_run(
     #    covers all CLOUD_RESOURCE nodes — both bucket and kms-key nodes)
     await _feed(
         "identity",
-        sources.identity_listing is not None,
+        sources.identity_listing is not None
+        or sources.gcp_iam_bindings is not None
+        or sources.gcp_sa_keys is not None
+        or sources.azure_role_assignments is not None
+        or sources.azure_ad_listing is not None,
         lambda: identity_run(
             _contract(
                 tenant,
@@ -416,30 +459,65 @@ async def scan_run(
             ),
             iam_listing=sources.identity_listing,
             semantic_store=store,
+            gcp_iam_bindings=sources.gcp_iam_bindings,
+            gcp_sa_keys=sources.gcp_sa_keys,
+            gcp_org_domain=sources.gcp_org_domain,
+            azure_role_assignments=sources.azure_role_assignments,
+            azure_ad_listing=sources.azure_ad_listing,
         ),
     )
 
     # 4. vulnerability (image_refs scan or host scan; enrich=False keeps it deterministic/offline)
-    await _feed(
-        "vulnerability",
-        bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
-        lambda: vulnerability_run(
-            _contract(
-                tenant,
+    #
+    # Cycle 4 P3 — multi-VM host-vuln cross-cloud: when vuln_host_targets is set, run one
+    # vulnerability_run per (target, arn) pair so each VM's host CVE lands on the correct
+    # vm-instance node (join key = instance_id shared with mc_vm_instances).  Each run gets
+    # its own workspace subdirectory (vulnerability/vm_{i}) to avoid output collisions.
+    # The legacy scalar path (vuln_host_target / vuln_host_target_arn) is kept for backward
+    # compatibility — it triggers when vuln_host_targets is None.
+    if sources.vuln_host_targets is not None:
+        for _idx, (_ht, _arn) in enumerate(sources.vuln_host_targets):
+            _ht_cap, _arn_cap = _ht, _arn  # capture loop vars for the lambda
+            await _feed(
                 "vulnerability",
-                _VULN_TOOLS,
-                workspace_root / "vulnerability",
-                ["findings.json", "summary.md"],
+                True,
+                lambda _h=_ht_cap, _a=_arn_cap, _i=_idx: vulnerability_run(
+                    _contract(
+                        tenant,
+                        "vulnerability",
+                        _VULN_TOOLS,
+                        workspace_root / "vulnerability" / f"vm_{_i}",
+                        ["findings.json", "summary.md"],
+                    ),
+                    host_target=_h,
+                    host_target_arn=_a,
+                    enrich=False,
+                    kev_cve_ids=sources.vuln_kev_cve_ids,
+                    epss_scores=sources.vuln_epss_scores,
+                    semantic_store=store,
+                ),
+            )
+    else:
+        await _feed(
+            "vulnerability",
+            bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
+            lambda: vulnerability_run(
+                _contract(
+                    tenant,
+                    "vulnerability",
+                    _VULN_TOOLS,
+                    workspace_root / "vulnerability",
+                    ["findings.json", "summary.md"],
+                ),
+                image_refs=list(sources.vuln_image_refs or ()),
+                host_target=sources.vuln_host_target,  # type: ignore[arg-type]
+                host_target_arn=sources.vuln_host_target_arn,
+                enrich=False,
+                kev_cve_ids=sources.vuln_kev_cve_ids,
+                epss_scores=sources.vuln_epss_scores,
+                semantic_store=store,
             ),
-            image_refs=list(sources.vuln_image_refs or ()),
-            host_target=sources.vuln_host_target,  # type: ignore[arg-type]
-            host_target_arn=sources.vuln_host_target_arn,
-            enrich=False,
-            kev_cve_ids=sources.vuln_kev_cve_ids,
-            epss_scores=sources.vuln_epss_scores,
-            semantic_store=store,
-        ),
-    )
+        )
 
     # 5. k8s-posture (manifest_dir feed or injectable cluster_reader)
     await _feed(

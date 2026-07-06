@@ -74,15 +74,21 @@ EC2 and ECS topology (`is_public`, `private_ips`, `iac_artifact`, `RUNS_IMAGE`, 
 
 Every LIVE-in-pipeline verdict is proven against feeds and fixtures with a real Postgres `SemanticStore`. Pointing any agent at a live AWS/Azure/GCP account requires the `NEXUS_LIVE_*` environment gates. The pipeline's correctness is feed-proven; live-account emission is operator work.
 
-## Multi-cloud Residual (parked — needs collection)
+## Multi-cloud parity — Cycle 4 (native identity + host-vuln now fire cross-cloud)
 
-The following detectors do **not** fire cross-cloud and are explicitly parked pending the named collection gap:
+**Cycle 4 (branch `feat/cycle4-multicloud-parity`) closed 2 of the 3 parked multi-cloud residuals** by wiring already-built, unit-tested Azure/GCP code into `run()`/`ScanSources` — with NO detector changes (every target detector in `kg_query.py` is already cloud-agnostic — no `arn:aws`/`AKIA`/prefix filter):
 
-- **`find_internet_exposed_host_vulnerable` cross-cloud** — `VULNERABLE_TO` edges are written by the `vulnerability` agent against AWS EC2 ARN-keyed host nodes only (`ScanSources.vuln_host_target_arn` routes Trivy findings to the ARN). There is no Azure VM or GCP Compute Engine host-CVE source; the `vulnerability` agent has no Azure/GCP scanner seam. Coverage is AWS-only until a multi-cloud host-CVE feeder is added.
+- **Native Azure-MI / GCP-SA identity — NOW CROSS-CLOUD.** `identity.run()` gains injectable GCP (`gcp_iam_bindings`/`gcp_sa_keys`/`gcp_org_domain`) + Azure (`azure_role_assignments`/`azure_ad_listing`) seams that call the built resolvers (`gcp_iam.py`/`azure_rbac.py`/`azure_ad.py`) → the cross-cloud identity writer methods (`record_access`/`record_escalation_grants`/`record_sa_credential_ownership`/`record_sp_credential_ownership`/`record_external_trust`). The Blob/GCS **data-side** is written by `data_security.run()`'s new `record_data_sources` seam (`ds_azure_blob_inventory`/`ds_gcs_inventory`/`ds_blob_gcs_classifier_hits`). So `find_fine_grained_data_exposure`, `find_privilege_escalation_to_data` / `find_escalation_method_to_data`, `find_external_trust_exposure`, and **native** `find_kms_key_access` now fire for Azure-MI / GCP-SA principals reaching Azure Blob / GCS data — proven end-to-end (BOTH edges written by real agents, not hand-seeded) in `test_scan_pipeline_data_parity_e2e.py`. Join keys: `gcs_uri` / `azure_blob_uri` (`charter.canonical`). Credential ownership keys on `secret_fingerprint` (no plaintext).
 
-- **Native Azure-MI / GCP-SA `find_kms_key_access`** — `HAS_ACCESS_TO` edges linking a managed identity or service account to a `kind=kms-key` node require non-AWS principal inventory. The `identity` agent's principal listing is AWS IAM-only. `identity/tools/gcp_iam.py` exists but is built-but-unwired (no `ScanSources` field, no call from `identity/agent.py`). The detector does fire incidentally when an AWS IAM admin's `HAS_ACCESS_TO` edge reaches a cross-cloud KMS key node written by `multi-cloud-posture`; that path is an AWS-admin-to-cross-cloud-key edge, not native Azure-MI or GCP-SA coverage.
+- **`find_internet_exposed_host_vulnerable` cross-cloud — NOW FIRES.** `ScanSources.vuln_host_targets` (a list; the scalar `vuln_host_target_arn` is retained for AWS backward-compat) routes each Azure VM / GCP instance's Trivy host CVE to the native VM id, so the CVE lands on the same `kind=vm-instance`+`is_public` node `multi-cloud-posture record_vm_instances` wrote. Proven for a single Azure VM + multi-VM (Azure+GCP).
 
-- **Cross-cloud `find_stored_secret_to_data`** — `stored_secret_grants` in `cloud_posture/tools/stored_secrets.py` applies `_AKIA_RE = re.compile(r"(AKIA|ASIA)[0-9A-Z]{16}")`. Azure connection strings, GCP service-account key JSON fragments, and other non-AWS credential shapes in ECS container environment values produce no `STORES_SECRET` edge. Azure/GCP secret pattern detection requires new regex or a separate detection pass.
+**Live-reader deferral (honest, standard).** The live `gcp_sa_key_reader` / `azure_sp_secret_reader` / `azure_ad` Graph readers stay `NEXUS_LIVE_*`-gated; Cycle 4 proves parity via **offline-injected** inputs — the fleet's standard bar (like every other feeder). Blob/GCS object _content_ sampling (`blob_gcs_classifier_hits`) is caller-injected offline; a live sampler is a v0.5 collector.
+
+## Still parked (deferred — honest)
+
+- **Cross-cloud `find_stored_secret_to_data`** — `stored_secret_grants` (`cloud_posture/tools/stored_secrets.py`) is AWS `AKIA/ASIA`-regex-only. Azure connection strings / GCP SA-key JSON in ECS env values produce no `STORES_SECRET` edge; needs a new regex pass (and rides on the Cycle-4 identity owner-edges). Deferred.
+
+- **Public-RDS-holding-PII** — no producer writes `rds-instance –EXPOSES_DATA→ DATA_CLASSIFICATION`; RDS content classification needs a live SQL sampler + a new writer + a new/deepened detector (the only residual that touches the detector files). Deferred (as in Cycle 3).
 
 ## Ranking
 

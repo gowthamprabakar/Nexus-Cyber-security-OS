@@ -55,12 +55,35 @@ from identity.tools.aws_iam import (
     aws_iam_list_identities,
     aws_iam_simulate_principal_policy,
 )
+from identity.tools.azure_ad import AzureAdListing, sp_credential_ownership
+from identity.tools.azure_rbac import (
+    AzureRoleAssignment,
+    blob_read_grants,
+)
+from identity.tools.azure_rbac import (
+    escalation_grants as azure_escalation_grants,
+)
+from identity.tools.azure_rbac import (
+    external_trust_grants as azure_external_trust_grants,
+)
 from identity.tools.cross_account import cross_account_trust_grants
 from identity.tools.federation import (
     detect_aws_oidc_providers,
     detect_aws_saml_providers,
     detect_azure_federated_domains,
     detect_azure_oidc_providers,
+)
+from identity.tools.gcp_iam import (
+    GcpIamBinding,
+    GcpServiceAccountKey,
+    sa_key_ownership,
+    storage_read_grants,
+)
+from identity.tools.gcp_iam import (
+    escalation_grants as gcp_escalation_grants,
+)
+from identity.tools.gcp_iam import (
+    external_trust_grants as gcp_external_trust_grants,
 )
 from identity.tools.permission_paths import EffectiveGrant, resolve_effective_grants
 
@@ -147,6 +170,11 @@ async def run(
     assess_effective_perms: bool = False,
     semantic_store: SemanticStore | None = None,
     iam_listing: IdentityListing | None = None,
+    gcp_iam_bindings: tuple[GcpIamBinding, ...] | None = None,
+    gcp_sa_keys: tuple[GcpServiceAccountKey, ...] | None = None,
+    gcp_org_domain: str = "",
+    azure_role_assignments: tuple[AzureRoleAssignment, ...] | None = None,
+    azure_ad_listing: AzureAdListing | None = None,
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -247,6 +275,60 @@ async def run(
             cred_grants = _credential_grants(listing)
             if cred_grants:
                 await kg.record_credential_ownership(cred_grants)
+
+            # P1 — GCP-SA identity seam (Cycle 4 gap #13 parity). When gcp_iam_bindings are
+            # injected, call the GCP resolvers and write the same graph edges as the AWS block
+            # above. None → AWS-only behavior unchanged.
+            if gcp_iam_bindings is not None:
+                gcp_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # storage_read_grants → HAS_ACCESS_TO (principal → GCS resource)
+                gcp_access = storage_read_grants(gcp_iam_bindings)
+                if gcp_access:
+                    await gcp_writer.record_access(gcp_access)
+                # escalation_grants → CAN_ESCALATE_TO (principal → owner)
+                gcp_esc = gcp_escalation_grants(gcp_iam_bindings)
+                if gcp_esc:
+                    await gcp_writer.record_escalation_grants(gcp_esc)
+                # external_trust_grants → external_trust=True on the member node (path 8)
+                if gcp_org_domain:
+                    gcp_ext = gcp_external_trust_grants(gcp_iam_bindings, org_domain=gcp_org_domain)
+                    if gcp_ext:
+                        await gcp_writer.record_external_trust([m for m, _ in gcp_ext])
+
+            if gcp_sa_keys is not None:
+                gcp_key_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # sa_key_ownership → OWNS + OWNED_BY (SA → SECRET(fingerprint))
+                gcp_key_grants = sa_key_ownership(gcp_sa_keys)
+                if gcp_key_grants:
+                    await gcp_key_writer.record_sa_credential_ownership(gcp_key_grants)
+
+            # P1b — Azure-MI identity seam (Cycle 4 gap #13 parity). When azure_role_assignments
+            # are injected, call the Azure resolvers and write the same graph edges as the GCP
+            # block above. None → unchanged behavior.
+            if azure_role_assignments is not None:
+                az_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # blob_read_grants → HAS_ACCESS_TO (principal → Azure Blob resource)
+                az_access = blob_read_grants(azure_role_assignments)
+                if az_access:
+                    await az_writer.record_access(az_access)
+                # escalation_grants → CAN_ESCALATE_TO (principal → owner)
+                az_esc = azure_escalation_grants(azure_role_assignments)
+                if az_esc:
+                    await az_writer.record_escalation_grants(az_esc)
+                # external_trust_grants → external_trust=True on guest principal nodes (path 8)
+                if azure_ad_listing is not None:
+                    guest_ids = frozenset(u.id for u in azure_ad_listing.users if u.is_guest)
+                    if guest_ids:
+                        az_ext = azure_external_trust_grants(azure_role_assignments, guest_ids)
+                        if az_ext:
+                            await az_writer.record_external_trust([p for p, _ in az_ext])
+
+            if azure_ad_listing is not None:
+                az_ad_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # sp_credential_ownership → OWNS + OWNED_BY (SP → SECRET(fingerprint))
+                az_sp_grants = sp_credential_ownership(azure_ad_listing.service_principals)
+                if az_sp_grants:
+                    await az_ad_writer.record_sp_credential_ownership(az_sp_grants)
 
         findings = await normalize_to_findings(
             listing,
