@@ -39,7 +39,7 @@ Differences from multi-cloud-posture:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -82,7 +82,10 @@ from data_security.tools import (
     read_s3_inventory,
     read_s3_objects,
 )
+from data_security.tools.azure_blob_inventory import AzureBlobContainer
+from data_security.tools.data_source import from_azure, from_gcs
 from data_security.tools.dynamodb_scan import scan_dynamodb
+from data_security.tools.gcs_inventory import GcsBucket
 from data_security.tools.rds_scan import scan_rds_posture
 from data_security.tools.s3_live_scan import scan_s3_live
 
@@ -140,6 +143,18 @@ async def run(
     appsec_workspace: Path | str | None = None,
     trusted_sensitivity_tag: str = "Restricted",
     semantic_store: SemanticStore | None = None,
+    # Cycle 4 P2 — Blob/GCS data-side (gap #13). When set, record_data_sources writes
+    # CLOUD_RESOURCE(azure_blob_uri / gcs_uri) --EXPOSES_DATA--> DATA_CLASSIFICATION so
+    # the native fine-grained path (Tasks 1+2 identity HAS_ACCESS_TO) completes end-to-end
+    # with BOTH edges written by real agents. None → S3-only behavior unchanged.
+    azure_blob_inventory: Sequence[AzureBlobContainer] | None = None,
+    gcs_inventory: Sequence[GcsBucket] | None = None,
+    # Optional classifier hits for the Blob/GCS inventories above, keyed by
+    # DataSource.identifier (Azure = "{account}/{container}", GCS = bucket name).
+    # Enables EXPOSES_DATA → DATA_CLASSIFICATION edges in the full-parity e2e
+    # without requiring live object sampling (v0.5 deliverable).  None → empty
+    # (no DATA_CLASSIFICATION edges; CLOUD_RESOURCE node still written).
+    blob_gcs_classifier_hits: Mapping[str, Sequence[ClassifierLabel]] | None = None,
 ) -> FindingsReport:
     """Run the Data Security Agent end-to-end under the runtime charter.
 
@@ -175,6 +190,26 @@ async def run(
         trusted_sensitivity_tag: Override for the trusted ``Sensitivity``
             tag value (defaults to ``"Restricted"`` — the documented
             common AWS Data Classification posture).
+        azure_blob_inventory: Optional sequence of ``AzureBlobContainer`` records
+            (Cycle 4 P2). When set and ``semantic_store`` is provided,
+            ``record_data_sources`` writes ``CLOUD_RESOURCE(azure_blob_uri)``
+            ``--EXPOSES_DATA--> DATA_CLASSIFICATION`` for each container so the
+            native Azure fine-grained path (P1b HAS_ACCESS_TO) completes. None →
+            S3-only behavior unchanged.
+        gcs_inventory: Optional sequence of ``GcsBucket`` records (Cycle 4 P2).
+            When set and ``semantic_store`` is provided, ``record_data_sources``
+            writes ``CLOUD_RESOURCE(gcs_uri) --EXPOSES_DATA--> DATA_CLASSIFICATION``
+            for each bucket so the native GCP fine-grained path (P1 HAS_ACCESS_TO)
+            completes. None → S3-only behavior unchanged.
+        blob_gcs_classifier_hits: Optional classifier label map for Blob/GCS sources,
+            keyed by ``DataSource.identifier`` (Azure = ``"{account}/{container}"``,
+            GCS = bucket name). When provided alongside ``azure_blob_inventory`` /
+            ``gcs_inventory``, ``record_data_sources`` writes the
+            ``EXPOSES_DATA → DATA_CLASSIFICATION`` edges (required for
+            ``find_fine_grained_data_exposure`` to fire in the full-parity e2e).
+            None → no DATA_CLASSIFICATION nodes written (CLOUD_RESOURCE node still
+            written). The live Blob/GCS object samplers (v0.5 deliverable) will
+            populate this automatically; for now callers inject labels offline.
 
     Returns:
         The ``FindingsReport``. Side effects: writes ``findings.json`` and
@@ -223,6 +258,21 @@ async def run(
             await kg.record(
                 buckets, classifier_hits_by_bucket, public_object_buckets=public_object_buckets
             )
+            # Cycle 4 P2 — Blob/GCS data-side (gap #13 parity).
+            # When Blob/GCS inventories are injected, write CLOUD_RESOURCE(azure_blob_uri /
+            # gcs_uri) --EXPOSES_DATA--> DATA_CLASSIFICATION nodes so the native fine-grained
+            # path (P1/P1b HAS_ACCESS_TO edges written by identity.run()) completes end-to-end.
+            # classifier_hits_by_identifier keyed by DataSource.identifier (not canonical_key):
+            # Azure = "{account}/{container}", GCS = bucket name.  None → unchanged.
+            if azure_blob_inventory or gcs_inventory:
+                sources = [
+                    *(from_azure(c) for c in (azure_blob_inventory or ())),
+                    *(from_gcs(g) for g in (gcs_inventory or ())),
+                ]
+                await kg.record_data_sources(
+                    sources,
+                    blob_gcs_classifier_hits if blob_gcs_classifier_hits is not None else {},
+                )
 
         # Stage 3 — DETECT: 4 detectors per bucket.
         d5_findings = _detect_all(

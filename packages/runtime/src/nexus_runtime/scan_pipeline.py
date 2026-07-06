@@ -38,6 +38,9 @@ from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
 from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
+from data_security.schemas import ClassifierLabel
+from data_security.tools.azure_blob_inventory import AzureBlobContainer
+from data_security.tools.gcs_inventory import GcsBucket
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
 from identity.tools.azure_ad import AzureAdListing
@@ -163,6 +166,17 @@ class ScanSources:
     # data-security feeds
     ds_inventory_feed: Path | None = None
     ds_objects_feed: Path | None = None
+    # Cycle 4 P2 — Blob/GCS data-side (gap #13). When set, data_security.run() calls
+    # record_data_sources so CLOUD_RESOURCE(azure_blob_uri / gcs_uri) --EXPOSES_DATA-->
+    # DATA_CLASSIFICATION nodes land in the graph — the sink half of the native
+    # fine-grained path.  None → S3-only behavior unchanged.
+    ds_azure_blob_inventory: tuple[AzureBlobContainer, ...] | None = None
+    ds_gcs_inventory: tuple[GcsBucket, ...] | None = None
+    # Optional offline classifier hits for the Blob/GCS inventories above, keyed by
+    # DataSource.identifier.  When set, record_data_sources writes
+    # EXPOSES_DATA → DATA_CLASSIFICATION — required for find_fine_grained_data_exposure
+    # to fire.  Live Blob/GCS object sampling (v0.5) will populate this automatically.
+    ds_blob_gcs_classifier_hits: Mapping[str, tuple[ClassifierLabel, ...]] | None = None
 
     # identity feed
     identity_listing: IdentityListing | None = None
@@ -347,7 +361,9 @@ async def scan_run(
     # 1. data-security
     await _feed(
         "data-security",
-        sources.ds_inventory_feed is not None,
+        sources.ds_inventory_feed is not None
+        or sources.ds_azure_blob_inventory is not None
+        or sources.ds_gcs_inventory is not None,
         lambda: data_security_run(
             _contract(
                 tenant,
@@ -358,6 +374,9 @@ async def scan_run(
             ),
             s3_inventory_feed=sources.ds_inventory_feed,
             s3_objects_feed=sources.ds_objects_feed,
+            azure_blob_inventory=sources.ds_azure_blob_inventory,
+            gcs_inventory=sources.ds_gcs_inventory,
+            blob_gcs_classifier_hits=sources.ds_blob_gcs_classifier_hits,
             semantic_store=store,
         ),
     )
