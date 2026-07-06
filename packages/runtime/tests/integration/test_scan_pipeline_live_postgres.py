@@ -191,8 +191,10 @@ async def test_scan_run_e2e_on_real_postgres(
 
     assert res.confirmed, "operating path must produce a ranked path on real Postgres"
 
-    # Ranking invariant: severity non-increasing (worst-first), same as the SQLite e2e.
-    severities = [p.severity for p in res.confirmed]
-    assert severities == sorted(severities, reverse=True), (
-        f"attack paths must be sorted worst-first by severity; got {severities}"
+    # The public-PII fixture forms the IDENTITY->HAS_ACCESS_TO->CLOUD_RESOURCE->EXPOSES_DATA
+    # chain (mirrors the SQLite e2e). confirmed is expected-loss-ordered now, not severity —
+    # ordering is proven by test_crown_jewel_outranks_single_store_by_expected_loss.
+    path_types = [p.path_type for p in res.confirmed]
+    assert "fine_grained_data" in path_types, (
+        f"fine_grained_data path must form on real Postgres; got {path_types}"
     )

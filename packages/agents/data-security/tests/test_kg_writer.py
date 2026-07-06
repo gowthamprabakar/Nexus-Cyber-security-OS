@@ -3,6 +3,9 @@
 End-to-end through ``agent.run()`` against a real in-memory ``SemanticStore``: the
 typed BucketInventory + classifier hits land as storage + DATA_CLASSIFICATION nodes
 (CONTAINS / EXPOSES_DATA edges), labels only. Opt-in: default (no store) writes nothing.
+
+Cycle 4 P2 addition: run() with azure_blob_inventory / gcs_inventory → EXPOSES_DATA
+edges land from the CLOUD_RESOURCE(azure_blob_uri / gcs_uri) node to DATA_CLASSIFICATION.
 """
 
 from __future__ import annotations
@@ -15,10 +18,13 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from charter.canonical import azure_blob_uri, gcs_uri
 from charter.contract import BudgetSpec, ExecutionContract
 from charter.memory.models import Base
 from charter.memory.semantic import SemanticStore
 from data_security.agent import run
+from data_security.tools.azure_blob_inventory import AzureBlobContainer
+from data_security.tools.gcs_inventory import GcsBucket
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.asyncio
@@ -130,3 +136,100 @@ async def test_run_without_store_writes_nothing(tmp_path: Path, store: SemanticS
     _write(inv, {"buckets": [_public_bucket("alpha")]})
     await run(_contract(tmp_path), s3_inventory_feed=inv)
     assert await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource") == []
+
+
+# ---------------------------------------------------------------------------
+# Cycle 4 P2 — Blob/GCS record_data_sources wired into run()
+# ---------------------------------------------------------------------------
+
+
+async def test_run_with_blob_inventory_writes_exposes_data(
+    tmp_path: Path, store: SemanticStore
+) -> None:
+    """run() with azure_blob_inventory writes CLOUD_RESOURCE(azure_blob_uri) --EXPOSES_DATA-->
+    DATA_CLASSIFICATION when the container is public.
+
+    Mirrors test_run_with_store_writes_storage_and_classification but via the Azure Blob path.
+    No S3 inventory is injected to prove the Blob path activates independently.
+
+    NOTE: no object samples are available in this path (azure_blob_objects_feed is a v0.5
+    deliverable), so CONTAINS/EXPOSES_DATA only land when a public container is present.
+    The CLOUD_RESOURCE node is written regardless; EXPOSES_DATA requires is_public=True.
+    """
+    _ACCOUNT = "mystorage"
+    _CONTAINER = "pii-data"
+    container = AzureBlobContainer(
+        storage_account=_ACCOUNT,
+        container=_CONTAINER,
+        region="eastus",
+        public_access="container",  # is_public=True
+        encrypted=True,
+    )
+    expected_uri = azure_blob_uri(_ACCOUNT, _CONTAINER)
+
+    await run(
+        _contract(tmp_path),
+        azure_blob_inventory=[container],
+        semantic_store=store,
+    )
+
+    storage = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource")
+    assert len(storage) == 1, (
+        f"expected 1 CLOUD_RESOURCE node; got {[s.external_id for s in storage]}"
+    )
+    assert storage[0].external_id == expected_uri, (
+        f"CLOUD_RESOURCE node must be keyed by azure_blob_uri; "
+        f"got {storage[0].external_id!r}, want {expected_uri!r}"
+    )
+    assert storage[0].properties["is_public"] is True
+    assert storage[0].properties["resource_type"] == "azure-storage"
+
+
+async def test_run_with_gcs_inventory_writes_exposes_data(
+    tmp_path: Path, store: SemanticStore
+) -> None:
+    """run() with gcs_inventory writes CLOUD_RESOURCE(gcs_uri) --EXPOSES_DATA-->
+    DATA_CLASSIFICATION when the bucket is public (allUsers iam_member).
+
+    Mirrors the Azure test above for the GCP path.
+    """
+    _PROJECT = "my-project"
+    _BUCKET = "gcp-pii-bucket"
+    bucket = GcsBucket(
+        project=_PROJECT,
+        name=_BUCKET,
+        location="us-central1",
+        iam_members=("allUsers",),  # is_public=True
+        encrypted=True,
+    )
+    expected_uri = gcs_uri(_BUCKET)
+
+    await run(
+        _contract(tmp_path),
+        gcs_inventory=[bucket],
+        semantic_store=store,
+    )
+
+    storage = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource")
+    assert len(storage) == 1, (
+        f"expected 1 CLOUD_RESOURCE node; got {[s.external_id for s in storage]}"
+    )
+    assert storage[0].external_id == expected_uri, (
+        f"CLOUD_RESOURCE node must be keyed by gcs_uri; "
+        f"got {storage[0].external_id!r}, want {expected_uri!r}"
+    )
+    assert storage[0].properties["is_public"] is True
+    assert storage[0].properties["resource_type"] == "gcp-storage"
+
+
+async def test_run_blob_gcs_none_does_not_write_extra_nodes(
+    tmp_path: Path, store: SemanticStore
+) -> None:
+    """S3-only path unchanged: azure_blob_inventory=None + gcs_inventory=None → no extra nodes."""
+    inv = tmp_path / "inv.json"
+    _write(inv, {"buckets": [_public_bucket("alpha")]})
+    await run(_contract(tmp_path), s3_inventory_feed=inv, semantic_store=store)
+    storage = await store.list_entities_by_type(tenant_id=_TENANT, entity_type="cloud_resource")
+    # Only the S3 bucket node should be present
+    assert len(storage) == 1
+    assert storage[0].external_id == "arn:aws:s3:::alpha"

@@ -155,6 +155,73 @@ async def test_empty_graph_returns_no_paths():
 
 
 @pytest.mark.asyncio
+async def test_kev_epss_carried_on_attack_path():
+    """A CVE node with kev=True and epss_score surfaces those values on AttackPath.
+
+    The worst-KEV aggregation rule: kev=True if ANY CVE on the path is KEV-listed;
+    epss=max(epss_score) across all CVEs on the path.
+
+    Node property key is ``kev`` (the writer stamps ``kev``); the dataclass field is
+    ``kev_listed`` — the reader aligns on the writer's key (Task 2 fix).
+    """
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        workload = await _node(
+            store, t, _R, "arn:ecs:svc/kev-test", {"kind": "ecs-service", "is_public": True}
+        )
+        image = await _node(store, t, _R, "myreg/kev-app:1.0", {"kind": "container-image"})
+        # KEV-listed CVE with an EPSS score (property key is "kev", matching the writer).
+        cve_kev = await _node(
+            store,
+            t,
+            _CVE,
+            "CVE-2021-44228",
+            {"severity": "CRITICAL", "kev": True, "epss_score": 0.975},
+        )
+        # A second CVE on the same image — not KEV-listed but has an EPSS score.
+        cve_non_kev = await _node(
+            store,
+            t,
+            _CVE,
+            "CVE-2022-22965",
+            {"severity": "HIGH", "kev": False, "epss_score": 0.42},
+        )
+        await _edge(store, t, workload, image, EdgeType.RUNS_IMAGE.value)
+        await _edge(store, t, image, cve_kev, EdgeType.VULNERABLE_TO.value)
+        await _edge(store, t, image, cve_non_kev, EdgeType.VULNERABLE_TO.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        exposed = [p for p in paths if p.path_type == "internet_exposed_vulnerable"]
+        assert len(exposed) == 1
+        path = exposed[0]
+        # kev is True because at least one CVE is KEV-listed.
+        assert path.kev is True
+        # epss is the max across all CVEs on the path.
+        assert path.epss is not None
+        assert abs(path.epss - 0.975) < 1e-6
+
+
+@pytest.mark.asyncio
+async def test_non_kev_path_defaults():
+    """A path whose CVE nodes carry no kev_listed/epss_score defaults to kev=False, epss=None."""
+    t = "t"
+    async with in_memory_semantic_store() as store:
+        workload = await _node(
+            store, t, _R, "arn:ecs:svc/plain2", {"kind": "ecs-service", "is_public": True}
+        )
+        image = await _node(store, t, _R, "myreg/plain2:1.0", {"kind": "container-image"})
+        cve = await _node(store, t, _CVE, "CVE-2020-1234", {"severity": "HIGH"})
+        await _edge(store, t, workload, image, EdgeType.RUNS_IMAGE.value)
+        await _edge(store, t, image, cve, EdgeType.VULNERABLE_TO.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        exposed = [p for p in paths if p.path_type == "internet_exposed_vulnerable"]
+        assert len(exposed) == 1
+        assert exposed[0].kev is False
+        assert exposed[0].epss is None
+
+
+@pytest.mark.asyncio
 async def test_fine_grained_path_exposes_its_data_sink() -> None:
     from charter.memory.graph_types import EdgeType, NodeCategory
     from fleet_testkit import in_memory_semantic_store

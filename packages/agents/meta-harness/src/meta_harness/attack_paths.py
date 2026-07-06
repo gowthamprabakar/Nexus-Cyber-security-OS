@@ -52,6 +52,7 @@ _SEVERITY: dict[str, int] = {
     "public_unencrypted": 75,
     "kms_key_access": 74,
     "escalation_method_to_data": 74,
+    "exposed_kms_key_over_data": 80,
     "exposed_kms_key": 72,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
@@ -62,6 +63,7 @@ _SEVERITY: dict[str, int] = {
     "cicd_compromise": 64,
     "stored_secret_to_data": 88,
     "k8s_escape_to_cloud_data": 82,
+    "rbac_escalation_to_cloud_data": 84,
 }
 
 
@@ -77,6 +79,10 @@ class AttackPath:
     fan-out evidence rolled up: ``evidence`` is the list of CVEs (vuln paths) or data types (data
     paths) the subject carries, and ``count`` is how many. So a workload with nine CVEs is ONE
     crown-jewel path with ``count=9`` — not nine rows.
+
+    ``kev`` and ``epss`` surface the worst-CVE exploitability signal for CVE-bearing paths:
+    ``kev=True`` if ANY CVE on the path is CISA KEV-listed; ``epss`` is the maximum EPSS score
+    across all CVEs on the path. Non-CVE paths keep the defaults (kev=False, epss=None).
     """
 
     path_type: str
@@ -86,12 +92,14 @@ class AttackPath:
     evidence: tuple[str, ...] = ()
     count: int = 1
     sink_id: str = ""  # v0.5: the data-classification this path reaches (for noisy-OR grouping)
+    kev: bool = False  # True if any CVE on this path is CISA KEV-listed
+    epss: float | None = None  # max EPSS score across all CVEs on this path
 
 
 class _Group:
     """Accumulates the detector hits that share one (path_type, subject) into a single path."""
 
-    __slots__ = ("context", "entities", "evidence", "sink", "worst")
+    __slots__ = ("context", "entities", "evidence", "kev", "max_epss", "sink", "worst")
 
     def __init__(self) -> None:
         self.entities: set[str] = set()
@@ -99,6 +107,10 @@ class _Group:
         self.worst: str = ""  # worst CVE severity label seen (vuln paths only)
         self.context: dict[str, str] = {}  # descriptive fields constant within the group
         self.sink: str = ""
+        # Exploitability rollup: kev=True if ANY CVE on this path is CISA KEV-listed;
+        # max_epss=max EPSS score seen (None means no CVE on this path had an EPSS value).
+        self.kev: bool = False
+        self.max_epss: float | None = None
 
     def add(
         self,
@@ -106,6 +118,8 @@ class _Group:
         item: str,
         *,
         cve_severity: str = "",
+        cve_kev: bool = False,
+        cve_epss: float | None = None,
         sink: str = "",
         **context: str,
     ) -> None:
@@ -114,6 +128,10 @@ class _Group:
             self.evidence.append(item)
         if cve_severity and _CVE_RANK.get(cve_severity, 0) > _CVE_RANK.get(self.worst, 0):
             self.worst = cve_severity
+        if cve_kev:
+            self.kev = True
+        if cve_epss is not None:
+            self.max_epss = max(self.max_epss, cve_epss) if self.max_epss is not None else cve_epss
         if sink and not self.sink:
             self.sink = sink
         for key, value in context.items():
@@ -158,6 +176,12 @@ def _title(path_type: str, grp: _Group) -> str:
         dt = grp.context.get("data_type", "") or _types_phrase(grp)
         return (
             f"A principal can use a KMS key that protects {dt or 'sensitive'} data (decrypt access)"
+        )
+    if path_type == "exposed_kms_key_over_data":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"KMS key policy is internet-open AND the key protects {dt or 'classified'} data "
+            f"— the encryption boundary is exposed and guards sensitive data"
         )
     if path_type == "exposed_kms_key":
         return "KMS key policy is internet-open (the encryption boundary is exposed)"
@@ -220,6 +244,14 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"A principal can escalate to admin{method_clause} and reach {dt or 'sensitive'} data"
         )
+    if path_type == "rbac_escalation_to_cloud_data":
+        role = grp.context.get("role_name", "")
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"K8s ServiceAccount is bound to a cluster-admin RBAC role ({role}) "
+            f"AND its IRSA cloud role can reach {dt or 'sensitive'} data — "
+            f"full cluster control plus cloud data breach"
+        )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -255,11 +287,16 @@ class AttackPathRanker:
         # SUBSUMES the same (principal, resource) surfacing again as a plain fine-grained grant —
         # otherwise the partner shows as both "External trust" and "Over-permissioned access".
         external_access: set[tuple[str, str]] = set()
+        # rbac_escalation_to_cloud_data (deeper combo) subsumed SA ids — a SA showing as the
+        # deep combo must NOT also appear as bare rbac_privilege_escalation.
+        subsumed_rbac_subjects: set[str] = set()
         for h in await self._kg.find_crown_jewel_exposure():
             g("crown_jewel", (h.workload_id, h.role_id, h.resource_id)).add(
                 (h.workload_id, h.image_id, h.role_id, h.resource_id),
                 h.cve_id,
                 cve_severity=h.severity,
+                cve_kev=h.kev_listed,
+                cve_epss=h.epss_score,
                 data_type=h.data_type,
                 sink=h.data_classification_id,
             )
@@ -277,6 +314,8 @@ class AttackPathRanker:
                 sb.package_name,
                 cve_severity=sb.severity,
                 cve_phrase=sb.cve_id,
+                cve_kev=sb.kev_listed,
+                cve_epss=sb.epss_score,
             )
             subsumed_sbom_workloads.add(sb.workload_id)
 
@@ -286,15 +325,27 @@ class AttackPathRanker:
             if v.workload_id in subsumed_sbom_workloads:
                 continue  # SBOM path is the more specific framing
             g("internet_exposed_vulnerable", (v.workload_id, v.image_id)).add(
-                (v.workload_id, v.image_id), v.cve_id, cve_severity=v.severity
+                (v.workload_id, v.image_id),
+                v.cve_id,
+                cve_severity=v.severity,
+                cve_kev=v.kev_listed,
+                cve_epss=v.epss_score,
             )
         for p in await self._kg.find_privileged_vulnerable_workload():
             g("privileged_vulnerable", (p.workload_id, p.image_id)).add(
-                (p.workload_id, p.image_id), p.cve_id, cve_severity=p.severity
+                (p.workload_id, p.image_id),
+                p.cve_id,
+                cve_severity=p.severity,
+                cve_kev=p.kev_listed,
+                cve_epss=p.epss_score,
             )
         for hv in await self._kg.find_internet_exposed_host_vulnerable():
             g("internet_exposed_host_vulnerable", (hv.host_id,)).add(
-                (hv.host_id,), hv.cve_id, cve_severity=hv.severity
+                (hv.host_id,),
+                hv.cve_id,
+                cve_severity=hv.severity,
+                cve_kev=hv.kev_listed,
+                cve_epss=hv.epss_score,
             )
         for s in await self._kg.find_public_secret_exposure():
             g("public_secret", (s.resource_id,)).add(
@@ -323,11 +374,48 @@ class AttackPathRanker:
             )
         for re_ in await self._kg.find_runtime_exploit_on_vulnerable_workload():
             g("runtime_exploit_vulnerable", (re_.host_id,)).add(
-                (re_.host_id, re_.image_id), re_.cve_id, cve_severity=re_.severity
+                (re_.host_id, re_.image_id),
+                re_.cve_id,
+                cve_severity=re_.severity,
+                cve_kev=re_.kev_listed,
+                cve_epss=re_.epss_score,
             )
+        # exposed_kms_key_over_data (deeper combo) subsumed KMS key resource_ids — a key showing
+        # as "public + protects classified data" must NOT also appear as a bare exposed_kms_key.
+        subsumed_kms_keys: set[str] = set()
+        for ekd in await self._kg.find_exposed_kms_key_over_data():
+            g("exposed_kms_key_over_data", (ekd.resource_id,)).add(
+                (ekd.resource_id, ekd.data_classification_id),
+                ekd.data_type,
+                data_type=ekd.data_type,
+                sink=ekd.data_classification_id,
+            )
+            subsumed_kms_keys.add(ekd.resource_id)
         for ek in await self._kg.find_exposed_kms_key():
+            if ek.resource_id in subsumed_kms_keys:
+                continue  # subsumed by the deeper exposed_kms_key_over_data combo
             g("exposed_kms_key", (ek.resource_id,)).add((ek.resource_id,), "kms-key")
+        for rc in await self._kg.find_rbac_escalation_to_cloud_data():
+            g(
+                "rbac_escalation_to_cloud_data",
+                (rc.subject_id, rc.cloud_role_id, rc.resource_id),
+            ).add(
+                (
+                    rc.subject_id,
+                    rc.admin_role_id,
+                    rc.cloud_role_id,
+                    rc.resource_id,
+                    rc.data_classification_id,
+                ),
+                rc.data_type,
+                role_name=rc.role_name,
+                data_type=rc.data_type,
+                sink=rc.data_classification_id,
+            )
+            subsumed_rbac_subjects.add(rc.subject_id)
         for rp in await self._kg.find_rbac_privilege_escalation():
+            if rp.subject_id in subsumed_rbac_subjects:
+                continue  # subsumed by the deeper rbac_escalation_to_cloud_data combo
             g("rbac_privilege_escalation", (rp.subject_id,)).add(
                 (rp.subject_id, rp.role_id), rp.subject_name, role_name=rp.role_name
             )
@@ -339,7 +427,11 @@ class AttackPathRanker:
             )
         for lm in await self._kg.find_lateral_movement_to_vulnerable_host():
             g("lateral_movement", (lm.foothold_id, lm.target_id)).add(
-                (lm.foothold_id, lm.target_id), lm.cve_id, cve_severity=lm.severity
+                (lm.foothold_id, lm.target_id),
+                lm.cve_id,
+                cve_severity=lm.severity,
+                cve_kev=lm.kev_listed,
+                cve_epss=lm.epss_score,
             )
         for lr in await self._kg.find_lateral_movement_via_reachability():
             g("lateral_reachable", (lr.foothold_id, lr.target_id)).add(
@@ -452,6 +544,8 @@ class AttackPathRanker:
                 evidence=tuple(grp.evidence),
                 count=len(grp.evidence),
                 sink_id=grp.sink,
+                kev=grp.kev,
+                epss=grp.max_epss,
             )
             for (path_type, _subject), grp in groups.items()
         ]
