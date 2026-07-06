@@ -1202,3 +1202,514 @@ async def test_scan_run_kev_reaches_confirmed_path(
     assert any(p.path_type == "internet_exposed_vulnerable" for p in kev_paths), (
         f"expected internet_exposed_vulnerable among KEV paths; got {[p.path_type for p in kev_paths]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 3 Task 3: cross-scan e2e + guard — ATTACK_PATH durability proof
+# ---------------------------------------------------------------------------
+
+_C3_TENANT = "t-c3-attack-path-durability"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_persists_attack_path_node_and_emits_ocsf(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cycle 3 P3 cross-scan e2e: scan_run persists ATTACK_PATH nodes + emits OCSF 2005 findings.
+
+    Scene: fine_grained_data / stored_secret (public PII bucket + admin identity) — the
+    same scene as test_scan_run_yields_ranked_public_data_path.
+
+    Run 1 assertions:
+      (a) res.ocsf_findings is non-empty; every entry has class_uid == 2005.
+      (b) At least one ATTACK_PATH node exists in the store for the tenant.
+      (c) The ATTACK_PATH node carries path_type, expected_loss, first_seen, last_seen.
+
+    Run 2 (same store, same sources) assertions — cross-scan dedup proof:
+      (d) STILL exactly one ATTACK_PATH node per path (no duplicate).
+      (e) first_seen is UNCHANGED from Run 1.
+      (f) last_seen is bumped (Run 2 timestamp > Run 1 timestamp).
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+    listing = _admin_identity_listing()
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+    )
+
+    # ---- Run 1 ----
+    _now1 = datetime(2026, 7, 6, 10, 0, 0, tzinfo=UTC)
+
+    # Patch datetime.now in scan_pipeline so Run 1 uses _now1.
+    from unittest.mock import patch
+
+    import nexus_runtime.scan_pipeline as _sp_mod
+
+    with patch.object(_sp_mod, "datetime") as mock_dt:
+        mock_dt.now.return_value = _now1
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        res1 = await scan_run(
+            session_factory=session_factory,
+            tenant=_C3_TENANT,
+            sources=sources,
+            workspace_root=tmp_path / "ws1",
+        )
+
+    # (a) OCSF findings present + all class_uid == 2005
+    assert res1.ocsf_findings, (
+        "expected non-empty ocsf_findings from scan_run — persist=True should emit OCSF 2005 findings"
+    )
+    for finding in res1.ocsf_findings:
+        # findings are wrapped in NexusEnvelope; the payload is in finding["payload"]
+        payload = finding.get("payload", finding)
+        assert payload.get("class_uid") == 2005, (
+            f"each finding must have class_uid==2005 (OCSF Incident Finding); got {payload.get('class_uid')}"
+        )
+
+    # (b) ATTACK_PATH node exists in the store
+    store = SemanticStore(session_factory)
+    nodes_after_run1 = await store.list_entities_by_type(
+        tenant_id=_C3_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+    assert nodes_after_run1, (
+        "expected at least one ATTACK_PATH node in the store after scan_run with persist=True"
+    )
+
+    # (c) Each node carries the expected properties
+    for node in nodes_after_run1:
+        props = node.properties
+        assert "path_type" in props, f"ATTACK_PATH node missing path_type; props={props}"
+        assert "expected_loss" in props, f"ATTACK_PATH node missing expected_loss; props={props}"
+        assert "first_seen" in props, f"ATTACK_PATH node missing first_seen; props={props}"
+        assert "last_seen" in props, f"ATTACK_PATH node missing last_seen; props={props}"
+
+    # Record first_seen values from Run 1 for cross-scan comparison.
+    first_seen_by_id = {node.entity_id: node.properties["first_seen"] for node in nodes_after_run1}
+    last_seen_by_id_run1 = {
+        node.entity_id: node.properties["last_seen"] for node in nodes_after_run1
+    }
+
+    # ---- Run 2 (same store, same sources, later timestamp) ----
+    _now2 = datetime(2026, 7, 6, 11, 0, 0, tzinfo=UTC)  # 1 hour later
+
+    with patch.object(_sp_mod, "datetime") as mock_dt2:
+        mock_dt2.now.return_value = _now2
+        mock_dt2.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        res2 = await scan_run(
+            session_factory=session_factory,
+            tenant=_C3_TENANT,
+            sources=sources,
+            workspace_root=tmp_path / "ws2",
+        )
+
+    nodes_after_run2 = await store.list_entities_by_type(
+        tenant_id=_C3_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+
+    # (d) No duplicate nodes: same count (or equal node ids)
+    assert len(nodes_after_run2) == len(nodes_after_run1), (
+        f"cross-scan dedup failed: Run 1 had {len(nodes_after_run1)} ATTACK_PATH node(s), "
+        f"Run 2 has {len(nodes_after_run2)} — expected no new duplicates."
+    )
+    ids_run2 = {node.entity_id for node in nodes_after_run2}
+    ids_run1 = {node.entity_id for node in nodes_after_run1}
+    assert ids_run2 == ids_run1, (
+        f"cross-scan dedup failed: node ids changed between runs. "
+        f"Run 1 ids={ids_run1}, Run 2 ids={ids_run2}"
+    )
+
+    # (e) first_seen unchanged
+    for node in nodes_after_run2:
+        orig_first_seen = first_seen_by_id.get(node.entity_id)
+        assert node.properties["first_seen"] == orig_first_seen, (
+            f"first_seen was mutated on second scan for node {node.entity_id!r}: "
+            f"expected {orig_first_seen!r}, got {node.properties['first_seen']!r}"
+        )
+
+    # (f) last_seen bumped
+    for node in nodes_after_run2:
+        run1_last = last_seen_by_id_run1.get(node.entity_id)
+        run2_last = node.properties.get("last_seen")
+        assert run2_last is not None, f"last_seen missing on node {node.entity_id!r} after Run 2"
+        assert run2_last > run1_last, (  # type: ignore[operator]
+            f"last_seen not bumped for node {node.entity_id!r}: "
+            f"Run 1 last_seen={run1_last!r}, Run 2 last_seen={run2_last!r}"
+        )
+
+    # Run 2 also emits findings.
+    assert res2.ocsf_findings, "expected non-empty ocsf_findings from second scan_run"
+
+
+@pytest.mark.asyncio
+async def test_analyze_default_persist_false_writes_no_attack_path_nodes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cycle 3 P3 guard: analyze() with default persist=False writes NO ATTACK_PATH nodes.
+
+    Proves that every existing caller is byte-unaffected — the default is the safe no-op path.
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from meta_harness.scan import analyze
+
+    _GUARD_TENANT = "t-c3-guard-no-persist"
+    store = SemanticStore(session_factory)
+
+    # Seed a minimal graph that forms a confirmed path (fine_grained_data).
+    _R = NodeCategory.CLOUD_RESOURCE.value
+    _ID = NodeCategory.IDENTITY.value
+    _DC = NodeCategory.DATA_CLASSIFICATION.value
+
+    principal = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/GuardRole",
+        properties={},
+    )
+    resource = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_R,
+        external_id="arn:aws:s3:::guard-bucket",
+        properties={"is_public": True},
+    )
+    dc = await store.upsert_entity(
+        tenant_id=_GUARD_TENANT,
+        entity_type=_DC,
+        external_id="arn:aws:s3:::guard-bucket/pii",
+        properties={"data_type": "ssn"},
+    )
+    await store.add_relationship(
+        tenant_id=_GUARD_TENANT,
+        src_entity_id=principal,
+        dst_entity_id=resource,
+        relationship_type=EdgeType.HAS_ACCESS_TO.value,
+        properties={},
+    )
+    await store.add_relationship(
+        tenant_id=_GUARD_TENANT,
+        src_entity_id=resource,
+        dst_entity_id=dc,
+        relationship_type=EdgeType.EXPOSES_DATA.value,
+        properties={},
+    )
+
+    # Call analyze() with the DEFAULT (persist=False).
+    result = await analyze(store, _GUARD_TENANT)
+
+    # The path must still be confirmed (analyze returns it) — we are only checking side-effects.
+    assert result.confirmed, "expected at least one confirmed path (scene is fine_grained_data)"
+
+    # Guard: ocsf_findings must be empty (persist=False → no emission).
+    assert result.ocsf_findings == [], (
+        f"persist=False must produce ocsf_findings=[] but got {result.ocsf_findings!r}"
+    )
+
+    # Guard: NO ATTACK_PATH nodes must have been written.
+    nodes = await store.list_entities_by_type(
+        tenant_id=_GUARD_TENANT,
+        entity_type=NodeCategory.ATTACK_PATH.value,
+    )
+    assert len(nodes) == 0, (
+        f"persist=False (default) must write 0 ATTACK_PATH nodes, but found {len(nodes)}: "
+        f"{[n.entity_id for n in nodes]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (cycle3-moat-productization): rbac_escalation_to_cloud_data fires
+# + subsumes bare rbac_privilege_escalation for the same SA.
+# ---------------------------------------------------------------------------
+
+_DEEP_RBAC_SA = "deep-admin-sa"
+_DEEP_RBAC_NAMESPACE = "prod"
+_DEEP_RBAC_ROLE = "cluster-admin"
+_DEEP_RBAC_IRSA_ROLE_ARN = "arn:aws:iam::123456789012:role/deep-rbac-cloud-role"
+
+
+class _AdminAndIrsaClusterReader:
+    """A ClusterReader whose SA 'deep-admin-sa' is both cluster-admin AND IRSA-mapped.
+
+    The same SA has:
+      - A BINDS edge to a ClusterRole with wildcard rules (is_admin=True)
+      - An IRSA annotation ``eks.amazonaws.com/role-arn`` pointing to _DEEP_RBAC_IRSA_ROLE_ARN
+
+    k8s-posture record_inventory writes both edges from the real inventory parser:
+      K8S_OBJECT(SA) --BINDS--> K8S_OBJECT{is_admin=True}
+      K8S_OBJECT(SA) --IRSA_MAPPING--> IDENTITY(_DEEP_RBAC_IRSA_ROLE_ARN)
+
+    identity's AdministratorAccess then writes:
+      IDENTITY(deep-rbac-cloud-role) --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+
+    data-security writes:
+      CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+
+    Full chain for find_rbac_escalation_to_cloud_data:
+      K8S_OBJECT(SA) --BINDS--> K8S_OBJECT{is_admin=True}
+      K8S_OBJECT(SA) --IRSA_MAPPING--> IDENTITY(deep-rbac-cloud-role)
+        --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+        --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+    """
+
+    def list_namespaces(self) -> list[dict]:  # type: ignore[type-arg]
+        return [{"metadata": {"name": _DEEP_RBAC_NAMESPACE}}]
+
+    def list_service_accounts(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "metadata": {
+                    "name": _DEEP_RBAC_SA,
+                    "namespace": _DEEP_RBAC_NAMESPACE,
+                    "annotations": {
+                        "eks.amazonaws.com/role-arn": _DEEP_RBAC_IRSA_ROLE_ARN,
+                    },
+                }
+            }
+        ]
+
+    def list_roles(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "kind": "ClusterRole",
+                "metadata": {"name": _DEEP_RBAC_ROLE},
+                "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+            }
+        ]
+
+    def list_role_bindings(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "kind": "ClusterRoleBinding",
+                "metadata": {"name": f"{_DEEP_RBAC_ROLE}-binding"},
+                "roleRef": {"kind": "ClusterRole", "name": _DEEP_RBAC_ROLE},
+                "subjects": [
+                    {
+                        "kind": "ServiceAccount",
+                        "name": _DEEP_RBAC_SA,
+                        "namespace": _DEEP_RBAC_NAMESPACE,
+                    }
+                ],
+            }
+        ]
+
+
+def _deep_rbac_identity_listing() -> IdentityListing:
+    """An IAM role at _DEEP_RBAC_IRSA_ROLE_ARN with AdministratorAccess.
+
+    identity's _synthesize_admin_grants detects AdministratorAccess and writes
+    HAS_ACCESS_TO every CLOUD_RESOURCE — including acme-pii from data-security.
+    """
+    role = IamRole(
+        arn=_DEEP_RBAC_IRSA_ROLE_ARN,
+        name="deep-rbac-cloud-role",
+        role_id="AROA-DEEPRBAC",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    return IdentityListing(users=(), roles=(role,), groups=())
+
+
+@pytest.mark.asyncio
+async def test_scan_run_rbac_escalation_to_cloud_data_fires_and_subsumes(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """P4a: SA that is both cluster-admin AND IRSA→data fires the deep combo + subsumes bare rbac.
+
+    Four feeders cooperate in the shared SemanticStore:
+      1. data-security writes CLOUD_RESOURCE(acme-pii, is_public=True)
+                              --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+      2. identity writes IDENTITY(deep-rbac-cloud-role)
+                         --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+         (AdministratorAccess expands to all resources)
+      3. k8s-posture (cluster_reader=_AdminAndIrsaClusterReader) writes:
+           K8S_OBJECT(SA:prod/deep-admin-sa) --BINDS--> K8S_OBJECT{cluster-admin, is_admin=True}
+           K8S_OBJECT(SA:prod/deep-admin-sa) --IRSA_MAPPING--> IDENTITY(deep-rbac-cloud-role)
+
+    Assertions:
+      - rbac_escalation_to_cloud_data path IS present (the deep combo fired)
+      - rbac_privilege_escalation path IS NOT present (subsumed by the deep combo for this SA)
+    """
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=_deep_rbac_identity_listing(),
+        k8s_cluster_reader=_AdminAndIrsaClusterReader(),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-deep-rbac",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "k8s-posture" in feeder_names, f"k8s-posture missing from {feeder_names}"
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+
+    # The deep combo must be present.
+    assert "rbac_escalation_to_cloud_data" in path_types, (
+        f"rbac_escalation_to_cloud_data not confirmed; got path_types={path_types}. "
+        f"Check: SA {_DEEP_RBAC_SA!r} in namespace {_DEEP_RBAC_NAMESPACE!r} must have "
+        f"BOTH a BINDS edge to an is_admin role AND an IRSA_MAPPING to "
+        f"{_DEEP_RBAC_IRSA_ROLE_ARN!r} which has HAS_ACCESS_TO acme-pii."
+    )
+
+    # Subject-scoped subsume proof: the combo SA must NOT also appear as a bare
+    # rbac_privilege_escalation row.  Checking by entity id (not global path_type)
+    # keeps this assertion correct when a second admin-only SA is added to the scene —
+    # a bare rbac_privilege_escalation for a DIFFERENT SA must not block this assertion.
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    _sa_external_id = f"offline/namespace/{_DEEP_RBAC_NAMESPACE}/serviceaccount/{_DEEP_RBAC_SA}"
+    store = SemanticStore(session_factory)
+    sa_nodes = await store.list_entities_by_type(
+        tenant_id="t-deep-rbac",
+        entity_type=NodeCategory.K8S_OBJECT.value,
+    )
+    combo_sa_ids = {n.entity_id for n in sa_nodes if n.external_id == _sa_external_id}
+    assert combo_sa_ids, (
+        f"could not find K8S_OBJECT node with external_id={_sa_external_id!r} in store — "
+        "the SA was not written; check k8s-posture record_inventory cluster_id='offline'"
+    )
+    bare_rbac = [
+        p
+        for p in res.confirmed
+        if p.path_type == "rbac_privilege_escalation" and combo_sa_ids.intersection(p.entities)
+    ]
+    assert not bare_rbac, (
+        f"combo SA {_DEEP_RBAC_SA!r} (entity ids={combo_sa_ids!r}) must be subsumed — "
+        f"it must not also appear as a bare rbac_privilege_escalation path; "
+        f"got bare_rbac={bare_rbac!r}. "
+        "Check the subsume guard in attack_paths.find_all."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 (cycle3-moat-productization): exposed_kms_key_over_data fires
+# + subsumes bare exposed_kms_key for the same key (P4b).
+# ---------------------------------------------------------------------------
+
+# Use a distinct KMS ARN to avoid tenant bleed with the G-3 / G-4 tests above.
+_P4B_KMS_ARN = "arn:aws:kms:us-east-1:999988887777:key/p4b-key"
+_P4B_TENANT = "t-p4b-kms-over-data"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_exposed_kms_key_over_data_fires_and_subsumes(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P4b: public KMS key that protects classified data fires exposed_kms_key_over_data
+    and the same key is NOT also emitted as a bare exposed_kms_key (subject-scoped subsume).
+
+    Two cloud-posture legs cooperate in the shared SemanticStore:
+      1. record_kms_keys writes
+             CLOUD_RESOURCE{kind=kms-key, is_public=True, external_id=_P4B_KMS_ARN}
+      2. record_kms_protected_data writes
+             CLOUD_RESOURCE(kms-key) --EXPOSES_DATA--> DATA_CLASSIFICATION
+
+    The detector walk for find_exposed_kms_key_over_data (path P4b):
+      CLOUD_RESOURCE{kind=kms-key, is_public=True} --EXPOSES_DATA--> DATA_CLASSIFICATION
+    → path_type == "exposed_kms_key_over_data"
+
+    Subsume assertion: the same kms-key node must NOT appear in any confirmed
+    "exposed_kms_key" path (the deeper combo subsumed it).  This is checked
+    subject-scoped (by the key's entity_id) — not with a global path_type assertion —
+    so a second bare-public key added to the same scene would not falsely fail.
+
+    Join keys:
+      - record_kms_keys: external_id == _P4B_KMS_ARN (key_arn, written by cloud-posture)
+      - record_kms_protected_data: first tuple element == _P4B_KMS_ARN (same key node upserted)
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_kms import KmsKey
+
+    sources = ScanSources(
+        cloud_kms_keys=(
+            KmsKey(
+                key_arn=_P4B_KMS_ARN,
+                is_public=True,
+            ),
+        ),
+        cloud_kms_protected_data=((_P4B_KMS_ARN, "pii"),),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_P4B_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+
+    # The deep combo must fire.
+    assert "exposed_kms_key_over_data" in path_types, (
+        f"exposed_kms_key_over_data path not confirmed; got path_types={path_types}. "
+        f"Check: cloud-posture record_kms_keys wrote CLOUD_RESOURCE{{kind=kms-key, "
+        f"is_public=True}} for {_P4B_KMS_ARN!r}; record_kms_protected_data wrote "
+        f"CLOUD_RESOURCE(_P4B_KMS_ARN) --EXPOSES_DATA--> DATA_CLASSIFICATION; "
+        "find_exposed_kms_key_over_data must find the intersection."
+    )
+
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    # Subject-scoped subsume proof: resolve the key node entity_id from the store,
+    # then assert no confirmed exposed_kms_key path contains that entity_id in .entities.
+    # Using subject-scoped check (not global "exposed_kms_key not in path_types") so that
+    # a second bare-public key in the same scene would not break this assertion.
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    store = SemanticStore(session_factory)
+    kms_nodes = await store.list_entities_by_type(
+        tenant_id=_P4B_TENANT,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+    )
+    combo_key_ids = {n.entity_id for n in kms_nodes if n.external_id == _P4B_KMS_ARN}
+    assert combo_key_ids, (
+        f"could not find CLOUD_RESOURCE node with external_id={_P4B_KMS_ARN!r} in store — "
+        "the kms-key was not written by cloud-posture record_kms_keys"
+    )
+
+    bare_exposed = [
+        p
+        for p in res.confirmed
+        if p.path_type == "exposed_kms_key" and combo_key_ids.intersection(p.entities)
+    ]
+    assert not bare_exposed, (
+        f"combo kms-key {_P4B_KMS_ARN!r} (entity ids={combo_key_ids!r}) must be subsumed — "
+        f"it must not also appear as a bare exposed_kms_key path; "
+        f"got bare_exposed={bare_exposed!r}. "
+        "Check the subsumed_kms_keys guard in attack_paths.find_all."
+    )

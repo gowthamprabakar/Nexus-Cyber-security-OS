@@ -236,6 +236,27 @@ class RbacPrivilegeEscalation:
 
 
 @dataclass(frozen=True, slots=True)
+class RbacEscalationToCloudData:
+    """A K8s ServiceAccount that is BOTH cluster-admin AND reaches sensitive cloud data via IRSA
+    (cross-domain intersection: k8s-posture + identity, path P4a).
+
+    Walk: ``K8S_OBJECT{service-account} --BINDS--> K8S_OBJECT{is_admin=True}``
+    AND ``K8S_OBJECT{service-account} --IRSA_MAPPING--> IDENTITY(cloud role)
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    The SA has full cluster control (admin binding) PLUS a cloud-data breach path (IRSA).
+    ``admin_role_id`` is the K8S_OBJECT role with ``is_admin=True``; ``cloud_role_id`` is the
+    cloud IAM IDENTITY the SA maps to. Read-only."""
+
+    subject_id: str
+    admin_role_id: str
+    cloud_role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+    role_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExposedAiWithSensitiveData:
     """An internet-exposed AI service whose training-data bucket is public + sensitive
     (path 10). The service EXPOSES_MODEL to the internet AND HAS_ACCESS_TO a bucket that
@@ -252,6 +273,21 @@ class ExposedKmsKey:
     """A KMS key whose key policy is internet-open (path #21) — the encryption boundary is open."""
 
     resource_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExposedKmsKeyOverData:
+    """A public KMS key that ALSO protects classified data (path P4b).
+
+    The encryption boundary is internet-open AND it guards sensitive data — the combination
+    is worse than either leg alone: an attacker who reaches the public key policy can now
+    decrypt the classified data it protects.
+
+    Walk: ``CLOUD_RESOURCE{kind=kms-key, is_public=True} --EXPOSES_DATA--> DATA_CLASSIFICATION``."""
+
+    resource_id: str
+    data_classification_id: str
+    data_type: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -915,6 +951,64 @@ class KgQuery:
                 )
         return hits
 
+    async def find_rbac_escalation_to_cloud_data(
+        self,
+    ) -> list[RbacEscalationToCloudData]:
+        """Find service accounts that are BOTH cluster-admin AND reach cloud data via IRSA (P4a).
+
+        Intersection: enumerates K8S_OBJECT service-accounts, checks for (a) a ``BINDS`` edge to
+        a K8S_OBJECT with ``is_admin=True`` (the cluster-admin leg), AND (b) an ``IRSA_MAPPING``
+        edge to an IDENTITY that ``HAS_ACCESS_TO`` a resource that ``EXPOSES_DATA`` to a
+        DATA_CLASSIFICATION (the cloud-data leg). A SA satisfying BOTH legs is a higher-severity
+        finding: full cluster control plus a direct cloud-data breach path. Read-only."""
+        hits: list[RbacEscalationToCloudData] = []
+        objects = await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.K8S_OBJECT.value
+        )
+        for sa in objects:
+            if sa.properties.get("kind") != "service-account":
+                continue
+
+            # Leg A: find all is_admin bindings for this SA.
+            admin_binds: list[tuple[str, str]] = []  # (role_entity_id, role_name)
+            for binds in await self._edges_from(sa.entity_id, (EdgeType.BINDS.value,)):
+                role = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=binds.dst_entity_id
+                )
+                if role is None or role.properties.get("is_admin") is not True:
+                    continue
+                admin_binds.append((role.entity_id, str(role.properties.get("name", ""))))
+            if not admin_binds:
+                continue  # fast path: no admin binding → skip IRSA walk
+
+            # Leg B: follow IRSA_MAPPING → HAS_ACCESS_TO → EXPOSES_DATA.
+            for irsa in await self._edges_from(sa.entity_id, (EdgeType.IRSA_MAPPING.value,)):
+                cloud_role_id = irsa.dst_entity_id
+                for access in await self._edges_from(
+                    cloud_role_id, (EdgeType.HAS_ACCESS_TO.value,)
+                ):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        for admin_role_id, role_name in admin_binds:
+                            hits.append(
+                                RbacEscalationToCloudData(
+                                    subject_id=sa.entity_id,
+                                    admin_role_id=admin_role_id,
+                                    cloud_role_id=cloud_role_id,
+                                    resource_id=access.dst_entity_id,
+                                    data_classification_id=dc.entity_id,
+                                    data_type=str(dc.properties.get("data_type", "")),
+                                    role_name=role_name,
+                                )
+                            )
+        return hits
+
     async def find_exposed_ai_with_sensitive_data(self) -> list[ExposedAiWithSensitiveData]:
         """Find internet-exposed AI services whose training-data bucket is public + sensitive.
 
@@ -992,6 +1086,37 @@ class KgQuery:
             )
             if r.properties.get("kind") == "kms-key" and r.properties.get("is_public") is True
         ]
+
+    async def find_exposed_kms_key_over_data(self) -> list[ExposedKmsKeyOverData]:
+        """Find public KMS keys that ALSO protect classified data (path P4b).
+
+        Intersection of two legs already written offline:
+        - Leg A: CLOUD_RESOURCE{kind=kms-key, is_public=True}  (the exposure)
+        - Leg B: kms-key --EXPOSES_DATA--> DATA_CLASSIFICATION  (the protected-data edge,
+          written by cloud-posture ``record_kms_protected_data``, read by ``find_kms_key_access``)
+
+        A key that matches BOTH legs is a higher-severity finding than a bare public key:
+        the encryption boundary is internet-open AND it guards classified data. Read-only."""
+        hits: list[ExposedKmsKeyOverData] = []
+        for r in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if r.properties.get("kind") != "kms-key" or r.properties.get("is_public") is not True:
+                continue
+            for expose in await self._edges_from(r.entity_id, (EdgeType.EXPOSES_DATA.value,)):
+                dc = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                )
+                if dc is None:
+                    continue
+                hits.append(
+                    ExposedKmsKeyOverData(
+                        resource_id=r.entity_id,
+                        data_classification_id=dc.entity_id,
+                        data_type=str(dc.properties.get("data_type", "")),
+                    )
+                )
+        return hits
 
     async def find_exposed_database(self) -> list[ExposedDatabase]:
         """Find publicly-accessible managed databases (path #19). Self-seeded: a CLOUD_RESOURCE with
@@ -1441,6 +1566,7 @@ __all__ = [
     "CrownJewelExposure",
     "EscalationMethodToData",
     "ExposedAiWithSensitiveData",
+    "ExposedKmsKeyOverData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",
@@ -1450,6 +1576,8 @@ __all__ = [
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",
     "PublicUnencryptedExposure",
+    "RbacEscalationToCloudData",
+    "RbacPrivilegeEscalation",
     "ResourceBasedDataExposure",
     "StoredSecretToData",
     "ToxicCombination",

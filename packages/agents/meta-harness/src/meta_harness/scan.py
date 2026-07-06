@@ -8,9 +8,11 @@ confirmed (named) attack paths and candidate (generic) paths.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
+from meta_harness.attack_path_writer import AttackPathWriter
 from meta_harness.attack_paths import AttackPathRanker
 from meta_harness.candidate_history import (
     CandidateDelta,
@@ -20,6 +22,7 @@ from meta_harness.candidate_history import (
 )
 from meta_harness.correlation import correlate_all
 from meta_harness.kg_query import KgQuery
+from meta_harness.ocsf_attack_path import build_incident_finding
 from meta_harness.path_engine import find_candidate_paths
 from meta_harness.report_card import rank_by_expected_loss
 
@@ -36,6 +39,7 @@ class ScanResult:
 
     confirmed: list[AttackPath]
     candidates: list[CandidatePath]
+    ocsf_findings: list[dict[str, Any]] = field(default_factory=list)
 
 
 async def analyze(
@@ -43,18 +47,38 @@ async def analyze(
     tenant_id: str,
     *,
     suppressed: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(),
+    persist: bool = False,
+    now: datetime | None = None,
 ) -> ScanResult:
     """Run the bridge resolvers, then rank the confirmed + candidate attack paths. Read-only-ish:
     the only writes are the idempotent cross-agent bridge edges (``correlate_all``).
 
     ``suppressed`` (BP4) is the set of candidate shapes an analyst dismissed — pass
-    ``FeedbackLog.suppressed_signatures()`` here so dismissed noise stops resurfacing."""
+    ``FeedbackLog.suppressed_signatures()`` here so dismissed noise stops resurfacing.
+
+    ``persist`` (default ``False``) — when ``True``, persists each ranked ``AttackPath`` as a
+    durable ``ATTACK_PATH`` graph node and collects OCSF 2005 Incident Findings.  The default is
+    ``False`` so every existing caller and test is byte-unaffected.
+
+    ``now`` — caller-supplied timestamp for ``first_seen`` / ``last_seen`` / OCSF time fields.
+    Defaults to ``datetime.now(UTC)`` when ``persist=True`` and the caller omits it.  Ignored
+    when ``persist=False``."""
     await correlate_all(store, tenant_id)
     confirmed = await AttackPathRanker(KgQuery(store, tenant_id)).find_all()
     ranked = await rank_by_expected_loss(confirmed, store, tenant_id)
+
+    ocsf_findings: list[dict[str, Any]] = []
+    if persist:
+        stamp = now or datetime.now(UTC)
+        await AttackPathWriter(store, tenant_id).persist(ranked, now=stamp)
+        ocsf_findings = [
+            build_incident_finding(p, el, blast, tenant_id=tenant_id, now=stamp)
+            for p, el, blast in ranked
+        ]
+
     confirmed = [t[0] for t in ranked]
     candidates = await find_candidate_paths(store, tenant_id, suppressed=suppressed)
-    return ScanResult(confirmed=confirmed, candidates=candidates)
+    return ScanResult(confirmed=confirmed, candidates=candidates, ocsf_findings=ocsf_findings)
 
 
 async def analyze_with_history(
