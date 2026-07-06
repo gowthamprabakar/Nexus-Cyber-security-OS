@@ -77,3 +77,63 @@ async def test_unowned_endpoint_talking_to_malicious_ip_is_dark() -> None:
         await correlate_all(store, _TENANT)
         paths = await AttackPathRanker(KgQuery(store, _TENANT)).find_all()
         assert not [p for p in paths if p.path_type == "malicious_destination"]
+
+
+# ---------------------------------------------------------------------------
+# Slice 6: completing-join e2e — attributed IOC vs unattributed (backward-compat)
+# ---------------------------------------------------------------------------
+
+_ACTOR_IP = "198.51.100.30"
+_TENANT_ACTOR = "tenant-maldest-actor"
+
+
+@pytest.mark.asyncio
+async def test_attributed_ioc_lights_up_path_with_actor_in_title() -> None:
+    """Attributed IOC → malicious_destination path fires AND title contains the actor name.
+
+    Production actor-population is operator-feed-dependent (MITRE ATT&CK is TTP-focused,
+    not IP→actor); this test proves the flow OFFLINE via the injectable seam.
+    """
+    async with in_memory_semantic_store() as store:
+        src_ip = await _seed_instance(store)
+        await drive_network_flows(store, tenant_id=_TENANT, flows=((src_ip, _ACTOR_IP),))
+        await drive_threat_intel_iocs(
+            store,
+            tenant_id=_TENANT,
+            malicious_ips=(_ACTOR_IP,),
+            actor_id="intrusion-set--apt29",
+            actor_name="APT29",
+        )
+        await correlate_all(store, _TENANT)
+
+        paths = await AttackPathRanker(KgQuery(store, _TENANT)).find_all()
+        mal = [p for p in paths if p.path_type == "malicious_destination"]
+        assert len(mal) >= 1, "attributed IOC → malicious_destination path fires"
+        attributed = [p for p in mal if _ACTOR_IP in p.title or "APT29" in p.title]
+        assert attributed, "at least one malicious_destination path title contains the actor name"
+        assert "attributed to APT29" in attributed[0].title
+
+
+@pytest.mark.asyncio
+async def test_unattributed_ioc_path_title_has_no_actor_suffix() -> None:
+    """Non-attributed IOC → path fires, title has NO actor suffix (backward-compat)."""
+    _UNATTR_IP = "198.51.100.31"
+    async with in_memory_semantic_store() as store:
+        src_ip = await _seed_instance(store)
+        await drive_network_flows(store, tenant_id=_TENANT, flows=((src_ip, _UNATTR_IP),))
+        await drive_threat_intel_iocs(
+            store,
+            tenant_id=_TENANT,
+            malicious_ips=(_UNATTR_IP,),
+            # actor_id / actor_name omitted — backward-compat default
+        )
+        await correlate_all(store, _TENANT)
+
+        paths = await AttackPathRanker(KgQuery(store, _TENANT)).find_all()
+        mal = [p for p in paths if p.path_type == "malicious_destination"]
+        assert len(mal) >= 1, "non-attributed IOC → malicious_destination path still fires"
+        for p in mal:
+            if _UNATTR_IP in p.title:
+                assert "attributed" not in p.title, (
+                    "non-attributed IOC path title must not contain actor suffix"
+                )

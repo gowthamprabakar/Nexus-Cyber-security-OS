@@ -157,3 +157,116 @@ async def test_deployed_via_requires_matching_artifact():
         )
         await _node(store, t, _IAC, "gh/acme/infra:main.tf", {"file": "main.tf"})
         assert await link_deployed_via(store, t) == 0
+
+
+# ---------------------------------------------------------------------------
+# Slice 3: MaliciousDestinationExposure actor fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_malicious_destination_carries_actor_when_ioc_has_actor() -> None:
+    """IOC node with actor_id/actor_name → MaliciousDestinationExposure.actor_* populated."""
+    t = "t-actor"
+    async with in_memory_semantic_store() as store:
+        src = await _node(store, t, _R, "10.0.1.5", {"kind": "network-endpoint", "ip": "10.0.1.5"})
+        dst = await _node(
+            store, t, _R, "198.51.100.10", {"kind": "network-endpoint", "ip": "198.51.100.10"}
+        )
+        inst = await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-actor",
+            {"kind": "ec2-instance", "private_ips": ["10.0.1.5"]},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=src,
+            dst_entity_id=dst,
+            relationship_type="COMMUNICATES_WITH",
+            properties={},
+        )
+        # IOC node with actor attribution
+        ioc = await _node(
+            store,
+            t,
+            "ioc",
+            "ip:198.51.100.10",
+            {
+                "ioc_type": "ip",
+                "value": "198.51.100.10",
+                "actor_id": "intrusion-set--apt29",
+                "actor_name": "APT29",
+            },
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=src,
+            dst_entity_id=inst,
+            relationship_type=EdgeType.OWNED_BY.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=dst,
+            dst_entity_id=ioc,
+            relationship_type=EdgeType.MATCHES_INDICATOR.value,
+            properties={},
+        )
+
+        hits = await KgQuery(store, t).find_resource_contacting_malicious_ip()
+        assert len(hits) == 1
+        assert hits[0].actor_name == "APT29"
+        assert hits[0].actor_id == "intrusion-set--apt29"
+
+
+@pytest.mark.asyncio
+async def test_malicious_destination_actor_defaults_to_empty_when_absent() -> None:
+    """IOC node without actor fields → MaliciousDestinationExposure.actor_* are empty strings."""
+    t = "t-noactor"
+    async with in_memory_semantic_store() as store:
+        src = await _node(store, t, _R, "10.0.2.5", {"kind": "network-endpoint", "ip": "10.0.2.5"})
+        dst = await _node(
+            store, t, _R, "198.51.100.11", {"kind": "network-endpoint", "ip": "198.51.100.11"}
+        )
+        inst = await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-noactor",
+            {"kind": "ec2-instance", "private_ips": ["10.0.2.5"]},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=src,
+            dst_entity_id=dst,
+            relationship_type="COMMUNICATES_WITH",
+            properties={},
+        )
+        ioc = await _node(
+            store,
+            t,
+            "ioc",
+            "ip:198.51.100.11",
+            {"ioc_type": "ip", "value": "198.51.100.11"},  # no actor fields
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=src,
+            dst_entity_id=inst,
+            relationship_type=EdgeType.OWNED_BY.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=t,
+            src_entity_id=dst,
+            dst_entity_id=ioc,
+            relationship_type=EdgeType.MATCHES_INDICATOR.value,
+            properties={},
+        )
+
+        hits = await KgQuery(store, t).find_resource_contacting_malicious_ip()
+        assert len(hits) == 1
+        assert hits[0].actor_id == ""
+        assert hits[0].actor_name == ""

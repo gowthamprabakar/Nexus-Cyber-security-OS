@@ -256,3 +256,84 @@ async def test_fine_grained_path_exposes_its_data_sink() -> None:
         paths = await AttackPathRanker(KgQuery(store, t)).find_all()
         fg = [p for p in paths if p.path_type == "fine_grained_data"]
         assert fg and fg[0].sink_id == d  # the data-classification entity id is the sink
+
+
+# ---------------------------------------------------------------------------
+# Slice 4: actor attribution in malicious_destination title
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_malicious_destination_title_includes_actor_when_attributed() -> None:
+    """IOC attributed to APT29 → path title contains '— attributed to APT29'."""
+    t = "t-actor-title"
+    async with in_memory_semantic_store() as store:
+        src = await _node(store, t, _R, "10.0.3.5", {"kind": "network-endpoint", "ip": "10.0.3.5"})
+        dst = await _node(
+            store, t, _R, "198.51.100.20", {"kind": "network-endpoint", "ip": "198.51.100.20"}
+        )
+        inst = await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-apt29",
+            {"kind": "ec2-instance", "private_ips": ["10.0.3.5"]},
+        )
+        await _edge(store, t, src, dst, EdgeType.COMMUNICATES_WITH.value)
+        await _edge(store, t, src, inst, EdgeType.OWNED_BY.value)
+        ioc = await _node(
+            store,
+            t,
+            "ioc",
+            "ip:198.51.100.20",
+            {
+                "ioc_type": "ip",
+                "value": "198.51.100.20",
+                "actor_id": "intrusion-set--apt29",
+                "actor_name": "APT29",
+            },
+        )
+        await _edge(store, t, dst, ioc, EdgeType.MATCHES_INDICATOR.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        mal = [p for p in paths if p.path_type == "malicious_destination"]
+        assert len(mal) == 1
+        assert "APT29" in mal[0].title
+        assert "attributed to APT29" in mal[0].title
+
+
+@pytest.mark.asyncio
+async def test_malicious_destination_title_without_actor_is_unchanged() -> None:
+    """IOC with no actor attribution → title is byte-identical to the pre-enrichment format."""
+    t = "t-noactor-title"
+    async with in_memory_semantic_store() as store:
+        src = await _node(store, t, _R, "10.0.4.5", {"kind": "network-endpoint", "ip": "10.0.4.5"})
+        dst = await _node(
+            store, t, _R, "198.51.100.21", {"kind": "network-endpoint", "ip": "198.51.100.21"}
+        )
+        inst = await _node(
+            store,
+            t,
+            _R,
+            "arn:aws:ec2:r:a:instance/i-plain",
+            {"kind": "ec2-instance", "private_ips": ["10.0.4.5"]},
+        )
+        await _edge(store, t, src, dst, EdgeType.COMMUNICATES_WITH.value)
+        await _edge(store, t, src, inst, EdgeType.OWNED_BY.value)
+        ioc = await _node(
+            store,
+            t,
+            "ioc",
+            "ip:198.51.100.21",
+            {"ioc_type": "ip", "value": "198.51.100.21"},  # no actor
+        )
+        await _edge(store, t, dst, ioc, EdgeType.MATCHES_INDICATOR.value)
+
+        paths = await AttackPathRanker(KgQuery(store, t)).find_all()
+        mal = [p for p in paths if p.path_type == "malicious_destination"]
+        assert len(mal) == 1
+        # Title must NOT contain any actor suffix
+        assert "attributed" not in mal[0].title
+        assert mal[0].title == (
+            "Resource is communicating with a known-malicious IP (198.51.100.21)"
+        )

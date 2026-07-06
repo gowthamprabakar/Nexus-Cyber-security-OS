@@ -90,6 +90,40 @@ def test_ioc_entity_confidence_clamped_to_unit_range() -> None:
         )
 
 
+def test_ioc_entity_actor_fields_default_none() -> None:
+    """absent actor → actor_id/actor_name are None; properties surface them as empty strings."""
+    ioc = IocEntity(
+        ioc_type=IocType.IP,
+        value="1.2.3.4",
+        first_seen=datetime(2024, 1, 1, tzinfo=UTC),
+        last_seen=datetime(2024, 1, 1, tzinfo=UTC),
+        source_feed="x",
+    )
+    assert ioc.actor_id is None
+    assert ioc.actor_name is None
+    props = ioc.properties()
+    assert props["actor_id"] == ""
+    assert props["actor_name"] == ""
+
+
+def test_ioc_entity_actor_fields_populated() -> None:
+    """actor_id/actor_name are surfaced in properties() when set."""
+    ioc = IocEntity(
+        ioc_type=IocType.IP,
+        value="198.51.100.10",
+        first_seen=datetime(2024, 1, 1, tzinfo=UTC),
+        last_seen=datetime(2024, 1, 2, tzinfo=UTC),
+        source_feed="taxii-feed",
+        actor_id="intrusion-set--apt29",
+        actor_name="APT29",
+    )
+    assert ioc.actor_id == "intrusion-set--apt29"
+    assert ioc.actor_name == "APT29"
+    props = ioc.properties()
+    assert props["actor_id"] == "intrusion-set--apt29"
+    assert props["actor_name"] == "APT29"
+
+
 # ---------------------------------------------------------------------------
 # CveEntity
 # ---------------------------------------------------------------------------
