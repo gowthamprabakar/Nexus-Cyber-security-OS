@@ -2170,3 +2170,159 @@ async def test_scan_run_supply_chain_sbom_fires_and_subsumed(
         f"workload ({_SBOM_ECS_ARN!r}); got path_types={path_types}. "
         "Check that find_all skips workloads already in subsumed_sbom_workloads."
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 6: serverless Lambda exposure — public Lambda + execution role → data
+# ---------------------------------------------------------------------------
+
+_LAMBDA_FN_ARN = "arn:aws:lambda:us-east-1:123456789012:function/public-handler"
+_LAMBDA_ROLE_ARN = "arn:aws:iam::123456789012:role/lambda-exec-e2e-role"
+_LAMBDA_TENANT_POS = "t-lambda-e2e-pos"
+_LAMBDA_TENANT_NEG = "t-lambda-e2e-neg"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_serverless_lambda_exposure_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cycle 6: serverless_lambda_exposure fires through scan_run.
+
+    Three feeders cooperate in the shared SemanticStore:
+      1. cloud-posture receives a public LambdaWorkload(is_public=True, role_arn=...)
+         via ScanSources.cloud_lambda_workloads.  record_lambda_workloads writes
+             CLOUD_RESOURCE{function_arn, kind=lambda-function, is_public=True}
+             --ASSUMES--> IDENTITY(lambda-exec-e2e-role)
+      2. identity (AdministratorAccess on _LAMBDA_ROLE_ARN) writes
+             IDENTITY(lambda-exec-e2e-role) --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+      3. data-security writes
+             CLOUD_RESOURCE(acme-pii, is_public=True) --EXPOSES_DATA--> DATA_CLASSIFICATION
+
+    The full serverless Lambda exposure chain:
+      CLOUD_RESOURCE(lambda, kind=lambda-function, is_public=True)
+        --ASSUMES--> IDENTITY(role)
+        --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+        --EXPOSES_DATA--> DATA_CLASSIFICATION
+    → path_type == "serverless_lambda_exposure"
+
+    Join keys: role_arn (LambdaWorkload ↔ identity role); bucket (identity ↔ data-security).
+    """
+    from cloud_posture.tools.aws_lambda import LambdaWorkload
+
+    _patch_cloud_posture_tools(monkeypatch)
+
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    lambda_role = IamRole(
+        arn=_LAMBDA_ROLE_ARN,
+        name="lambda-exec-e2e-role",
+        role_id="AROA-LAMBDAROLE",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    listing = IdentityListing(users=(), roles=(lambda_role,), groups=())
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+        cloud_lambda_workloads=(
+            LambdaWorkload(
+                function_arn=_LAMBDA_FN_ARN,
+                is_public=True,
+                role_arn=_LAMBDA_ROLE_ARN,
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_LAMBDA_TENANT_POS,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "serverless_lambda_exposure" in path_types, (
+        f"serverless_lambda_exposure path not confirmed; got path_types={path_types}. "
+        f"Join-key check: function_arn={_LAMBDA_FN_ARN!r} (is_public=True, kind=lambda-function); "
+        f"role_arn={_LAMBDA_ROLE_ARN!r} (LambdaWorkload.role_arn must equal identity role ARN); "
+        f"bucket={_BUCKET_NAME!r} (identity HAS_ACCESS_TO must reach data-security EXPOSES_DATA bucket). "
+        "Check record_lambda_workloads writes kind=lambda-function and is_public on the node."
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_serverless_lambda_exposure_private_stays_dark(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cycle 6 negative: private Lambda (is_public=False) does NOT fire serverless_lambda_exposure.
+
+    Same scene as the positive test but with is_public=False.
+    The ASSUMES + HAS_ACCESS_TO + EXPOSES_DATA chain is still present — only the
+    is_public flag is False — so the detector must stay dark.
+    fine_grained_data may still fire (the role has direct HAS_ACCESS_TO); that is
+    expected and acceptable. Only serverless_lambda_exposure must be absent.
+    """
+    from cloud_posture.tools.aws_lambda import LambdaWorkload
+
+    _patch_cloud_posture_tools(monkeypatch)
+
+    feeds_dir = tmp_path / "feeds-neg"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    lambda_role = IamRole(
+        arn=_LAMBDA_ROLE_ARN,
+        name="lambda-exec-e2e-role",
+        role_id="AROA-LAMBDAROLE2",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    listing = IdentityListing(users=(), roles=(lambda_role,), groups=())
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+        cloud_lambda_workloads=(
+            LambdaWorkload(
+                function_arn=_LAMBDA_FN_ARN,
+                is_public=False,
+                role_arn=_LAMBDA_ROLE_ARN,
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_LAMBDA_TENANT_NEG,
+        sources=sources,
+        workspace_root=tmp_path / "ws-neg",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "serverless_lambda_exposure" not in path_types, (
+        f"serverless_lambda_exposure must NOT fire for private Lambda (is_public=False); "
+        f"got path_types={path_types}. "
+        "The is_public=False property on the node must gate the detector dark."
+    )

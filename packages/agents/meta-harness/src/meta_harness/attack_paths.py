@@ -64,6 +64,7 @@ _SEVERITY: dict[str, int] = {
     "stored_secret_to_data": 88,
     "k8s_escape_to_cloud_data": 82,
     "rbac_escalation_to_cloud_data": 84,
+    "serverless_lambda_exposure": 83,
 }
 
 
@@ -252,6 +253,9 @@ def _title(path_type: str, grp: _Group) -> str:
             f"AND its IRSA cloud role can reach {dt or 'sensitive'} data — "
             f"full cluster control plus cloud data breach"
         )
+    if path_type == "serverless_lambda_exposure":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return f"Public Lambda function's execution role can read {dt or 'sensitive'} data"
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -533,6 +537,18 @@ class AttackPathRanker:
                 method=em.method,
                 data_type=em.data_type,
                 sink=em.data_classification_id,
+            )
+        for sl in await self._kg.find_serverless_lambda_exposure():
+            g("serverless_lambda_exposure", (sl.function_id, sl.role_id, sl.resource_id)).add(
+                (
+                    sl.function_id,
+                    sl.role_id,
+                    sl.resource_id,
+                    sl.data_classification_id,
+                ),
+                sl.data_type,
+                data_type=sl.data_type,
+                sink=sl.data_classification_id,
             )
 
         paths = [

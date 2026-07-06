@@ -475,6 +475,30 @@ class ResourceBasedDataExposure:
 
 
 @dataclass(frozen=True, slots=True)
+class ServerlessLambdaExposure:
+    """A public Lambda function whose execution role can reach sensitive data.
+
+    An attacker who invokes the open Function URL (AuthType=NONE) or the wildcard-policy
+    endpoint runs as the execution role and inherits its ``HAS_ACCESS_TO`` blast radius.
+
+    Discriminator: ``kind=lambda-function`` AND ``is_public=True`` are both required —
+    a private Lambda (no URL / IAM-auth) and non-Lambda resources with the same edges
+    MUST NOT fire (kind gate).
+
+    Walk: ``CLOUD_RESOURCE{kind=lambda-function, is_public=True}
+    --ASSUMES--> IDENTITY(role)
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    One hit per ``(function_id, role_id, data_classification_id)``."""
+
+    function_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class SupplyChainSbom:
     """A public workload running an image whose SBOM package has a CVE (supply-chain, NEX-305).
 
@@ -1643,6 +1667,48 @@ class KgQuery:
                             )
         return hits
 
+    async def find_serverless_lambda_exposure(self) -> list[ServerlessLambdaExposure]:
+        """Find public Lambda functions whose execution role reaches sensitive data.
+
+        Self-seeded: enumerates CLOUD_RESOURCE nodes that have BOTH
+        ``kind="lambda-function"`` AND ``is_public=True`` (the kind gate — an EC2 node
+        with the same edges MUST NOT fire), follows ``ASSUMES`` to the execution role,
+        then the role's ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data
+        classification.
+
+        An attacker who invokes the open Function URL (AuthType=NONE) or the
+        wildcard-policy endpoint runs as the execution role and can read sensitive data.
+        One hit per ``(function_id, role_id, data_classification_id)``. Read-only."""
+        hits: list[ServerlessLambdaExposure] = []
+        for fn in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if fn.properties.get("kind") != "lambda-function":
+                continue
+            if fn.properties.get("is_public") is not True:
+                continue
+            for assumes in await self._edges_from(fn.entity_id, (EdgeType.ASSUMES.value,)):
+                role_id = assumes.dst_entity_id
+                for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            ServerlessLambdaExposure(
+                                function_id=fn.entity_id,
+                                role_id=role_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
+        return hits
+
     async def find_supply_chain_sbom(self) -> list[SupplyChainSbom]:
         """Public workload runs an image whose SBOM package has a CVE (dependency-level supply chain).
 
@@ -1717,6 +1783,7 @@ __all__ = [
     "RbacEscalationToCloudData",
     "RbacPrivilegeEscalation",
     "ResourceBasedDataExposure",
+    "ServerlessLambdaExposure",
     "StoredSecretToData",
     "SupplyChainSbom",
     "ToxicCombination",
