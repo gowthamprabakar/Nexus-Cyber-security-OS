@@ -35,9 +35,22 @@
 
 ## Bottom Line
 
-**22 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (22 + 0 = 22)
+**24 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (24 + 0 = 24)
 
-All 22 detectors are fully LIVE-in-pipeline. This merge combines PR #800 (last three detectors: `find_rbac_privilege_escalation`, `find_k8s_escape_to_cloud_data`, `find_internet_exposed_host_vulnerable`) with PR #799 (`find_kms_key_access`), reaching 22/22.
+22 detectors reached 22/22 (PR #797–#801). **Cycle 3 (branch `feat/cycle3-moat-productization`, off main+#801) productizes the moat and adds 2 deepened detectors**, reaching 24/24. (Independent of #802, which adds its own 2 — expect a coverage-doc union at merge.)
+
+**Moat productization — durable + exportable (the headline).** The ranked cross-agent attack paths, previously transient (in-memory `list[AttackPath]` → Markdown at the CLI), are now:
+
+- persisted as durable **`ATTACK_PATH` graph nodes** (`AttackPathWriter`) — cross-scan-tracked via a stable key `attackpath:sha256(path_type|sorted(entities))[:16]` with set-once `first_seen` / bumped `last_seen`; run-over-run dedup is free (ADR-022 node upsert + edge UNIQUE index). `CONTRIBUTES_TO` edges from each entity + `PART_OF_PATH` to the sink.
+- emitted as **OCSF 2005 Incident Findings** (`build_incident_finding`) — SIEM-exportable; `finding_info.uid` == the node key so graph and SIEM dedup on the same identity; evidence carries ids / CVE ids / data-types only (no plaintext secrets).
+- wired into `analyze` behind a `persist` flag (`scan_run` sets `persist=True`; CLI + existing tests default `persist=False` → zero side-effects). Proven cross-scan (twice-run e2e: one node, `first_seen` held, `last_seen` bumped).
+
+**2 deepened detectors** (commodity single-signal → real toxic combination; both offline-provable, both subsume their shallow parent per-subject):
+
+- **`find_rbac_escalation_to_cloud_data`** (sev 84) — a cluster-admin service-account (`BINDS` an `is_admin` role) that ALSO reaches cloud data (`IRSA_MAPPING → role → HAS_ACCESS_TO → resource → EXPOSES_DATA`). K8s admin + cloud-data breach; dominates both `rbac_privilege_escalation` and `k8s_escape_to_cloud_data`.
+- **`find_exposed_kms_key_over_data`** (sev 80) — a public KMS key (`is_public`) that ALSO `EXPOSES_DATA` to a classification. The encryption boundary is internet-open AND guards classified data — worse than a bare exposed key.
+
+**Deferred to Cycle 4 (honest):** public-RDS→PII — no producer writes an `rds-instance → DATA_CLASSIFICATION` edge today (`record_rds_instances` writes the node only); that's collection wiring, not productization.
 
 ## Known Scope Limits
 
