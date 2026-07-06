@@ -21,6 +21,7 @@ from meta_harness.candidate_history import (
 from meta_harness.correlation import correlate_all
 from meta_harness.kg_query import KgQuery
 from meta_harness.path_engine import find_candidate_paths
+from meta_harness.report_card import rank_by_expected_loss
 
 if TYPE_CHECKING:
     from charter.memory.semantic import SemanticStore
@@ -50,6 +51,8 @@ async def analyze(
     ``FeedbackLog.suppressed_signatures()`` here so dismissed noise stops resurfacing."""
     await correlate_all(store, tenant_id)
     confirmed = await AttackPathRanker(KgQuery(store, tenant_id)).find_all()
+    ranked = await rank_by_expected_loss(confirmed, store, tenant_id)
+    confirmed = [t[0] for t in ranked]
     candidates = await find_candidate_paths(store, tenant_id, suppressed=suppressed)
     return ScanResult(confirmed=confirmed, candidates=candidates)
 

@@ -4,9 +4,12 @@ import pytest
 from charter.memory.graph_types import EdgeType, NodeCategory
 from fleet_testkit import in_memory_semantic_store
 from identity.kg_writer import KnowledgeGraphWriter as IdentityKgWriter
+from meta_harness.attack_paths import AttackPathRanker
 from meta_harness.kg_query import KgQuery
 from meta_harness.path_priors import EDGE_TRAVERSAL_PRIOR
-from meta_harness.report_card import build_report_card
+from meta_harness.report_card import build_report_card, rank_by_expected_loss
+from vulnerability.kg_writer import KnowledgeGraphWriter as VulnKgWriter
+from vulnerability.tools.trivy import TrivyResult
 
 
 async def _public_data(store, t, res, dt="ssn"):
@@ -323,3 +326,136 @@ async def test_find_stored_secret_to_data_fires_for_non_public_workload() -> Non
         assert hits[0].workload_id == workload
         assert hits[0].secret_id == secret
         assert hits[0].data_type == "ssn"
+
+
+# ---------------------------------------------------------------------------
+# Task 2: KEV flows through the REAL writer into the ranking (anti-regression)
+# ---------------------------------------------------------------------------
+
+_IMAGE_KEV = "myreg/kev-workload:1.0"
+_IMAGE_PLAIN = "myreg/plain-workload:1.0"
+_CVE_KEV_ID = "CVE-2021-44228"  # the KEV-listed CVE (Log4Shell)
+_CVE_PLAIN_ID = "CVE-2022-99999"  # same severity, NOT KEV-listed
+
+
+def _trivy_finding(*, cve_id: str, image_ref: str, severity: str = "HIGH") -> dict:
+    """One raw Trivy finding, shaped like the real scanner's output."""
+    return {
+        "VulnerabilityID": cve_id,
+        "PkgName": "test-pkg",
+        "InstalledVersion": "1.0.0",
+        "Severity": severity,
+        "Title": f"{cve_id} in test-pkg",
+        "_target": f"{image_ref} (test 1.0)",
+        "_class": "lang-pkgs",
+        "_artifact_name": image_ref,
+    }
+
+
+async def _seed_two_exposed_vuln_workloads_via_writers(store, tenant: str) -> None:
+    """Seed two internet-exposed workloads via graph primitives + real vulnerability writer.
+
+    workload-A RUNS_IMAGE img-kev  → CVE_KEV (HIGH, kev=True via record_scan_results)
+    workload-B RUNS_IMAGE img-plain → CVE_PLAIN (HIGH, kev=False — not in kev_cve_ids set)
+
+    The image node identity: the workload RUNS_IMAGE an image whose external_id matches the
+    ``_artifact_name`` the vulnerability writer keys on — the same join key the integration
+    e2e test (test_path2_e2e.py) uses.  We plant the workload + RUNS_IMAGE edge manually
+    (mirrors test_kg_query_exposed_vuln._seed), then let record_scan_results upsert the
+    image node and VULNERABLE_TO edge (the real writer does both).
+    """
+    # --- workload A: internet-exposed, will get a KEV CVE ---
+    wl_a = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id="arn:aws:ecs:us-east-1:111:service/kev-workload",
+        properties={"kind": "ecs-service", "is_public": True},
+    )
+    img_a = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id=_IMAGE_KEV,
+        properties={"kind": "container-image"},
+    )
+    await store.add_relationship(
+        tenant_id=tenant,
+        src_entity_id=wl_a,
+        dst_entity_id=img_a,
+        relationship_type=EdgeType.RUNS_IMAGE.value,
+        properties={},
+    )
+
+    # --- workload B: internet-exposed, plain (non-KEV) CVE ---
+    wl_b = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id="arn:aws:ecs:us-east-1:111:service/plain-workload",
+        properties={"kind": "ecs-service", "is_public": True},
+    )
+    img_b = await store.upsert_entity(
+        tenant_id=tenant,
+        entity_type=NodeCategory.CLOUD_RESOURCE.value,
+        external_id=_IMAGE_PLAIN,
+        properties={"kind": "container-image"},
+    )
+    await store.add_relationship(
+        tenant_id=tenant,
+        src_entity_id=wl_b,
+        dst_entity_id=img_b,
+        relationship_type=EdgeType.RUNS_IMAGE.value,
+        properties={},
+    )
+
+    # --- vulnerability writer: stamp KEV on _CVE_KEV_ID ONLY ---
+    # This is the whole point: kev=True must flow through record_scan_results, not through
+    # a hand-set properties={"kev": True}.  Under the OLD kev_listed reader the detector
+    # reads cve.properties.get("kev_listed", False) — which is always False here (the writer
+    # stamps "kev", not "kev_listed") — so AttackPath.kev would be False for both paths.
+    trivy_a = TrivyResult(raw_findings=[_trivy_finding(cve_id=_CVE_KEV_ID, image_ref=_IMAGE_KEV)])
+    trivy_b = TrivyResult(
+        raw_findings=[_trivy_finding(cve_id=_CVE_PLAIN_ID, image_ref=_IMAGE_PLAIN)]
+    )
+    writer = VulnKgWriter(store, tenant)
+    await writer.record_scan_results([trivy_a], kev_cve_ids={_CVE_KEV_ID})
+    await writer.record_scan_results([trivy_b], kev_cve_ids=set())  # no KEV ids → kev=False
+
+
+@pytest.mark.asyncio
+async def test_kev_path_outranks_non_kev_through_real_writer() -> None:
+    """KEV signal flows writer → node → detector → AttackPath ranking (Task 2 anti-regression).
+
+    This test is RED under the old kg_query.py that reads ``cve.properties.get("kev_listed", False)``
+    (the writer stamps ``kev``, so the detector always sees False) and GREEN after the fix that
+    reads ``cve.properties.get("kev", False)``.
+
+    Two equal-severity (HIGH) internet-exposed workloads: one's CVE is KEV-listed (via the real
+    vulnerability writer), the other is not.  The KEV workload's AttackPath must carry kev=True
+    and must outrank the non-KEV path via rank_by_expected_loss.
+    """
+    t = "kev-writer-regression"
+    async with in_memory_semantic_store() as store:
+        await _seed_two_exposed_vuln_workloads_via_writers(store, t)
+
+        kq = KgQuery(store, t)
+        confirmed = await AttackPathRanker(kq).find_all()
+
+        # Both workloads must produce internet_exposed_vulnerable paths.
+        exposed = [p for p in confirmed if p.path_type == "internet_exposed_vulnerable"]
+        assert len(exposed) == 2, f"expected 2 exposed-vuln paths, got {len(exposed)}"
+
+        kev_paths = [p for p in exposed if p.kev is True]
+        assert len(kev_paths) == 1, (
+            "exactly one path must carry kev=True (the one whose CVE was in kev_cve_ids); "
+            f"got kev_paths={[p.evidence for p in kev_paths]}"
+        )
+        assert _CVE_KEV_ID in kev_paths[0].evidence, (
+            f"the KEV path must carry {_CVE_KEV_ID!r} as evidence; got {kev_paths[0].evidence}"
+        )
+
+        # rank_by_expected_loss must put the KEV path first (KEV lifts leaf_probability floor).
+        ranked = await rank_by_expected_loss(confirmed, store, t)
+        top_path = ranked[0][0]
+        assert top_path.kev is True, (
+            "rank_by_expected_loss must place the KEV-listed path first; "
+            f"got top={top_path.evidence!r} kev={top_path.kev}"
+        )

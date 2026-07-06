@@ -21,6 +21,7 @@ remaining feeders are wired by their own tasks listed below.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,6 +41,8 @@ from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
 from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
+from multi_cloud_posture.agent import run as multi_cloud_posture_run
+from multi_cloud_posture.tools.kg_writer import KmsKeyRecord, SqlInstanceRecord, VmInstanceRecord
 from network_threat.agent import run as network_threat_run
 from runtime_threat.agent import run as runtime_threat_run
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -78,6 +81,16 @@ _CP_TOOLS: list[str] = [
     "aws_s3_describe",
     "aws_iam_list_users_without_mfa",
     "aws_iam_list_admin_policies",
+    "kg_upsert_asset",
+    "kg_upsert_finding",
+]
+
+# Source: packages/agents/multi-cloud-posture/tests/test_kg_writer.py (_contract permitted_tools)
+_MC_TOOLS: list[str] = [
+    "read_azure_findings",
+    "read_azure_activity",
+    "read_gcp_findings",
+    "read_gcp_iam_findings",
     "kg_upsert_asset",
     "kg_upsert_finding",
 ]
@@ -157,6 +170,11 @@ class ScanSources:
     # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
     vuln_host_target: object | None = None
     vuln_host_target_arn: str | None = None
+    # injectable exploitability maps — passed through to vulnerability_run so the
+    # kg_writer stamps kev=True / epss scores on VULNERABLE_TO edges.  When None,
+    # unchanged behavior (enrich=False offline run gets no enrichment).
+    vuln_kev_cve_ids: frozenset[str] | None = None
+    vuln_epss_scores: Mapping[str, float] | None = None
 
     # k8s-posture feeds
     k8s_kube_bench_feed: Path | None = None
@@ -193,6 +211,14 @@ class ScanSources:
     # When set, the offline k8s-posture path calls inventory_from_reader → record_inventory,
     # writing SA/RBAC nodes into the fleet graph (lights find_rbac_privilege_escalation).
     k8s_cluster_reader: object | None = None
+
+    # multi-cloud-posture injectable resource seam (B-1/B-2).
+    # When non-None, the multi-cloud-posture feeder writes Azure/GCP KMS/SQL/VM spine nodes
+    # so the cloud-agnostic detectors (find_exposed_kms_key / find_exposed_database) fire
+    # cross-cloud without any detector change. Mirrors cloud-posture's G-1 seam.
+    mc_kms_keys: tuple[KmsKeyRecord, ...] | None = None
+    mc_sql_instances: tuple[SqlInstanceRecord, ...] | None = None
+    mc_vm_instances: tuple[VmInstanceRecord, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,6 +374,31 @@ async def scan_run(
         ),
     )
 
+    # 2b. multi-cloud-posture (after cloud-posture, before identity — Azure/GCP KMS/SQL/VM
+    #     spine nodes must exist when identity expands HAS_ACCESS_TO edges cross-cloud).
+    #     Enabled by any non-None mc_* source (B-1/B-2 injectable seam).
+    await _feed(
+        "multi-cloud-posture",
+        (
+            sources.mc_kms_keys is not None
+            or sources.mc_sql_instances is not None
+            or sources.mc_vm_instances is not None
+        ),
+        lambda: multi_cloud_posture_run(
+            _contract(
+                tenant,
+                "multi_cloud_posture",
+                _MC_TOOLS,
+                workspace_root / "multi_cloud_posture",
+                ["findings.json", "report.md"],
+            ),
+            mc_kms_keys=sources.mc_kms_keys,
+            mc_sql_instances=sources.mc_sql_instances,
+            mc_vm_instances=sources.mc_vm_instances,
+            semantic_store=store,
+        ),
+    )
+
     # 3. identity (after data-security and cloud-posture so HAS_ACCESS_TO expansion
     #    covers all CLOUD_RESOURCE nodes — both bucket and kms-key nodes)
     await _feed(
@@ -382,6 +433,8 @@ async def scan_run(
             host_target=sources.vuln_host_target,  # type: ignore[arg-type]
             host_target_arn=sources.vuln_host_target_arn,
             enrich=False,
+            kev_cve_ids=sources.vuln_kev_cve_ids,
+            epss_scores=sources.vuln_epss_scores,
             semantic_store=store,
         ),
     )

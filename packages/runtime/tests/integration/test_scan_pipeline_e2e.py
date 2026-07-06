@@ -15,7 +15,7 @@ path and surfaces it as a ``fine_grained_data`` confirmed attack path (severity=
 Assertions:
   - all feeders ok=True (both agent run()s completed without exception)
   - res.confirmed is non-empty (the path formed from real run()s)
-  - severity is non-increasing (ranking invariant)
+  - fine_grained_data path_type is present (the expected archetype for this fixture)
 
 NOTE: SQLite does not enforce RLS; DB-level tenant isolation is proven by the
 gated Postgres test, not here.
@@ -160,6 +160,7 @@ async def test_scan_run_yields_ranked_public_data_path(
 
     This is the Phase-1 operating-path proof — the keystone regression guard.
     Task 11 extends it once the dormant writers land.
+    Ordering by expected_loss (not severity) is proven by test_crown_jewel_outranks_single_store_by_expected_loss.
     """
     feeds_dir = tmp_path / "feeds"
     inv, obj = _write_public_pii_inventory(feeds_dir)
@@ -193,11 +194,13 @@ async def test_scan_run_yields_ranked_public_data_path(
         "analyze should find fine_grained_data or public_unencrypted"
     )
 
-    # Ranking invariant: severity is non-increasing (worst-first order).
-    # AttackPath.severity is the rank key; find_all() sorts by (-severity, -count, title).
-    severities = [p.severity for p in res.confirmed]
-    assert severities == sorted(severities, reverse=True), (
-        f"attack paths must be sorted worst-first by severity; got {severities}"
+    # The operating path must surface the expected fine_grained_data path type.
+    # (Ordering is by expected_loss, proven by test_crown_jewel_outranks_single_store_by_expected_loss;
+    # this test's job is "the path forms from real run()s", so we assert the path is present.)
+    assert any(p.path_type == "fine_grained_data" for p in res.confirmed), (
+        f"expected fine_grained_data path from real run()s — "
+        f"data-security wrote EXPOSES_DATA, identity wrote HAS_ACCESS_TO; "
+        f"got path_types={[p.path_type for p in res.confirmed]}"
     )
 
 
@@ -910,4 +913,292 @@ async def test_scan_run_kms_key_access_fires(
         f"Check join keys: cloud-posture record_kms_keys external_id={_KMS_ARN!r}; "
         f"cloud-posture record_kms_protected_data first tuple element={_KMS_ARN!r}; "
         f"identity admin role {_ADMIN_ROLE_ARN!r} expands HAS_ACCESS_TO all CLOUD_RESOURCE nodes."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (Tier-3): multi-cloud-posture seam → cross-cloud exposed_kms_key +
+# exposed_database detectors fire via the mc_* injectable sources
+# ---------------------------------------------------------------------------
+
+_AZURE_KV_KEY_ID = "https://my-vault.vault.azure.net/keys/my-key/abc123"
+_GCP_SQL_INSTANCE_ID = "projects/my-project/instances/my-sql-instance"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_multicloud_exposed_kms_and_db_fire(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Injected Azure KMS key + GCP SQL instance (both public) → exposed_kms_key + exposed_database.
+
+    multi-cloud-posture feeder receives:
+      - mc_kms_keys: one public Azure Key Vault key →
+          record_kms_keys writes CLOUD_RESOURCE{kind=kms-key, is_public=True}
+      - mc_sql_instances: one public GCP Cloud SQL instance →
+          record_sql_instances writes CLOUD_RESOURCE{kind=rds-instance, is_public=True}
+
+    analyze → find_exposed_kms_key → confirmed path_type == "exposed_kms_key"
+    analyze → find_exposed_database → confirmed path_type == "exposed_database"
+
+    This proves the cross-cloud seam: the same cloud-agnostic detectors that fire
+    for AWS (cloud-posture) now fire for Azure/GCP via multi-cloud-posture.
+    """
+    from multi_cloud_posture.tools.kg_writer import KmsKeyRecord, SqlInstanceRecord
+
+    sources = ScanSources(
+        mc_kms_keys=(
+            KmsKeyRecord(
+                key_id=_AZURE_KV_KEY_ID,
+                is_public=True,
+            ),
+        ),
+        mc_sql_instances=(
+            SqlInstanceRecord(
+                instance_id=_GCP_SQL_INSTANCE_ID,
+                is_public=True,
+                engine="postgres",
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-mc",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "multi-cloud-posture" in feeder_names, (
+        f"multi-cloud-posture feeder missing from {feeder_names}"
+    )
+
+    types = {p.path_type for p in res.confirmed}
+    assert "exposed_kms_key" in types, (
+        f"exposed_kms_key not confirmed; got path_types={types}. "
+        f"Check multi-cloud-posture wrote CLOUD_RESOURCE{{kind=kms-key, is_public=True}} "
+        f"for {_AZURE_KV_KEY_ID!r} and find_exposed_kms_key picked it up."
+    )
+    assert "exposed_database" in types, (
+        f"exposed_database not confirmed; got path_types={types}. "
+        f"Check multi-cloud-posture wrote CLOUD_RESOURCE{{kind=rds-instance, is_public=True}} "
+        f"for {_GCP_SQL_INSTANCE_ID!r} and find_exposed_database picked it up."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (Tier-3): expected-loss ordering — crown-jewel outranks single-store
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_crown_jewel_outranks_single_store_by_expected_loss(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Task 4 (B3): analyze returns confirmed paths ordered by expected loss, not flat severity.
+
+    Two ``fine_grained_data`` paths (severity=60, count=1) are inserted into a shared graph:
+      - crown-jewel principal "zzz-crown" reaches 5 data stores  → blast=5, higher expected loss
+      - single-store principal "aaa-single" reaches 1 data store → blast=1, lower expected loss
+
+    Titles are chosen so that alphabetically "aaa-single" PRECEDES "zzz-crown": the old
+    flat-severity sort (``-severity, -count, title``) resolves the tie by title and puts
+    single-store FIRST.  After wiring ``rank_by_expected_loss`` into ``analyze``, the
+    crown-jewel path's higher blast radius should put it FIRST instead.
+
+    This test proves the wire: it FAILS on the pre-wiring flat sort and PASSES after.
+    """
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import EdgeType, NodeCategory
+    from meta_harness.scan import analyze
+
+    _T4 = "t-crown-jewel-rank"
+    store = SemanticStore(session_factory)
+
+    _R = NodeCategory.CLOUD_RESOURCE.value
+    _ID = NodeCategory.IDENTITY.value
+    _DC = NodeCategory.DATA_CLASSIFICATION.value
+
+    # --- Single-store principal inserted FIRST so it appears first in the flat-sort groups dict ---
+    # Under the old flat-severity sort (stable, equal keys), insertion order is preserved and
+    # single-store comes first.  After wiring rank_by_expected_loss, crown-jewel (blast=5) wins.
+    ss_principal = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/aaa-single",
+        properties={},
+    )
+    ss_res = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_R,
+        external_id="arn:aws:s3:::single-bucket",
+        properties={"is_public": True},
+    )
+    ss_dc = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_DC,
+        external_id="arn:aws:s3:::single-bucket/pii",
+        properties={"data_type": "ssn"},
+    )
+    await store.add_relationship(
+        tenant_id=_T4,
+        src_entity_id=ss_principal,
+        dst_entity_id=ss_res,
+        relationship_type=EdgeType.HAS_ACCESS_TO.value,
+        properties={},
+    )
+    await store.add_relationship(
+        tenant_id=_T4,
+        src_entity_id=ss_res,
+        dst_entity_id=ss_dc,
+        relationship_type=EdgeType.EXPOSES_DATA.value,
+        properties={},
+    )
+
+    # --- Crown-jewel principal inserted SECOND, so it appears LAST under the old flat-sort ---
+    # Both paths: fine_grained_data, sev=60, count=1, same title — equal flat-sort keys.
+    # Old stable sort preserves insertion order → single-store (inserted first) wins flat-sort.
+    # rank_by_expected_loss gives crown-jewel blast=5 vs single-store blast=1, so crown-jewel wins.
+    cj_principal = await store.upsert_entity(
+        tenant_id=_T4,
+        entity_type=_ID,
+        external_id="arn:aws:iam::1:role/zzz-crown",
+        properties={},
+    )
+    for i in range(5):
+        cj_res = await store.upsert_entity(
+            tenant_id=_T4,
+            entity_type=_R,
+            external_id=f"arn:aws:s3:::crown-bucket-{i}",
+            properties={"is_public": True},
+        )
+        cj_dc = await store.upsert_entity(
+            tenant_id=_T4,
+            entity_type=_DC,
+            external_id=f"arn:aws:s3:::crown-bucket-{i}/pii",
+            properties={"data_type": "ssn"},
+        )
+        await store.add_relationship(
+            tenant_id=_T4,
+            src_entity_id=cj_principal,
+            dst_entity_id=cj_res,
+            relationship_type=EdgeType.HAS_ACCESS_TO.value,
+            properties={},
+        )
+        await store.add_relationship(
+            tenant_id=_T4,
+            src_entity_id=cj_res,
+            dst_entity_id=cj_dc,
+            relationship_type=EdgeType.EXPOSES_DATA.value,
+            properties={},
+        )
+
+    # --- Run analyze and check ordering ---
+    result = await analyze(store, _T4)
+
+    assert result.confirmed, "expected at least two confirmed attack paths"
+    assert len(result.confirmed) >= 2, (
+        f"expected at least 2 confirmed paths; got {[p.title for p in result.confirmed]}"
+    )
+
+    # Both path types are fine_grained_data (sev=60, count=1).
+    # All titles are identical ("Principal has access to public ssn data") — ties on severity+count+title.
+    # Under the OLD flat-severity sort: single-store (ss_principal, inserted first) wins stable tie.
+    # Under rank_by_expected_loss: crown-jewel (blast=5 via 5 data stores) outranks single-store
+    # (blast=1 via 1 data store).  Crown-jewel path must be confirmed[0].
+    first = result.confirmed[0]
+    assert cj_principal in first.entities, (
+        f"crown-jewel path (entity={cj_principal!r}, blast=5) must be confirmed[0] under "
+        f"expected-loss ordering. Got confirmed[0]: entities={first.entities!r}. "
+        f"All confirmed paths: {[(p.entities,) for p in result.confirmed]}. "
+        "If this fails, analyze() is still using flat-severity sort instead of rank_by_expected_loss."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (Cycle 1): injectable kev/epss maps → KEV flag reaches confirmed path
+# ---------------------------------------------------------------------------
+
+# CVE id produced by the existing _patch_trivy stub (Log4Shell) — verbatim, no typos.
+_KEV_CVE_ID = "CVE-2021-44228"
+
+# Tenant isolated from other e2e tests (no cross-contamination via shared SQLite).
+_KEV_TENANT = "t-kev-e2e"
+
+# ECS workload ARN — distinct from _ECS_ARN used in Task 11 to avoid tenant bleed.
+_KEV_ECS_ARN = "arn:aws:ecs:us-east-1:123456789012:service/cluster/kev-svc"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_kev_reaches_confirmed_path(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 4 (Cycle 1): vuln_kev_cve_ids injected through ScanSources reaches a KEV-flagged
+    confirmed attack path.
+
+    Seeding pattern mirrors test_scan_run_stored_secret_to_data_fires (Task 11):
+      - cloud-posture ECS workload (is_public=True, image_ref=_IMAGE_REF)
+          writes CLOUD_RESOURCE{is_public} --RUNS_IMAGE--> image-node
+      - vulnerability trivy stub (image_ref=_IMAGE_REF, _patch_trivy)
+          writes image-node --VULNERABLE_TO--> CVE-2021-44228
+
+    With vuln_kev_cve_ids=frozenset({_KEV_CVE_ID}), the vulnerability kg_writer
+    stamps kev=True on the VULNERABLE_TO edge for CVE-2021-44228.
+
+    analyze → find_internet_exposed_vulnerable_workload → AttackPath.kev is True.
+
+    This proves the injectable seam is wired end-to-end: without the ScanSources fields
+    (Task 4 Step 2), this test fails with AttributeError; with the fields but without
+    passing them through the feeder, p.kev stays False.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy(monkeypatch)
+
+    from cloud_posture.tools.aws_ecs import EcsWorkload
+
+    sources = ScanSources(
+        cloud_ecs_workloads=(
+            EcsWorkload(
+                service_arn=_KEV_ECS_ARN,
+                image_ref=_IMAGE_REF,
+                is_public=True,
+                task_role_arn="",
+                env_values=(),
+            ),
+        ),
+        vuln_image_refs=(_IMAGE_REF,),
+        vuln_kev_cve_ids=frozenset({_KEV_CVE_ID}),
+        vuln_epss_scores={_KEV_CVE_ID: 0.95},
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_KEV_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    # Guard: both feeders must have completed without error.
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture feeder missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability feeder missing from {feeder_names}"
+
+    # Core assertion: at least one confirmed path must carry kev=True.
+    kev_paths = [p for p in res.confirmed if p.kev]
+    assert kev_paths, (
+        f"a KEV-flagged confirmed path must exist after injecting vuln_kev_cve_ids={{{_KEV_CVE_ID!r}}}; "
+        f"got confirmed paths: {[(p.path_type, p.kev) for p in res.confirmed]}. "
+        "Check that ScanSources.vuln_kev_cve_ids is wired through vulnerability_run(kev_cve_ids=...)."
+    )
+
+    # Sanity: the KEV path is the internet_exposed_vulnerable archetype we seeded.
+    assert any(p.path_type == "internet_exposed_vulnerable" for p in kev_paths), (
+        f"expected internet_exposed_vulnerable among KEV paths; got {[p.path_type for p in kev_paths]}"
     )
