@@ -44,3 +44,13 @@ def test_trap_no_owner_still_no_edge():
     assert (
         escalation_grants((_b("roles/iam.roleAdmin", _ATTACKER), _b("roles/editor", _OWNER))) == []
     )
+
+
+def test_sa_impersonation_method():
+    m = _methods([_b("roles/iam.serviceAccountTokenCreator", _ATTACKER), _b("roles/owner", _OWNER)])
+    assert ("sa_impersonation", "iam.serviceAccounts.getOpenIdToken") in m
+
+
+def test_trap_compute_viewer_not_sa_impersonation():
+    m = _methods([_b("roles/compute.viewer", _ATTACKER), _b("roles/owner", _OWNER)])
+    assert not any(method == "sa_impersonation" for method, _v in m)
