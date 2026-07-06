@@ -188,6 +188,23 @@ class PrivilegedVulnerableWorkload:
 
 
 @dataclass(frozen=True, slots=True)
+class LateralReachable:
+    """A public foothold that CAN_REACH / PEERED_WITH a target which is either a vulnerable host or a
+    managed datastore (derived lateral movement, Cycle 2 Task 3). Distinct from :class:`LateralMovement`
+    (which uses observed ``COMMUNICATES_WITH`` edges from flow logs); this fires from *config* alone —
+    before any traffic — and catches both vulnerable-host and sensitive-datastore pivot targets. The
+    ``reach_kind`` records the network mechanism (``lateral_sg`` or ``vpc_peering``); ``impact``
+    distinguishes the threat model (``vulnerable_host`` vs ``sensitive_resource``). Read-only."""
+
+    foothold_id: str
+    target_id: str
+    reach_kind: str  # "lateral_sg" | "vpc_peering" (from edge property "method")
+    impact: str  # "vulnerable_host" | "sensitive_resource"
+    cve_id: str = ""
+    severity: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class LateralMovement:
     """A public-facing foothold with an OBSERVED network flow to an internal host that carries a
     known CVE (path #14). The foothold endpoint is ``OWNED_BY`` a public resource and
@@ -1341,6 +1358,64 @@ class KgQuery:
                         )
         return hits
 
+    async def find_lateral_movement_via_reachability(self) -> list[LateralReachable]:
+        """Derived (config-based) lateral movement: a public foothold that CAN_REACH / PEERED_WITH a
+        target which is either a vulnerable host or a managed datastore.
+
+        Distinct from :meth:`find_lateral_movement_to_vulnerable_host` (which uses observed
+        ``COMMUNICATES_WITH`` edges from flow logs); this fires from security-group / VPC-peering
+        config alone — before any traffic is seen — and covers both vulnerable-host and
+        sensitive-datastore pivot targets.  ``impact="sensitive_resource"`` when the target is
+        a managed datastore (``kind`` in ``{"rds-instance", "kms-key"}``);
+        ``impact="vulnerable_host"`` when the target carries a ``VULNERABLE_TO`` CVE.  A target
+        that matches BOTH emits two hits (one per threat model). Read-only; self-seeded.
+        """
+        hits: list[LateralReachable] = []
+        for foothold in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if foothold.properties.get("is_public") is not True:
+                continue
+            for reach in await self._edges_from(
+                foothold.entity_id, (EdgeType.CAN_REACH.value, EdgeType.PEERED_WITH.value)
+            ):
+                if reach.dst_entity_id == foothold.entity_id:
+                    continue
+                target = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=reach.dst_entity_id
+                )
+                if target is None:
+                    continue
+                reach_kind = str(reach.properties.get("method", ""))
+                if target.properties.get("kind") in {"rds-instance", "kms-key"}:
+                    hits.append(
+                        LateralReachable(
+                            foothold.entity_id,
+                            target.entity_id,
+                            reach_kind,
+                            "sensitive_resource",
+                        )
+                    )
+                for vuln in await self._edges_from(
+                    target.entity_id, (EdgeType.VULNERABLE_TO.value,)
+                ):
+                    cve = await self._semantic_store.get_entity(
+                        tenant_id=self._customer_id, entity_id=vuln.dst_entity_id
+                    )
+                    if cve is None:
+                        continue
+                    hits.append(
+                        LateralReachable(
+                            foothold.entity_id,
+                            target.entity_id,
+                            reach_kind,
+                            "vulnerable_host",
+                            cve.external_id,
+                            str(cve.properties.get("severity", "")),
+                        )
+                    )
+        return hits
+
     async def find_lateral_movement_to_vulnerable_host(self) -> list[LateralMovement]:
         """Find a public foothold with an observed flow to an internal vulnerable host (path #14).
 
@@ -1412,6 +1487,7 @@ __all__ = [
     "InternetExposedVulnerableWorkload",
     "K8sEscapeToCloudData",
     "KgQuery",
+    "LateralReachable",
     "PathEdge",
     "PrivilegedVulnerableWorkload",
     "PublicSecretExposure",

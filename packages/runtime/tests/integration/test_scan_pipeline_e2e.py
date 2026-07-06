@@ -1000,3 +1000,248 @@ async def test_scan_run_network_topology_lands_can_reach(
         "Check that network_threat.run() writes record_reachability when "
         "network_instances + security_groups are injected and semantic_store is set."
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 2 Task 3: find_lateral_movement_via_reachability (derived CAN_REACH/PEERED_WITH)
+# ---------------------------------------------------------------------------
+
+# ARNs used across the three lateral-reachable e2e tests.
+_LR_FOOTHOLD = "arn:aws:ec2:us-east-1:222233334444:instance/i-lr-foothold"
+_LR_TARGET_HOST = "arn:aws:ec2:us-east-1:222233334444:instance/i-lr-target-host"
+_LR_RDS = "arn:aws:rds:us-east-1:222233334444:db:lr-internal-db"
+_LR_TENANT = "t-lateral-reachable-e2e"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_lateral_reachable_vuln_host_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 3a: CAN_REACH foothold → vulnerable host → lateral_reachable path.
+
+    Three feeders cooperate via the shared SemanticStore:
+
+      1. cloud-posture (record_ec2_workloads) writes
+             CLOUD_RESOURCE{external_id=_LR_FOOTHOLD, is_public=True}
+      2. vulnerability (trivy host scan, relabelled to _LR_TARGET_HOST) writes
+             CLOUD_RESOURCE{external_id=_LR_TARGET_HOST} --VULNERABLE_TO--> CVE
+      3. network-threat (reach_grants) writes
+             CAN_REACH{method=lateral_sg}  _LR_FOOTHOLD → _LR_TARGET_HOST
+
+    The e2e join key: NetworkInstance.resource_id == instance_arn for BOTH nodes.
+    cloud-posture keys on instance_arn (Ec2Workload.instance_arn).
+    vulnerability keys on vuln_host_target_arn (agent relabels _artifact_name).
+    network-threat keys on NetworkInstance.resource_id.
+    All three use the SAME ARN string → nodes converge.
+
+    analyze → find_lateral_movement_via_reachability → confirmed path_type=="lateral_reachable"
+    with impact=="vulnerable_host".
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy_host_scan(monkeypatch)
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+    from network_threat.tools.reachability import IngressRule, NetworkInstance, SecurityGroup
+
+    foothold_inst = Ec2Workload(instance_arn=_LR_FOOTHOLD, is_public=True)
+
+    # SG topology: foothold is in sg-lr-A; target is in sg-lr-B which allows sg-lr-A → CAN_REACH.
+    sg_a = SecurityGroup(group_id="sg-lr-A", ingress=())
+    sg_b = SecurityGroup(
+        group_id="sg-lr-B",
+        ingress=(IngressRule(protocol="tcp", from_port=443, to_port=443, source_sgs=("sg-lr-A",)),),
+    )
+    foothold_net = NetworkInstance(resource_id=_LR_FOOTHOLD, security_group_ids=("sg-lr-A",))
+    target_net = NetworkInstance(resource_id=_LR_TARGET_HOST, security_group_ids=("sg-lr-B",))
+
+    sources = ScanSources(
+        cloud_ec2_workloads=(foothold_inst,),
+        vuln_host_target="/mnt/rootfs",
+        vuln_host_target_arn=_LR_TARGET_HOST,
+        network_instances=[foothold_net, target_net],
+        network_security_groups=[sg_a, sg_b],
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_LR_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability missing from {feeder_names}"
+    assert "network-threat" in feeder_names, f"network-threat missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "lateral_reachable" in path_types, (
+        f"lateral_reachable path not confirmed; got path_types={path_types}. "
+        f"Join-key check: cloud-posture Ec2Workload.instance_arn={_LR_FOOTHOLD!r} (is_public=True); "
+        f"vuln_host_target_arn={_LR_TARGET_HOST!r} (VULNERABLE_TO node keyed on same ARN); "
+        f"NetworkInstance.resource_id matches both ARNs so CAN_REACH edges land on the same nodes."
+    )
+
+    # Verify the hit carries the right impact.
+    lr_paths = [p for p in res.confirmed if p.path_type == "lateral_reachable"]
+    assert any("vulnerable_host" in p.title for p in lr_paths), (
+        f"expected 'vulnerable_host' in lateral_reachable title; "
+        f"got titles: {[p.title for p in lr_paths]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_lateral_reachable_rds_datastore_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 3b: CAN_REACH foothold → RDS instance → lateral_reachable sensitive_resource.
+
+    Two cloud-posture legs cooperate with the network-threat feeder:
+
+      1. cloud-posture (record_ec2_workloads) writes
+             CLOUD_RESOURCE{external_id=_LR_FOOTHOLD, is_public=True}
+      2. cloud-posture (record_rds_instances) writes
+             CLOUD_RESOURCE{external_id=_LR_RDS, kind=rds-instance}
+      3. network-threat (reach_grants) writes
+             CAN_REACH{method=lateral_sg}  _LR_FOOTHOLD → _LR_RDS
+
+    The e2e join key: NetworkInstance.resource_id == RdsInstance.instance_arn == _LR_RDS.
+    record_rds_instances keys on instance_arn; network-threat keys on resource_id.
+    Same string → the CAN_REACH edge lands ON the rds-instance node cloud-posture wrote.
+
+    analyze → find_lateral_movement_via_reachability → confirmed path_type=="lateral_reachable"
+    with impact=="sensitive_resource" (target kind in {"rds-instance", "kms-key"}).
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+    from cloud_posture.tools.aws_rds import RdsInstance
+    from network_threat.tools.reachability import IngressRule, NetworkInstance, SecurityGroup
+
+    foothold_inst = Ec2Workload(instance_arn=_LR_FOOTHOLD, is_public=True)
+    rds_inst = RdsInstance(instance_arn=_LR_RDS, is_public=False, engine="mysql")
+
+    # SG topology: foothold sg-lr-C → target sg-lr-D allows it.
+    sg_c = SecurityGroup(group_id="sg-lr-C", ingress=())
+    sg_d = SecurityGroup(
+        group_id="sg-lr-D",
+        ingress=(
+            IngressRule(protocol="tcp", from_port=3306, to_port=3306, source_sgs=("sg-lr-C",)),
+        ),
+    )
+    foothold_net = NetworkInstance(resource_id=_LR_FOOTHOLD, security_group_ids=("sg-lr-C",))
+    rds_net = NetworkInstance(resource_id=_LR_RDS, security_group_ids=("sg-lr-D",))
+
+    sources = ScanSources(
+        cloud_ec2_workloads=(foothold_inst,),
+        cloud_rds_instances=(rds_inst,),
+        network_instances=[foothold_net, rds_net],
+        network_security_groups=[sg_c, sg_d],
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_LR_TENANT + "-rds",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "network-threat" in feeder_names, f"network-threat missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "lateral_reachable" in path_types, (
+        f"lateral_reachable path not confirmed; got path_types={path_types}. "
+        f"Join-key check: cloud-posture Ec2Workload.instance_arn={_LR_FOOTHOLD!r} (is_public=True); "
+        f"cloud-posture RdsInstance.instance_arn={_LR_RDS!r} (kind=rds-instance); "
+        f"NetworkInstance.resource_id must equal both ARNs so CAN_REACH lands on the same nodes "
+        f"that record_ec2_workloads and record_rds_instances wrote."
+    )
+
+    lr_paths = [p for p in res.confirmed if p.path_type == "lateral_reachable"]
+    assert any("sensitive_resource" in p.title for p in lr_paths), (
+        f"expected 'sensitive_resource' in lateral_reachable title; "
+        f"got titles: {[p.title for p in lr_paths]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_lateral_reachable_peering_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 3c: PEERED_WITH foothold → vulnerable host → lateral_reachable via vpc_peering.
+
+    Two feeders cooperate:
+
+      1. cloud-posture (record_ec2_workloads) writes
+             CLOUD_RESOURCE{external_id=_LR_FOOTHOLD, is_public=True}
+      2. vulnerability (trivy host scan) writes
+             CLOUD_RESOURCE{external_id=_LR_TARGET_HOST} --VULNERABLE_TO--> CVE
+      3. network-threat (peering_reach_grants) writes
+             PEERED_WITH{method=vpc_peering}  _LR_FOOTHOLD → _LR_TARGET_HOST
+
+    The e2e join key: VpcInstance.resource_id == instance_arn for both nodes.
+
+    analyze → find_lateral_movement_via_reachability → confirmed path_type=="lateral_reachable"
+    with reach_kind="vpc_peering" in the title.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+    _patch_trivy_host_scan(monkeypatch)
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+    from network_threat.tools.reachability import VpcInstance
+
+    foothold_inst = Ec2Workload(instance_arn=_LR_FOOTHOLD, is_public=True)
+
+    vpc_foothold = VpcInstance(resource_id=_LR_FOOTHOLD, vpc_id="vpc-lr-1")
+    vpc_target = VpcInstance(resource_id=_LR_TARGET_HOST, vpc_id="vpc-lr-2")
+
+    sources = ScanSources(
+        cloud_ec2_workloads=(foothold_inst,),
+        vuln_host_target="/mnt/rootfs",
+        vuln_host_target_arn=_LR_TARGET_HOST,
+        network_vpc_instances=[vpc_foothold, vpc_target],
+        network_vpc_peerings=frozenset({frozenset({"vpc-lr-1", "vpc-lr-2"})}),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_LR_TENANT + "-peering",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "network-threat" in feeder_names, f"network-threat missing from {feeder_names}"
+    assert "vulnerability" in feeder_names, f"vulnerability missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "lateral_reachable" in path_types, (
+        f"lateral_reachable path not confirmed; got path_types={path_types}. "
+        f"Join-key check: VpcInstance.resource_id={_LR_FOOTHOLD!r} and {_LR_TARGET_HOST!r} must "
+        f"match Ec2Workload.instance_arn and vuln_host_target_arn respectively so PEERED_WITH "
+        f"edges land on the same nodes that cloud-posture and vulnerability wrote."
+    )
+
+    lr_paths = [p for p in res.confirmed if p.path_type == "lateral_reachable"]
+    assert any("vpc_peering" in p.title for p in lr_paths), (
+        f"expected 'vpc_peering' in lateral_reachable title; "
+        f"got titles: {[p.title for p in lr_paths]}"
+    )

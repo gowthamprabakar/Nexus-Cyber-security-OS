@@ -68,6 +68,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "host's CVEs so a pivot has nothing to exploit.",
         auto_fixable=False,
     ),
+    "lateral_reachable": FixAdvice(
+        "Restrict the security group ingress (or remove the VPC peering route) so the public "
+        "foothold can no longer reach the internal target over the network; also patch the target's "
+        "CVEs or restrict access to the datastore to eliminate the pivot's value.",
+        auto_fixable=False,
+    ),
     "malicious_destination": FixAdvice(
         "Treat the resource as potentially compromised: isolate it (deny egress via security group), "
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",

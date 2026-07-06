@@ -45,6 +45,7 @@ _SEVERITY: dict[str, int] = {
     "lateral_movement": 82,
     "internet_exposed_vulnerable": 80,
     "internet_exposed_host_vulnerable": 79,
+    "lateral_reachable": 78,
     "privileged_vulnerable": 78,
     "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
@@ -164,6 +165,13 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"Public foothold has an observed network flow to an internal vulnerable host "
             f"({_cve_phrase(grp)}) — lateral movement"
+        )
+    if path_type == "lateral_reachable":
+        impact = grp.context.get("impact", "resource")
+        reach_kind = grp.context.get("reach_kind", "")
+        return (
+            f"Public foothold can reach an internal {impact} over the network "
+            f"({reach_kind}) — lateral movement"
         )
     if path_type == "malicious_destination":
         return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
@@ -311,6 +319,14 @@ class AttackPathRanker:
         for lm in await self._kg.find_lateral_movement_to_vulnerable_host():
             g("lateral_movement", (lm.foothold_id, lm.target_id)).add(
                 (lm.foothold_id, lm.target_id), lm.cve_id, cve_severity=lm.severity
+            )
+        for lr in await self._kg.find_lateral_movement_via_reachability():
+            g("lateral_reachable", (lr.foothold_id, lr.target_id)).add(
+                (lr.foothold_id, lr.target_id),
+                lr.cve_id or lr.impact,
+                cve_severity=lr.severity,
+                reach_kind=lr.reach_kind,
+                impact=lr.impact,
             )
         for lc in await self._kg.find_leaked_credential_to_data():
             g("leaked_credential", (lc.principal_id, lc.resource_id)).add(

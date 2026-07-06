@@ -38,6 +38,7 @@ _FIX: dict[str, str] = {
     "malicious_destination": "Isolate the resource and investigate the connection to the known-bad destination.",
     "exposed_database": "Remove public ingress from the database and require authentication.",
     "lateral_movement": "Tighten the security group: remove the cross-SG ingress that exposes the private host, and patch its CVE.",
+    "lateral_reachable": "Restrict the security group ingress (or VPC peering route) so the foothold cannot reach the internal target, and patch the target's CVE.",
     "internet_exposed_vulnerable": "Patch the vulnerable image and remove the internet exposure.",
     "internet_exposed_host_vulnerable": "Patch the host's OS package and remove the internet exposure.",
     "privileged_vulnerable": "Patch the image and drop the pod's privileged securityContext.",
@@ -73,6 +74,7 @@ _INTERNET_FACING: frozenset[str] = frozenset(
         "internet_exposed_vulnerable",
         "internet_exposed_host_vulnerable",
         "lateral_movement",
+        "lateral_reachable",
         "network_topology_lateral",
         "supply_chain_sbom",
         "exposed_database",
@@ -118,7 +120,7 @@ def _generic_path_type(path: GenericPath) -> str:
     if "OWNED_BY" in sig and path.source_marker == "leaked_credential":
         return "leaked_credential"
     if "CAN_REACH" in sig or "PEERED_WITH" in sig:
-        return "lateral_movement"
+        return "lateral_reachable"
     if "CONTAINS_PACKAGE" in sig:
         return "supply_chain_sbom"
     if path.sink_marker == "known_vulnerability":
@@ -135,6 +137,7 @@ def _generic_title(path_type: str, path: GenericPath) -> str:
         "privilege_escalation": "A principal can escalate to admin and reach sensitive data",
         "leaked_credential": "A credential leaked in code reaches sensitive data through its owner",
         "lateral_movement": "An internet-exposed foothold can move laterally to a vulnerable host",
+        "lateral_reachable": "A public foothold can reach an internal resource over a derived network path",
         "internet_exposed_vulnerable": "An exposed resource reaches a known vulnerability",
         "exposed_ai_sensitive_data": "An exposed path reaches an AI model",
         "fine_grained_data": "An exposed principal reaches sensitive data",

@@ -108,6 +108,7 @@ _OUT_OF_MODEL = {
     "exposed_kms_key",
     "rbac_privilege_escalation",
     "lateral_movement",
+    "lateral_reachable",
     "cicd_compromise",
 }
 
