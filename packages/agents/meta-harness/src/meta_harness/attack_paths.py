@@ -43,8 +43,10 @@ _SEVERITY: dict[str, int] = {
     "malicious_destination": 85,
     "exposed_database": 84,
     "lateral_movement": 82,
+    "supply_chain_sbom": 80,  # same workload as internet_exposed_vulnerable, finer attribution
     "internet_exposed_vulnerable": 80,
     "internet_exposed_host_vulnerable": 79,
+    "lateral_reachable": 78,
     "privileged_vulnerable": 78,
     "rbac_privilege_escalation": 76,
     "public_unencrypted": 75,
@@ -156,6 +158,10 @@ def _title(path_type: str, grp: _Group) -> str:
             f"Internet-exposed workload runs a vulnerable image ({_cve_phrase(grp)}) "
             f"as a role that can read {dt} data"
         )
+    if path_type == "supply_chain_sbom":
+        packages = _types_phrase(grp)  # grp.evidence holds the package names
+        cve_info = grp.context.get("cve_phrase", grp.worst or "known CVE")
+        return f"Internet-exposed workload runs a vulnerable dependency ({packages}) — {cve_info}"
     if path_type == "internet_exposed_vulnerable":
         return f"Internet-exposed workload runs an image with {_cve_phrase(grp)}"
     if path_type == "internet_exposed_host_vulnerable":
@@ -188,6 +194,13 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"Public foothold has an observed network flow to an internal vulnerable host "
             f"({_cve_phrase(grp)}) — lateral movement"
+        )
+    if path_type == "lateral_reachable":
+        impact = grp.context.get("impact", "resource")
+        reach_kind = grp.context.get("reach_kind", "")
+        return (
+            f"Public foothold can reach an internal {impact} over the network "
+            f"({reach_kind}) — lateral movement"
         )
     if path_type == "malicious_destination":
         return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
@@ -290,9 +303,27 @@ class AttackPathRanker:
             subsumed_workloads.add(h.workload_id)
             subsumed_access.add((h.role_id, h.resource_id))
 
+        # SBOM paths are the more specific framing when package data exists — subsume the
+        # bare image-level `internet_exposed_vulnerable` path for the same workload.
+        subsumed_sbom_workloads: set[str] = set()
+        for sb in await self._kg.find_supply_chain_sbom():
+            if sb.workload_id in subsumed_workloads:
+                continue  # already subsumed by crown jewel
+            g("supply_chain_sbom", (sb.workload_id, sb.image_id)).add(
+                (sb.workload_id, sb.image_id),
+                sb.package_name,
+                cve_severity=sb.severity,
+                cve_phrase=sb.cve_id,
+                cve_kev=sb.kev_listed,
+                cve_epss=sb.epss_score,
+            )
+            subsumed_sbom_workloads.add(sb.workload_id)
+
         for v in await self._kg.find_internet_exposed_vulnerable_workload():
             if v.workload_id in subsumed_workloads:
-                continue  # subsumed by the crown jewel for this workload
+                continue  # subsumed by crown jewel
+            if v.workload_id in subsumed_sbom_workloads:
+                continue  # SBOM path is the more specific framing
             g("internet_exposed_vulnerable", (v.workload_id, v.image_id)).add(
                 (v.workload_id, v.image_id),
                 v.cve_id,
@@ -401,6 +432,14 @@ class AttackPathRanker:
                 cve_severity=lm.severity,
                 cve_kev=lm.kev_listed,
                 cve_epss=lm.epss_score,
+            )
+        for lr in await self._kg.find_lateral_movement_via_reachability():
+            g("lateral_reachable", (lr.foothold_id, lr.target_id)).add(
+                (lr.foothold_id, lr.target_id),
+                lr.cve_id or lr.impact,
+                cve_severity=lr.severity,
+                reach_kind=lr.reach_kind,
+                impact=lr.impact,
             )
         for lc in await self._kg.find_leaked_credential_to_data():
             g("leaked_credential", (lc.principal_id, lc.resource_id)).add(

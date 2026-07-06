@@ -9,12 +9,16 @@ the test surface is the agent's wiring of charter + readers + detectors
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+import pytest_asyncio
 from charter.contract import BudgetSpec, ExecutionContract
+from charter.memory.models import Base
+from charter.memory.semantic import SemanticStore
 from network_threat import agent as agent_mod
 from network_threat.agent import build_registry, run
 from network_threat.schemas import (
@@ -24,6 +28,13 @@ from network_threat.schemas import (
     SuricataAlert,
     SuricataAlertSeverity,
 )
+from network_threat.tools.reachability import (
+    IngressRule,
+    NetworkInstance,
+    SecurityGroup,
+    VpcInstance,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 NOW = datetime(2026, 5, 13, 12, 0, 0, tzinfo=UTC)
 
@@ -351,3 +362,101 @@ async def test_audit_chain_emitted(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert audit_path.is_file()
     lines = [ln for ln in audit_path.read_text().splitlines() if ln.strip()]
     assert len(lines) >= 1
+
+
+# ---------------------------- topology seam (CAN_REACH / PEERED_WITH) ----
+
+
+@pytest_asyncio.fixture
+async def _store() -> AsyncIterator[SemanticStore]:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    yield SemanticStore(factory)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_run_with_network_instances_writes_can_reach(
+    tmp_path: Path, _store: SemanticStore
+) -> None:
+    """Injected network_instances + security_groups → CAN_REACH edge lands in the store.
+
+    Topology: foothold (i-foothold) is in sg-A; target (i-target) is in sg-B which has
+    an ingress rule allowing sg-A on TCP:443. reach_grants should produce one grant and
+    record_reachability should land a CAN_REACH edge foothold→target.
+    """
+    foothold = NetworkInstance(resource_id="i-foothold", security_group_ids=("sg-A",))
+    target = NetworkInstance(resource_id="i-target", security_group_ids=("sg-B",))
+    sg_b = SecurityGroup(
+        group_id="sg-B",
+        ingress=(IngressRule(protocol="tcp", from_port=443, to_port=443, source_sgs=("sg-A",)),),
+    )
+    # sg-A has no ingress rules (it's the source, not the destination here)
+    sg_a = SecurityGroup(group_id="sg-A", ingress=())
+
+    await run(
+        _contract(tmp_path),
+        semantic_store=_store,
+        network_instances=[foothold, target],
+        security_groups=[sg_a, sg_b],
+    )
+
+    endpoints = await _store.list_entities_by_type(
+        tenant_id="cust_test", entity_type="cloud_resource"
+    )
+    ext_ids = {e.external_id for e in endpoints}
+    assert "i-foothold" in ext_ids
+    assert "i-target" in ext_ids
+
+    foothold_node = next(e for e in endpoints if e.external_id == "i-foothold")
+    neighbors = await _store.neighbors(
+        tenant_id="cust_test",
+        entity_id=foothold_node.entity_id,
+        depth=1,
+        edge_types=("CAN_REACH",),
+    )
+    neighbor_ids = [n.external_id for n in neighbors]
+    assert "i-target" in neighbor_ids, (
+        f"Expected CAN_REACH edge foothold→target; got {neighbor_ids}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_with_vpc_instances_writes_peered_with(
+    tmp_path: Path, _store: SemanticStore
+) -> None:
+    """Injected vpc_instances in two peered VPCs → PEERED_WITH edges land in the store.
+
+    Topology: inst-A in vpc-1, inst-B in vpc-2; vpc_peerings = {frozenset({"vpc-1","vpc-2"})}.
+    peering_reach_grants emits directed edges both ways; both PEERED_WITH edges must land.
+    """
+    inst_a = VpcInstance(resource_id="inst-A", vpc_id="vpc-1")
+    inst_b = VpcInstance(resource_id="inst-B", vpc_id="vpc-2")
+    peerings: frozenset[frozenset[str]] = frozenset({frozenset({"vpc-1", "vpc-2"})})
+
+    await run(
+        _contract(tmp_path),
+        semantic_store=_store,
+        vpc_instances=[inst_a, inst_b],
+        vpc_peerings=peerings,
+    )
+
+    endpoints = await _store.list_entities_by_type(
+        tenant_id="cust_test", entity_type="cloud_resource"
+    )
+    ext_ids = {e.external_id for e in endpoints}
+    assert "inst-A" in ext_ids
+    assert "inst-B" in ext_ids
+
+    node_a = next(e for e in endpoints if e.external_id == "inst-A")
+    neighbors_a = await _store.neighbors(
+        tenant_id="cust_test",
+        entity_id=node_a.entity_id,
+        depth=1,
+        edge_types=("PEERED_WITH",),
+    )
+    assert any(n.external_id == "inst-B" for n in neighbors_a), (
+        f"Expected PEERED_WITH edge inst-A→inst-B; got {[n.external_id for n in neighbors_a]}"
+    )

@@ -35,9 +35,20 @@
 
 ## Bottom Line
 
-**24 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (24 + 0 = 24)
+**26 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (26 + 0 = 26)
 
-22 detectors reached 22/22 (PR #797–#801). **Cycle 3 (branch `feat/cycle3-moat-productization`, off main+#801) productizes the moat and adds 2 deepened detectors**, reaching 24/24. (Independent of #802, which adds its own 2 — expect a coverage-doc union at merge.)
+22 detectors reached 22/22 across PR #797–#801. Two productization cycles then each add 2 named detectors, and Cycle 4 wires multi-cloud parity with none — reaching **26**.
+
+**Cycle 2 (branch `feat/cycle2-tier1-dead-signal`, PR #802) — 2 dead-signal detectors:**
+
+- **`find_lateral_movement_via_reachability`** — a public `CLOUD_RESOURCE{is_public}` foothold that `CAN_REACH` (same-VPC security-group) or `PEERED_WITH` (cross-VPC peering) an internal target that is either a vulnerable host (`VULNERABLE_TO` CVE, `impact=vulnerable_host`) or a managed datastore (`kind ∈ {rds-instance, kms-key}`, `impact=sensitive_resource`). **Derived/proactive** reachability — fires from config alone, before any traffic — distinct from the observed-flow `find_lateral_movement_to_vulnerable_host` (`COMMUNICATES_WITH`). Edges written by `network_threat.run()`'s injectable topology seam (`reach_grants`/`peering_reach_grants` over `NetworkInstance`/`SecurityGroup`/`VpcInstance`, fed by `ScanSources.network_instances`/`network_security_groups`/`network_vpc_instances`/`network_vpc_peerings`). Live `describe-security-groups` / VPC-peering readers stay operator-gated (see Known Scope Limits).
+- **`find_supply_chain_sbom`** — a public workload runs an image whose SBOM package has a CVE (`RUNS_IMAGE → image → CONTAINS_PACKAGE → SBOM_PACKAGE{name} → VULNERABLE_TO → CVE`), naming the vulnerable **dependency** (remediation granularity over the image-level `find_internet_exposed_vulnerable_workload`, which it **subsumes** for the same workload — no double-count). Edges already land in-pipeline (`vulnerability.run()` `record_sbom_packages` + cloud ECS `RUNS_IMAGE`); this promotes the generic candidate to a named first-class path.
+
+**Dropped from Cycle 2 as honest non-improvements** (deep-scoped; would add no detection):
+
+- the `sensitive_resource` generic-engine **sink** — it forced the full Python oracle to run on _every_ `find_generic_paths` call (a BP5 perf regression) and broke the CTE≡oracle equivalence; datastore-lateral is delivered directly by the named detector's `kind` check instead.
+- IAM group-privesc via **`MEMBER_OF`/`ATTACHED_TO`** — the identity `_synthesize_admin_grants` logic already folds group-inherited admin into the user's `HAS_ACCESS_TO`, so `find_fine_grained_data_exposure` already fires; a group-edge detector re-detects what's already detected.
+  **Cycle 3 (branch `feat/cycle3-moat-productization`, off main+#801, PR #803) — productizes the moat + 2 deepened detectors:**
 
 **Moat productization — durable + exportable (the headline).** The ranked cross-agent attack paths, previously transient (in-memory `list[AttackPath]` → Markdown at the CLI), are now:
 
@@ -50,7 +61,9 @@
 - **`find_rbac_escalation_to_cloud_data`** (sev 84) — a cluster-admin service-account (`BINDS` an `is_admin` role) that ALSO reaches cloud data (`IRSA_MAPPING → role → HAS_ACCESS_TO → resource → EXPOSES_DATA`). K8s admin + cloud-data breach; dominates both `rbac_privilege_escalation` and `k8s_escape_to_cloud_data`.
 - **`find_exposed_kms_key_over_data`** (sev 80) — a public KMS key (`is_public`) that ALSO `EXPOSES_DATA` to a classification. The encryption boundary is internet-open AND guards classified data — worse than a bare exposed key.
 
-**Deferred to Cycle 4 (honest):** public-RDS→PII — no producer writes an `rds-instance → DATA_CLASSIFICATION` edge today (`record_rds_instances` writes the node only); that's collection wiring, not productization.
+**Cycle 4 (branch `feat/cycle4-multicloud-parity`, PR #804) — multi-cloud parity, no new detectors.** Wires the already-built Azure/GCP identity resolvers, Blob/GCS data-side, and cross-cloud host-vuln into `scan_run` so the existing cloud-agnostic detectors fire for Azure/GCP principals + resources (detail in the "Multi-cloud parity — Cycle 4" section below).
+
+**Deferred to Cycle 5 (honest):** public-RDS→PII — no producer writes an `rds-instance → DATA_CLASSIFICATION` edge today (`record_rds_instances` writes the node only), so it's collection wiring, not productization — plus cross-cloud stored secrets and the latent `vuln_image_refs`+`vuln_host_targets` drop-guard.
 
 ## Known Scope Limits
 
@@ -69,6 +82,10 @@ EC2 and ECS topology (`is_public`, `private_ips`, `iac_artifact`, `RUNS_IMAGE`, 
 ### K8s pod reachability (POD_CAN_REACH): offline feeds carry no data
 
 `k8s_posture/kg_writer.record_pod_reachability` writes `POD_CAN_REACH` edges (W4 pod-to-pod lateral movement). This is not used by any current `find_*` detector in `kg_query.py`, so it does not affect any row in the table above. Observed network reachability from offline manifests is structurally unavailable; live-cluster-only.
+
+### Network topology (CAN_REACH/PEERED_WITH): pipeline-proven, live SG/peering reader deferred
+
+`find_lateral_movement_via_reachability` reads `CAN_REACH`/`PEERED_WITH` edges derived from security-group and VPC-peering config, written by `network_threat.run()`'s injectable topology seam (`reach_grants`/`peering_reach_grants` over injected `NetworkInstance`/`SecurityGroup`/`VpcInstance` dataclasses, fed via `ScanSources.network_instances`/`network_security_groups`/`network_vpc_instances`/`network_vpc_peerings`). The reachability compute is pure and offline-proven. The live `describe-security-groups` / VPC-peering readers (from real AWS credentials) are NOT wired — the detector is pipeline-proven with injected topology; live-cloud emission requires a boto-client wiring follow-on (same pattern as the cloud-posture topology limit above). The observed-flow `find_lateral_movement_to_vulnerable_host` (`COMMUNICATES_WITH`) remains the complementary reactive detector.
 
 ### Live cloud accounts: operator-gated
 

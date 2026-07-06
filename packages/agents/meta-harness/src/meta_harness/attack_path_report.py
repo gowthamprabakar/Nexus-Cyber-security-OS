@@ -28,6 +28,7 @@ _LABELS = {
     "runtime_exploit_vulnerable": "Active exploit on vulnerable workload",
     "malicious_destination": "Communicating with malicious IP",
     "lateral_movement": "Network lateral movement",
+    "lateral_reachable": "Network lateral movement (reachable)",
     "exposed_database": "Exposed managed database",
     "kms_key_access": "KMS key decrypt access to data",
     "cicd_compromise": "CI/CD pipeline compromise",
@@ -45,6 +46,7 @@ _LABELS = {
     "resource_based_data": "Resource-based access",
     "fine_grained_data": "Over-permissioned access",
     "iac_misconfig_deployed": "Misconfigured IaC deployed",
+    "supply_chain_sbom": "Vulnerable dependency (SBOM)",
 }
 
 

@@ -110,7 +110,9 @@ _OUT_OF_MODEL = {
     "rbac_privilege_escalation",
     "rbac_escalation_to_cloud_data",
     "lateral_movement",
+    "lateral_reachable",
     "cicd_compromise",
+    "supply_chain_sbom",  # 4-hop via SBOM_PACKAGE — first-sink walker stops at CVE_FINDING
 }
 
 

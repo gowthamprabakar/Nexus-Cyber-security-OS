@@ -124,14 +124,17 @@ async def test_higher_blast_radius_ranks_higher_at_equal_probability() -> None:
 @pytest.mark.asyncio
 async def test_edge_prior_table_is_load_bearing(monkeypatch) -> None:
     # Mutating the expert prior must change a generic path's probability -> guards dead config.
+    # Uses an external-identity source (external_trust=True) so the named lateral_reachable
+    # detector (which only walks CLOUD_RESOURCE is_public=True footholds) does NOT fire —
+    # the path stays a GENERIC candidate whose probability uses route_probability(EDGE_TRAVERSAL_PRIOR).
     t = "load-bearing"
     async with in_memory_semantic_store() as store:
-        # a novel 2-hop generic path: public principal -CAN_REACH-> host -VULNERABLE_TO-> cve
+        # a novel 2-hop generic path: external_identity -CAN_REACH-> host -VULNERABLE_TO-> cve
         p = await store.upsert_entity(
             tenant_id=t,
-            entity_type=NodeCategory.CLOUD_RESOURCE.value,
-            external_id="arn:pub",
-            properties={"is_public": True},
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id="arn:ext-principal",
+            properties={"external_trust": True},
         )
         h = await store.upsert_entity(
             tenant_id=t,
@@ -173,14 +176,17 @@ async def test_edge_prior_table_is_load_bearing(monkeypatch) -> None:
 async def test_kev_dominates() -> None:
     # KEV boosts generic-path probability via leaf_probability floor (§4.4); named paths can't
     # carry KEV — this asymmetry is by design, so we test GENERIC paths only (§4.5).
+    # Uses external-identity sources (external_trust=True) so the named lateral_reachable
+    # detector (which only walks CLOUD_RESOURCE is_public=True footholds) does NOT fire —
+    # these paths stay GENERIC, where route_probability carries the KEV signal.
     t = "kev-dominates"
     async with in_memory_semantic_store() as store:
-        # path A: public_resource -CAN_REACH-> hostA -VULNERABLE_TO-> CVE-A (kev=True, severity=HIGH)
+        # path A: external_identity -CAN_REACH-> hostA -VULNERABLE_TO-> CVE-A (kev=True, severity=HIGH)
         pubA = await store.upsert_entity(
             tenant_id=t,
-            entity_type=NodeCategory.CLOUD_RESOURCE.value,
-            external_id="arn:pubA",
-            properties={"is_public": True},
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id="arn:ext-A",
+            properties={"external_trust": True},
         )
         hostA = await store.upsert_entity(
             tenant_id=t,
@@ -208,12 +214,12 @@ async def test_kev_dominates() -> None:
             relationship_type=EdgeType.VULNERABLE_TO.value,
             properties={},
         )
-        # path B: public_resource -CAN_REACH-> hostB -VULNERABLE_TO-> CVE-B (kev=False, severity=HIGH)
+        # path B: external_identity -CAN_REACH-> hostB -VULNERABLE_TO-> CVE-B (kev=False, severity=HIGH)
         pubB = await store.upsert_entity(
             tenant_id=t,
-            entity_type=NodeCategory.CLOUD_RESOURCE.value,
-            external_id="arn:pubB",
-            properties={"is_public": True},
+            entity_type=NodeCategory.IDENTITY.value,
+            external_id="arn:ext-B",
+            properties={"external_trust": True},
         )
         hostB = await store.upsert_entity(
             tenant_id=t,

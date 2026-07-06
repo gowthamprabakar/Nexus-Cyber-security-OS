@@ -68,6 +68,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "host's CVEs so a pivot has nothing to exploit.",
         auto_fixable=False,
     ),
+    "lateral_reachable": FixAdvice(
+        "Restrict the security group ingress (or remove the VPC peering route) so the public "
+        "foothold can no longer reach the internal target over the network; also patch the target's "
+        "CVEs or restrict access to the datastore to eliminate the pivot's value.",
+        auto_fixable=False,
+    ),
     "malicious_destination": FixAdvice(
         "Treat the resource as potentially compromised: isolate it (deny egress via security group), "
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",
@@ -178,6 +184,12 @@ REMEDIATION: dict[str, FixAdvice] = {
         "iam:CreatePolicyVersion) from the principal so it can no longer self-grant the target "
         "identity's privileges; scope the principal to least privilege and audit all admin-granting "
         "actions in CloudTrail to confirm no escalation has already occurred.",
+        auto_fixable=False,
+    ),
+    "supply_chain_sbom": FixAdvice(
+        "Upgrade the vulnerable dependency to a patched version, then rebuild and redeploy the "
+        "image; also restrict the workload's internet exposure so the vulnerable service is not "
+        "reachable from 0.0.0.0/0 while the patch is applied.",
         auto_fixable=False,
     ),
 }
