@@ -1575,9 +1575,32 @@ async def test_scan_run_rbac_escalation_to_cloud_data_fires_and_subsumes(
         f"{_DEEP_RBAC_IRSA_ROLE_ARN!r} which has HAS_ACCESS_TO acme-pii."
     )
 
-    # The bare rbac_privilege_escalation must NOT appear for the same SA (subsumed).
-    assert "rbac_privilege_escalation" not in path_types, (
-        f"rbac_privilege_escalation should be subsumed by rbac_escalation_to_cloud_data "
-        f"for SA {_DEEP_RBAC_SA!r}; got path_types={path_types}. "
+    # Subject-scoped subsume proof: the combo SA must NOT also appear as a bare
+    # rbac_privilege_escalation row.  Checking by entity id (not global path_type)
+    # keeps this assertion correct when a second admin-only SA is added to the scene —
+    # a bare rbac_privilege_escalation for a DIFFERENT SA must not block this assertion.
+    from charter.memory import SemanticStore
+    from charter.memory.graph_types import NodeCategory
+
+    _sa_external_id = f"offline/namespace/{_DEEP_RBAC_NAMESPACE}/serviceaccount/{_DEEP_RBAC_SA}"
+    store = SemanticStore(session_factory)
+    sa_nodes = await store.list_entities_by_type(
+        tenant_id="t-deep-rbac",
+        entity_type=NodeCategory.K8S_OBJECT.value,
+    )
+    combo_sa_ids = {n.entity_id for n in sa_nodes if n.external_id == _sa_external_id}
+    assert combo_sa_ids, (
+        f"could not find K8S_OBJECT node with external_id={_sa_external_id!r} in store — "
+        "the SA was not written; check k8s-posture record_inventory cluster_id='offline'"
+    )
+    bare_rbac = [
+        p
+        for p in res.confirmed
+        if p.path_type == "rbac_privilege_escalation" and combo_sa_ids.intersection(p.entities)
+    ]
+    assert not bare_rbac, (
+        f"combo SA {_DEEP_RBAC_SA!r} (entity ids={combo_sa_ids!r}) must be subsumed — "
+        f"it must not also appear as a bare rbac_privilege_escalation path; "
+        f"got bare_rbac={bare_rbac!r}. "
         "Check the subsume guard in attack_paths.find_all."
     )
