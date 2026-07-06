@@ -911,3 +911,92 @@ async def test_scan_run_kms_key_access_fires(
         f"cloud-posture record_kms_protected_data first tuple element={_KMS_ARN!r}; "
         f"identity admin role {_ADMIN_ROLE_ARN!r} expands HAS_ACCESS_TO all CLOUD_RESOURCE nodes."
     )
+
+
+# ---------------------------------------------------------------------------
+# Cycle 2 Task 2: pipeline seam — ScanSources topology fields → CAN_REACH lands
+# ---------------------------------------------------------------------------
+
+_NET_FOOTHOLD = "arn:aws:ec2:us-east-1:111122223333:instance/i-foothold"
+_NET_TARGET = "arn:aws:ec2:us-east-1:111122223333:instance/i-target"
+_NET_TENANT = "t-net-topology"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_network_topology_lands_can_reach(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cycle 2 Task 2: ScanSources topology fields → network-threat feeder fires → CAN_REACH lands.
+
+    Two injected NetworkInstances with an SG-allowed reach:
+      foothold (sg-A) → target (sg-B, ingress allows sg-A on TCP:443)
+
+    After scan_run:
+      - all feeders ok=True (no feeder exception)
+      - the network-threat feeder executed
+      - a CAN_REACH relationship exists in the store from foothold → target
+
+    This is the pipeline-seam proof (Task 2). The full lateral-movement detector
+    that traverses CAN_REACH → VULNERABLE_TO is Task 4.
+    """
+    from charter.memory.graph_types import NodeCategory
+    from network_threat.tools.reachability import IngressRule, NetworkInstance, SecurityGroup
+
+    foothold = NetworkInstance(resource_id=_NET_FOOTHOLD, security_group_ids=("sg-A",))
+    target = NetworkInstance(resource_id=_NET_TARGET, security_group_ids=("sg-B",))
+    sg_a = SecurityGroup(group_id="sg-A", ingress=())
+    sg_b = SecurityGroup(
+        group_id="sg-B",
+        ingress=(IngressRule(protocol="tcp", from_port=443, to_port=443, source_sgs=("sg-A",)),),
+    )
+
+    sources = ScanSources(
+        network_instances=[foothold, target],
+        network_security_groups=[sg_a, sg_b],
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_NET_TENANT,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    # All executed feeders must have completed without exception.
+    assert all(f.ok for f in res.feeders), [f for f in res.feeders if not f.ok]
+
+    # The network-threat feeder must have executed (topology seam fires it).
+    feeder_names = {f.agent for f in res.feeders}
+    assert "network-threat" in feeder_names, (
+        f"network-threat feeder missing from {feeder_names}; "
+        "the 'needed' predicate must fire on network_instances is not None"
+    )
+
+    # A CAN_REACH edge must exist from foothold → target in the store.
+    from charter.memory import SemanticStore
+
+    store = SemanticStore(session_factory)
+    endpoints = await store.list_entities_by_type(
+        tenant_id=_NET_TENANT, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    ext_ids = {e.external_id for e in endpoints}
+    assert _NET_FOOTHOLD in ext_ids, (
+        f"foothold node {_NET_FOOTHOLD!r} not found in store; got {ext_ids}"
+    )
+    assert _NET_TARGET in ext_ids, f"target node {_NET_TARGET!r} not found in store; got {ext_ids}"
+
+    foothold_node = next(e for e in endpoints if e.external_id == _NET_FOOTHOLD)
+    neighbors = await store.neighbors(
+        tenant_id=_NET_TENANT,
+        entity_id=foothold_node.entity_id,
+        depth=1,
+        edge_types=("CAN_REACH",),
+    )
+    neighbor_ext_ids = [n.external_id for n in neighbors]
+    assert _NET_TARGET in neighbor_ext_ids, (
+        f"Expected CAN_REACH edge foothold→target in the store; "
+        f"foothold={_NET_FOOTHOLD!r}, neighbors={neighbor_ext_ids}. "
+        "Check that network_threat.run() writes record_reachability when "
+        "network_instances + security_groups are injected and semantic_store is set."
+    )

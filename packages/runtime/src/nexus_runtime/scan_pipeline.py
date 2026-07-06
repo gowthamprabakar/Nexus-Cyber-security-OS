@@ -21,6 +21,7 @@ remaining feeders are wired by their own tasks listed below.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -41,6 +42,7 @@ from identity.tools.aws_iam import IdentityListing
 from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
 from network_threat.agent import run as network_threat_run
+from network_threat.tools.reachability import NetworkInstance, SecurityGroup, VpcInstance
 from runtime_threat.agent import run as runtime_threat_run
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from threat_intel.agent import run as threat_intel_run
@@ -165,6 +167,12 @@ class ScanSources:
 
     # network-threat feed
     network_vpc_flow_feed: Path | None = None
+
+    # network-threat topology seam (Cycle 2, Task 2)
+    network_instances: Sequence[NetworkInstance] | None = None
+    network_security_groups: Sequence[SecurityGroup] | None = None
+    network_vpc_instances: Sequence[VpcInstance] | None = None
+    network_vpc_peerings: frozenset[frozenset[str]] | None = None
 
     # threat-intel snapshots
     threat_nvd_snapshot: Path | None = None
@@ -404,19 +412,27 @@ async def scan_run(
         ),
     )
 
-    # 6. network-threat (vpc_flow_feed)
+    # 6. network-threat (vpc_flow_feed or topology seam)
     await _feed(
         "network-threat",
-        sources.network_vpc_flow_feed is not None,
+        (
+            sources.network_vpc_flow_feed is not None
+            or sources.network_instances is not None
+            or sources.network_vpc_instances is not None
+        ),
         lambda: network_threat_run(
             _contract(
                 tenant,
                 "network_threat",
                 _NET_TOOLS,
                 workspace_root / "network_threat",
-                ["findings.json", "summary.md"],
+                ["findings.json", "report.md"],
             ),
             vpc_flow_feed=sources.network_vpc_flow_feed,
+            network_instances=sources.network_instances,
+            security_groups=sources.network_security_groups,
+            vpc_instances=sources.network_vpc_instances,
+            vpc_peerings=sources.network_vpc_peerings,
             semantic_store=store,
         ),
     )
