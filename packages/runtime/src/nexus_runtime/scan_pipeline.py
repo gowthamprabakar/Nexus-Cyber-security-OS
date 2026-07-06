@@ -40,6 +40,7 @@ from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
+from identity.tools.gcp_iam import GcpIamBinding, GcpServiceAccountKey
 from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
 from multi_cloud_posture.agent import run as multi_cloud_posture_run
@@ -163,6 +164,12 @@ class ScanSources:
 
     # identity feed
     identity_listing: IdentityListing | None = None
+    # GCP-SA identity seam (Cycle 4 P1 — gap #13 parity). When set, identity.run() calls the GCP
+    # IAM resolvers and writes the same graph edges as the AWS block (HAS_ACCESS_TO, CAN_ESCALATE_TO,
+    # OWNS/OWNED_BY for SA keys, external_trust). None → AWS-only behavior unchanged.
+    gcp_iam_bindings: tuple[GcpIamBinding, ...] | None = None
+    gcp_sa_keys: tuple[GcpServiceAccountKey, ...] | None = None
+    gcp_org_domain: str = ""
 
     # vulnerability feeds
     vuln_image_refs: tuple[str, ...] | None = None
@@ -405,7 +412,9 @@ async def scan_run(
     #    covers all CLOUD_RESOURCE nodes — both bucket and kms-key nodes)
     await _feed(
         "identity",
-        sources.identity_listing is not None,
+        sources.identity_listing is not None
+        or sources.gcp_iam_bindings is not None
+        or sources.gcp_sa_keys is not None,
         lambda: identity_run(
             _contract(
                 tenant,
@@ -416,6 +425,9 @@ async def scan_run(
             ),
             iam_listing=sources.identity_listing,
             semantic_store=store,
+            gcp_iam_bindings=sources.gcp_iam_bindings,
+            gcp_sa_keys=sources.gcp_sa_keys,
+            gcp_org_domain=sources.gcp_org_domain,
         ),
     )
 

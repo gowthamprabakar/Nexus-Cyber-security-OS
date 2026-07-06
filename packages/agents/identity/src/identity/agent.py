@@ -62,6 +62,18 @@ from identity.tools.federation import (
     detect_azure_federated_domains,
     detect_azure_oidc_providers,
 )
+from identity.tools.gcp_iam import (
+    GcpIamBinding,
+    GcpServiceAccountKey,
+    sa_key_ownership,
+    storage_read_grants,
+)
+from identity.tools.gcp_iam import (
+    escalation_grants as gcp_escalation_grants,
+)
+from identity.tools.gcp_iam import (
+    external_trust_grants as gcp_external_trust_grants,
+)
 from identity.tools.permission_paths import EffectiveGrant, resolve_effective_grants
 
 DEFAULT_NLAH_VERSION = "0.1.0"
@@ -147,6 +159,9 @@ async def run(
     assess_effective_perms: bool = False,
     semantic_store: SemanticStore | None = None,
     iam_listing: IdentityListing | None = None,
+    gcp_iam_bindings: tuple[GcpIamBinding, ...] | None = None,
+    gcp_sa_keys: tuple[GcpServiceAccountKey, ...] | None = None,
+    gcp_org_domain: str = "",
 ) -> FindingsReport:
     """Run the Identity Agent end-to-end under the runtime charter.
 
@@ -247,6 +262,32 @@ async def run(
             cred_grants = _credential_grants(listing)
             if cred_grants:
                 await kg.record_credential_ownership(cred_grants)
+
+            # P1 — GCP-SA identity seam (Cycle 4 gap #13 parity). When gcp_iam_bindings are
+            # injected, call the GCP resolvers and write the same graph edges as the AWS block
+            # above. None → AWS-only behavior unchanged.
+            if gcp_iam_bindings is not None:
+                gcp_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # storage_read_grants → HAS_ACCESS_TO (principal → GCS resource)
+                gcp_access = storage_read_grants(gcp_iam_bindings)
+                if gcp_access:
+                    await gcp_writer.record_access(gcp_access)
+                # escalation_grants → CAN_ESCALATE_TO (principal → owner)
+                gcp_esc = gcp_escalation_grants(gcp_iam_bindings)
+                if gcp_esc:
+                    await gcp_writer.record_escalation_grants(gcp_esc)
+                # external_trust_grants → external_trust=True on the member node (path 8)
+                if gcp_org_domain:
+                    gcp_ext = gcp_external_trust_grants(gcp_iam_bindings, org_domain=gcp_org_domain)
+                    if gcp_ext:
+                        await gcp_writer.record_external_trust([m for m, _ in gcp_ext])
+
+            if gcp_sa_keys is not None:
+                gcp_key_writer = KnowledgeGraphWriter(semantic_store, contract.customer_id)
+                # sa_key_ownership → OWNS + OWNED_BY (SA → SECRET(fingerprint))
+                gcp_key_grants = sa_key_ownership(gcp_sa_keys)
+                if gcp_key_grants:
+                    await gcp_key_writer.record_sa_credential_ownership(gcp_key_grants)
 
         findings = await normalize_to_findings(
             listing,
