@@ -60,6 +60,7 @@ _SEVERITY: dict[str, int] = {
     "cicd_compromise": 64,
     "stored_secret_to_data": 88,
     "k8s_escape_to_cloud_data": 82,
+    "rbac_escalation_to_cloud_data": 84,
 }
 
 
@@ -223,6 +224,14 @@ def _title(path_type: str, grp: _Group) -> str:
         return (
             f"A principal can escalate to admin{method_clause} and reach {dt or 'sensitive'} data"
         )
+    if path_type == "rbac_escalation_to_cloud_data":
+        role = grp.context.get("role_name", "")
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"K8s ServiceAccount is bound to a cluster-admin RBAC role ({role}) "
+            f"AND its IRSA cloud role can reach {dt or 'sensitive'} data — "
+            f"full cluster control plus cloud data breach"
+        )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -258,6 +267,9 @@ class AttackPathRanker:
         # SUBSUMES the same (principal, resource) surfacing again as a plain fine-grained grant —
         # otherwise the partner shows as both "External trust" and "Over-permissioned access".
         external_access: set[tuple[str, str]] = set()
+        # rbac_escalation_to_cloud_data (deeper combo) subsumed SA ids — a SA showing as the
+        # deep combo must NOT also appear as bare rbac_privilege_escalation.
+        subsumed_rbac_subjects: set[str] = set()
         for h in await self._kg.find_crown_jewel_exposure():
             g("crown_jewel", (h.workload_id, h.role_id, h.resource_id)).add(
                 (h.workload_id, h.image_id, h.role_id, h.resource_id),
@@ -332,7 +344,27 @@ class AttackPathRanker:
             )
         for ek in await self._kg.find_exposed_kms_key():
             g("exposed_kms_key", (ek.resource_id,)).add((ek.resource_id,), "kms-key")
+        for rc in await self._kg.find_rbac_escalation_to_cloud_data():
+            g(
+                "rbac_escalation_to_cloud_data",
+                (rc.subject_id, rc.cloud_role_id, rc.resource_id),
+            ).add(
+                (
+                    rc.subject_id,
+                    rc.admin_role_id,
+                    rc.cloud_role_id,
+                    rc.resource_id,
+                    rc.data_classification_id,
+                ),
+                rc.data_type,
+                role_name=rc.role_name,
+                data_type=rc.data_type,
+                sink=rc.data_classification_id,
+            )
+            subsumed_rbac_subjects.add(rc.subject_id)
         for rp in await self._kg.find_rbac_privilege_escalation():
+            if rp.subject_id in subsumed_rbac_subjects:
+                continue  # subsumed by the deeper rbac_escalation_to_cloud_data combo
             g("rbac_privilege_escalation", (rp.subject_id,)).add(
                 (rp.subject_id, rp.role_id), rp.subject_name, role_name=rp.role_name
             )
