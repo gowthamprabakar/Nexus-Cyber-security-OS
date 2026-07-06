@@ -52,8 +52,8 @@ readers write nodes+properties; detectors in `meta_harness.kg_query` traverse ex
 
 **Graph pattern (green-for-right-reason):**
 `CLOUD_RESOURCE{kind=ec2-instance, is_public=True, imdsv1_enabled=True}` --ASSUMES--> `IDENTITY`(role)
---HAS_ACCESS_TO--> `CLOUD_RESOURCE` --EXPOSES_DATA--> `DATA_CLASSIFICATION`. The discriminator is
-`imdsv1_enabled` — a public instance whose role reaches data is only _metadata-cred-stealable_ when
+--HAS*ACCESS_TO--> `CLOUD_RESOURCE` --EXPOSES_DATA--> `DATA_CLASSIFICATION`. The discriminator is
+`imdsv1_enabled` — a public instance whose role reaches data is only \_metadata-cred-stealable* when
 IMDSv1 is on (fix = enforce IMDSv2). Negative case: `imdsv1_enabled=False` (IMDSv2 enforced) stays dark.
 
 - [ ] **Step 1: Failing test — `Ec2Workload` carries IMDSv1 flag.** In cloud-posture tests, drive
@@ -82,7 +82,13 @@ IMDSv1 is on (fix = enforce IMDSv2). Negative case: `imdsv1_enabled=False` (IMDS
       `imds_credential_theft` path; assert IMDSv2 variant produces none.
 - [ ] **Step 11: Whole-repo `uv run mypy` + `packages/charter` guard + `ruff` clean. Commit.**
 
-### Task 2: Broadened / cross-cloud stored-secret extraction
+### Task 2: Broadened / cross-cloud stored-secret extraction — DEFERRED to Cycle 7
+
+> **Deferred (devil-critic, 2026-07-06):** broadening the extractor alone produces _dormant_ SECRET
+> nodes — `find_stored_secret_to_data` needs `secret --OWNED_BY--> identity --HAS_ACCESS_TO--> data`,
+> and no `OWNED_BY` edge exists for non-AKIA creds. No security hole today either (extractor is
+> AKIA-only). Cross-cloud stored secrets moves to **Cycle 7 (identity deepening)**, where the SA-key
+> ownership edge that _completes_ the path is built. Cycle 5 ships the IMDS archetype alone.
 
 **Files:**
 
