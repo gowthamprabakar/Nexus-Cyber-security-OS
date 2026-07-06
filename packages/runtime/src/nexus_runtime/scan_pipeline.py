@@ -40,6 +40,8 @@ from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
 from identity.agent import run as identity_run
 from identity.tools.aws_iam import IdentityListing
+from identity.tools.azure_ad import AzureAdListing
+from identity.tools.azure_rbac import AzureRoleAssignment
 from identity.tools.gcp_iam import GcpIamBinding, GcpServiceAccountKey
 from k8s_posture.agent import run as k8s_posture_run
 from meta_harness.scan import analyze
@@ -170,6 +172,11 @@ class ScanSources:
     gcp_iam_bindings: tuple[GcpIamBinding, ...] | None = None
     gcp_sa_keys: tuple[GcpServiceAccountKey, ...] | None = None
     gcp_org_domain: str = ""
+    # Azure-MI identity seam (Cycle 4 P1b — gap #13 parity). When set, identity.run() calls the
+    # Azure resolvers and writes the same graph edges (HAS_ACCESS_TO, CAN_ESCALATE_TO, OWNS/OWNED_BY
+    # for SP credential, external_trust for guest principals). None → unchanged behavior.
+    azure_role_assignments: tuple[AzureRoleAssignment, ...] | None = None
+    azure_ad_listing: AzureAdListing | None = None
 
     # vulnerability feeds
     vuln_image_refs: tuple[str, ...] | None = None
@@ -414,7 +421,9 @@ async def scan_run(
         "identity",
         sources.identity_listing is not None
         or sources.gcp_iam_bindings is not None
-        or sources.gcp_sa_keys is not None,
+        or sources.gcp_sa_keys is not None
+        or sources.azure_role_assignments is not None
+        or sources.azure_ad_listing is not None,
         lambda: identity_run(
             _contract(
                 tenant,
@@ -428,6 +437,8 @@ async def scan_run(
             gcp_iam_bindings=sources.gcp_iam_bindings,
             gcp_sa_keys=sources.gcp_sa_keys,
             gcp_org_domain=sources.gcp_org_domain,
+            azure_role_assignments=sources.azure_role_assignments,
+            azure_ad_listing=sources.azure_ad_listing,
         ),
     )
 
