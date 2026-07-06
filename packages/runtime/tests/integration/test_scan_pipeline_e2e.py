@@ -1422,3 +1422,162 @@ async def test_analyze_default_persist_false_writes_no_attack_path_nodes(
         f"persist=False (default) must write 0 ATTACK_PATH nodes, but found {len(nodes)}: "
         f"{[n.entity_id for n in nodes]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (cycle3-moat-productization): rbac_escalation_to_cloud_data fires
+# + subsumes bare rbac_privilege_escalation for the same SA.
+# ---------------------------------------------------------------------------
+
+_DEEP_RBAC_SA = "deep-admin-sa"
+_DEEP_RBAC_NAMESPACE = "prod"
+_DEEP_RBAC_ROLE = "cluster-admin"
+_DEEP_RBAC_IRSA_ROLE_ARN = "arn:aws:iam::123456789012:role/deep-rbac-cloud-role"
+
+
+class _AdminAndIrsaClusterReader:
+    """A ClusterReader whose SA 'deep-admin-sa' is both cluster-admin AND IRSA-mapped.
+
+    The same SA has:
+      - A BINDS edge to a ClusterRole with wildcard rules (is_admin=True)
+      - An IRSA annotation ``eks.amazonaws.com/role-arn`` pointing to _DEEP_RBAC_IRSA_ROLE_ARN
+
+    k8s-posture record_inventory writes both edges from the real inventory parser:
+      K8S_OBJECT(SA) --BINDS--> K8S_OBJECT{is_admin=True}
+      K8S_OBJECT(SA) --IRSA_MAPPING--> IDENTITY(_DEEP_RBAC_IRSA_ROLE_ARN)
+
+    identity's AdministratorAccess then writes:
+      IDENTITY(deep-rbac-cloud-role) --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+
+    data-security writes:
+      CLOUD_RESOURCE(acme-pii) --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+
+    Full chain for find_rbac_escalation_to_cloud_data:
+      K8S_OBJECT(SA) --BINDS--> K8S_OBJECT{is_admin=True}
+      K8S_OBJECT(SA) --IRSA_MAPPING--> IDENTITY(deep-rbac-cloud-role)
+        --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+        --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+    """
+
+    def list_namespaces(self) -> list[dict]:  # type: ignore[type-arg]
+        return [{"metadata": {"name": _DEEP_RBAC_NAMESPACE}}]
+
+    def list_service_accounts(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "metadata": {
+                    "name": _DEEP_RBAC_SA,
+                    "namespace": _DEEP_RBAC_NAMESPACE,
+                    "annotations": {
+                        "eks.amazonaws.com/role-arn": _DEEP_RBAC_IRSA_ROLE_ARN,
+                    },
+                }
+            }
+        ]
+
+    def list_roles(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "kind": "ClusterRole",
+                "metadata": {"name": _DEEP_RBAC_ROLE},
+                "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+            }
+        ]
+
+    def list_role_bindings(self) -> list[dict]:  # type: ignore[type-arg]
+        return [
+            {
+                "kind": "ClusterRoleBinding",
+                "metadata": {"name": f"{_DEEP_RBAC_ROLE}-binding"},
+                "roleRef": {"kind": "ClusterRole", "name": _DEEP_RBAC_ROLE},
+                "subjects": [
+                    {
+                        "kind": "ServiceAccount",
+                        "name": _DEEP_RBAC_SA,
+                        "namespace": _DEEP_RBAC_NAMESPACE,
+                    }
+                ],
+            }
+        ]
+
+
+def _deep_rbac_identity_listing() -> IdentityListing:
+    """An IAM role at _DEEP_RBAC_IRSA_ROLE_ARN with AdministratorAccess.
+
+    identity's _synthesize_admin_grants detects AdministratorAccess and writes
+    HAS_ACCESS_TO every CLOUD_RESOURCE — including acme-pii from data-security.
+    """
+    role = IamRole(
+        arn=_DEEP_RBAC_IRSA_ROLE_ARN,
+        name="deep-rbac-cloud-role",
+        role_id="AROA-DEEPRBAC",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    return IdentityListing(users=(), roles=(role,), groups=())
+
+
+@pytest.mark.asyncio
+async def test_scan_run_rbac_escalation_to_cloud_data_fires_and_subsumes(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """P4a: SA that is both cluster-admin AND IRSA→data fires the deep combo + subsumes bare rbac.
+
+    Four feeders cooperate in the shared SemanticStore:
+      1. data-security writes CLOUD_RESOURCE(acme-pii, is_public=True)
+                              --EXPOSES_DATA--> DATA_CLASSIFICATION(pii)
+      2. identity writes IDENTITY(deep-rbac-cloud-role)
+                         --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+         (AdministratorAccess expands to all resources)
+      3. k8s-posture (cluster_reader=_AdminAndIrsaClusterReader) writes:
+           K8S_OBJECT(SA:prod/deep-admin-sa) --BINDS--> K8S_OBJECT{cluster-admin, is_admin=True}
+           K8S_OBJECT(SA:prod/deep-admin-sa) --IRSA_MAPPING--> IDENTITY(deep-rbac-cloud-role)
+
+    Assertions:
+      - rbac_escalation_to_cloud_data path IS present (the deep combo fired)
+      - rbac_privilege_escalation path IS NOT present (subsumed by the deep combo for this SA)
+    """
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=_deep_rbac_identity_listing(),
+        k8s_cluster_reader=_AdminAndIrsaClusterReader(),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant="t-deep-rbac",
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "k8s-posture" in feeder_names, f"k8s-posture missing from {feeder_names}"
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+
+    # The deep combo must be present.
+    assert "rbac_escalation_to_cloud_data" in path_types, (
+        f"rbac_escalation_to_cloud_data not confirmed; got path_types={path_types}. "
+        f"Check: SA {_DEEP_RBAC_SA!r} in namespace {_DEEP_RBAC_NAMESPACE!r} must have "
+        f"BOTH a BINDS edge to an is_admin role AND an IRSA_MAPPING to "
+        f"{_DEEP_RBAC_IRSA_ROLE_ARN!r} which has HAS_ACCESS_TO acme-pii."
+    )
+
+    # The bare rbac_privilege_escalation must NOT appear for the same SA (subsumed).
+    assert "rbac_privilege_escalation" not in path_types, (
+        f"rbac_privilege_escalation should be subsumed by rbac_escalation_to_cloud_data "
+        f"for SA {_DEEP_RBAC_SA!r}; got path_types={path_types}. "
+        "Check the subsume guard in attack_paths.find_all."
+    )
