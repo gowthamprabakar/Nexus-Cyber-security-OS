@@ -37,10 +37,19 @@ from meta_harness.attack_paths import AttackPath
 _log = logging.getLogger(__name__)
 
 
-def _attack_path_external_id(path: AttackPath) -> str:
-    """Deterministic, stable key for a path — collapses same-path across runs."""
+def attack_path_external_id(path: AttackPath) -> str:
+    """Deterministic, stable key for a path — collapses same-path across runs.
+
+    Shared between the graph writer (P1) and the OCSF builder (P2) so that
+    ``finding_info.uid`` in the emitted OCSF 2005 finding equals the
+    ``external_id`` of the persisted ``ATTACK_PATH`` node, enabling SIEM dedup.
+    """
     raw = path.path_type + "|" + "|".join(sorted(path.entities))
     return "attackpath:" + hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+# Backward-compatible private alias (used by existing tests + internal calls).
+_attack_path_external_id = attack_path_external_id
 
 
 class AttackPathWriter(KnowledgeGraphWriterBase):
@@ -142,4 +151,4 @@ class AttackPathWriter(KnowledgeGraphWriterBase):
             await self.add_edge(node_id, path.sink_id, EdgeType.PART_OF_PATH, {})
 
 
-__all__ = ["AttackPathWriter"]
+__all__ = ["AttackPathWriter", "attack_path_external_id"]
