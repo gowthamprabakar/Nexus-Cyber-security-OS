@@ -28,6 +28,7 @@ _LABELS = {
     "runtime_exploit_vulnerable": "Active exploit on vulnerable workload",
     "malicious_destination": "Communicating with malicious IP",
     "lateral_movement": "Network lateral movement",
+    "lateral_reachable": "Network lateral movement (reachable)",
     "exposed_database": "Exposed managed database",
     "kms_key_access": "KMS key decrypt access to data",
     "cicd_compromise": "CI/CD pipeline compromise",

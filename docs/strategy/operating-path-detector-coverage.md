@@ -35,9 +35,17 @@
 
 ## Bottom Line
 
-**22 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (22 + 0 = 22)
+**24 LIVE-in-pipeline / 0 live-cloud-gated / 0 BLOCKED** (24 + 0 = 24)
 
-All 22 detectors are fully LIVE-in-pipeline. This merge combines PR #800 (last three detectors: `find_rbac_privilege_escalation`, `find_k8s_escape_to_cloud_data`, `find_internet_exposed_host_vulnerable`) with PR #799 (`find_kms_key_access`), reaching 22/22.
+22 detectors reached 22/22 across PR #797–#800. **Cycle 2 (branch `feat/cycle2-tier1-dead-signal`) adds 2 dead-signal detectors**, reaching 24/24:
+
+- **`find_lateral_movement_via_reachability`** — a public `CLOUD_RESOURCE{is_public}` foothold that `CAN_REACH` (same-VPC security-group) or `PEERED_WITH` (cross-VPC peering) an internal target that is either a vulnerable host (`VULNERABLE_TO` CVE, `impact=vulnerable_host`) or a managed datastore (`kind ∈ {rds-instance, kms-key}`, `impact=sensitive_resource`). **Derived/proactive** reachability — fires from config alone, before any traffic — distinct from the observed-flow `find_lateral_movement_to_vulnerable_host` (`COMMUNICATES_WITH`). Edges written by `network_threat.run()`'s injectable topology seam (`reach_grants`/`peering_reach_grants` over `NetworkInstance`/`SecurityGroup`/`VpcInstance`, fed by `ScanSources.network_instances`/`network_security_groups`/`network_vpc_instances`/`network_vpc_peerings`). Live `describe-security-groups` / VPC-peering readers stay operator-gated (see Known Scope Limits).
+- **`find_supply_chain_sbom`** — a public workload runs an image whose SBOM package has a CVE (`RUNS_IMAGE → image → CONTAINS_PACKAGE → SBOM_PACKAGE{name} → VULNERABLE_TO → CVE`), naming the vulnerable **dependency** (remediation granularity over the image-level `find_internet_exposed_vulnerable_workload`, which it **subsumes** for the same workload — no double-count). Edges already land in-pipeline (`vulnerability.run()` `record_sbom_packages` + cloud ECS `RUNS_IMAGE`); this promotes the generic candidate to a named first-class path.
+
+**Dropped from Cycle 2 as honest non-improvements** (deep-scoped; would add no detection):
+
+- the `sensitive_resource` generic-engine **sink** — it forced the full Python oracle to run on _every_ `find_generic_paths` call (a BP5 perf regression) and broke the CTE≡oracle equivalence; datastore-lateral is delivered directly by the named detector's `kind` check instead.
+- IAM group-privesc via **`MEMBER_OF`/`ATTACHED_TO`** — the identity `_synthesize_admin_grants` logic already folds group-inherited admin into the user's `HAS_ACCESS_TO`, so `find_fine_grained_data_exposure` already fires; a group-edge detector re-detects what's already detected.
 
 ## Known Scope Limits
 
@@ -56,6 +64,10 @@ EC2 and ECS topology (`is_public`, `private_ips`, `iac_artifact`, `RUNS_IMAGE`, 
 ### K8s pod reachability (POD_CAN_REACH): offline feeds carry no data
 
 `k8s_posture/kg_writer.record_pod_reachability` writes `POD_CAN_REACH` edges (W4 pod-to-pod lateral movement). This is not used by any current `find_*` detector in `kg_query.py`, so it does not affect any row in the table above. Observed network reachability from offline manifests is structurally unavailable; live-cluster-only.
+
+### Network topology (CAN_REACH/PEERED_WITH): pipeline-proven, live SG/peering reader deferred
+
+`find_lateral_movement_via_reachability` reads `CAN_REACH`/`PEERED_WITH` edges derived from security-group and VPC-peering config, written by `network_threat.run()`'s injectable topology seam (`reach_grants`/`peering_reach_grants` over injected `NetworkInstance`/`SecurityGroup`/`VpcInstance` dataclasses, fed via `ScanSources.network_instances`/`network_security_groups`/`network_vpc_instances`/`network_vpc_peerings`). The reachability compute is pure and offline-proven. The live `describe-security-groups` / VPC-peering readers (from real AWS credentials) are NOT wired — the detector is pipeline-proven with injected topology; live-cloud emission requires a boto-client wiring follow-on (same pattern as the cloud-posture topology limit above). The observed-flow `find_lateral_movement_to_vulnerable_host` (`COMMUNICATES_WITH`) remains the complementary reactive detector.
 
 ### Live cloud accounts: operator-gated
 
