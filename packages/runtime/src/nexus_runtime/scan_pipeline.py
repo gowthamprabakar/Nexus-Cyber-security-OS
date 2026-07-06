@@ -199,6 +199,12 @@ class ScanSources:
     # instance ARN so it joins the cloud-posture is_public node (find_internet_exposed_host_vulnerable).
     vuln_host_target: object | None = None
     vuln_host_target_arn: str | None = None
+    # Cycle 4 P3 — host-vuln cross-cloud multi-VM seam.  When set, the vulnerability
+    # feeder runs once per (target, arn) pair so each VM's host CVE keys on its native
+    # VM id (mc_vm_instances[].instance_id), making find_internet_exposed_host_vulnerable
+    # fire cross-cloud.  Takes precedence over the scalar vuln_host_target /
+    # vuln_host_target_arn when both are present.  None → scalar behavior unchanged.
+    vuln_host_targets: tuple[tuple[object, str], ...] | None = None
     # injectable exploitability maps — passed through to vulnerability_run so the
     # kg_writer stamps kev=True / epss scores on VULNERABLE_TO edges.  When None,
     # unchanged behavior (enrich=False offline run gets no enrichment).
@@ -462,26 +468,56 @@ async def scan_run(
     )
 
     # 4. vulnerability (image_refs scan or host scan; enrich=False keeps it deterministic/offline)
-    await _feed(
-        "vulnerability",
-        bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
-        lambda: vulnerability_run(
-            _contract(
-                tenant,
+    #
+    # Cycle 4 P3 — multi-VM host-vuln cross-cloud: when vuln_host_targets is set, run one
+    # vulnerability_run per (target, arn) pair so each VM's host CVE lands on the correct
+    # vm-instance node (join key = instance_id shared with mc_vm_instances).  Each run gets
+    # its own workspace subdirectory (vulnerability/vm_{i}) to avoid output collisions.
+    # The legacy scalar path (vuln_host_target / vuln_host_target_arn) is kept for backward
+    # compatibility — it triggers when vuln_host_targets is None.
+    if sources.vuln_host_targets is not None:
+        for _idx, (_ht, _arn) in enumerate(sources.vuln_host_targets):
+            _ht_cap, _arn_cap = _ht, _arn  # capture loop vars for the lambda
+            await _feed(
                 "vulnerability",
-                _VULN_TOOLS,
-                workspace_root / "vulnerability",
-                ["findings.json", "summary.md"],
+                True,
+                lambda _h=_ht_cap, _a=_arn_cap, _i=_idx: vulnerability_run(
+                    _contract(
+                        tenant,
+                        "vulnerability",
+                        _VULN_TOOLS,
+                        workspace_root / "vulnerability" / f"vm_{_i}",
+                        ["findings.json", "summary.md"],
+                    ),
+                    host_target=_h,
+                    host_target_arn=_a,
+                    enrich=False,
+                    kev_cve_ids=sources.vuln_kev_cve_ids,
+                    epss_scores=sources.vuln_epss_scores,
+                    semantic_store=store,
+                ),
+            )
+    else:
+        await _feed(
+            "vulnerability",
+            bool(sources.vuln_image_refs) or sources.vuln_host_target is not None,
+            lambda: vulnerability_run(
+                _contract(
+                    tenant,
+                    "vulnerability",
+                    _VULN_TOOLS,
+                    workspace_root / "vulnerability",
+                    ["findings.json", "summary.md"],
+                ),
+                image_refs=list(sources.vuln_image_refs or ()),
+                host_target=sources.vuln_host_target,  # type: ignore[arg-type]
+                host_target_arn=sources.vuln_host_target_arn,
+                enrich=False,
+                kev_cve_ids=sources.vuln_kev_cve_ids,
+                epss_scores=sources.vuln_epss_scores,
+                semantic_store=store,
             ),
-            image_refs=list(sources.vuln_image_refs or ()),
-            host_target=sources.vuln_host_target,  # type: ignore[arg-type]
-            host_target_arn=sources.vuln_host_target_arn,
-            enrich=False,
-            kev_cve_ids=sources.vuln_kev_cve_ids,
-            epss_scores=sources.vuln_epss_scores,
-            semantic_store=store,
-        ),
-    )
+        )
 
     # 5. k8s-posture (manifest_dir feed or injectable cluster_reader)
     await _feed(
