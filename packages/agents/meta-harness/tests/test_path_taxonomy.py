@@ -106,6 +106,7 @@ _OUT_OF_MODEL = {
     "leaked_credential",
     "exposed_database",
     "exposed_kms_key",
+    "exposed_kms_key_over_data",
     "rbac_privilege_escalation",
     "rbac_escalation_to_cloud_data",
     "lateral_movement",

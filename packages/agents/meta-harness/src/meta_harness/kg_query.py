@@ -276,6 +276,21 @@ class ExposedKmsKey:
 
 
 @dataclass(frozen=True, slots=True)
+class ExposedKmsKeyOverData:
+    """A public KMS key that ALSO protects classified data (path P4b).
+
+    The encryption boundary is internet-open AND it guards sensitive data — the combination
+    is worse than either leg alone: an attacker who reaches the public key policy can now
+    decrypt the classified data it protects.
+
+    Walk: ``CLOUD_RESOURCE{kind=kms-key, is_public=True} --EXPOSES_DATA--> DATA_CLASSIFICATION``."""
+
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExposedDatabase:
     """A publicly-accessible managed database (path #19) — an internet-facing data store. The
     resource itself is the finding; a managed DB is sensitive-by-assumption."""
@@ -1072,6 +1087,37 @@ class KgQuery:
             if r.properties.get("kind") == "kms-key" and r.properties.get("is_public") is True
         ]
 
+    async def find_exposed_kms_key_over_data(self) -> list[ExposedKmsKeyOverData]:
+        """Find public KMS keys that ALSO protect classified data (path P4b).
+
+        Intersection of two legs already written offline:
+        - Leg A: CLOUD_RESOURCE{kind=kms-key, is_public=True}  (the exposure)
+        - Leg B: kms-key --EXPOSES_DATA--> DATA_CLASSIFICATION  (the protected-data edge,
+          written by cloud-posture ``record_kms_protected_data``, read by ``find_kms_key_access``)
+
+        A key that matches BOTH legs is a higher-severity finding than a bare public key:
+        the encryption boundary is internet-open AND it guards classified data. Read-only."""
+        hits: list[ExposedKmsKeyOverData] = []
+        for r in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if r.properties.get("kind") != "kms-key" or r.properties.get("is_public") is not True:
+                continue
+            for expose in await self._edges_from(r.entity_id, (EdgeType.EXPOSES_DATA.value,)):
+                dc = await self._semantic_store.get_entity(
+                    tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                )
+                if dc is None:
+                    continue
+                hits.append(
+                    ExposedKmsKeyOverData(
+                        resource_id=r.entity_id,
+                        data_classification_id=dc.entity_id,
+                        data_type=str(dc.properties.get("data_type", "")),
+                    )
+                )
+        return hits
+
     async def find_exposed_database(self) -> list[ExposedDatabase]:
         """Find publicly-accessible managed databases (path #19). Self-seeded: a CLOUD_RESOURCE with
         ``kind=rds-instance`` and ``is_public`` — an internet-facing data store. Read-only."""
@@ -1520,6 +1566,7 @@ __all__ = [
     "CrownJewelExposure",
     "EscalationMethodToData",
     "ExposedAiWithSensitiveData",
+    "ExposedKmsKeyOverData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
     "InternetExposedVulnerableWorkload",

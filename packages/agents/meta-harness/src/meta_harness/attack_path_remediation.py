@@ -73,6 +73,13 @@ REMEDIATION: dict[str, FixAdvice] = {
         "investigate for C2/exfil, rotate its credentials, and block the malicious IP at the firewall.",
         auto_fixable=False,
     ),
+    "exposed_kms_key_over_data": FixAdvice(
+        "Remove the wildcard (Principal: *) statement from the KMS key policy to close the "
+        "internet-open boundary; this key protects classified data, so the exposure is "
+        "critical — an attacker who reaches the public key policy can decrypt the sensitive "
+        "data it protects. Scoped grants are left intact.",
+        auto_fixable=False,
+    ),
     "exposed_kms_key": FixAdvice(
         "Remove the wildcard (Principal: *) statement from the KMS key policy (auto-fixable — scoped "
         "grants are left intact); a public key policy defeats encryption-at-rest.",

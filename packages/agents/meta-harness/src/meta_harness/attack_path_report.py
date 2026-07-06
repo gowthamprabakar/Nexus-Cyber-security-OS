@@ -31,6 +31,7 @@ _LABELS = {
     "exposed_database": "Exposed managed database",
     "kms_key_access": "KMS key decrypt access to data",
     "cicd_compromise": "CI/CD pipeline compromise",
+    "exposed_kms_key_over_data": "Exposed KMS key protecting classified data",
     "exposed_kms_key": "Exposed KMS key policy",
     "internet_exposed_vulnerable": "Internet-exposed vulnerable workload",
     "internet_exposed_host_vulnerable": "Internet-exposed vulnerable host (EC2/VM)",

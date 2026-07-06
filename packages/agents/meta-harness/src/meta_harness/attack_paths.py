@@ -50,6 +50,7 @@ _SEVERITY: dict[str, int] = {
     "public_unencrypted": 75,
     "kms_key_access": 74,
     "escalation_method_to_data": 74,
+    "exposed_kms_key_over_data": 80,
     "exposed_kms_key": 72,
     "external_trust": 70,
     "exposed_ai_sensitive_data": 68,
@@ -169,6 +170,12 @@ def _title(path_type: str, grp: _Group) -> str:
         dt = grp.context.get("data_type", "") or _types_phrase(grp)
         return (
             f"A principal can use a KMS key that protects {dt or 'sensitive'} data (decrypt access)"
+        )
+    if path_type == "exposed_kms_key_over_data":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"KMS key policy is internet-open AND the key protects {dt or 'classified'} data "
+            f"— the encryption boundary is exposed and guards sensitive data"
         )
     if path_type == "exposed_kms_key":
         return "KMS key policy is internet-open (the encryption boundary is exposed)"
@@ -342,7 +349,20 @@ class AttackPathRanker:
                 cve_kev=re_.kev_listed,
                 cve_epss=re_.epss_score,
             )
+        # exposed_kms_key_over_data (deeper combo) subsumed KMS key resource_ids — a key showing
+        # as "public + protects classified data" must NOT also appear as a bare exposed_kms_key.
+        subsumed_kms_keys: set[str] = set()
+        for ekd in await self._kg.find_exposed_kms_key_over_data():
+            g("exposed_kms_key_over_data", (ekd.resource_id,)).add(
+                (ekd.resource_id, ekd.data_classification_id),
+                ekd.data_type,
+                data_type=ekd.data_type,
+                sink=ekd.data_classification_id,
+            )
+            subsumed_kms_keys.add(ekd.resource_id)
         for ek in await self._kg.find_exposed_kms_key():
+            if ek.resource_id in subsumed_kms_keys:
+                continue  # subsumed by the deeper exposed_kms_key_over_data combo
             g("exposed_kms_key", (ek.resource_id,)).add((ek.resource_id,), "kms-key")
         for rc in await self._kg.find_rbac_escalation_to_cloud_data():
             g(

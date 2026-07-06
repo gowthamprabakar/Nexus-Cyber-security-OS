@@ -44,6 +44,7 @@ _FIX: dict[str, str] = {
     "rbac_privilege_escalation": "Remove the role-assignment-write grant from the principal; scope to least privilege.",
     "rbac_escalation_to_cloud_data": "Remove the cluster-admin RoleBinding; scope the SA's IRSA cloud IAM role to least privilege so a cluster exploit cannot reach cloud data.",
     "public_unencrypted": "Make the resource private and enable encryption at rest.",
+    "exposed_kms_key_over_data": "Remove the wildcard KMS key-policy grant — this key protects classified data, so an internet-open policy is a direct data-breach path.",
     "exposed_kms_key": "Add a key-policy condition restricting use and remove broad grants.",
     "external_trust": "Restrict the cross-account/external trust to known principals only.",
     "exposed_ai_sensitive_data": "Restrict access to the AI service and the data it can reach.",
@@ -78,6 +79,7 @@ _INTERNET_FACING: frozenset[str] = frozenset(
         "supply_chain_sbom",
         "exposed_database",
         "exposed_kms_key",
+        "exposed_kms_key_over_data",
         "runtime_exploit_vulnerable",
     }
 )
