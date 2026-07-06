@@ -70,6 +70,13 @@ from network_threat.schemas import (
 )
 from network_threat.summarizer import render_summary
 from network_threat.tools.dns_log_reader import read_dns_logs
+from network_threat.tools.reachability import (
+    NetworkInstance,
+    SecurityGroup,
+    VpcInstance,
+    peering_reach_grants,
+    reach_grants,
+)
 from network_threat.tools.suricata_normalize import normalize_suricata_event
 from network_threat.tools.suricata_reader import read_suricata_alerts
 from network_threat.tools.vpc_flow_reader import read_vpc_flow_logs
@@ -151,6 +158,10 @@ async def run(
     zeek_stream: EventStream | None = None,
     realtime_max_events: int = DEFAULT_REALTIME_MAX_EVENTS,
     semantic_store: SemanticStore | None = None,
+    network_instances: Sequence[NetworkInstance] | None = None,
+    security_groups: Sequence[SecurityGroup] | None = None,
+    vpc_instances: Sequence[VpcInstance] | None = None,
+    vpc_peerings: frozenset[frozenset[str]] | None = None,
 ) -> FindingsReport:
     """Run the Network Threat Agent end-to-end under the runtime charter.
 
@@ -184,6 +195,25 @@ async def run(
             the observed network topology (flow endpoints + ``COMMUNICATES_WITH``
             edges) is written via ``KnowledgeGraphWriter`` after INGEST. Default
             None is inert — no graph writes, ``findings.json`` byte-identical.
+        network_instances: Cycle 2 topology seam. Injectable frozen
+            ``NetworkInstance`` objects (resource_id + security_group_ids). When
+            set alongside ``security_groups``, ``reach_grants`` derives
+            ``CAN_REACH`` edges (lateral-movement path: foothold→reachable target)
+            and lands them via ``record_reachability``. Pure computation — no
+            ``ctx.call_tool`` / ADR-016 budget impact. ``None`` skips (unchanged
+            behavior).
+        security_groups: Cycle 2 topology seam. Injectable ``SecurityGroup``
+            objects pairing a group_id with its ingress rules. Required alongside
+            ``network_instances`` for ``CAN_REACH`` writes; ignored when
+            ``network_instances`` is None.
+        vpc_instances: Cycle 2 topology seam. Injectable ``VpcInstance`` objects
+            (resource_id + vpc_id). When set alongside ``vpc_peerings``,
+            ``peering_reach_grants`` derives ``PEERED_WITH`` edges (cross-VPC
+            lateral path) and lands them via ``record_peering_reachability``.
+            ``None`` skips (unchanged behavior).
+        vpc_peerings: Cycle 2 topology seam. A frozenset of unordered VPC-id
+            pair frozensets. Required alongside ``vpc_instances`` for
+            ``PEERED_WITH`` writes; ignored when ``vpc_instances`` is None.
 
     Returns:
         The `FindingsReport`. Side effects: writes `findings.json` and
@@ -239,6 +269,14 @@ async def run(
         if semantic_store is not None:
             kg = KnowledgeGraphWriter(semantic_store, contract.customer_id)
             await kg.record_flows(flow_records)
+            if network_instances is not None and security_groups is not None:
+                grants = reach_grants(tuple(network_instances), tuple(security_groups))
+                if grants:
+                    await kg.record_reachability(grants)
+            if vpc_instances is not None and vpc_peerings is not None:
+                pgrants = peering_reach_grants(tuple(vpc_instances), vpc_peerings)
+                if pgrants:
+                    await kg.record_peering_reachability(pgrants)
 
         # Stage 2: PATTERN_DETECT — three deterministic detectors over the parsed feeds.
         detections = _detect(
