@@ -13,13 +13,32 @@ from __future__ import annotations
 
 _KEV_FLOOR = 0.9  # CISA KEV = weaponized in the wild -> P floored here via noisy-OR
 
+_LOGGING_DISABLED_LIFT = 1.15
+# Tunable expert prior — an attacker in an account with audit logging off (CloudTrail not logging
+# OR GuardDuty absent/disabled) completes paths unseen; ~15% lift, analogous to _KEV_FLOOR.
+# When logging_disabled=True, the computed probability is multiplied by this factor and clamped
+# to ≤ 1.0 (a probability must remain a probability).
 
-def leaf_probability(severity_score: int, *, kev: bool = False, epss: float | None = None) -> float:
+
+def leaf_probability(
+    severity_score: int,
+    *,
+    kev: bool = False,
+    epss: float | None = None,
+    logging_disabled: bool = False,
+) -> float:
     """P(the entry exposure is exploited). EPSS wins if present (already a probability);
-    else the 0-100 severity maps linearly into [0, 0.8]; KEV floors at 0.9 via noisy-OR."""
+    else the 0-100 severity maps linearly into [0, 0.8]; KEV floors at 0.9 via noisy-OR.
+
+    When ``logging_disabled=True`` (CloudTrail not logging OR GuardDuty absent/disabled), the
+    attacker operates unseen and the probability is lifted by ``_LOGGING_DISABLED_LIFT`` (clamped
+    to ≤ 1.0).  Defaults to False → no change in behavior (backward-compatible).
+    """
     p = float(epss) if epss is not None else max(0, min(100, severity_score)) / 100.0 * 0.8
     if kev:
         p = 1.0 - (1.0 - p) * (1.0 - _KEV_FLOOR)
+    if logging_disabled:
+        p = p * _LOGGING_DISABLED_LIFT
     return max(0.0, min(1.0, p))
 
 
@@ -53,4 +72,9 @@ EDGE_TRAVERSAL_PRIOR: dict[str, float] = {
 }
 DEFAULT_EDGE_PRIOR = 0.5  # unknown edge: coin-flip, never a silent 1.0
 
-__all__ = ["DEFAULT_EDGE_PRIOR", "EDGE_TRAVERSAL_PRIOR", "leaf_probability"]
+__all__ = [
+    "DEFAULT_EDGE_PRIOR",
+    "EDGE_TRAVERSAL_PRIOR",
+    "_LOGGING_DISABLED_LIFT",
+    "leaf_probability",
+]

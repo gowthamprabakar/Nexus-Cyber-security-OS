@@ -49,6 +49,7 @@ async def analyze(
     suppressed: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(),
     persist: bool = False,
     now: datetime | None = None,
+    logging_disabled: bool = False,
 ) -> ScanResult:
     """Run the bridge resolvers, then rank the confirmed + candidate attack paths. Read-only-ish:
     the only writes are the idempotent cross-agent bridge edges (``correlate_all``).
@@ -62,10 +63,15 @@ async def analyze(
 
     ``now`` — caller-supplied timestamp for ``first_seen`` / ``last_seen`` / OCSF time fields.
     Defaults to ``datetime.now(UTC)`` when ``persist=True`` and the caller omits it.  Ignored
-    when ``persist=False``."""
+    when ``persist=False``.
+
+    ``logging_disabled`` (default False) — passed through to ``rank_by_expected_loss`` to apply
+    the defense-evasion lift when the account's audit logging is off."""
     await correlate_all(store, tenant_id)
     confirmed = await AttackPathRanker(KgQuery(store, tenant_id)).find_all()
-    ranked = await rank_by_expected_loss(confirmed, store, tenant_id)
+    ranked = await rank_by_expected_loss(
+        confirmed, store, tenant_id, logging_disabled=logging_disabled
+    )
 
     ocsf_findings: list[dict[str, Any]] = []
     if persist:
