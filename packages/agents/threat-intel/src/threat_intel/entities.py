@@ -35,6 +35,13 @@ class IocEntity(BaseModel):
     The external_id encodes both the IOC kind and value to allow distinct
     IPv4/domain/url/file-hash IOCs sharing similar strings to coexist
     (e.g., ``ip:1.2.3.4`` vs a hypothetical ``url:1.2.3.4``).
+
+    ``actor_id`` / ``actor_name`` carry threat-actor attribution when the IOC
+    can be linked to a known intrusion-set (e.g. "APT29").  Population is
+    **operator-feed-dependent**: MITRE ATT&CK is TTP-focused, not IP→actor;
+    real attributed IP IOCs come from a STIX/TAXII feed the operator wires.
+    Both fields default to ``None`` (absent → no attribution, no change to
+    title/evidence/severity).
     """
 
     ioc_type: IocType
@@ -43,6 +50,8 @@ class IocEntity(BaseModel):
     last_seen: datetime
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     source_feed: str = Field(min_length=1)
+    actor_id: str | None = None
+    actor_name: str | None = None
 
     @property
     def external_id(self) -> str:
@@ -57,6 +66,8 @@ class IocEntity(BaseModel):
             "last_seen": self.last_seen.isoformat(),
             "confidence": self.confidence,
             "source_feed": self.source_feed,
+            "actor_id": self.actor_id or "",
+            "actor_name": self.actor_name or "",
         }
 
 

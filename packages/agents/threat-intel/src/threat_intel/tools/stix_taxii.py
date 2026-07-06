@@ -165,3 +165,52 @@ class TaxiiClient:
                 break
             params = {"next": str(body["next"])}
         return objects, cursor
+
+
+def extract_actor_map(objects: list[StixObject]) -> dict[str, tuple[str, str]]:
+    """Build a map of indicator_id → (actor_id, actor_name) from a parsed STIX bundle.
+
+    Scans intrusion-set objects and relationship objects whose
+    ``relationship_type`` is in ``{"indicates", "uses", "attributed-to"}`` and
+    that link an intrusion-set to an indicator (in either direction).  Also
+    falls back to an indicator's ``created_by_ref`` field if it points to an
+    intrusion-set.
+
+    Production actor-population is **operator-feed-dependent**: MITRE ATT&CK
+    is TTP-focused, not IP→actor; real attributed IP IOCs come from a
+    STIX/TAXII feed the operator wires.  This function is exercised offline via
+    a STIX fixture (intrusion-set + indicator + "indicates" relationship).
+
+    Returns a dict keyed by indicator STIX id, value = (actor_id, actor_name).
+    """
+    # Index intrusion-set objects by their STIX id.
+    actor_by_id: dict[str, tuple[str, str]] = {}
+    for obj in objects:
+        if obj.type in {"intrusion-set", "threat-actor"}:
+            actor_by_id[obj.id] = (obj.id, obj.name)
+
+    _ATTRIBUTION_RELS = frozenset({"indicates", "uses", "attributed-to"})
+    result: dict[str, tuple[str, str]] = {}
+
+    for obj in objects:
+        if obj.type == "relationship":
+            rel_type = str(obj.raw.get("relationship_type", ""))
+            if rel_type not in _ATTRIBUTION_RELS:
+                continue
+            src = str(obj.raw.get("source_ref", ""))
+            tgt = str(obj.raw.get("target_ref", ""))
+            # Relationship: intrusion-set --indicates/uses/attributed-to--> indicator
+            if src in actor_by_id and tgt.startswith("indicator--"):
+                result.setdefault(tgt, actor_by_id[src])
+            # Relationship: indicator --attributed-to--> intrusion-set
+            elif tgt in actor_by_id and src.startswith("indicator--"):
+                result.setdefault(src, actor_by_id[tgt])
+
+    # Fallback: indicator's created_by_ref → intrusion-set
+    for obj in objects:
+        if obj.type == "indicator" and obj.id not in result:
+            cbr = str(obj.raw.get("created_by_ref", ""))
+            if cbr in actor_by_id:
+                result[obj.id] = actor_by_id[cbr]
+
+    return result

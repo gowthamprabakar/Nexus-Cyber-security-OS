@@ -454,12 +454,19 @@ class RuntimeExploitVulnerableWorkload:
 class MaliciousDestinationExposure:
     """An owned cloud resource communicating with a known-malicious IP (cross-domain: network +
     threat-intel). The endpoint OWNED_BY the resource COMMUNICATES_WITH a destination that
-    MATCHES_INDICATOR a threat-intel IOC — active C2/exfil signal on the account's own resource."""
+    MATCHES_INDICATOR a threat-intel IOC — active C2/exfil signal on the account's own resource.
+
+    ``actor_id`` / ``actor_name`` carry threat-actor attribution when the IOC is linked to a known
+    intrusion-set (e.g. "APT29").  Population is operator-feed-dependent: both fields default to
+    ``""`` (absent → no attribution, title/evidence unchanged).
+    """
 
     resource_id: str
     destination_id: str
     indicator_id: str
     indicator_value: str
+    actor_id: str = ""
+    actor_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1569,6 +1576,8 @@ class KgQuery:
                     )
                     if ioc is None:
                         continue
+                    actor_id = str(ioc.properties.get("actor_id", ""))
+                    actor_name = str(ioc.properties.get("actor_name", ""))
                     for owner in owners:
                         hits.append(
                             MaliciousDestinationExposure(
@@ -1576,6 +1585,8 @@ class KgQuery:
                                 destination_id=comm.dst_entity_id,
                                 indicator_id=ioc.entity_id,
                                 indicator_value=str(ioc.properties.get("value", "")),
+                                actor_id=actor_id,
+                                actor_name=actor_name,
                             )
                         )
         return hits

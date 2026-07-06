@@ -49,9 +49,19 @@ async def drive_network_flows(
 
 
 async def drive_threat_intel_iocs(
-    store: SemanticStore, *, tenant_id: str, malicious_ips: tuple[str, ...]
+    store: SemanticStore,
+    *,
+    tenant_id: str,
+    malicious_ips: tuple[str, ...],
+    actor_id: str = "",
+    actor_name: str = "",
 ) -> None:
-    """Run threat-intel's REAL ``upsert_ioc`` for each known-malicious IP (an IOC of type ip)."""
+    """Run threat-intel's REAL ``upsert_ioc`` for each known-malicious IP (an IOC of type ip).
+
+    ``actor_id`` / ``actor_name`` are optional attribution fields.  When provided they are
+    written into the IOC's properties so the ``malicious_destination`` attack path can surface
+    the actor name in its title.  Defaults to ``""`` → all existing callers are byte-identical.
+    """
     writer = ThreatIntelKgWriter(store, tenant_id)
     for ip in malicious_ips:
         await writer.upsert_ioc(
@@ -61,6 +71,8 @@ async def drive_threat_intel_iocs(
                 first_seen=_T0,
                 last_seen=_T1,
                 source_feed="test-feed",
+                actor_id=actor_id or None,
+                actor_name=actor_name or None,
             )
         )
 

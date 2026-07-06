@@ -9,6 +9,7 @@ from threat_intel.tools.stix_taxii import (
     StixParseError,
     TaxiiClient,
     TaxiiError,
+    extract_actor_map,
     parse_stix_bundle,
     parse_stix_objects,
 )
@@ -161,3 +162,76 @@ async def test_transport_unreachable_after_retries() -> None:
 
     with pytest.raises(TaxiiError, match="unreachable after 3 attempts"):
         await TaxiiClient(_Dead(), max_retries=3).collections("https://taxii/api")
+
+
+# -------------------- extract_actor_map (Slice 2) ----------------------------
+
+# Minimal STIX fixture: 1 intrusion-set "APT29" + 1 indicator IP + "indicates" relationship.
+# Production actor-population is operator-feed-dependent (MITRE ATT&CK is TTP-focused, not
+# IP→actor); this fixture proves the offline path.
+_APT29 = {
+    "type": "intrusion-set",
+    "id": "intrusion-set--apt29",
+    "name": "APT29",
+    "modified": "2026-01-01T00:00:00Z",
+}
+_IND_IP = {
+    "type": "indicator",
+    "id": "indicator--bad-ip-1",
+    "name": "malicious-ip",
+    "modified": "2026-01-02T00:00:00Z",
+}
+_REL_INDICATES = {
+    "type": "relationship",
+    "id": "relationship--r1",
+    "relationship_type": "indicates",
+    "source_ref": "intrusion-set--apt29",
+    "target_ref": "indicator--bad-ip-1",
+    "modified": "2026-01-02T00:00:00Z",
+}
+
+
+def test_extract_actor_map_with_indicates_relationship() -> None:
+    """A minimal STIX fixture (intrusion-set + indicator + "indicates" rel) → actor map populated."""
+    objs = parse_stix_objects([_APT29, _IND_IP, _REL_INDICATES], only_relevant=True)
+    result = extract_actor_map(objs)
+    assert "indicator--bad-ip-1" in result
+    actor_id, actor_name = result["indicator--bad-ip-1"]
+    assert actor_name == "APT29"
+    assert actor_id == "intrusion-set--apt29"
+
+
+def test_extract_actor_map_without_relationship_returns_empty() -> None:
+    """Bundle with no relationship → actor map is empty (non-attributed IOC)."""
+    objs = parse_stix_objects([_APT29, _IND_IP], only_relevant=True)
+    result = extract_actor_map(objs)
+    assert result == {}
+
+
+def test_extract_actor_map_uses_relationship() -> None:
+    """'uses' relationship_type also triggers attribution."""
+    rel_uses = {
+        "type": "relationship",
+        "id": "relationship--r2",
+        "relationship_type": "uses",
+        "source_ref": "intrusion-set--apt29",
+        "target_ref": "indicator--bad-ip-1",
+        "modified": "2026-01-02T00:00:00Z",
+    }
+    objs = parse_stix_objects([_APT29, _IND_IP, rel_uses], only_relevant=True)
+    result = extract_actor_map(objs)
+    assert result.get("indicator--bad-ip-1", ("", ""))[1] == "APT29"
+
+
+def test_extract_actor_map_created_by_ref_fallback() -> None:
+    """Indicator with created_by_ref pointing to intrusion-set → fallback attribution."""
+    ind_with_ref = {
+        "type": "indicator",
+        "id": "indicator--bad-ip-2",
+        "name": "malicious-ip-2",
+        "created_by_ref": "intrusion-set--apt29",
+        "modified": "2026-01-03T00:00:00Z",
+    }
+    objs = parse_stix_objects([_APT29, ind_with_ref], only_relevant=True)
+    result = extract_actor_map(objs)
+    assert result.get("indicator--bad-ip-2", ("", ""))[1] == "APT29"

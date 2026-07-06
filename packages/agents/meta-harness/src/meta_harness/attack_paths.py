@@ -205,7 +205,11 @@ def _title(path_type: str, grp: _Group) -> str:
             f"({reach_kind}) — lateral movement"
         )
     if path_type == "malicious_destination":
-        return f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
+        base = f"Resource is communicating with a known-malicious IP ({_types_phrase(grp)})"
+        actor = grp.context.get("actor_name", "")
+        if actor:
+            return f"{base} — attributed to {actor}"
+        return base
     if path_type == "leaked_credential":
         return f"A live cloud credential is committed in source code and can reach {_types_phrase(grp)} data"
     if path_type == "public_secret":
@@ -434,7 +438,9 @@ class AttackPathRanker:
             g("exposed_database", (ed.resource_id,)).add((ed.resource_id,), ed.engine or "database")
         for md in await self._kg.find_resource_contacting_malicious_ip():
             g("malicious_destination", (md.resource_id,)).add(
-                (md.resource_id, md.destination_id), md.indicator_value
+                (md.resource_id, md.destination_id),
+                md.indicator_value,
+                actor_name=md.actor_name,
             )
         for lm in await self._kg.find_lateral_movement_to_vulnerable_host():
             g("lateral_movement", (lm.foothold_id, lm.target_id)).add(
