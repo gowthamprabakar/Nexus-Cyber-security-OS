@@ -230,7 +230,11 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
         EC2 runs an AMI, not a container image — host-vuln is a separate slice.)
         """
         for workload in workloads:
-            props: dict[str, Any] = {"kind": "ec2-instance", "is_public": workload.is_public}
+            props: dict[str, Any] = {
+                "kind": "ec2-instance",
+                "is_public": workload.is_public,
+                "imdsv1_enabled": workload.imdsv1_enabled,
+            }
             if workload.private_ips:
                 # The join key for the network-endpoint→instance OWNED_BY bridge (correlation).
                 props["private_ips"] = list(workload.private_ips)

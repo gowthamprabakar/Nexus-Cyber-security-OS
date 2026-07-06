@@ -197,6 +197,11 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "sensitive_data",
             ("CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA"),
         ),  # escalation_method_to_data (C-3)
+        (
+            "public_resource",
+            "sensitive_data",
+            ("ASSUMES", "HAS_ACCESS_TO", "EXPOSES_DATA"),
+        ),  # imds_credential_theft (Cycle 5): public EC2 --ASSUMES--> role --HAS_ACCESS_TO--> data
     }
 )
 
