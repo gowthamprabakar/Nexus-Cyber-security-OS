@@ -36,6 +36,7 @@ from cloud_posture.agent import run as cloud_posture_run
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
+from cloud_posture.tools.aws_lambda import LambdaWorkload
 from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
 from data_security.schemas import ClassifierLabel
@@ -247,6 +248,7 @@ class ScanSources:
     cloud_ecs_workloads: tuple[EcsWorkload, ...] | None = None
     cloud_kms_keys: tuple[KmsKey, ...] | None = None
     cloud_kms_protected_data: tuple[tuple[str, str], ...] | None = None
+    cloud_lambda_workloads: tuple[LambdaWorkload, ...] | None = None
     cloud_rds_instances: tuple[RdsInstance, ...] | None = None
 
     # k8s-posture injectable cluster reader (ClusterReader protocol, or None).
@@ -403,6 +405,7 @@ async def scan_run(
             or sources.cloud_ecs_workloads is not None
             or sources.cloud_kms_keys is not None
             or sources.cloud_kms_protected_data is not None
+            or sources.cloud_lambda_workloads is not None
             or sources.cloud_rds_instances is not None
         ),
         lambda: cloud_posture_run(
@@ -417,6 +420,7 @@ async def scan_run(
             ecs_workloads=sources.cloud_ecs_workloads,
             kms_keys=sources.cloud_kms_keys,
             kms_protected_data=sources.cloud_kms_protected_data,
+            lambda_workloads=sources.cloud_lambda_workloads,
             rds_instances=sources.cloud_rds_instances,
             semantic_store=store,
         ),

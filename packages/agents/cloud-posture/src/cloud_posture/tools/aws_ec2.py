@@ -37,6 +37,11 @@ class Ec2Workload:
     #: deployed from, read from a ``nexus:iac`` resource tag; the join key the code-to-cloud
     #: (``DEPLOYED_VIA``) resolver matches. "" when the resource carries no provenance tag.
     iac_artifact: str = ""
+    #: True when the instance metadata service is IMDSv1-accessible (HttpTokens=optional).
+    #: A public instance with IMDSv1 lets any attacker who reaches it steal the instance-role
+    #: credentials via the metadata endpoint (SSRF/IMDS credential theft). False when
+    #: HttpTokens=required (IMDSv2-only, safe). Default False (safe assumption on missing data).
+    imdsv1_enabled: bool = False
 
 
 def _instance_arn(instance_id: str, *, account_id: str, region: str) -> str:
@@ -106,6 +111,7 @@ def read_ec2_workloads(
             is_public = bool(instance.get("PublicIpAddress")) and _sg_allows_public(
                 ec2, _instance_sg_ids(instance)
             )
+            imdsv1_enabled = instance.get("MetadataOptions", {}).get("HttpTokens") == "optional"
             workloads.append(
                 Ec2Workload(
                     instance_arn=_instance_arn(
@@ -115,6 +121,7 @@ def read_ec2_workloads(
                     role_arn=_profile_role_arn(iam, instance.get("IamInstanceProfile")),
                     private_ips=_instance_private_ips(instance),
                     iac_artifact=_instance_iac_artifact(instance),
+                    imdsv1_enabled=imdsv1_enabled,
                 )
             )
     return workloads
