@@ -106,6 +106,11 @@ _ESCALATION_METHODS: tuple[tuple[frozenset[str], str, str], ...] = (
         "credential_mint",
         "iam.serviceAccountKeys.create",
     ),
+    (  # can mint an OAuth/OIDC token for a target SA and act as it
+        frozenset({"roles/iam.serviceAccountTokenCreator"}),
+        "sa_impersonation",
+        "iam.serviceAccounts.getOpenIdToken",
+    ),
 )
 
 
