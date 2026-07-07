@@ -96,6 +96,17 @@ DEFAULT_DORMANT_THRESHOLD_DAYS = 90
 # role assumption) and keeps the live SimulatePrincipalPolicy cost predictable.
 CURATED_RISK_ACTIONS: tuple[str, ...] = ("iam:*", "s3:*", "ec2:*", "sts:AssumeRole")
 
+# Cycle 8 Task 2: destructive-permissions detection. Actions that destroy/disable
+# data or key material — an attacker with these can ransom/wipe, not merely exfiltrate.
+_DESTRUCTIVE_ACTIONS: tuple[str, ...] = (
+    "s3:DeleteObject",
+    "s3:Delete*",
+    "s3:PutBucketPolicy",
+    "kms:ScheduleKeyDeletion",
+    "kms:DisableKey",
+    "kms:DeleteImportedKeyMaterial",
+)
+
 # AWS managed admin policy + customer-managed admin pattern.
 _ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
 
@@ -275,6 +286,16 @@ async def run(
             cred_grants = _credential_grants(listing)
             if cred_grants:
                 await kg.record_credential_ownership(cred_grants)
+
+            # W5 (Cycle 8 Task 2): principals whose permissions include destructive actions
+            # (delete objects/buckets, disable/delete KMS keys) → IDENTITY node gets
+            # destructive_permissions=True.  The blast multiplier in report_card uses this
+            # property.  AWS-only; offline; additive — does not touch the findings path.
+            destructive_arns = _destructive_principal_arns(listing)
+            if destructive_arns:
+                await KnowledgeGraphWriter(
+                    semantic_store, contract.customer_id
+                ).record_destructive_principals(destructive_arns)
 
             # P1 — GCP-SA identity seam (Cycle 4 gap #13 parity). When gcp_iam_bindings are
             # injected, call the GCP resolvers and write the same graph edges as the AWS block
@@ -795,6 +816,49 @@ def _escalation_grants(listing: IdentityListing) -> list[tuple[str, str, str, st
         ):
             for arn in _scoped_targets(passres, admin_roles):
                 emit(principal.arn, arn, "pass_privileged_role", "iam:PassRole")
+    return out
+
+
+def _has_destructive_permissions(
+    documents: list[dict[Any, Any]], boundary: dict[str, Any] | None
+) -> bool:
+    """True if, after permission-boundary capping, the principal may destroy/disable data or keys.
+
+    Cycle 8 Task 2: checks the destructive action set (_DESTRUCTIVE_ACTIONS) using the same
+    cap-aware ``_granted_capped`` / ``_allowed_action_resources`` helpers as escalation detection.
+    Returns True if ANY destructive action is allowed (wildcard actions like ``s3:Delete*`` are
+    matched via ``_action_matches`` in ``_granted_capped``).  Returns False when no destructive
+    action is found, or when a resolvable permission boundary blocks every matching action.
+    """
+    ar = _allowed_action_resources(documents)
+    return any(_granted_capped(ar, boundary, action) is not None for action in _DESTRUCTIVE_ACTIONS)
+
+
+def _destructive_principal_arns(listing: IdentityListing) -> list[str]:
+    """ARNs of IAM users + roles whose effective permissions include at least one destructive action.
+
+    Cycle 8 Task 2 — offline, AWS-only. Mirrors ``_externally_trusted_arns``: derived purely from
+    the policy documents already in the listing (customer-managed + inline + group-inherited).
+    Permission-boundary capping applied (gap #8) via ``_has_destructive_permissions``. Deduped,
+    order-preserving.
+    """
+    doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
+    group_by_name = {group.name: group for group in listing.groups}
+    out: list[str] = []
+    seen: set[str] = set()
+    principals: list[IamUser | IamRole] = [*listing.users, *listing.roles]
+    for principal in principals:
+        documents = [doc_by_arn[a] for a in principal.attached_policy_arns if a in doc_by_arn]
+        documents += [doc for _name, doc in principal.inline_policies]
+        for group_name in getattr(principal, "group_memberships", ()):
+            group = group_by_name.get(group_name)
+            if group is not None:
+                documents += [doc_by_arn[a] for a in group.attached_policy_arns if a in doc_by_arn]
+                documents += [doc for _name, doc in group.inline_policies]
+        boundary = _boundary_doc(principal, doc_by_arn)
+        if _has_destructive_permissions(documents, boundary) and principal.arn not in seen:
+            seen.add(principal.arn)
+            out.append(principal.arn)
     return out
 
 

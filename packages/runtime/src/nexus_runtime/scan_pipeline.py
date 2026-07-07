@@ -37,6 +37,7 @@ from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
 from cloud_posture.tools.aws_lambda import LambdaWorkload
+from cloud_posture.tools.aws_logging import AccountLoggingState
 from cloud_posture.tools.aws_rds import RdsInstance
 from data_security.agent import run as data_security_run
 from data_security.schemas import ClassifierLabel
@@ -250,6 +251,10 @@ class ScanSources:
     cloud_kms_protected_data: tuple[tuple[str, str], ...] | None = None
     cloud_lambda_workloads: tuple[LambdaWorkload, ...] | None = None
     cloud_rds_instances: tuple[RdsInstance, ...] | None = None
+    # Cycle 8 T1 — defense-evasion ranking enrichment.  When set, the ranking model applies
+    # _LOGGING_DISABLED_LIFT to every attack path in this account if logging_disabled is True
+    # (CloudTrail not logging OR GuardDuty absent/disabled).  None → False → unchanged behavior.
+    cloud_logging_state: AccountLoggingState | None = None
 
     # k8s-posture injectable cluster reader (ClusterReader protocol, or None).
     # When set, the offline k8s-posture path calls inventory_from_reader → record_inventory,
@@ -652,7 +657,15 @@ async def scan_run(
     # ------------------------------------------------------------------
     # analyze always runs on whatever the feeders wrote (partial is fine)
     # ------------------------------------------------------------------
-    scan_result = await analyze(store, tenant, persist=True, now=datetime.now(UTC))
+    scan_result = await analyze(
+        store,
+        tenant,
+        persist=True,
+        now=datetime.now(UTC),
+        logging_disabled=(
+            sources.cloud_logging_state is not None and sources.cloud_logging_state.logging_disabled
+        ),
+    )
 
     return ScanRunResult(
         confirmed=list(scan_result.confirmed),

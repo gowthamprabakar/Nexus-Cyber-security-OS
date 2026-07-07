@@ -235,6 +235,56 @@ async def test_rank_by_expected_loss_kev_outranks_non_kev_at_equal_severity_and_
 
 
 @pytest.mark.asyncio
+async def test_logging_disabled_lift_raises_every_path_expected_loss() -> None:
+    """Cycle 8 T1 — logging_disabled=True must increase every path's expected_loss vs False.
+
+    Two identical paths (same severity, kev=False, epss=None, equal blast).  Run
+    rank_by_expected_loss twice: once with logging_disabled=False (baseline) and once with True.
+    Every path in the logging_disabled=True run must have strictly higher expected_loss.
+    Ordering among paths within a single run is unchanged (uniform lift preserves rank order —
+    but we assert per-path expected_loss increased, not ordering, since both paths are equal).
+    """
+    tenant = "rl-logging-lift"
+    async with in_memory_semantic_store() as store:
+        # Two identical paths: each principal reaches 1 data store, equal severity.
+        principalA, dcsA = await _wire_principal_to_n_data_stores(store, tenant, "arn:role/LA", 1)
+        principalB, dcsB = await _wire_principal_to_n_data_stores(store, tenant, "arn:role/LB", 1)
+
+        path_a = AttackPath(
+            path_type="fine_grained_data",
+            severity=_SEV,
+            title="path LA",
+            entities=(principalA,),
+            sink_id=dcsA[0],
+        )
+        path_b = AttackPath(
+            path_type="fine_grained_data",
+            severity=_SEV,
+            title="path LB",
+            entities=(principalB,),
+            sink_id=dcsB[0],
+        )
+
+        baseline = await rank_by_expected_loss(
+            [path_a, path_b], store, tenant, logging_disabled=False
+        )
+        lifted = await rank_by_expected_loss([path_a, path_b], store, tenant, logging_disabled=True)
+
+        assert len(baseline) == 2
+        assert len(lifted) == 2
+
+        # Build dicts keyed by path title for easy per-path comparison.
+        baseline_loss = {p.title: el for p, el, _ in baseline}
+        lifted_loss = {p.title: el for p, el, _ in lifted}
+
+        for title in ("path LA", "path LB"):
+            assert lifted_loss[title] > baseline_loss[title], (
+                f"logging_disabled lift must increase expected_loss for {title!r}: "
+                f"baseline={baseline_loss[title]:.4f} lifted={lifted_loss[title]:.4f}"
+            )
+
+
+@pytest.mark.asyncio
 async def test_rank_by_expected_loss_resource_reach_blast_not_fallback() -> None:
     """_blast must count data stores via resource_reach, not fall back to 1 for resource-entity paths.
 

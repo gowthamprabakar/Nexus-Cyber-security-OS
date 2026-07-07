@@ -69,6 +69,11 @@ _DEFAULT_FIX = "Review this exposure and apply least privilege."
 _DEFAULT_SEVERITY = 50
 
 
+#: Tunable expert prior — a principal that can DESTROY (not just read) data has a higher blast
+#: radius: the attacker can ransom/wipe, not merely exfiltrate.  Applied once per path when any
+#: entity in principal_reach carries destructive_permissions=True.
+_DESTRUCTIVE_LIFT: float = 1.5
+
 #: path_types that begin at an internet-facing exposure (reachable from outside → more exploitable).
 _INTERNET_FACING: frozenset[str] = frozenset(
     {
@@ -190,6 +195,7 @@ async def rank_by_expected_loss(
     *,
     principal_reach: dict[str, set[str]] | None = None,
     resource_reach: dict[str, set[str]] | None = None,
+    logging_disabled: bool = False,
 ) -> list[tuple[AttackPath, float, int]]:
     """Rank *paths* by expected loss = P(sink compromised) x blast_radius.
 
@@ -198,8 +204,9 @@ async def rank_by_expected_loss(
     Every input path appears in the output — the ranker is total.
 
     Scoring:
-    - ``route_p = leaf_probability(p.severity, kev=p.kev, epss=p.epss)``
+    - ``route_p = leaf_probability(p.severity, kev=p.kev, epss=p.epss, logging_disabled=logging_disabled)``
       Uses the REAL per-path KEV/EPSS (not the hard-coded ``kev=False`` in build_report_card).
+      When ``logging_disabled=True``, applies the defense-evasion lift uniformly to every path.
     - Paths sharing a ``sink_id`` are grouped; ``sink_p = noisy-OR`` of their route_ps.
       A path with empty ``sink_id`` uses its own ``route_p`` as ``sink_p`` (fallback: no shared
       sink context available, so we treat it as an independent route to its own sink).
@@ -209,6 +216,9 @@ async def rank_by_expected_loss(
     ``principal_reach`` and ``resource_reach`` are optional pre-built maps from
     ``find_fine_grained_data_exposure``; when provided the ranker skips its own query so callers
     that already hold those maps (e.g. ``build_report_card``) avoid the duplicate DB round-trip.
+
+    ``logging_disabled`` (default False) mirrors how KEV is threaded: an optional signal that lifts
+    every route's probability when the account's audit logging is off (defense-evasion enrichment).
     """
     if principal_reach is None or resource_reach is None:
         kq = KgQuery(store, tenant_id)
@@ -226,8 +236,21 @@ async def rank_by_expected_loss(
     scored: list[tuple[AttackPath, float, int]] = []
     routes_by_sink: dict[str, list[float]] = {}
     for p in paths:
-        route_p = leaf_probability(p.severity, kev=p.kev, epss=p.epss)
+        route_p = leaf_probability(
+            p.severity, kev=p.kev, epss=p.epss, logging_disabled=logging_disabled
+        )
         blast = _blast(p.entities, principal_reach, resource_reach)
+        # Cycle 8 Task 2 — destructive-permissions blast lift: if any principal entity in this
+        # path (those that appear in principal_reach, i.e. IDENTITY nodes the reach map covers)
+        # carries destructive_permissions=True, multiply blast by _DESTRUCTIVE_LIFT (x1.5).
+        # Applied at most once per path (one multiplication regardless of how many destructive
+        # principals appear). Absent the property → blast unchanged → all existing tests stay green.
+        for eid in p.entities:
+            if eid in principal_reach:
+                ent = await store.get_entity(tenant_id=tenant_id, entity_id=eid)
+                if ent is not None and ent.properties.get("destructive_permissions"):
+                    blast = round(blast * _DESTRUCTIVE_LIFT)
+                    break  # cap: apply once per path
         scored.append((p, route_p, blast))
         if p.sink_id:
             routes_by_sink.setdefault(p.sink_id, []).append(route_p)
@@ -247,7 +270,7 @@ async def rank_by_expected_loss(
 
 
 async def build_report_card(
-    store: SemanticStore, tenant: str, *, top_n: int = 10
+    store: SemanticStore, tenant: str, *, top_n: int = 10, logging_disabled: bool = False
 ) -> list[AttackPathCard]:
     """Build the ranked, fix-annotated report card for ``tenant`` from the shared graph.
 
@@ -255,6 +278,10 @@ async def build_report_card(
     noisy-OR over every route reaching that sink (the belief network). Named paths contribute
     ``leaf_probability(severity)`` (severity is the curated per-archetype danger); generic paths
     contribute ``route_probability`` over their real edge signature.
+
+    ``logging_disabled`` (default False) applies the defense-evasion lift
+    (``_LOGGING_DISABLED_LIFT``) to every path when the account's audit logging is off (CloudTrail
+    not logging OR GuardDuty absent/disabled). Mirrors how KEV is threaded as an optional signal.
     """
     kq = KgQuery(store, tenant)
 
@@ -287,13 +314,16 @@ async def build_report_card(
         tenant,
         principal_reach=principal_reach,
         resource_reach=resource_reach,
+        logging_disabled=logging_disabled,
     )
     _named_blast: dict[int, int] = {id(p): blast for p, _el, blast in ranked_named}
 
     named_entities_by_type: dict[str, set[str]] = {}
     for ap in named_paths:
         chain = await _labels(ap.entities)
-        route_p = leaf_probability(ap.severity, kev=ap.kev, epss=ap.epss)
+        route_p = leaf_probability(
+            ap.severity, kev=ap.kev, epss=ap.epss, logging_disabled=logging_disabled
+        )
         rows.append(
             (
                 ap.severity,
@@ -315,7 +345,7 @@ async def build_report_card(
             continue
         chain = cand.path.node_labels
         sev = _GENERIC_SEVERITY.get(pt) or _SEVERITY.get(pt, _DEFAULT_SEVERITY)
-        leaf = leaf_probability(sev, kev=cand.path.sink_kev)
+        leaf = leaf_probability(sev, kev=cand.path.sink_kev, logging_disabled=logging_disabled)
         route_p = route_probability(leaf, cand.path.edge_signature)
         rows.append(
             (
@@ -399,6 +429,7 @@ async def render_tenant_report_card(store: SemanticStore, tenant: str, *, top_n:
 
 
 __all__ = [
+    "_DESTRUCTIVE_LIFT",
     "AttackPathCard",
     "build_report_card",
     "rank_by_expected_loss",
