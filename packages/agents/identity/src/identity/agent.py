@@ -711,19 +711,26 @@ def _scoped_targets(resources: list[str], candidates: set[str]) -> set[str]:
 def _escalation_grants(listing: IdentityListing) -> list[tuple[str, str, str, str]]:
     """``(principal_arn, target_arn, method, via_action)`` privilege-escalation edges → CAN_ESCALATE_TO.
 
-    Thin slice #1: 5 IAM methods, target = an ADMIN principal (the cleanest 'more privileged'
-    definition). An edge is emitted ONLY when the trigger action AND a resolvable admin target are
-    both present — a bare risky action is never an edge. A permission boundary that doesn't allow the
-    trigger action caps it (gap #8). Offline; deduped. Reuses ``_synthesize_admin_grants`` for the
-    admin set so privilege comparison isn't reinvented.
+    18 IAM methods (was 5).  Target may be an ADMIN principal (methods 1-6, 9-11) or ANY user/role
+    whose HAS_ACCESS_TO chain reaches data (methods 7-8, 13-18 — the core deepening).
+
+    An edge is emitted ONLY when the trigger action AND a resolvable target (within the action's
+    resource scope) are both present — a bare risky action is never an edge.  A permission boundary
+    that doesn't allow the trigger action caps it (gap #8).  Offline; deduped.  Reuses
+    ``_synthesize_admin_grants`` for the admin set.
+
+    Gate refactor: the early-exit ``if not admin_arns`` is removed — NON-ADMIN-target methods
+    (7, 8, 13-18) are meaningful even when the account has no admin principal.  ADMIN-target methods
+    (1-6, 9-11) guard themselves naturally: their loops over ``admin_arns`` / ``admin_roles`` /
+    ``admin_users`` emit nothing when those sets are empty.
     """
     admin_arns = {g.principal_arn for g in _synthesize_admin_grants(listing) if g.is_admin}
-    if not admin_arns:
-        return []
     doc_by_arn = {policy.arn: policy.document for policy in listing.policies}
     group_by_name = {group.name: group for group in listing.groups}
     admin_roles = {r.arn for r in listing.roles if r.arn in admin_arns}
     admin_users = {u.arn for u in listing.users if u.arn in admin_arns}
+    all_user_arns = {u.arn for u in listing.users}
+    all_role_arns = {r.arn for r in listing.roles}
     attached_to: dict[str, set[str]] = {}  # policy ARN -> principals it's attached to
     all_principals: list[IamUser | IamRole | IamGroup] = [
         *listing.users,
@@ -777,13 +784,13 @@ def _escalation_grants(listing: IdentityListing) -> list[tuple[str, str, str, st
                 if "*" in res or parn in res:
                     for adm in holders & admin_arns:
                         emit(principal.arn, adm, "policy_rewrite", "iam:CreatePolicyVersion")
-        # 3. trust_rewrite — rewrite an admin role's trust to allow self → assume it.
+        # 3. trust_rewrite — rewrite an admin role's trust to allow self → assume it (admin target).
         res = _granted_capped(ar, boundary, "iam:UpdateAssumeRolePolicy")
         if res is not None:
             for arn in _scoped_targets(res, admin_roles):
                 emit(principal.arn, arn, "trust_rewrite", "iam:UpdateAssumeRolePolicy")
         # 4. credential_mint — mint creds/login for an admin user.
-        for act in ("iam:CreateAccessKey", "iam:CreateLoginProfile"):
+        for act in ("iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:UpdateLoginProfile"):
             res = _granted_capped(ar, boundary, act)
             if res is not None:
                 for arn in _scoped_targets(res, admin_users):
@@ -795,6 +802,98 @@ def _escalation_grants(listing: IdentityListing) -> list[tuple[str, str, str, st
         ):
             for arn in _scoped_targets(passres, admin_roles):
                 emit(principal.arn, arn, "pass_privileged_role", "iam:PassRole")
+
+        # 6. set_default_policy_version — roll a customer-managed policy version to elevate an admin.
+        res = _granted_capped(ar, boundary, "iam:SetDefaultPolicyVersion")
+        if res is not None:
+            for parn, holders in attached_to.items():
+                if parn.startswith("arn:aws:iam::aws:policy/"):
+                    continue  # skip AWS-managed policies
+                if "*" in res or parn in res:
+                    for adm in holders & admin_arns:
+                        emit(
+                            principal.arn,
+                            adm,
+                            "set_default_policy_version",
+                            "iam:SetDefaultPolicyVersion",
+                        )
+
+        # 7. create_access_key_on_other — create access key for a NON-admin user (data-reach target).
+        res = _granted_capped(ar, boundary, "iam:CreateAccessKey")
+        if res is not None:
+            for arn in _scoped_targets(res, all_user_arns - admin_users):
+                emit(principal.arn, arn, "create_access_key_on_other", "iam:CreateAccessKey")
+
+        # 8. update_login_profile — update console password for ANY user (admin covered by m4 above).
+        res = _granted_capped(ar, boundary, "iam:UpdateLoginProfile")
+        if res is not None:
+            for arn in _scoped_targets(res, all_user_arns):
+                emit(principal.arn, arn, "update_login_profile", "iam:UpdateLoginProfile")
+
+        # 9. attach_group_policy — attach an admin policy to an admin group.
+        res = _granted_capped(ar, boundary, "iam:AttachGroupPolicy")
+        if res is not None:
+            admin_groups = {g.arn for g in listing.groups if g.arn in admin_arns}
+            for arn in _scoped_targets(res, admin_groups):
+                emit(principal.arn, arn, "attach_group_policy", "iam:AttachGroupPolicy")
+
+        # 10. put_group_policy — inline-policy an admin group.
+        res = _granted_capped(ar, boundary, "iam:PutGroupPolicy")
+        if res is not None:
+            admin_groups = {g.arn for g in listing.groups if g.arn in admin_arns}
+            for arn in _scoped_targets(res, admin_groups):
+                emit(principal.arn, arn, "put_group_policy", "iam:PutGroupPolicy")
+
+        # 11. add_user_to_group — join an admin group → inherit admin.
+        res = _granted_capped(ar, boundary, "iam:AddUserToGroup")
+        if res is not None:
+            admin_groups = {g.arn for g in listing.groups if g.arn in admin_arns}
+            for arn in _scoped_targets(res, admin_groups):
+                emit(principal.arn, arn, "add_user_to_group", "iam:AddUserToGroup")
+
+        # 13-16. per-service pass_role to a NON-admin role (the data-reach core).
+        passres = _granted_capped(ar, boundary, "iam:PassRole")
+        non_admin_roles = all_role_arns - admin_roles
+        _PER_SERVICE_PASS: list[tuple[str | tuple[str, ...], str]] = [
+            (("lambda:CreateFunction", "lambda:UpdateFunctionCode"), "lambda_pass_role"),
+            ("ec2:RunInstances", "ec2_pass_role"),
+            ("glue:CreateDevEndpoint", "glue_pass_role"),
+            ("cloudformation:CreateStack", "cloudformation_pass_role"),
+        ]
+        if passres is not None:
+            for launch_spec, method_name in _PER_SERVICE_PASS:
+                launch_actions = (launch_spec,) if isinstance(launch_spec, str) else launch_spec
+                if any(_granted_capped(ar, boundary, la) is not None for la in launch_actions):
+                    for arn in _scoped_targets(passres, non_admin_roles):
+                        emit(principal.arn, arn, method_name, "iam:PassRole")
+
+        # 17. create_instance_profile — attach a role to a new EC2 instance profile → role takeover.
+        if (
+            _granted_capped(ar, boundary, "iam:CreateInstanceProfile") is not None
+            and _granted_capped(ar, boundary, "iam:AddRoleToInstanceProfile") is not None
+            and _granted_capped(ar, boundary, "ec2:RunInstances") is not None
+        ):
+            # passres may be None here if PassRole isn't granted; use "*" scope as fallback.
+            profile_scope = passres if passres is not None else ["*"]
+            for arn in _scoped_targets(profile_scope, all_role_arns):
+                emit(
+                    principal.arn,
+                    arn,
+                    "create_instance_profile",
+                    "iam:CreateInstanceProfile",
+                )
+
+        # 18. update_assume_role_policy_any — rewrite any non-admin role's trust to allow self.
+        res = _granted_capped(ar, boundary, "iam:UpdateAssumeRolePolicy")
+        if res is not None:
+            for arn in _scoped_targets(res, non_admin_roles):
+                emit(
+                    principal.arn,
+                    arn,
+                    "update_assume_role_policy_any",
+                    "iam:UpdateAssumeRolePolicy",
+                )
+
     return out
 
 
