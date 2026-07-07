@@ -201,7 +201,7 @@ NAMED_SHAPES: frozenset[tuple[str, str, tuple[str, ...]]] = frozenset(
             "public_resource",
             "sensitive_data",
             ("ASSUMES", "HAS_ACCESS_TO", "EXPOSES_DATA"),
-        ),  # imds_credential_theft (Cycle 5): public EC2 --ASSUMES--> role --HAS_ACCESS_TO--> data
+        ),  # imds_credential_theft (C5) + serverless_lambda_exposure (C6): public resource --ASSUMES--> role --HAS_ACCESS_TO--> data
     }
 )
 

@@ -63,6 +63,7 @@ from cloud_posture.tools import aws_account_discovery, aws_iam, aws_s3, prowler
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
 from cloud_posture.tools.aws_kms import KmsKey
+from cloud_posture.tools.aws_lambda import LambdaWorkload
 from cloud_posture.tools.aws_rds import RdsInstance
 from cloud_posture.tools.kg_writer import KnowledgeGraphWriter
 from cloud_posture.tools.stored_secrets import stored_secret_grants
@@ -347,6 +348,7 @@ async def run(
     ecs_workloads: Sequence[EcsWorkload] | None = None,
     kms_keys: Sequence[KmsKey] | None = None,
     kms_protected_data: Sequence[tuple[str, str]] | None = None,
+    lambda_workloads: Sequence[LambdaWorkload] | None = None,
     rds_instances: Sequence[RdsInstance] | None = None,
 ) -> FindingsReport:
     """Run the Cloud Posture Agent end-to-end under the runtime charter.
@@ -373,6 +375,11 @@ async def run(
     `kms_key_access` detector (NEX-202a). Each tuple is ``(kms_key_arn, data_type)``
     — the key protects data of that type. When provided, written via
     `record_kms_protected_data`; when None, skipped (no-op).
+
+    Cycle 6 extension: `lambda_workloads` follows the same seam — public Lambda
+    functions (Function URL with AuthType=NONE or wildcard resource policy) whose
+    execution role reaches sensitive data surface as ``serverless_lambda_exposure``
+    paths. When None, skipped (no-op).
     """
     del llm_provider  # reserved for future iterations
 
@@ -492,6 +499,7 @@ async def run(
                 ecs_workloads=ecs_workloads,
                 kms_keys=kms_keys,
                 kms_protected_data=kms_protected_data,
+                lambda_workloads=lambda_workloads,
                 rds_instances=rds_instances,
             )
 
@@ -544,9 +552,10 @@ async def _write_topology_to_kg(
     ecs_workloads: Sequence[EcsWorkload] | None,
     kms_keys: Sequence[KmsKey] | None,
     kms_protected_data: Sequence[tuple[str, str]] | None,
+    lambda_workloads: Sequence[LambdaWorkload] | None,
     rds_instances: Sequence[RdsInstance] | None,
 ) -> None:
-    """Write EC2/ECS/KMS/RDS topology nodes+edges into the KG when workloads are provided.
+    """Write EC2/ECS/KMS/RDS/Lambda topology nodes+edges into the KG when workloads are provided.
 
     NEX-004a injectable seam: when the caller supplies workloads (offline / pipeline /
     test), they are written directly via KnowledgeGraphWriter without hitting live AWS
@@ -578,5 +587,7 @@ async def _write_topology_to_kg(
         await kg.record_kms_keys(kms_keys)
     if kms_protected_data is not None:
         await kg.record_kms_protected_data(kms_protected_data)
+    if lambda_workloads is not None:
+        await kg.record_lambda_workloads(lambda_workloads)
     if rds_instances is not None:
         await kg.record_rds_instances(rds_instances)

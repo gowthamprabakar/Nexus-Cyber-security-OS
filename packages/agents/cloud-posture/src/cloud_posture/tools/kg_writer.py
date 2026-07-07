@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from cloud_posture.tools.aws_ec2 import Ec2Workload
     from cloud_posture.tools.aws_ecs import EcsWorkload
     from cloud_posture.tools.aws_kms import KmsKey
+    from cloud_posture.tools.aws_lambda import LambdaWorkload
     from cloud_posture.tools.aws_rds import RdsInstance
     from cloud_posture.tools.azure_aci import AciWorkload
     from cloud_posture.tools.gcp_cloud_run import CloudRunWorkload
@@ -247,6 +248,26 @@ class KnowledgeGraphWriter(KnowledgeGraphWriterBase):
             if workload.role_arn:
                 role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})
                 await self.add_edge(instance_node or "", role_node or "", EdgeType.ASSUMES)
+
+    async def record_lambda_workloads(self, workloads: Iterable[LambdaWorkload]) -> None:
+        """Write Lambda function ``CLOUD_RESOURCE{kind=lambda-function, is_public}`` + ``ASSUMES`` → execution role.
+
+        Inventories serverless compute so a public Lambda function is a first-class
+        workload on the graph. The execution role is the Lambda analogue of an ECS task
+        role — a public function whose role reaches sensitive data is a reachable path.
+        (No ``RUNS_IMAGE``: Lambda is not a scanned container image in this slice.)
+        """
+        for workload in workloads:
+            props: dict[str, Any] = {
+                "kind": "lambda-function",
+                "is_public": workload.is_public,
+            }
+            fn_node = await self.upsert_node(
+                NodeCategory.CLOUD_RESOURCE, workload.function_arn, props
+            )
+            if workload.role_arn:
+                role_node = await self.upsert_node(NodeCategory.IDENTITY, workload.role_arn, {})
+                await self.add_edge(fn_node or "", role_node or "", EdgeType.ASSUMES)
 
     async def record_stored_secrets(self, grants: Iterable[tuple[str, str]]) -> None:
         """Write CLOUD_RESOURCE --STORES_SECRET--> SECRET(access-key-id) (W6 credential access).

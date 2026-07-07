@@ -97,6 +97,11 @@ _EXPOSURE_IMPACT = {
         (NC.DATA_CLASSIFICATION, {}),
         ["CAN_ESCALATE_TO", "HAS_ACCESS_TO", "EXPOSES_DATA"],
     ),
+    "serverless_lambda_exposure": (
+        (NC.CLOUD_RESOURCE, {"is_public": True}),
+        (NC.DATA_CLASSIFICATION, {}),
+        ["ASSUMES", "HAS_ACCESS_TO", "EXPOSES_DATA"],
+    ),
     "imds_credential_theft": (
         (NC.CLOUD_RESOURCE, {"is_public": True, "imdsv1_enabled": True}),
         (NC.DATA_CLASSIFICATION, {}),
