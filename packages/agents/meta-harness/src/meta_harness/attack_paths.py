@@ -65,6 +65,7 @@ _SEVERITY: dict[str, int] = {
     "k8s_escape_to_cloud_data": 82,
     "rbac_escalation_to_cloud_data": 84,
     "serverless_lambda_exposure": 83,
+    "imds_credential_theft": 82,
 }
 
 
@@ -256,6 +257,12 @@ def _title(path_type: str, grp: _Group) -> str:
     if path_type == "serverless_lambda_exposure":
         dt = grp.context.get("data_type", "") or _types_phrase(grp)
         return f"Public Lambda function's execution role can read {dt or 'sensitive'} data"
+    if path_type == "imds_credential_theft":
+        dt = grp.context.get("data_type", "") or _types_phrase(grp)
+        return (
+            f"IMDS credential theft — public instance with IMDSv1 exposes its role's "
+            f"{dt or 'sensitive'} data access"
+        )
     return f"Principal has access to public {_types_phrase(grp)} data"  # fine_grained_data
 
 
@@ -549,6 +556,18 @@ class AttackPathRanker:
                 sl.data_type,
                 data_type=sl.data_type,
                 sink=sl.data_classification_id,
+            )
+        for ic in await self._kg.find_imds_credential_theft():
+            g("imds_credential_theft", (ic.instance_id, ic.role_id, ic.resource_id)).add(
+                (
+                    ic.instance_id,
+                    ic.role_id,
+                    ic.resource_id,
+                    ic.data_classification_id,
+                ),
+                ic.data_type,
+                data_type=ic.data_type,
+                sink=ic.data_classification_id,
             )
 
         paths = [

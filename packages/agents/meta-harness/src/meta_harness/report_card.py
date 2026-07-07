@@ -61,6 +61,7 @@ _FIX: dict[str, str] = {
     "k8s_escape_to_cloud_data": "Drop the pod's privileged securityContext; scope the SA's IRSA role to least privilege.",
     "escalation_method_to_data": "Remove the escalation-enabling grant (PassRole / CreatePolicyVersion / AttachUserPolicy) and scope the principal to least privilege.",
     "serverless_lambda_exposure": "Remove the function URL or set its auth type to AWS_IAM; scope the execution role's data access to least privilege.",
+    "imds_credential_theft": "Enforce IMDSv2 (set HttpTokens=required on the instance metadata options); scope the instance role to least privilege.",
 }
 #: Severity for generic-only families not in the named `_SEVERITY` map (report-card local).
 _GENERIC_SEVERITY: dict[str, int] = {"supply_chain_sbom": 80, "container_escape": 78}
@@ -85,6 +86,7 @@ _INTERNET_FACING: frozenset[str] = frozenset(
         "exposed_kms_key_over_data",
         "runtime_exploit_vulnerable",
         "serverless_lambda_exposure",
+        "imds_credential_theft",
     }
 )
 
@@ -150,6 +152,9 @@ def _generic_title(path_type: str, path: GenericPath) -> str:
         "container_escape": "A privileged pod escapes to its cloud role and reaches data",
         "rbac_escalation_to_cloud_data": "A cluster-admin ServiceAccount can also reach sensitive cloud data via IRSA",
         "serverless_lambda_exposure": "A public Lambda function's execution role can read sensitive data",
+        "imds_credential_theft": (
+            "A public EC2 instance with IMDSv1 exposes its instance-role credentials to data"
+        ),
     }
     return titles.get(path_type, f"Novel attack path ({' → '.join(path.edge_signature)})")
 

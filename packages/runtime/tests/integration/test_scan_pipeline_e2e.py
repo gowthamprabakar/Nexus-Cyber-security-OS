@@ -2173,6 +2173,164 @@ async def test_scan_run_supply_chain_sbom_fires_and_subsumed(
 
 
 # ---------------------------------------------------------------------------
+# Cycle 5 Task 1: IMDS credential theft — public EC2 + IMDSv1 + role → data
+# ---------------------------------------------------------------------------
+
+_IMDS_INSTANCE_ARN = "arn:aws:ec2:us-east-1:123456789012:instance/i-imds-e2e"
+_IMDS_ROLE_ARN = "arn:aws:iam::123456789012:role/imds-e2e-role"
+_IMDS_TENANT_POS = "t-imds-e2e-pos"
+_IMDS_TENANT_NEG = "t-imds-e2e-neg"
+
+
+@pytest.mark.asyncio
+async def test_scan_run_imds_credential_theft_fires(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cycle 5 Task 1: imds_credential_theft fires through scan_run.
+
+    Three feeders cooperate in the shared SemanticStore:
+      1. cloud-posture receives a public Ec2Workload(imdsv1_enabled=True, role_arn=...)
+         via ScanSources.cloud_ec2_workloads.  record_ec2_workloads writes
+             CLOUD_RESOURCE{instance_arn, is_public=True, imdsv1_enabled=True}
+             --ASSUMES--> IDENTITY(imds-e2e-role)
+      2. identity (AdministratorAccess on _IMDS_ROLE_ARN) writes
+             IDENTITY(imds-e2e-role) --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+      3. data-security writes
+             CLOUD_RESOURCE(acme-pii, is_public=True) --EXPOSES_DATA--> DATA_CLASSIFICATION
+
+    The full IMDS cred-theft chain:
+      CLOUD_RESOURCE(ec2, is_public=True, imdsv1_enabled=True)
+        --ASSUMES--> IDENTITY(role)
+        --HAS_ACCESS_TO--> CLOUD_RESOURCE(acme-pii)
+        --EXPOSES_DATA--> DATA_CLASSIFICATION
+    → path_type == "imds_credential_theft"
+
+    Join keys: role_arn (Ec2Workload ↔ identity role); bucket (identity ↔ data-security).
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    feeds_dir = tmp_path / "feeds"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    imds_role = IamRole(
+        arn=_IMDS_ROLE_ARN,
+        name="imds-e2e-role",
+        role_id="AROA-IMDSROLE",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    listing = IdentityListing(users=(), roles=(imds_role,), groups=())
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+        cloud_ec2_workloads=(
+            Ec2Workload(
+                instance_arn=_IMDS_INSTANCE_ARN,
+                is_public=True,
+                role_arn=_IMDS_ROLE_ARN,
+                imdsv1_enabled=True,
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_IMDS_TENANT_POS,
+        sources=sources,
+        workspace_root=tmp_path / "ws",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    feeder_names = {f.agent for f in res.feeders}
+    assert "cloud-posture" in feeder_names, f"cloud-posture missing from {feeder_names}"
+    assert "data-security" in feeder_names, f"data-security missing from {feeder_names}"
+    assert "identity" in feeder_names, f"identity missing from {feeder_names}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "imds_credential_theft" in path_types, (
+        f"imds_credential_theft path not confirmed; got path_types={path_types}. "
+        f"Join-key check: instance_arn={_IMDS_INSTANCE_ARN!r} (is_public=True, imdsv1_enabled=True); "
+        f"role_arn={_IMDS_ROLE_ARN!r} (Ec2Workload.role_arn must equal identity role ARN); "
+        f"bucket={_BUCKET_NAME!r} (identity HAS_ACCESS_TO must reach data-security EXPOSES_DATA bucket). "
+        "Check record_ec2_workloads writes imdsv1_enabled property on the CLOUD_RESOURCE node."
+    )
+
+
+@pytest.mark.asyncio
+async def test_scan_run_imds_credential_theft_imdsv2_stays_dark(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cycle 5 Task 1 negative: IMDSv2-only instance does NOT fire imds_credential_theft.
+
+    Same scene as the positive test but with imdsv1_enabled=False (HttpTokens=required).
+    The ASSUMES + HAS_ACCESS_TO + EXPOSES_DATA chain is still present — only the
+    imdsv1_enabled discriminator is False — so the detector must stay dark.
+    fine_grained_data may still fire (the role has direct HAS_ACCESS_TO); that is
+    expected and acceptable. Only imds_credential_theft must be absent.
+    """
+    _patch_cloud_posture_tools(monkeypatch)
+
+    feeds_dir = tmp_path / "feeds-neg"
+    inv, obj = _write_public_pii_inventory(feeds_dir)
+
+    imds_role = IamRole(
+        arn=_IMDS_ROLE_ARN,
+        name="imds-e2e-role",
+        role_id="AROA-IMDSROLE2",
+        create_date=_NOW,
+        last_used_at=_NOW,
+        assume_role_policy_document={},
+        attached_policy_arns=(_ADMIN_POLICY_ARN,),
+    )
+    listing = IdentityListing(users=(), roles=(imds_role,), groups=())
+
+    from cloud_posture.tools.aws_ec2 import Ec2Workload
+
+    sources = ScanSources(
+        ds_inventory_feed=inv,
+        ds_objects_feed=obj,
+        identity_listing=listing,
+        cloud_ec2_workloads=(
+            Ec2Workload(
+                instance_arn=_IMDS_INSTANCE_ARN,
+                is_public=True,
+                role_arn=_IMDS_ROLE_ARN,
+                imdsv1_enabled=False,
+            ),
+        ),
+    )
+
+    res = await scan_run(
+        session_factory=session_factory,
+        tenant=_IMDS_TENANT_NEG,
+        sources=sources,
+        workspace_root=tmp_path / "ws-neg",
+    )
+
+    failed = [f for f in res.feeders if not f.ok]
+    assert not failed, f"feeder(s) failed: {failed}"
+
+    path_types = [p.path_type for p in res.confirmed]
+    assert "imds_credential_theft" not in path_types, (
+        f"imds_credential_theft must NOT fire for IMDSv2 instance (imdsv1_enabled=False); "
+        f"got path_types={path_types}. "
+        "The imdsv1_enabled=False property on the node must gate the detector dark."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Cycle 6: serverless Lambda exposure — public Lambda + execution role → data
 # ---------------------------------------------------------------------------
 

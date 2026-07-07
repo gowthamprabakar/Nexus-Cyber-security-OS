@@ -197,6 +197,11 @@ REMEDIATION: dict[str, FixAdvice] = {
         "data access to least privilege.",
         auto_fixable=False,
     ),
+    "imds_credential_theft": FixAdvice(
+        "Enforce IMDSv2 (set HttpTokens=required on the instance metadata options); scope the "
+        "instance role to least privilege so the stolen credentials have minimal blast radius.",
+        auto_fixable=False,
+    ),
 }
 
 
