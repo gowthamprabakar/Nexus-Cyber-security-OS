@@ -47,6 +47,7 @@ _LABELS = {
     "fine_grained_data": "Over-permissioned access",
     "iac_misconfig_deployed": "Misconfigured IaC deployed",
     "supply_chain_sbom": "Vulnerable dependency (SBOM)",
+    "imds_credential_theft": "IMDS credential theft (IMDSv1 public instance)",
 }
 
 
