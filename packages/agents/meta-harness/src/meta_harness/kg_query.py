@@ -482,6 +482,53 @@ class ResourceBasedDataExposure:
 
 
 @dataclass(frozen=True, slots=True)
+class ServerlessLambdaExposure:
+    """A public Lambda function whose execution role can reach sensitive data.
+
+    An attacker who invokes the open Function URL (AuthType=NONE) or the wildcard-policy
+    endpoint runs as the execution role and inherits its ``HAS_ACCESS_TO`` blast radius.
+
+    Discriminator: ``kind=lambda-function`` AND ``is_public=True`` are both required —
+    a private Lambda (no URL / IAM-auth) and non-Lambda resources with the same edges
+    MUST NOT fire (kind gate).
+
+    Walk: ``CLOUD_RESOURCE{kind=lambda-function, is_public=True}
+    --ASSUMES--> IDENTITY(role)
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE
+    --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    One hit per ``(function_id, role_id, data_classification_id)``."""
+
+    function_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class ImdsCredentialTheft:
+    """A public EC2 instance with IMDSv1 enabled whose instance role can reach sensitive data.
+
+    An attacker who reaches the public instance can call the metadata endpoint
+    (169.254.169.254) without a session token (IMDSv1 is unauthenticated) and steal
+    the instance-profile credentials. Those credentials carry the instance role's
+    ``HAS_ACCESS_TO`` blast radius to sensitive data.
+
+    Discriminator: BOTH ``is_public=True`` AND ``imdsv1_enabled=True`` are required —
+    IMDSv2-only (``imdsv1_enabled=False``) and private instances stay dark.
+
+    Walk: ``CLOUD_RESOURCE{ec2-instance, is_public, imdsv1_enabled} --ASSUMES--> IDENTITY(role)
+    --HAS_ACCESS_TO--> CLOUD_RESOURCE --EXPOSES_DATA--> DATA_CLASSIFICATION``.
+    One hit per ``(instance_id, role_id, data_classification_id)``."""
+
+    instance_id: str
+    role_id: str
+    resource_id: str
+    data_classification_id: str
+    data_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class SupplyChainSbom:
     """A public workload running an image whose SBOM package has a CVE (supply-chain, NEX-305).
 
@@ -1654,6 +1701,90 @@ class KgQuery:
                             )
         return hits
 
+    async def find_serverless_lambda_exposure(self) -> list[ServerlessLambdaExposure]:
+        """Find public Lambda functions whose execution role reaches sensitive data.
+
+        Self-seeded: enumerates CLOUD_RESOURCE nodes that have BOTH
+        ``kind="lambda-function"`` AND ``is_public=True`` (the kind gate — an EC2 node
+        with the same edges MUST NOT fire), follows ``ASSUMES`` to the execution role,
+        then the role's ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data
+        classification.
+
+        An attacker who invokes the open Function URL (AuthType=NONE) or the
+        wildcard-policy endpoint runs as the execution role and can read sensitive data.
+        One hit per ``(function_id, role_id, data_classification_id)``. Read-only."""
+        hits: list[ServerlessLambdaExposure] = []
+        for fn in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if fn.properties.get("kind") != "lambda-function":
+                continue
+            if fn.properties.get("is_public") is not True:
+                continue
+            for assumes in await self._edges_from(fn.entity_id, (EdgeType.ASSUMES.value,)):
+                role_id = assumes.dst_entity_id
+                for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            ServerlessLambdaExposure(
+                                function_id=fn.entity_id,
+                                role_id=role_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
+        return hits
+
+    async def find_imds_credential_theft(self) -> list[ImdsCredentialTheft]:
+        """Find public EC2 instances with IMDSv1 enabled whose role reaches sensitive data.
+
+        Self-seeded: enumerates CLOUD_RESOURCE nodes that have BOTH ``is_public=True`` AND
+        ``imdsv1_enabled=True`` (the IMDS credential-theft discriminator — IMDSv2-only stays
+        dark), follows ``ASSUMES`` to the instance-profile role, then the role's
+        ``HAS_ACCESS_TO`` → resource → ``EXPOSES_DATA`` → data classification.
+
+        An attacker who reaches the public instance calls the IMDSv1 metadata endpoint
+        (no session token required) to steal the role's temporary credentials, then uses
+        that role's blast radius to read sensitive data. One hit per
+        ``(instance_id, role_id, data_classification_id)``. Read-only."""
+        hits: list[ImdsCredentialTheft] = []
+        for instance in await self._semantic_store.list_entities_by_type(
+            tenant_id=self._customer_id, entity_type=NodeCategory.CLOUD_RESOURCE.value
+        ):
+            if instance.properties.get("is_public") is not True:
+                continue
+            if instance.properties.get("imdsv1_enabled") is not True:
+                continue
+            for assumes in await self._edges_from(instance.entity_id, (EdgeType.ASSUMES.value,)):
+                role_id = assumes.dst_entity_id
+                for access in await self._edges_from(role_id, (EdgeType.HAS_ACCESS_TO.value,)):
+                    for expose in await self._edges_from(
+                        access.dst_entity_id, (EdgeType.EXPOSES_DATA.value,)
+                    ):
+                        dc = await self._semantic_store.get_entity(
+                            tenant_id=self._customer_id, entity_id=expose.dst_entity_id
+                        )
+                        if dc is None:
+                            continue
+                        hits.append(
+                            ImdsCredentialTheft(
+                                instance_id=instance.entity_id,
+                                role_id=role_id,
+                                resource_id=access.dst_entity_id,
+                                data_classification_id=dc.entity_id,
+                                data_type=str(dc.properties.get("data_type", "")),
+                            )
+                        )
+        return hits
+
     async def find_supply_chain_sbom(self) -> list[SupplyChainSbom]:
         """Public workload runs an image whose SBOM package has a CVE (dependency-level supply chain).
 
@@ -1717,6 +1848,7 @@ __all__ = [
     "ExposedKmsKeyOverData",
     "ExternalTrustExposure",
     "FineGrainedDataExposure",
+    "ImdsCredentialTheft",
     "InternetExposedVulnerableWorkload",
     "K8sEscapeToCloudData",
     "KgQuery",
@@ -1728,6 +1860,7 @@ __all__ = [
     "RbacEscalationToCloudData",
     "RbacPrivilegeEscalation",
     "ResourceBasedDataExposure",
+    "ServerlessLambdaExposure",
     "StoredSecretToData",
     "SupplyChainSbom",
     "ToxicCombination",
