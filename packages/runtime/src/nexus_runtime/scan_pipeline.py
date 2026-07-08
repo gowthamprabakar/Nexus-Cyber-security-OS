@@ -21,6 +21,7 @@ remaining feeders are wired by their own tasks listed below.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -32,6 +33,7 @@ from appsec.agent import run as appsec_run
 from appsec.tools.scm_connector import ScmConnector
 from charter.contract import BudgetSpec, ExecutionContract
 from charter.memory import SemanticStore
+from charter.memory.episodic import EpisodicStore
 from cloud_posture.agent import run as cloud_posture_run
 from cloud_posture.tools.aws_ec2 import Ec2Workload
 from cloud_posture.tools.aws_ecs import EcsWorkload
@@ -48,6 +50,7 @@ from identity.tools.azure_ad import AzureAdListing
 from identity.tools.azure_rbac import AzureRoleAssignment
 from identity.tools.gcp_iam import GcpIamBinding, GcpServiceAccountKey
 from k8s_posture.agent import run as k8s_posture_run
+from meta_harness.posture import PostureRollup, emit_posture_snapshot, write_posture_json
 from meta_harness.scan import analyze
 from multi_cloud_posture.agent import run as multi_cloud_posture_run
 from multi_cloud_posture.tools.kg_writer import KmsKeyRecord, SqlInstanceRecord, VmInstanceRecord
@@ -58,6 +61,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from threat_intel.agent import run as threat_intel_run
 from ulid import ULID
 from vulnerability.agent import run as vulnerability_run
+
+_log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Permitted-tool lists — copied verbatim from correlation.py (single source of
@@ -282,6 +287,7 @@ class ScanRunResult:
     candidates: list[object]  # list[meta_harness.path_engine.CandidatePath]
     feeders: list[FeederOutcome]  # one per EXECUTED feeder (skipped feeders absent)
     ocsf_findings: list[dict[str, Any]] = field(default_factory=list)  # OCSF 2005 Incident Findings
+    posture: object | None = None  # meta_harness.posture.PostureSummary | None (best-effort rollup)
 
 
 # ---------------------------------------------------------------------------
@@ -652,13 +658,32 @@ async def scan_run(
     # ------------------------------------------------------------------
     # analyze always runs on whatever the feeders wrote (partial is fine)
     # ------------------------------------------------------------------
-    scan_result = await analyze(store, tenant, persist=True, now=datetime.now(UTC))
+    now = datetime.now(UTC)
+    scan_result = await analyze(store, tenant, persist=True, now=now)
+
+    # --- posture rollup (best-effort; a failure must NOT fail the scan) ---
+    posture = None
+    try:
+        posture = await PostureRollup(store, tenant).compute(
+            now=now, paths=scan_result.confirmed, feeders=feeders
+        )
+        write_posture_json(posture, workspace_root)
+        await emit_posture_snapshot(
+            EpisodicStore(session_factory),
+            tenant,
+            posture,
+            correlation_id=f"scan:{tenant}:{now.isoformat()}",
+        )
+    except Exception:
+        _log.warning("posture rollup failed; scan output unaffected", exc_info=True)
+        posture = None
 
     return ScanRunResult(
         confirmed=list(scan_result.confirmed),
         candidates=list(scan_result.candidates),
         feeders=feeders,
         ocsf_findings=scan_result.ocsf_findings,
+        posture=posture,
     )
 
 
