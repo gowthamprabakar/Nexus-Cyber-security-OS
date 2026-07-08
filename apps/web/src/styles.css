@@ -1,0 +1,89 @@
+:root {
+  --bg: #0e131a;
+  --panel: #151c26;
+  --line: #28323f;
+  --ink: #e8edf4;
+  --muted: #93a0b2;
+  --accent: #35c4b4;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.app__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.app__mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+.app__title {
+  font-weight: 650;
+}
+.app__main {
+  padding: 24px;
+}
+
+.page__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.page__head h1 {
+  font-size: 20px;
+  margin: 0;
+}
+.page__count {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.state {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--panel);
+}
+.state--error {
+  color: #f0616d;
+  border-color: rgba(240, 97, 109, 0.4);
+}
+.state--error button {
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.grid th,
+.grid td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.grid th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.grid__id {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+}
