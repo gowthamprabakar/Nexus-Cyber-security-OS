@@ -7,10 +7,12 @@ See docs/superpowers/specs/2026-07-08-posture-rollup-design.md.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from charter.memory.graph_types import NodeCategory as NC
+from charter.memory.semantic import SemanticStore
 
 from meta_harness.attack_paths import AttackPath
 
@@ -213,3 +215,75 @@ def exposure_funnel(paths: list[AttackPath]) -> ExposureFunnel:
     kev = sum(1 for p in exposure if p.kev)
     exploitable = sum(1 for p in exposure if p.epss is not None and p.epss > EPSS_EXPLOITABLE)
     return ExposureFunnel(exposed=exposed, vulnerable=vulnerable, kev=kev, exploitable=exploitable)
+
+
+# ---- store-derived helpers -------------------------------------------------
+def _pct(num: int, den: int) -> int:
+    return round(num / den * 100) if den else 0
+
+
+def _all_counted() -> tuple[str, ...]:
+    seen: dict[str, None] = {}
+    for c in (*INVENTORY_CATEGORIES, *FINDING_CATEGORIES):
+        seen[c] = None
+    for cats in DOMAIN_CATEGORIES.values():
+        for c in cats:
+            seen[c] = None
+    return tuple(seen)
+
+
+async def count_categories(
+    store: SemanticStore, tenant: str, categories: tuple[str, ...]
+) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for cat in categories:
+        rows = await store.list_entities_by_type(tenant_id=tenant, entity_type=cat)
+        out[cat] = len(rows)
+    return out
+
+
+async def compute_coverage(
+    store: SemanticStore,
+    tenant: str,
+    paths: list[AttackPath],
+    feeders: Sequence[object] | None,
+    *,
+    category_counts: dict[str, int],
+) -> Coverage:
+    # domain coverage — a domain is "covered" if any of its categories has >=1 node
+    domains_covered = sum(
+        1 for cats in DOMAIN_CATEGORIES.values() if any(category_counts.get(c, 0) > 0 for c in cats)
+    )
+    domains_total = len(DOMAIN_CATEGORIES)
+
+    # collector coverage — from FeederOutcome.ok (None when no feeder context)
+    collectors_ok: int | None = None
+    collectors_run: int | None = None
+    collector_pct: int | None = None
+    if feeders is not None:
+        collectors_run = len(feeders)
+        collectors_ok = sum(1 for f in feeders if getattr(f, "ok", False))
+        collector_pct = _pct(collectors_ok, collectors_run)
+
+    # surfaced ratio — distinct finding entity ids that appear on any path
+    total_findings = sum(category_counts.get(c, 0) for c in FINDING_CATEGORIES)
+    finding_ids: set[str] = set()
+    for cat in FINDING_CATEGORIES:
+        for row in await store.list_entities_by_type(tenant_id=tenant, entity_type=cat):
+            finding_ids.add(row.entity_id)
+    on_paths: set[str] = set()
+    for p in paths:
+        on_paths.update(p.entities)
+    surfaced_findings = len(finding_ids & on_paths)
+
+    return Coverage(
+        domains_covered=domains_covered,
+        domains_total=domains_total,
+        domain_pct=_pct(domains_covered, domains_total),
+        collectors_ok=collectors_ok,
+        collectors_run=collectors_run,
+        collector_pct=collector_pct,
+        surfaced_findings=surfaced_findings,
+        total_findings=total_findings,
+        surfaced_pct=_pct(surfaced_findings, total_findings),
+    )
