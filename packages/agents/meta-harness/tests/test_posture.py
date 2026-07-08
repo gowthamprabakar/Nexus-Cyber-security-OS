@@ -1,3 +1,6 @@
+import json
+from datetime import UTC, datetime
+
 import pytest
 from charter.memory.graph_types import NodeCategory as NC
 from fleet_testkit import in_memory_semantic_store
@@ -125,3 +128,75 @@ async def test_compute_coverage_no_feeders_is_none_and_guards_zero():
         cov = await P.compute_coverage(store, "t", [], None, category_counts=counts)
         assert cov.collectors_ok is None and cov.collector_pct is None
         assert cov.total_findings == 0 and cov.surfaced_pct == 0 and cov.domain_pct == 0
+
+
+@pytest.mark.asyncio
+async def test_compute_full_summary_on_fixture():
+    async with in_memory_semantic_store() as store:
+        f1 = await store.upsert_entity(
+            tenant_id="t", entity_type=NC.CVE_FINDING.value, external_id="cve-1", properties={}
+        )
+        await store.upsert_entity(
+            tenant_id="t", entity_type=NC.CLOUD_RESOURCE.value, external_id="arn:x", properties={}
+        )
+        paths = [
+            _p("crown_jewel", 95, entities=(f1,)),
+            _p("internet_exposed_vulnerable", 80, kev=True, epss=0.9, entities=(f1,)),
+        ]
+        now = datetime(2026, 7, 8, tzinfo=UTC)
+        s = await P.PostureRollup(store, "t").compute(now=now, paths=paths, feeders=[_Feeder(True)])
+        assert s.tenant == "t" and s.scan_at == now.isoformat()
+        assert s.totals["attack_paths"] == 2
+        assert s.severity_distribution == {"critical": 1, "high": 1, "medium": 0, "low": 0}
+        assert s.exposure_funnel.exposed == 1 and s.exposure_funnel.kev == 1
+        assert s.coverage.surfaced_findings == 1 and s.coverage.collectors_ok == 1
+        assert s.inventory_counts[NC.CLOUD_RESOURCE.value] == 1
+
+
+@pytest.mark.asyncio
+async def test_compute_empty_graph_is_all_zero():
+    async with in_memory_semantic_store() as store:
+        s = await P.PostureRollup(store, "t").compute(
+            now=datetime(2026, 7, 8, tzinfo=UTC), paths=[], feeders=[]
+        )
+        assert s.totals["attack_paths"] == 0
+        assert s.severity_distribution == {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        assert s.by_domain == () and s.by_path_type == () and s.top_paths == ()
+        assert s.coverage.domain_pct == 0 and s.coverage.surfaced_pct == 0
+
+
+@pytest.mark.asyncio
+async def test_write_posture_json_round_trips(tmp_path):
+    async with in_memory_semantic_store() as store:
+        s = await P.PostureRollup(store, "t").compute(
+            now=datetime(2026, 7, 8, tzinfo=UTC), paths=[], feeders=[]
+        )
+        path = P.write_posture_json(s, tmp_path)
+        assert path == tmp_path / "aggregation" / "posture.json"
+        data = json.loads(path.read_text())
+        assert (
+            data["tenant"] == "t"
+            and "coverage" in data
+            and data["severity_distribution"]["critical"] == 0
+        )
+
+
+def test_render_leads_with_coverage_and_omits_missing_collectors():
+    cov = P.Coverage(4, 9, 44, None, None, None, 3, 10, 30)
+    s = P.PostureSummary(
+        tenant="t",
+        scan_at="2026-07-08T00:00:00+00:00",
+        coverage=cov,
+        totals={"attack_paths": 5, "findings": 10, "nodes": 20},
+        severity_distribution={"critical": 1, "high": 2, "medium": 1, "low": 1},
+        by_domain=(P.DomainCount("data", 1, 0, 0, 0, 1),),
+        by_path_type=(),
+        exposure_funnel=P.ExposureFunnel(2, 2, 1, 1),
+        inventory_counts={},
+        top_paths=(),
+    )
+    md = P.render_posture_summary(s)
+    first_line = md.strip().splitlines()[0]
+    assert "Coverage" in first_line and "44%" in first_line
+    assert "collector" not in md.lower()  # omitted when None
+    assert "data" in md

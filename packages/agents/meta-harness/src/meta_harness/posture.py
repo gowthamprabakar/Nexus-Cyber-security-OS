@@ -6,15 +6,20 @@ See docs/superpowers/specs/2026-07-08-posture-rollup-design.md.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from charter.memory.graph_types import NodeCategory as NC
 from charter.memory.semantic import SemanticStore
 
-from meta_harness.attack_paths import AttackPath
+from meta_harness.attack_paths import AttackPath, AttackPathRanker
+from meta_harness.kg_query import KgQuery
 
 
 # ---- severity bucketing (attack-path severity is an int 0-100) -------------
@@ -287,3 +292,99 @@ async def compute_coverage(
         total_findings=total_findings,
         surfaced_pct=_pct(surfaced_findings, total_findings),
     )
+
+
+# ---- orchestration ---------------------------------------------------------
+_TOP_N = 10
+
+
+class PostureRollup:
+    """Read-only rollup of the post-scan graph into a PostureSummary. Tenant-scoped."""
+
+    def __init__(self, store: SemanticStore, tenant: str) -> None:
+        self._store = store
+        self._tenant = tenant
+
+    async def compute(
+        self,
+        *,
+        now: datetime,
+        paths: list[AttackPath] | None = None,
+        feeders: Sequence[object] | None = None,
+    ) -> PostureSummary:
+        if paths is None:
+            paths = await AttackPathRanker(KgQuery(self._store, self._tenant)).find_all()
+
+        counts = await count_categories(self._store, self._tenant, _all_counted())
+        coverage = await compute_coverage(
+            self._store, self._tenant, paths, feeders, category_counts=counts
+        )
+        inventory = {c: counts.get(c, 0) for c in INVENTORY_CATEGORIES}
+        totals = {
+            "attack_paths": len(paths),
+            "findings": sum(counts.get(c, 0) for c in FINDING_CATEGORIES),
+            "nodes": sum(counts.values()),
+        }
+        top = tuple(
+            {
+                "path_type": p.path_type,
+                "severity": p.severity,
+                "title": p.title,
+                "kev": p.kev,
+                "epss": p.epss,
+            }
+            for p in paths[:_TOP_N]
+        )
+        return PostureSummary(
+            tenant=self._tenant,
+            scan_at=now.isoformat(),
+            coverage=coverage,
+            totals=totals,
+            severity_distribution=severity_distribution(paths),
+            by_domain=by_domain(paths),
+            by_path_type=by_path_type(paths),
+            exposure_funnel=exposure_funnel(paths),
+            inventory_counts=inventory,
+            top_paths=top,
+        )
+
+
+def summary_to_dict(summary: PostureSummary) -> dict[str, Any]:
+    return dataclasses.asdict(summary)
+
+
+def write_posture_json(summary: PostureSummary, workspace_root: Path) -> Path:
+    out_dir = workspace_root / "aggregation"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "posture.json"
+    path.write_text(json.dumps(summary_to_dict(summary), indent=2, sort_keys=True))
+    return path
+
+
+def render_posture_summary(summary: PostureSummary) -> str:
+    c = summary.coverage
+    parts = [f"**Coverage:** {c.domain_pct}% of domains ({c.domains_covered}/{c.domains_total})"]
+    if c.collector_pct is not None:
+        parts.append(f"{c.collector_pct}% of collectors ({c.collectors_ok}/{c.collectors_run})")
+    parts.append(
+        f"{c.surfaced_pct}% of findings surfaced ({c.surfaced_findings}/{c.total_findings})"
+    )
+    lines = [" · ".join(parts), ""]
+    d = summary.severity_distribution
+    lines.append(
+        f"**Attack paths:** {summary.totals['attack_paths']} "
+        f"(critical {d['critical']} · high {d['high']} · medium {d['medium']} · low {d['low']})"
+    )
+    lines.append("")
+    lines.append("**By domain:**")
+    for row in summary.by_domain:
+        lines.append(
+            f"- {row.domain}: {row.total} (C{row.critical} H{row.high} M{row.medium} L{row.low})"
+        )
+    f = summary.exposure_funnel
+    lines.append("")
+    lines.append(
+        f"**Exposure funnel:** {f.exposed} exposed → {f.vulnerable} vulnerable"
+        f" → {f.kev} KEV → {f.exploitable} exploitable"
+    )
+    return "\n".join(lines)
