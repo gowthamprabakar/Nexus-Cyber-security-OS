@@ -6,10 +6,13 @@ See docs/superpowers/specs/2026-07-08-posture-rollup-design.md.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
 from charter.memory.graph_types import NodeCategory as NC
+
+from meta_harness.attack_paths import AttackPath
 
 
 # ---- severity bucketing (attack-path severity is an int 0-100) -------------
@@ -162,3 +165,51 @@ class TrendPoint:
     attack_paths: int
     critical: int
     high: int
+
+
+# ---- pure aggregations over list[AttackPath] --------------------------------
+def severity_distribution(paths: list[AttackPath]) -> dict[str, int]:
+    out = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for p in paths:
+        out[bucket_of(p.severity)] += 1
+    return out
+
+
+def by_path_type(paths: list[AttackPath]) -> tuple[PathTypeCount, ...]:
+    count: dict[str, int] = defaultdict(int)
+    maxsev: dict[str, int] = defaultdict(int)
+    for p in paths:
+        count[p.path_type] += 1
+        maxsev[p.path_type] = max(maxsev[p.path_type], p.severity)
+    rows = [PathTypeCount(pt, count[pt], maxsev[pt]) for pt in count]
+    return tuple(sorted(rows, key=lambda r: (-r.max_severity, r.path_type)))
+
+
+def by_domain(paths: list[AttackPath]) -> tuple[DomainCount, ...]:
+    buckets: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    )
+    for p in paths:
+        domain = PATH_DOMAIN.get(p.path_type, "other")
+        buckets[domain][bucket_of(p.severity)] += 1
+    rows = [
+        DomainCount(
+            d,
+            b["critical"],
+            b["high"],
+            b["medium"],
+            b["low"],
+            b["critical"] + b["high"] + b["medium"] + b["low"],
+        )
+        for d, b in buckets.items()
+    ]
+    return tuple(sorted(rows, key=lambda r: (-r.total, r.domain)))
+
+
+def exposure_funnel(paths: list[AttackPath]) -> ExposureFunnel:
+    exposure = [p for p in paths if p.path_type in EXPOSURE_PATH_TYPES]
+    exposed = len(exposure)
+    vulnerable = sum(1 for p in exposure if p.count >= 1)
+    kev = sum(1 for p in exposure if p.kev)
+    exploitable = sum(1 for p in exposure if p.epss is not None and p.epss > EPSS_EXPLOITABLE)
+    return ExposureFunnel(exposed=exposed, vulnerable=vulnerable, kev=kev, exploitable=exploitable)
