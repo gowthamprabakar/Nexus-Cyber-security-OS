@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 
 class Meta(BaseModel):
-    cursor: int | None
+    offset: int | None
     total: int | None
     tenant: str
     generated_at: str
@@ -31,14 +31,14 @@ class Envelope(BaseModel):
 def make_envelope(
     *,
     data: Any,
-    cursor: int | None,
+    offset: int | None,
     total: int | None,
     tenant: str,
 ) -> Envelope:
     return Envelope(
         data=data,
         meta=Meta(
-            cursor=cursor,
+            offset=offset,
             total=total,
             tenant=tenant,
             generated_at=datetime.now(tz=UTC).isoformat(),

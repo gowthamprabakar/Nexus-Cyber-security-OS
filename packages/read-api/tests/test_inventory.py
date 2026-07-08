@@ -192,27 +192,27 @@ def test_filter_public_false(client_with_store: TestClient) -> None:
     assert data[0]["is_public"] is False
 
 
-def test_pagination_cursor(client_with_store: TestClient) -> None:
-    # Request limit=2 — should get first 2 of 3 nodes, next cursor=2
+def test_pagination_offset(client_with_store: TestClient) -> None:
+    # Request limit=2 — should get first 2 of 3 nodes, next offset=2
     resp = client_with_store.get(
-        "/v1/inventory/cloud-resources?cursor=0&limit=2",
+        "/v1/inventory/cloud-resources?offset=0&limit=2",
         headers={"X-Tenant-Id": "acme"},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["data"]) == 2
-    assert body["meta"]["cursor"] == 2
+    assert body["meta"]["offset"] == 2
     assert body["meta"]["total"] == 3
 
     # Fetch page 2
     resp2 = client_with_store.get(
-        "/v1/inventory/cloud-resources?cursor=2&limit=2",
+        "/v1/inventory/cloud-resources?offset=2&limit=2",
         headers={"X-Tenant-Id": "acme"},
     )
     assert resp2.status_code == 200
     body2 = resp2.json()
     assert len(body2["data"]) == 1
-    assert body2["meta"]["cursor"] is None  # no more pages
+    assert body2["meta"]["offset"] is None  # no more pages
 
 
 def test_default_tenant_is_dev(client_with_store: TestClient) -> None:

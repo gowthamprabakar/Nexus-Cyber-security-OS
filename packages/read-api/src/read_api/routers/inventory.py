@@ -26,7 +26,7 @@ def _derive_cloud(external_id: str, kind: str) -> str:
 
 @router.get("/cloud-resources", response_model=Envelope)
 async def list_cloud_resources(
-    cursor: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
     kind: str | None = Query(default=None),
     public: bool | None = Query(default=None),
@@ -61,12 +61,12 @@ async def list_cloud_resources(
         )
 
     total = len(items)
-    page = items[cursor : cursor + limit]
-    next_cursor: int | None = cursor + limit if cursor + limit < total else None
+    page = items[offset : offset + limit]
+    next_offset: int | None = offset + limit if offset + limit < total else None
 
     return make_envelope(
         data=page,
-        cursor=next_cursor,
+        offset=next_offset,
         total=total,
         tenant=tenant,
     )

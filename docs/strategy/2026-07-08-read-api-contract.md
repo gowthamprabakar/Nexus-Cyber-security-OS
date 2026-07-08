@@ -15,9 +15,9 @@ shape the backend can't deliver.
   server maps it to finding/node types (`vuln` → `{cve_finding, sbom_package, eol}`) and **enforces** it
   (RBAC, not a UI toggle — fixes the premortem's ungated-access finding). Unknown/absent domain → the
   caller's default entitlement.
-- **Envelope.** `{ "data": …, "meta": { "cursor": str|null, "total": int|null, "tenant": str, "generated_at": iso } }`.
+- **Envelope.** `{ "data": …, "meta": { "offset": int|null, "total": int|null, "tenant": str, "generated_at": iso } }`.
   Errors: `{ "error": { "code": str, "message": str } }` with real HTTP status. No silent stale data.
-- **Pagination.** Cursor-based (`?cursor=&limit=`) on every list — the mock has none; real lists need it.
+- **Pagination.** Offset-based (`?offset=&limit=`) on every list — the mock has none; real lists need it.
 - **Auth/RBAC** sit behind an interface (`require_tenant()`, `require_entitlement(resource, action)`)
   that is **stubbed now** (single dev tenant, allow-all) and swapped for a real IdP later — callers don't change.
 
@@ -27,7 +27,7 @@ shape the backend can't deliver.
 
 ### 1. `GET /v1/inventory/cloud-resources` → the `cloud-resources` page (🟢 pilot, frontend-only)
 
-Query: `?cursor=&limit=&kind=&public=`. One row per `CLOUD_RESOURCE` node for the tenant.
+Query: `?offset=&limit=&kind=&public=`. One row per `CLOUD_RESOURCE` node for the tenant.
 
 ```jsonc
 { "data": [ {
@@ -41,7 +41,7 @@ Query: `?cursor=&limit=&kind=&public=`. One row per `CLOUD_RESOURCE` node for th
 
 ### 2. `GET /v1/findings/vulnerabilities` → the `vulnerabilities` list (🟡, frontend + filter)
 
-Query: `?cursor=&limit=&severity=&kev=&domain=vuln`. Each `CVE_FINDING` joined to its resource via `VULNERABLE_TO`.
+Query: `?offset=&limit=&severity=&kev=&domain=vuln`. Each `CVE_FINDING` joined to its resource via `VULNERABLE_TO`.
 
 ```jsonc
 { "data": [ {
