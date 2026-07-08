@@ -586,6 +586,7 @@ def scan_cmd(
     from nexus_runtime.scan_pipeline import ScanSources, scan_run
 
     from meta_harness.attack_path_report import render_candidates, render_report
+    from meta_harness.posture import render_posture_summary, summary_to_dict
 
     async def _run() -> None:
         import json as _json
@@ -610,6 +611,9 @@ def scan_cmd(
                         "feeders": [
                             {"agent": f.agent, "ok": f.ok, "error": f.error} for f in res.feeders
                         ],
+                        "posture": summary_to_dict(res.posture)
+                        if res.posture is not None
+                        else None,  # type: ignore[arg-type]
                         "confirmed": [path_to_dict(p) for p in res.confirmed[:limit]],  # type: ignore[arg-type]
                         "candidates": [candidate_to_dict(c) for c in res.candidates],  # type: ignore[arg-type]
                     },
@@ -620,6 +624,9 @@ def scan_cmd(
             for f in res.feeders:
                 click.echo(f"feeder {f.agent}: {'ok' if f.ok else 'FAILED ' + (f.error or '')}")
             click.echo()
+            if res.posture is not None:
+                click.echo(render_posture_summary(res.posture))  # type: ignore[arg-type]
+                click.echo()
             click.echo(render_report(res.confirmed, tenant_id=customer_id, limit=limit))  # type: ignore[arg-type]
             click.echo()
             click.echo(render_candidates(res.candidates, tenant_id=customer_id))  # type: ignore[arg-type]
