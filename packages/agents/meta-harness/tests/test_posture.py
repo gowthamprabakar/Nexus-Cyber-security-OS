@@ -33,9 +33,15 @@ def test_domain_categories_cover_all_domains():
     assert set(P.DOMAIN_CATEGORIES) == set(P.DOMAINS)
 
 
-def _p(path_type, severity, *, kev=False, epss=None, entities=("e",)):
+def _p(path_type, severity, *, kev=False, epss=None, entities=("e",), evidence=()):
     return AttackPath(
-        path_type=path_type, severity=severity, title="t", entities=entities, kev=kev, epss=epss
+        path_type=path_type,
+        severity=severity,
+        title="t",
+        entities=entities,
+        kev=kev,
+        epss=epss,
+        evidence=evidence,
     )
 
 
@@ -69,13 +75,16 @@ def test_by_domain_groups_paths_into_domains():
 
 def test_exposure_funnel():
     paths = [
-        _p("internet_exposed_vulnerable", 80, kev=True, epss=0.9),
-        _p("internet_exposed_vulnerable", 80, kev=False, epss=0.2),
-        _p("internet_exposed_host_vulnerable", 79, kev=False, epss=None),
+        _p("internet_exposed_vulnerable", 80, kev=True, epss=0.9, evidence=("CVE-1",)),
+        _p("internet_exposed_vulnerable", 80, kev=False, epss=0.2, evidence=("CVE-2",)),
+        _p(
+            "internet_exposed_host_vulnerable", 79, kev=False, epss=None, evidence=()
+        ),  # exposed, no CVE evidence
         _p("crown_jewel", 95),  # not an exposure path — excluded
     ]
     f = P.exposure_funnel(paths)
-    assert (f.exposed, f.vulnerable, f.kev, f.exploitable) == (3, 3, 1, 1)
+    # 3 exposed; 2 carry evidence (vulnerable); 1 KEV; 1 exploitable (epss > 0.5)
+    assert (f.exposed, f.vulnerable, f.kev, f.exploitable) == (3, 2, 1, 1)
 
 
 class _Feeder:
@@ -154,6 +163,8 @@ async def test_compute_full_summary_on_fixture():
         assert s.exposure_funnel.exposed == 1 and s.exposure_funnel.kev == 1
         assert s.coverage.surfaced_findings == 1 and s.coverage.collectors_ok == 1
         assert s.inventory_counts[NC.CLOUD_RESOURCE.value] == 1
+        assert len(s.top_paths) == 2
+        assert all({"path_type", "severity", "title", "kev", "epss"} == set(p) for p in s.top_paths)
 
 
 @pytest.mark.asyncio

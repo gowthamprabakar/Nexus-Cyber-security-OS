@@ -217,7 +217,9 @@ def by_domain(paths: list[AttackPath]) -> tuple[DomainCount, ...]:
 def exposure_funnel(paths: list[AttackPath]) -> ExposureFunnel:
     exposure = [p for p in paths if p.path_type in EXPOSURE_PATH_TYPES]
     exposed = len(exposure)
-    vulnerable = sum(1 for p in exposure if p.count >= 1)
+    # of exposed paths, those carrying CVE/data evidence. For the CVE-bearing EXPOSURE_PATH_TYPES this is
+    # ~= exposed by construction; the gate only discriminates when an exposure path has empty evidence.
+    vulnerable = sum(1 for p in exposure if p.evidence)
     kev = sum(1 for p in exposure if p.kev)
     exploitable = sum(1 for p in exposure if p.epss is not None and p.epss > EPSS_EXPLOITABLE)
     return ExposureFunnel(exposed=exposed, vulnerable=vulnerable, kev=kev, exploitable=exploitable)

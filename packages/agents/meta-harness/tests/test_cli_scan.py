@@ -141,11 +141,11 @@ def _make_fake_stubs_with_posture(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sp_mod, "scan_run", _fake_scan_run)
 
 
-def test_scan_cli_renders_posture_coverage(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scan_cli_renders_posture_coverage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """scan command renders posture coverage line when posture is present."""
     _make_fake_stubs_with_posture(monkeypatch)
 
-    inv_path = Path(tempfile.mkdtemp()) / "inv.json"
+    inv_path = tmp_path / "inv.json"
     inv_path.write_text("[]")
 
     result = CliRunner().invoke(
@@ -164,11 +164,11 @@ def test_scan_cli_renders_posture_coverage(monkeypatch: pytest.MonkeyPatch) -> N
     assert "Coverage:" in result.output
 
 
-def test_scan_cli_json_includes_posture(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scan_cli_json_includes_posture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """--json flag includes posture key when posture is present."""
     _make_fake_stubs_with_posture(monkeypatch)
 
-    inv_path = Path(tempfile.mkdtemp()) / "inv.json"
+    inv_path = tmp_path / "inv.json"
     inv_path.write_text("[]")
 
     result = CliRunner().invoke(
@@ -189,3 +189,46 @@ def test_scan_cli_json_includes_posture(monkeypatch: pytest.MonkeyPatch) -> None
     assert "posture" in data, f"missing 'posture' key; got: {list(data)}"
     assert data["posture"] is not None
     assert data["posture"]["coverage"]["domain_pct"] == 60
+
+
+def test_scan_cli_no_posture_renders_cleanly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When posture is None, the scan CLI exits 0 and does not print the coverage line."""
+    _make_fake_stubs(monkeypatch)
+
+    inv_path = tmp_path / "inv.json"
+    inv_path.write_text("[]")
+
+    # text output: no "Coverage:" line
+    result = CliRunner().invoke(
+        cli_mod.main,
+        [
+            "scan",
+            "--customer-id",
+            "t1",
+            "--dsn",
+            "postgresql+asyncpg://fake/db",
+            "--ds-inventory-feed",
+            str(inv_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Coverage:" not in result.output
+
+    # json output: posture key is None
+    result_json = CliRunner().invoke(
+        cli_mod.main,
+        [
+            "scan",
+            "--customer-id",
+            "t1",
+            "--dsn",
+            "postgresql+asyncpg://fake/db",
+            "--ds-inventory-feed",
+            str(inv_path),
+            "--json",
+        ],
+    )
+    assert result_json.exit_code == 0, result_json.output
+    assert json.loads(result_json.output)["posture"] is None
