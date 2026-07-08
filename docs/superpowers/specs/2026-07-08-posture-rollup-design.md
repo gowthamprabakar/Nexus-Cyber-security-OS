@@ -7,8 +7,9 @@
 
 Turn data the scan **already** puts in the knowledge graph into **board/dashboard data** — a
 per-scan posture summary (severity distribution, per-domain scorecards, a domain×severity heatmap
-matrix, an exposure→vulnerable→exploitable funnel, inventory counts, and cross-scan trends). No new
-collection, no frontend. This is the single highest-leverage product-surface gap: it moves the
+matrix, an exposure→vulnerable→exploitable funnel, inventory counts, cross-scan trends, and a
+**highlighted coverage metric** — how much of the estate is actually populated, so the boards never
+imply completeness they don't have). No new collection, no frontend. This is the single highest-leverage product-surface gap: it moves the
 design's Overview, inventory-overview, heatmap, ASM-funnel, and trends pages from "no producer"
 (🔴/🟡) toward "backed by real data" (🟢), and lifts every persona's backend-readiness at once.
 
@@ -26,12 +27,13 @@ design's Overview, inventory-overview, heatmap, ASM-funnel, and trends pages fro
 
 A new module `packages/agents/meta-harness/src/meta_harness/posture.py` with three clear units:
 
-1. **`PostureRollup(store, tenant)` — pure reader/computer.** Reads the post-scan graph (via
-   `store.list_entities_by_type(...)` and the already-ranked `AttackPath`s) and returns a frozen
-   `PostureSummary`. No writes, no side effects. Tenant-scoped by construction (mirrors `KgQuery` /
-   `KnowledgeGraphWriterBase`).
+1. **`PostureRollup(store, tenant).compute(now, feeders=None)` — pure reader/computer.** Reads the
+   post-scan graph (via `store.list_entities_by_type(...)` and the already-ranked `AttackPath`s), plus the
+   optional `feeders` list (for collector coverage), and returns a frozen `PostureSummary`. No writes, no
+   side effects. Tenant-scoped by construction (mirrors `KgQuery` / `KnowledgeGraphWriterBase`).
 2. **`render_posture_summary(summary) -> str` — pure renderer.** Markdown section for the CLI report
-   (sibling to `report_card.render_report_card`).
+   (sibling to `report_card.render_report_card`); renders the **coverage line first**, then severity,
+   domains, and the funnel.
 3. **Persistence (two explicit, best-effort functions):**
    - `write_posture_json(summary, workspace_root) -> Path` → `workspace_root/aggregation/posture.json`.
    - `emit_posture_snapshot(store, tenant, summary, now)` → appends one episodic-memory row
@@ -52,7 +54,9 @@ OCSF findings. Immediately after, add a **best-effort** rollup step:
 scan_result = await analyze(store, tenant, persist=True, now=now)          # existing
 # --- new, non-fatal: a rollup failure must NOT fail the scan ---
 try:
-    summary = await PostureRollup(store, tenant).compute(now=now)
+    # `feeders` is the list of FeederOutcome already assembled in scan_run; it feeds
+    # collector-coverage. Passing it keeps compute() pure (inputs -> output).
+    summary = await PostureRollup(store, tenant).compute(now=now, feeders=feeders)
     write_posture_json(summary, workspace_root)
     await emit_posture_snapshot(store, tenant, summary, now=now)
 except Exception:
@@ -91,9 +95,25 @@ class ExposureFunnel:
     exploitable: int         # of those, EPSS > EPSS_EXPLOITABLE (0.5)
 
 @dataclass(frozen=True, slots=True)
+class Coverage:              # HIGHLIGHTED — how complete is this posture picture? (honesty signal)
+    # headline: breadth of the security picture actually populated this scan
+    domains_covered: int     # domains with >=1 finding or asset this scan
+    domains_total: int       # known domain roster (constant list — see DOMAINS)
+    domain_pct: int          # round(domains_covered / domains_total * 100)
+    # scan health: collectors that produced data (None when computed outside a scan)
+    collectors_ok: int | None    # feeders that succeeded (from ScanRunResult.feeders)
+    collectors_run: int | None
+    collector_pct: int | None
+    # surfaced: findings prioritized onto >=1 ranked attack path ("shown as an issue")
+    surfaced_findings: int
+    total_findings: int
+    surfaced_pct: int        # round(surfaced_findings / total_findings * 100); 0 when total_findings == 0
+
+@dataclass(frozen=True, slots=True)
 class PostureSummary:
     tenant: str
     scan_at: str                          # ISO-8601
+    coverage: Coverage                    # HIGHLIGHTED — rendered first; top-level in posture.json
     totals: dict[str, int]                # attack_paths = len(ranked paths); findings = sum of finding-category
                                           #   counts (CVE+misconfig+secret+data); nodes = all entities for the tenant
     severity_distribution: dict[str, int] # {"critical","high","medium","low"} — distribution of ATTACK PATHS by
@@ -135,6 +155,29 @@ row per scan (`action="posture_snapshot"`, payload = `{severity_distribution, to
 - The plan locates the episodic-memory append path (`charter.memory`, `EpisodeModel`). If no clean writer
   exists, that is a plan-level decision surfaced to the human — **not** silently worked around.
 
+## Coverage (highlighted)
+
+The honesty signal that keeps a full-looking board from implying a complete picture. Three computable
+angles, all in the `Coverage` block, rendered **first** in the markdown and placed **top-level** in
+`posture.json`:
+
+- **Domain coverage (headline)** — `domains_covered / domains_total`. `DOMAINS` is a constant roster of the
+  product's security domains (the union of `PATH_DOMAIN` values and the finding taxonomy: vulnerability,
+  cloud, identity, data, container, appsec, threat, ai, …). A domain is "covered" when the tenant has ≥1
+  finding node or attack path in it this scan. Example: 8/14 → **57%**. This is the number a customer reads
+  as "how much of my estate does this reflect."
+- **Collector coverage** — `collectors_ok / collectors_run` from the scan's `FeederOutcome`s (which feeders
+  ran and whether they succeeded). `None` when `compute` is called outside a scan (e.g. the CLI over an
+  existing graph); the render **omits** it rather than showing a fake 100%.
+- **Surfaced ratio** — `surfaced_findings / total_findings`: distinct finding entities that appear on ≥1
+  ranked attack path ÷ all finding nodes. This is the literal "% of data being shown" — how much of the raw
+  pile is surfaced as a prioritized issue. A low value is **not** a defect (most findings aren't attack
+  paths); it's rendered as context, not an alarm.
+
+`compute(now, feeders=None)` stays pure — the graph plus the optional feeder list are its only inputs.
+Every percentage guards divide-by-zero (returns 0 when the denominator is 0). The coverage block is the
+one thing rendered **above** the severity numbers, so the picture's completeness is read before its content.
+
 ## Error handling
 
 - **Non-fatal in the pipeline:** the scan hook wraps the rollup in try/except; a failure logs a warning
@@ -150,8 +193,13 @@ row per scan (`action="posture_snapshot"`, payload = `{severity_distribution, to
   category nodes; assert **exact** `severity_distribution`, `by_domain`, `by_path_type`,
   `exposure_funnel`, `inventory_counts`, `totals`.
 - **Unit — empty graph:** `compute` returns the all-zero summary without raising.
-- **Unit — `render_posture_summary`:** asserts the markdown contains the headline totals + one domain row +
-  the funnel line (not just "renders without error").
+- **Unit — coverage:** fixture with a known domain / feeder / finding mix → assert exact `domain_pct`,
+  `collector_pct`, `surfaced_pct`; a domain with zero data lowers `domain_pct`; a failed feeder lowers
+  `collector_pct`; `feeders=None` → `collectors_*` is `None`; `total_findings == 0` → `surfaced_pct == 0`
+  (no divide-by-zero).
+- **Unit — `render_posture_summary`:** asserts the markdown leads with the coverage line and contains the
+  headline totals + one domain row + the funnel line (not just "renders without error"); with
+  `collectors_* == None`, the collector clause is omitted (no fake 100%).
 - **Unit — domain map completeness:** every live `path_type` maps to a real domain (none fall to `"other"`).
 - **Unit — trends:** two synthetic snapshots → `posture_trend` returns two ordered `TrendPoint`s;
   zero snapshots → empty.
