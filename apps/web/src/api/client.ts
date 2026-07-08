@@ -1,10 +1,19 @@
-import type { CloudResource, Envelope } from './types';
+import type { CloudResource, Envelope, VulnDetail, VulnFinding } from './types';
+
+type QueryValue = string | number | boolean | undefined;
 
 export interface CloudResourceQuery {
   offset?: number;
   limit?: number;
   kind?: string;
   public?: boolean;
+}
+
+export interface VulnQuery {
+  offset?: number;
+  limit?: number;
+  severity?: string;
+  kev?: boolean;
 }
 
 /** Thrown on any non-2xx response so pages can render an error state. */
@@ -18,25 +27,49 @@ export class ApiError extends Error {
   }
 }
 
-function buildQuery(params: CloudResourceQuery): string {
+function buildQuery(entries: Array<[string, QueryValue]>): string {
   const q = new URLSearchParams();
-  if (params.offset != null) q.set('offset', String(params.offset));
-  if (params.limit != null) q.set('limit', String(params.limit));
-  if (params.kind) q.set('kind', params.kind);
-  if (params.public != null) q.set('public', String(params.public));
+  for (const [key, value] of entries) {
+    if (value !== undefined) q.set(key, String(value));
+  }
   const s = q.toString();
   return s ? `?${s}` : '';
 }
 
-export async function getCloudResources(
+async function getJson<T>(path: string, tenant: string): Promise<T> {
+  const res = await fetch(path, { headers: { 'X-Tenant-Id': tenant } });
+  if (!res.ok) {
+    throw new ApiError(res.status, `request failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}
+
+export function getCloudResources(
   tenant: string,
   params: CloudResourceQuery = {}
 ): Promise<Envelope<CloudResource[]>> {
-  const res = await fetch(`/v1/inventory/cloud-resources${buildQuery(params)}`, {
-    headers: { 'X-Tenant-Id': tenant },
-  });
-  if (!res.ok) {
-    throw new ApiError(res.status, `cloud-resources request failed (${res.status})`);
-  }
-  return (await res.json()) as Envelope<CloudResource[]>;
+  const qs = buildQuery([
+    ['offset', params.offset],
+    ['limit', params.limit],
+    ['kind', params.kind],
+    ['public', params.public],
+  ]);
+  return getJson(`/v1/inventory/cloud-resources${qs}`, tenant);
+}
+
+export function getVulnerabilities(
+  tenant: string,
+  params: VulnQuery = {}
+): Promise<Envelope<VulnFinding[]>> {
+  const qs = buildQuery([
+    ['offset', params.offset],
+    ['limit', params.limit],
+    ['severity', params.severity],
+    ['kev', params.kev],
+  ]);
+  return getJson(`/v1/findings/vulnerabilities${qs}`, tenant);
+}
+
+export function getVulnerability(tenant: string, cveId: string): Promise<Envelope<VulnDetail>> {
+  return getJson(`/v1/findings/vulnerabilities/${encodeURIComponent(cveId)}`, tenant);
 }
