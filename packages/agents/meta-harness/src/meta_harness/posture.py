@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from charter.memory.episodic import EpisodicStore
 from charter.memory.graph_types import NodeCategory as NC
 from charter.memory.semantic import SemanticStore
 
@@ -388,3 +389,43 @@ def render_posture_summary(summary: PostureSummary) -> str:
         f" → {f.kev} KEV → {f.exploitable} exploitable"
     )
     return "\n".join(lines)
+
+
+# ---- cross-scan trend snapshots via episodic memory --------------------------
+SNAPSHOT_ACTION = "posture_snapshot"
+SNAPSHOT_AGENT = "posture-rollup"
+
+
+async def emit_posture_snapshot(
+    episodic: EpisodicStore, tenant: str, summary: PostureSummary, *, correlation_id: str
+) -> None:
+    await episodic.append_event(
+        tenant_id=tenant,
+        correlation_id=correlation_id,
+        agent_id=SNAPSHOT_AGENT,
+        action=SNAPSHOT_ACTION,
+        payload={
+            "at": summary.scan_at,
+            "totals": summary.totals,
+            "severity_distribution": summary.severity_distribution,
+        },
+    )
+
+
+async def posture_trend(
+    episodic: EpisodicStore, tenant: str, *, limit: int = 30
+) -> list[TrendPoint]:
+    # query_recent returns DESC; over-fetch to survive interleaved actions, filter, reverse to ASC.
+    rows = await episodic.query_recent(tenant_id=tenant, limit=max(limit * 4, 100))
+    snaps = [r for r in rows if r.action == SNAPSHOT_ACTION]
+    snaps.reverse()
+    points = [
+        TrendPoint(
+            at=str(r.payload.get("at", "")),
+            attack_paths=int(r.payload.get("totals", {}).get("attack_paths", 0)),
+            critical=int(r.payload.get("severity_distribution", {}).get("critical", 0)),
+            high=int(r.payload.get("severity_distribution", {}).get("high", 0)),
+        )
+        for r in snaps
+    ]
+    return points[-limit:]

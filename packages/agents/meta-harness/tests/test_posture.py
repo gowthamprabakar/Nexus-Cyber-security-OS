@@ -2,10 +2,13 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from charter.memory.episodic import EpisodicStore
 from charter.memory.graph_types import NodeCategory as NC
+from charter.memory.models import Base
 from fleet_testkit import in_memory_semantic_store
 from meta_harness import posture as P
 from meta_harness.attack_paths import _SEVERITY, AttackPath
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
 def test_bucket_of_boundaries():
@@ -200,3 +203,46 @@ def test_render_leads_with_coverage_and_omits_missing_collectors():
     assert "Coverage" in first_line and "44%" in first_line
     assert "collector" not in md.lower()  # omitted when None
     assert "data" in md
+
+
+async def _episodic():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    return EpisodicStore(async_sessionmaker(engine, expire_on_commit=False))
+
+
+def _summary(at, ap, crit, high):
+    cov = P.Coverage(0, 9, 0, None, None, None, 0, 0, 0)
+    return P.PostureSummary(
+        tenant="t",
+        scan_at=at,
+        coverage=cov,
+        totals={"attack_paths": ap, "findings": 0, "nodes": 0},
+        severity_distribution={"critical": crit, "high": high, "medium": 0, "low": 0},
+        by_domain=(),
+        by_path_type=(),
+        exposure_funnel=P.ExposureFunnel(0, 0, 0, 0),
+        inventory_counts={},
+        top_paths=(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_trend_returns_snapshots_in_time_order():
+    ep = await _episodic()
+    await P.emit_posture_snapshot(
+        ep, "t", _summary("2026-07-01T00:00:00+00:00", 3, 1, 1), correlation_id="c1"
+    )
+    await P.emit_posture_snapshot(
+        ep, "t", _summary("2026-07-08T00:00:00+00:00", 5, 2, 2), correlation_id="c2"
+    )
+    trend = await P.posture_trend(ep, "t")
+    assert [t.attack_paths for t in trend] == [3, 5]  # ascending by emit order
+    assert trend[1].critical == 2 and trend[1].high == 2
+
+
+@pytest.mark.asyncio
+async def test_trend_empty_when_no_snapshots():
+    ep = await _episodic()
+    assert await P.posture_trend(ep, "t") == []
