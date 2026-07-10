@@ -50,3 +50,49 @@ export interface VulnDetail {
   first_seen: string | null;
   remediation: VulnRemediation;
 }
+
+export interface Coverage {
+  domains_covered: number;
+  domains_total: number;
+  domain_pct: number;
+  collectors_ok: number | null;
+  collectors_run: number | null;
+  collector_pct: number | null;
+  surfaced_findings: number;
+  total_findings: number;
+  surfaced_pct: number;
+}
+
+export interface DomainCount {
+  domain: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+}
+
+export interface ExposureFunnel {
+  exposed: number;
+  vulnerable: number;
+  kev: number;
+  exploitable: number;
+}
+
+export interface SeverityDistribution {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface PostureSummary {
+  tenant: string;
+  scan_at: string;
+  coverage: Coverage;
+  totals: Record<string, number>;
+  severity_distribution: SeverityDistribution;
+  by_domain: DomainCount[];
+  exposure_funnel: ExposureFunnel;
+  inventory_counts: Record<string, number>;
+}

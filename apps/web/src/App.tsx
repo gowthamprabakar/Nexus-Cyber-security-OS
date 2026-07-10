@@ -1,13 +1,20 @@
 import { useState } from 'react';
 import { TenantProvider } from './auth/TenantProvider';
 import { CloudResourcesPage } from './pages/CloudResourcesPage';
+import { OverviewPage } from './pages/OverviewPage';
 import { VulnerabilitiesPage } from './pages/VulnerabilitiesPage';
 import './styles.css';
 
-type View = 'cloud-resources' | 'vulnerabilities';
+type View = 'overview' | 'cloud-resources' | 'vulnerabilities';
+
+const NAV: { view: View; label: string }[] = [
+  { view: 'overview', label: 'Overview' },
+  { view: 'cloud-resources', label: 'Cloud Resources' },
+  { view: 'vulnerabilities', label: 'Vulnerabilities' },
+];
 
 export function App() {
-  const [view, setView] = useState<View>('cloud-resources');
+  const [view, setView] = useState<View>('overview');
   return (
     <TenantProvider>
       <div className="app">
@@ -15,24 +22,22 @@ export function App() {
           <span className="app__mark" aria-hidden="true" />
           <span className="app__title">Nexus Console</span>
           <nav className="app__nav">
-            <button
-              type="button"
-              className={view === 'cloud-resources' ? 'active' : ''}
-              onClick={() => setView('cloud-resources')}
-            >
-              Cloud Resources
-            </button>
-            <button
-              type="button"
-              className={view === 'vulnerabilities' ? 'active' : ''}
-              onClick={() => setView('vulnerabilities')}
-            >
-              Vulnerabilities
-            </button>
+            {NAV.map((n) => (
+              <button
+                key={n.view}
+                type="button"
+                className={view === n.view ? 'active' : ''}
+                onClick={() => setView(n.view)}
+              >
+                {n.label}
+              </button>
+            ))}
           </nav>
         </header>
         <main className="app__main">
-          {view === 'cloud-resources' ? <CloudResourcesPage /> : <VulnerabilitiesPage />}
+          {view === 'overview' && <OverviewPage />}
+          {view === 'cloud-resources' && <CloudResourcesPage />}
+          {view === 'vulnerabilities' && <VulnerabilitiesPage />}
         </main>
       </div>
     </TenantProvider>

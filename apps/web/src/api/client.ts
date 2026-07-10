@@ -1,4 +1,4 @@
-import type { CloudResource, Envelope, VulnDetail, VulnFinding } from './types';
+import type { CloudResource, Envelope, PostureSummary, VulnDetail, VulnFinding } from './types';
 
 type QueryValue = string | number | boolean | undefined;
 
@@ -72,4 +72,9 @@ export function getVulnerabilities(
 
 export function getVulnerability(tenant: string, cveId: string): Promise<Envelope<VulnDetail>> {
   return getJson(`/v1/findings/vulnerabilities/${encodeURIComponent(cveId)}`, tenant);
+}
+
+export function getPosture(tenant: string, domain?: string): Promise<Envelope<PostureSummary>> {
+  const qs = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+  return getJson(`/v1/posture${qs}`, tenant);
 }
