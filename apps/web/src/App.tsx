@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { TenantProvider } from './auth/TenantProvider';
 import { CloudResourcesPage } from './pages/CloudResourcesPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { SbomPage } from './pages/SbomPage';
 import { VulnerabilitiesPage } from './pages/VulnerabilitiesPage';
 import './styles.css';
 
-type View = 'overview' | 'cloud-resources' | 'vulnerabilities';
+type View = 'overview' | 'cloud-resources' | 'vulnerabilities' | 'sbom';
 
 const NAV: { view: View; label: string }[] = [
   { view: 'overview', label: 'Overview' },
   { view: 'cloud-resources', label: 'Cloud Resources' },
   { view: 'vulnerabilities', label: 'Vulnerabilities' },
+  { view: 'sbom', label: 'SBOM' },
 ];
 
 export function App() {
@@ -38,6 +40,7 @@ export function App() {
           {view === 'overview' && <OverviewPage />}
           {view === 'cloud-resources' && <CloudResourcesPage />}
           {view === 'vulnerabilities' && <VulnerabilitiesPage />}
+          {view === 'sbom' && <SbomPage />}
         </main>
       </div>
     </TenantProvider>

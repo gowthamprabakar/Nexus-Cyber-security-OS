@@ -20,6 +20,13 @@ export interface CloudResource {
   region: string | null;
 }
 
+export interface SbomPackage {
+  id: string;
+  name: string;
+  image: string;
+  vulnerabilities: number;
+}
+
 export interface VulnFinding {
   cve_id: string;
   severity: string;
