@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.routing import APIRouter
 
-from read_api.routers import findings, inventory
+from read_api.routers import findings, inventory, posture
 
 app = FastAPI(
     title="Nexus Read API",
@@ -16,5 +16,6 @@ app = FastAPI(
 v1 = APIRouter(prefix="/v1")
 v1.include_router(inventory.router)
 v1.include_router(findings.router)
+v1.include_router(posture.router)
 
 app.include_router(v1)

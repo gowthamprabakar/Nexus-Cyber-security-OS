@@ -2381,6 +2381,7 @@ source = { editable = "packages/read-api" }
 dependencies = [
     { name = "fastapi" },
     { name = "nexus-charter" },
+    { name = "nexus-meta-harness-agent" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
@@ -2398,6 +2399,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
     { name = "nexus-charter", editable = "packages/charter" },
+    { name = "nexus-meta-harness-agent", editable = "packages/agents/meta-harness" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },

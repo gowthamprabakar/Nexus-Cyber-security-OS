@@ -5,6 +5,7 @@ description = "Nexus Read API — FastAPI read-layer serving the product fronten
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "nexus-charter",
+    "nexus-meta-harness-agent",
     "fastapi>=0.115.0",
     "sqlalchemy[asyncio]>=2.0.30",
 ]
@@ -19,6 +20,7 @@ dev = [
 
 [tool.uv.sources]
 nexus-charter = { workspace = true }
+nexus-meta-harness-agent = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
