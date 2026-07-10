@@ -8,9 +8,19 @@ from charter.memory.graph_types import EdgeType, NodeCategory
 from charter.memory.semantic import SemanticStore
 from fastapi import APIRouter, Depends, Query
 
-from read_api.deps import Envelope, get_store, make_envelope, require_tenant
+from read_api.deps import (
+    Envelope,
+    get_store,
+    make_envelope,
+    require_entitlement,
+    require_tenant,
+)
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=[Depends(require_entitlement("inventory", "read"))],
+)
 
 _VULN_TO = (EdgeType.VULNERABLE_TO.value,)
 

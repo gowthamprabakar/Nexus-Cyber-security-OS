@@ -54,7 +54,15 @@ _store: SemanticStore | None = None
 
 
 def _build_store() -> SemanticStore:
-    dsn = os.environ.get("NEXUS_DB_DSN", "sqlite+aiosqlite:///:memory:")
+    # Fail fast: an unset DSN used to default to in-memory sqlite, which has no
+    # schema and is per-connection — it would serve empty results forever while
+    # looking healthy. Tests never hit this path (they override get_store).
+    dsn = os.environ.get("NEXUS_DB_DSN")
+    if not dsn:
+        raise RuntimeError(
+            "NEXUS_DB_DSN is not set. The read API needs a DSN pointing at the "
+            "populated knowledge-graph database (e.g. postgresql+asyncpg://...)."
+        )
     factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
         create_async_engine(dsn), expire_on_commit=False
     )

@@ -25,12 +25,3 @@ export function useTenant(): string {
   if (!ctx) throw new Error('useTenant must be used within a TenantProvider');
   return ctx.tenant;
 }
-
-/**
- * Entitlement gate — STUB (allow-all). A real seam so gated actions (e.g. the
- * destructive remediation controls the premortem flagged as ungated) can be
- * enforced server-and-client-side later without touching call sites.
- */
-export function useEntitlement(): (resource: string, action: string) => boolean {
-  return () => true;
-}
