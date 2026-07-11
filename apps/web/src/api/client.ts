@@ -1,4 +1,5 @@
 import type {
+  CatalogEntry,
   CloudResource,
   ContainerImage,
   Envelope,
@@ -80,6 +81,19 @@ export function getVulnerabilities(
 
 export function getVulnerability(tenant: string, cveId: string): Promise<Envelope<VulnDetail>> {
   return getJson(`/v1/findings/vulnerabilities/${encodeURIComponent(cveId)}`, tenant);
+}
+
+export function getCatalog(
+  tenant: string,
+  params: VulnQuery = {}
+): Promise<Envelope<CatalogEntry[]>> {
+  const qs = buildQuery([
+    ['offset', params.offset],
+    ['limit', params.limit],
+    ['severity', params.severity],
+    ['kev', params.kev],
+  ]);
+  return getJson(`/v1/findings/catalog${qs}`, tenant);
 }
 
 export function getPosture(tenant: string, domain?: string): Promise<Envelope<PostureSummary>> {

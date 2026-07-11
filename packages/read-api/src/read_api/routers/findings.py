@@ -28,6 +28,54 @@ router = APIRouter(
 )
 
 _VULN_TO = (EdgeType.VULNERABLE_TO.value,)
+_SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+
+
+async def _catalog_rows(store: SemanticStore, tenant: str) -> list[dict[str, Any]]:
+    """One row per unique CVE (deduplicated) with its direct affected-resource count.
+
+    Unlike ``_vuln_rows`` (one row per resource-CVE pair), the catalog collapses to
+    the CVE and counts how many resources carry a direct VULNERABLE_TO edge into it.
+    Ranked worst-first: KEV, then severity, then EPSS, then blast radius.
+    """
+    cves = {
+        c.entity_id: c
+        for c in await store.list_entities_by_type(
+            tenant_id=tenant, entity_type=NodeCategory.CVE_FINDING.value
+        )
+    }
+    affected: dict[str, int] = {}
+    for res in await store.list_entities_by_type(
+        tenant_id=tenant, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    ):
+        for rel in await store.get_relationships_from(
+            tenant_id=tenant, src_entity_id=res.entity_id, edge_types=_VULN_TO
+        ):
+            if rel.dst_entity_id in cves:
+                affected[rel.dst_entity_id] = affected.get(rel.dst_entity_id, 0) + 1
+
+    rows: list[dict[str, Any]] = []
+    for eid, cve in cves.items():
+        props = cve.properties
+        rows.append(
+            {
+                "cve_id": cve.external_id,
+                "severity": str(props.get("severity", "")),
+                "kev": bool(props.get("kev", False)),
+                "epss": props.get("epss_score"),
+                "affected_resources": affected.get(eid, 0),
+            }
+        )
+    rows.sort(
+        key=lambda r: (
+            r["kev"],
+            _SEV_RANK.get(str(r["severity"]).upper(), 0),
+            r["epss"] or 0.0,
+            r["affected_resources"],
+        ),
+        reverse=True,
+    )
+    return rows
 
 
 async def _vuln_rows(store: SemanticStore, tenant: str) -> list[dict[str, Any]]:
@@ -77,6 +125,27 @@ async def list_vulnerabilities(
 ) -> Envelope:
     """Vulnerability findings (one per resource-CVE pair), tenant-scoped, paginated."""
     rows = await _vuln_rows(store, tenant)
+    if severity is not None:
+        rows = [r for r in rows if str(r["severity"]).lower() == severity.lower()]
+    if kev is not None:
+        rows = [r for r in rows if r["kev"] == kev]
+    total = len(rows)
+    page = rows[offset : offset + limit]
+    next_offset: int | None = offset + limit if offset + limit < total else None
+    return make_envelope(data=page, offset=next_offset, total=total, tenant=tenant)
+
+
+@router.get("/catalog", response_model=Envelope)
+async def list_catalog(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    severity: str | None = Query(default=None),
+    kev: bool | None = Query(default=None),
+    tenant: str = Depends(require_tenant),
+    store: SemanticStore = Depends(get_store),  # noqa: B008
+) -> Envelope:
+    """CVE catalog — one row per unique CVE, ranked worst-first, tenant-scoped, paginated."""
+    rows = await _catalog_rows(store, tenant)
     if severity is not None:
         rows = [r for r in rows if str(r["severity"]).lower() == severity.lower()]
     if kev is not None:

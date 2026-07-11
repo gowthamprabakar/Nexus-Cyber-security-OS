@@ -44,6 +44,14 @@ export interface VulnFinding {
   status: string;
 }
 
+export interface CatalogEntry {
+  cve_id: string;
+  severity: string;
+  kev: boolean;
+  epss: number | null;
+  affected_resources: number;
+}
+
 export interface VulnRemediation {
   tier: string;
   advice: string;

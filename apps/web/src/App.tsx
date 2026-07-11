@@ -4,10 +4,17 @@ import { CloudResourcesPage } from './pages/CloudResourcesPage';
 import { ContainerImagesPage } from './pages/ContainerImagesPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { SbomPage } from './pages/SbomPage';
+import { VulnCatalogPage } from './pages/VulnCatalogPage';
 import { VulnerabilitiesPage } from './pages/VulnerabilitiesPage';
 import './styles.css';
 
-type View = 'overview' | 'cloud-resources' | 'vulnerabilities' | 'sbom' | 'container-images';
+type View =
+  | 'overview'
+  | 'cloud-resources'
+  | 'vulnerabilities'
+  | 'sbom'
+  | 'container-images'
+  | 'vuln-catalog';
 
 const NAV: { view: View; label: string }[] = [
   { view: 'overview', label: 'Overview' },
@@ -15,6 +22,7 @@ const NAV: { view: View; label: string }[] = [
   { view: 'vulnerabilities', label: 'Vulnerabilities' },
   { view: 'sbom', label: 'SBOM' },
   { view: 'container-images', label: 'Container Images' },
+  { view: 'vuln-catalog', label: 'Catalog' },
 ];
 
 export function App() {
@@ -44,6 +52,7 @@ export function App() {
           {view === 'vulnerabilities' && <VulnerabilitiesPage />}
           {view === 'sbom' && <SbomPage />}
           {view === 'container-images' && <ContainerImagesPage />}
+          {view === 'vuln-catalog' && <VulnCatalogPage />}
         </main>
       </div>
     </TenantProvider>

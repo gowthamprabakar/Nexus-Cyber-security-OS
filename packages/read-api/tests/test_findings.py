@@ -151,3 +151,20 @@ def test_detail_returns_enriched_fields_and_advisory(client: TestClient) -> None
 def test_detail_unknown_cve_is_404(client: TestClient) -> None:
     resp = client.get("/v1/findings/vulnerabilities/CVE-NOPE", headers={"X-Tenant-Id": "acme"})
     assert resp.status_code == 404
+
+
+def test_catalog_dedupes_ranks_and_scopes(client: TestClient) -> None:
+    resp = client.get("/v1/findings/catalog", headers={"X-Tenant-Id": "acme"})
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    ids = [d["cve_id"] for d in data]
+    assert ids == ["CVE-2024-0001", "CVE-2024-0002"]  # KEV-first ranking
+    assert "CVE-OTHER" not in ids  # tenant scoping
+    top = data[0]
+    assert top["kev"] is True
+    assert top["affected_resources"] == 1  # img:1.0
+
+
+def test_catalog_kev_filter(client: TestClient) -> None:
+    resp = client.get("/v1/findings/catalog?kev=true", headers={"X-Tenant-Id": "acme"})
+    assert {d["cve_id"] for d in resp.json()["data"]} == {"CVE-2024-0001"}
