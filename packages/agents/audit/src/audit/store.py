@@ -27,7 +27,7 @@ the F.5 stores use — no other coupling to the underlying engine.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from charter.memory.models import AuditEventModel
@@ -39,6 +39,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.sql.dml import Insert
 
 from audit.schemas import AuditEvent, AuditQueryResult
+
+
+def _normalize_utc(value: datetime) -> datetime:
+    """SQLite drops tzinfo on TIMESTAMPTZ round-trip; pin UTC so readers — and
+    hash-chain verification, which recomputes from ``emitted_at.isoformat()`` —
+    always see a timezone-aware value. Mirrors ``episode_reader._normalize_timestamp``.
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 class AuditStore:
@@ -168,7 +176,7 @@ class AuditStore:
             payload=dict(model.payload),
             previous_hash=model.previous_hash,
             entry_hash=model.entry_hash,
-            emitted_at=model.emitted_at,
+            emitted_at=_normalize_utc(model.emitted_at),
             source=model.source,
         )
 
