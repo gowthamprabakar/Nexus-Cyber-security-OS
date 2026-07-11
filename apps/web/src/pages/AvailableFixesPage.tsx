@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { getAvailableFixes } from '../api/client';
 import type { AvailableFix } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; rows: AvailableFix[] };
+  | { status: 'ready'; rows: AvailableFix[]; total: number | null };
 
 export function AvailableFixesPage() {
   const tenant = useTenant();
@@ -16,7 +17,7 @@ export function AvailableFixesPage() {
     setState({ status: 'loading' });
     try {
       const env = await getAvailableFixes(tenant);
-      setState({ status: 'ready', rows: env.data });
+      setState({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
     }
@@ -31,7 +32,7 @@ export function AvailableFixesPage() {
       <header className="page__head">
         <h1>Available Fixes</h1>
         {state.status === 'ready' && (
-          <span className="page__count">{state.rows.length} patch actions</span>
+          <RowCount shown={state.rows.length} total={state.total} noun="patch actions" />
         )}
       </header>
       <p className="page__note">

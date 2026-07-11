@@ -102,14 +102,17 @@ export function getPosture(tenant: string, domain?: string): Promise<Envelope<Po
   return getJson(`/v1/posture${qs}`, tenant);
 }
 
-export function getSbom(tenant: string): Promise<Envelope<SbomPackage[]>> {
-  return getJson('/v1/inventory/sbom', tenant);
+export function getSbom(tenant: string, limit = 500): Promise<Envelope<SbomPackage[]>> {
+  return getJson(`/v1/inventory/sbom${buildQuery([['limit', limit]])}`, tenant);
 }
 
-export function getContainerImages(tenant: string): Promise<Envelope<ContainerImage[]>> {
-  return getJson('/v1/inventory/container-images', tenant);
+export function getContainerImages(
+  tenant: string,
+  limit = 500
+): Promise<Envelope<ContainerImage[]>> {
+  return getJson(`/v1/inventory/container-images${buildQuery([['limit', limit]])}`, tenant);
 }
 
-export function getAvailableFixes(tenant: string): Promise<Envelope<AvailableFix[]>> {
-  return getJson('/v1/findings/available-fixes', tenant);
+export function getAvailableFixes(tenant: string, limit = 500): Promise<Envelope<AvailableFix[]>> {
+  return getJson(`/v1/findings/available-fixes${buildQuery([['limit', limit]])}`, tenant);
 }

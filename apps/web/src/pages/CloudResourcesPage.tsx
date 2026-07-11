@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getCloudResources } from '../api/client';
 import type { CloudResource } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type LoadState =
   | { status: 'loading' }
@@ -15,7 +16,7 @@ export function CloudResourcesPage() {
   const load = useCallback(async () => {
     setState({ status: 'loading' });
     try {
-      const env = await getCloudResources(tenant, { limit: 100 });
+      const env = await getCloudResources(tenant, { limit: 500 });
       setState({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
@@ -31,7 +32,7 @@ export function CloudResourcesPage() {
       <header className="page__head">
         <h1>Cloud Resources</h1>
         {state.status === 'ready' && (
-          <span className="page__count">{state.total ?? state.rows.length} total</span>
+          <RowCount shown={state.rows.length} total={state.total} noun="resources" />
         )}
       </header>
 

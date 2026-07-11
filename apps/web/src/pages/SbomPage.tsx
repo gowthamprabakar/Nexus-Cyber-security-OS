@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { getSbom } from '../api/client';
 import type { SbomPackage } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; rows: SbomPackage[] };
+  | { status: 'ready'; rows: SbomPackage[]; total: number | null };
 
 export function SbomPage() {
   const tenant = useTenant();
@@ -16,7 +17,7 @@ export function SbomPage() {
     setState({ status: 'loading' });
     try {
       const env = await getSbom(tenant);
-      setState({ status: 'ready', rows: env.data });
+      setState({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
     }
@@ -31,7 +32,7 @@ export function SbomPage() {
       <header className="page__head">
         <h1>SBOM</h1>
         {state.status === 'ready' && (
-          <span className="page__count">{state.rows.length} packages</span>
+          <RowCount shown={state.rows.length} total={state.total} noun="packages" />
         )}
       </header>
 

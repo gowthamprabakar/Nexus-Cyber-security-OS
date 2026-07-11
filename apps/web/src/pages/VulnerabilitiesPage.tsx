@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { getVulnerabilities, getVulnerability } from '../api/client';
 import type { VulnDetail, VulnFinding } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type ListState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; rows: VulnFinding[] };
+  | { status: 'ready'; rows: VulnFinding[]; total: number | null };
 
 type DetailState =
   | { status: 'idle' }
@@ -26,8 +27,8 @@ export function VulnerabilitiesPage() {
   const loadList = useCallback(async () => {
     setList({ status: 'loading' });
     try {
-      const env = await getVulnerabilities(tenant, { limit: 100 });
-      setList({ status: 'ready', rows: env.data });
+      const env = await getVulnerabilities(tenant, { limit: 500 });
+      setList({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setList({ status: 'error', message: message(err) });
     }
@@ -55,7 +56,7 @@ export function VulnerabilitiesPage() {
       <header className="page__head">
         <h1>Vulnerabilities</h1>
         {list.status === 'ready' && (
-          <span className="page__count">{list.rows.length} findings</span>
+          <RowCount shown={list.rows.length} total={list.total} noun="findings" />
         )}
       </header>
 

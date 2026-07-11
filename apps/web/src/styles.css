@@ -73,6 +73,9 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+.page__count-more {
+  color: var(--warn, #d29922);
+}
 .page__note {
   color: var(--muted);
   font-size: 13px;

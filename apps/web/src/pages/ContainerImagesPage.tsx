@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { getContainerImages } from '../api/client';
 import type { ContainerImage } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; rows: ContainerImage[] };
+  | { status: 'ready'; rows: ContainerImage[]; total: number | null };
 
 export function ContainerImagesPage() {
   const tenant = useTenant();
@@ -16,7 +17,7 @@ export function ContainerImagesPage() {
     setState({ status: 'loading' });
     try {
       const env = await getContainerImages(tenant);
-      setState({ status: 'ready', rows: env.data });
+      setState({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
     }
@@ -31,7 +32,7 @@ export function ContainerImagesPage() {
       <header className="page__head">
         <h1>Container Images</h1>
         {state.status === 'ready' && (
-          <span className="page__count">{state.rows.length} images</span>
+          <RowCount shown={state.rows.length} total={state.total} noun="images" />
         )}
       </header>
 

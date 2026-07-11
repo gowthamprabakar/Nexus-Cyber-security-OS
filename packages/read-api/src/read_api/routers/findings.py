@@ -126,9 +126,12 @@ async def _available_fixes(store: SemanticStore, tenant: str) -> list[dict[str, 
     groups: dict[tuple[str, str], dict[str, Any]] = {}
     for r in await _vuln_rows(store, tenant):
         fix = str(r["fix_version"])
-        if not fix:
-            continue
         component = str(r["component"])
+        # An "upgrade <package> to <version>" action is only actionable with both
+        # a named package and a target version; skip findings missing either so
+        # nameless findings never merge into one bogus "—" patch row.
+        if not fix or not component:
+            continue
         group = groups.setdefault(
             (component, fix),
             {"component": component, "fix_version": fix, "_cves": set(), "_res": set(), "_sev": 0},

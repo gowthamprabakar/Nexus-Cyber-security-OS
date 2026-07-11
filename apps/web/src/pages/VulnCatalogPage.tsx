@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { getCatalog } from '../api/client';
 import type { CatalogEntry } from '../api/types';
 import { useTenant } from '../auth/TenantProvider';
+import { RowCount } from '../components/RowCount';
 
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; rows: CatalogEntry[] };
+  | { status: 'ready'; rows: CatalogEntry[]; total: number | null };
 
 export function VulnCatalogPage() {
   const tenant = useTenant();
@@ -15,8 +16,8 @@ export function VulnCatalogPage() {
   const load = useCallback(async () => {
     setState({ status: 'loading' });
     try {
-      const env = await getCatalog(tenant, { limit: 200 });
-      setState({ status: 'ready', rows: env.data });
+      const env = await getCatalog(tenant, { limit: 500 });
+      setState({ status: 'ready', rows: env.data, total: env.meta.total });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
     }
@@ -31,7 +32,7 @@ export function VulnCatalogPage() {
       <header className="page__head">
         <h1>Vulnerability Catalog</h1>
         {state.status === 'ready' && (
-          <span className="page__count">{state.rows.length} unique CVEs</span>
+          <RowCount shown={state.rows.length} total={state.total} noun="unique CVEs" />
         )}
       </header>
 

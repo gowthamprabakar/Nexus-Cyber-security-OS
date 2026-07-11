@@ -182,3 +182,44 @@ def test_available_fixes_groups_by_patch_action(client: TestClient) -> None:
     assert fix["cve_count"] == 1
     assert fix["resource_count"] == 1
     assert fix["max_severity"] == "CRITICAL"
+
+
+def test_available_fixes_skips_nameless_findings() -> None:
+    """A fix with a version but no package name is not an actionable patch row."""
+
+    async def _seed(store: SemanticStore) -> None:
+        res = await store.upsert_entity(
+            tenant_id="acme", entity_type="cloud_resource", external_id="img:2.0", properties={}
+        )
+        for cve_id, package in (("CVE-NAMED", "libc"), ("CVE-NAMELESS", "")):
+            cve = await store.upsert_entity(
+                tenant_id="acme",
+                entity_type="cve_finding",
+                external_id=cve_id,
+                properties={"severity": "HIGH"},
+            )
+            await store.add_relationship(
+                tenant_id="acme",
+                src_entity_id=res,
+                dst_entity_id=cve,
+                relationship_type="VULNERABLE_TO",
+                properties={"package": package, "fix_version": "9.9"},
+            )
+
+    loop = asyncio.new_event_loop()
+    ctx = _in_memory_store()
+    store = loop.run_until_complete(ctx.__aenter__())
+    loop.run_until_complete(_seed(store))
+    app.dependency_overrides[get_store] = lambda: store
+    try:
+        data = (
+            TestClient(app)
+            .get("/v1/findings/available-fixes", headers={"X-Tenant-Id": "acme"})
+            .json()["data"]
+        )
+        # The nameless finding (package="") is dropped; only libc surfaces.
+        assert [d["component"] for d in data] == ["libc"]
+    finally:
+        app.dependency_overrides.clear()
+        loop.run_until_complete(ctx.__aexit__(None, None, None))
+        loop.close()
