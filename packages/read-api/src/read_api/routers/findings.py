@@ -29,6 +29,7 @@ router = APIRouter(
 
 _VULN_TO = (EdgeType.VULNERABLE_TO.value,)
 _SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+_SEV_NAME = {rank: name for name, rank in _SEV_RANK.items()}
 
 
 async def _catalog_rows(store: SemanticStore, tenant: str) -> list[dict[str, Any]]:
@@ -114,6 +115,42 @@ async def _vuln_rows(store: SemanticStore, tenant: str) -> list[dict[str, Any]]:
     return rows
 
 
+async def _available_fixes(store: SemanticStore, tenant: str) -> list[dict[str, Any]]:
+    """Group findings that carry a fix_version by patch action (component, fix_version).
+
+    One row per actionable upgrade with its blast radius — how many CVEs it clears,
+    across how many resources, at what worst severity. Ranked most-impactful first.
+    This is the "available fixes" surface of the Patch chapter (lifecycle/deployment
+    tracking is the chapter's own scope).
+    """
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in await _vuln_rows(store, tenant):
+        fix = str(r["fix_version"])
+        if not fix:
+            continue
+        component = str(r["component"])
+        group = groups.setdefault(
+            (component, fix),
+            {"component": component, "fix_version": fix, "_cves": set(), "_res": set(), "_sev": 0},
+        )
+        group["_cves"].add(r["cve_id"])
+        group["_res"].add(r["resource"])
+        group["_sev"] = max(group["_sev"], _SEV_RANK.get(str(r["severity"]).upper(), 0))
+
+    rows = [
+        {
+            "component": g["component"],
+            "fix_version": g["fix_version"],
+            "cve_count": len(g["_cves"]),
+            "resource_count": len(g["_res"]),
+            "max_severity": _SEV_NAME.get(g["_sev"], ""),
+        }
+        for g in groups.values()
+    ]
+    rows.sort(key=lambda x: (x["cve_count"], x["resource_count"]), reverse=True)
+    return rows
+
+
 @router.get("/vulnerabilities", response_model=Envelope)
 async def list_vulnerabilities(
     offset: int = Query(default=0, ge=0),
@@ -150,6 +187,21 @@ async def list_catalog(
         rows = [r for r in rows if str(r["severity"]).lower() == severity.lower()]
     if kev is not None:
         rows = [r for r in rows if r["kev"] == kev]
+    total = len(rows)
+    page = rows[offset : offset + limit]
+    next_offset: int | None = offset + limit if offset + limit < total else None
+    return make_envelope(data=page, offset=next_offset, total=total, tenant=tenant)
+
+
+@router.get("/available-fixes", response_model=Envelope)
+async def list_available_fixes(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    tenant: str = Depends(require_tenant),
+    store: SemanticStore = Depends(get_store),  # noqa: B008
+) -> Envelope:
+    """Available fixes — patch actions ranked by blast radius, tenant-scoped, paginated."""
+    rows = await _available_fixes(store, tenant)
     total = len(rows)
     page = rows[offset : offset + limit]
     next_offset: int | None = offset + limit if offset + limit < total else None

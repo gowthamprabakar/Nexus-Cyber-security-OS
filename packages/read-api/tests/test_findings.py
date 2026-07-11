@@ -168,3 +168,17 @@ def test_catalog_dedupes_ranks_and_scopes(client: TestClient) -> None:
 def test_catalog_kev_filter(client: TestClient) -> None:
     resp = client.get("/v1/findings/catalog?kev=true", headers={"X-Tenant-Id": "acme"})
     assert {d["cve_id"] for d in resp.json()["data"]} == {"CVE-2024-0001"}
+
+
+def test_available_fixes_groups_by_patch_action(client: TestClient) -> None:
+    resp = client.get("/v1/findings/available-fixes", headers={"X-Tenant-Id": "acme"})
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    # Only openssl has a fix_version; spring (fix_version="") is excluded.
+    assert len(data) == 1
+    fix = data[0]
+    assert fix["component"] == "openssl"
+    assert fix["fix_version"] == "1.1.1w"
+    assert fix["cve_count"] == 1
+    assert fix["resource_count"] == 1
+    assert fix["max_severity"] == "CRITICAL"

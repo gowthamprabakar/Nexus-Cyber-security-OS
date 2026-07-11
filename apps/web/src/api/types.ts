@@ -52,6 +52,14 @@ export interface CatalogEntry {
   affected_resources: number;
 }
 
+export interface AvailableFix {
+  component: string;
+  fix_version: string;
+  cve_count: number;
+  resource_count: number;
+  max_severity: string;
+}
+
 export interface VulnRemediation {
   tier: string;
   advice: string;

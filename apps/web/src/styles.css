@@ -73,6 +73,12 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+.page__note {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 70ch;
+  margin: -6px 0 18px;
+}
 
 .state {
   padding: 24px;

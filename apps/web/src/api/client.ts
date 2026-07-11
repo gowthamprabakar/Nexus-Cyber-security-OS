@@ -1,4 +1,5 @@
 import type {
+  AvailableFix,
   CatalogEntry,
   CloudResource,
   ContainerImage,
@@ -107,4 +108,8 @@ export function getSbom(tenant: string): Promise<Envelope<SbomPackage[]>> {
 
 export function getContainerImages(tenant: string): Promise<Envelope<ContainerImage[]>> {
   return getJson('/v1/inventory/container-images', tenant);
+}
+
+export function getAvailableFixes(tenant: string): Promise<Envelope<AvailableFix[]>> {
+  return getJson('/v1/findings/available-fixes', tenant);
 }
