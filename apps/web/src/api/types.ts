@@ -68,6 +68,16 @@ export interface AuditEvent {
   source: string;
 }
 
+export interface ChainStatus {
+  valid: boolean;
+  entries_checked: number;
+  chains_checked: number;
+  broken_at_correlation_id: string | null;
+  broken_at_action: string | null;
+  total_events: number;
+  complete: boolean;
+}
+
 export interface VulnRemediation {
   tier: string;
   advice: string;

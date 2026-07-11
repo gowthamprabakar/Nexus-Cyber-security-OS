@@ -76,6 +76,21 @@ body {
 .page__count-more {
   color: var(--warn, #d29922);
 }
+.chain {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.chain--ok {
+  color: var(--ok, #3fb950);
+  border-color: color-mix(in srgb, var(--ok, #3fb950) 40%, transparent);
+}
+.chain--bad {
+  color: var(--danger, #f85149);
+  border-color: color-mix(in srgb, var(--danger, #f85149) 45%, transparent);
+}
 .page__note {
   color: var(--muted);
   font-size: 13px;

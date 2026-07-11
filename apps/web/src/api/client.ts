@@ -2,6 +2,7 @@ import type {
   AuditEvent,
   AvailableFix,
   CatalogEntry,
+  ChainStatus,
   CloudResource,
   ContainerImage,
   Envelope,
@@ -120,4 +121,8 @@ export function getAvailableFixes(tenant: string, limit = 500): Promise<Envelope
 
 export function getAuditEvents(tenant: string, limit = 500): Promise<Envelope<AuditEvent[]>> {
   return getJson(`/v1/audit${buildQuery([['limit', limit]])}`, tenant);
+}
+
+export function getAuditVerify(tenant: string): Promise<Envelope<ChainStatus>> {
+  return getJson('/v1/audit/verify', tenant);
 }
