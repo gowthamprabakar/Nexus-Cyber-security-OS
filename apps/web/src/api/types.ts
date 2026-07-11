@@ -27,6 +27,12 @@ export interface SbomPackage {
   vulnerabilities: number;
 }
 
+export interface ContainerImage {
+  id: string;
+  packages: number;
+  vulnerabilities: number;
+}
+
 export interface VulnFinding {
   cve_id: string;
   severity: string;

@@ -23,6 +23,7 @@ router = APIRouter(
 )
 
 _VULN_TO = (EdgeType.VULNERABLE_TO.value,)
+_CONTAINS_PKG = (EdgeType.CONTAINS_PACKAGE.value,)
 
 
 def _derive_cloud(external_id: str, kind: str) -> str:
@@ -106,6 +107,45 @@ async def list_sbom_packages(
                 "name": str(pkg.properties.get("name", "")),
                 "image": pkg.external_id.split("#", 1)[0],
                 "vulnerabilities": len(rels),
+            }
+        )
+    total = len(items)
+    page = items[offset : offset + limit]
+    next_offset: int | None = offset + limit if offset + limit < total else None
+    return make_envelope(data=page, offset=next_offset, total=total, tenant=tenant)
+
+
+@router.get("/container-images", response_model=Envelope)
+async def list_container_images(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    tenant: str = Depends(require_tenant),
+    store: SemanticStore = Depends(get_store),  # noqa: B008
+) -> Envelope:
+    """Container-image resources with per-image package + direct-CVE counts.
+
+    Images are CLOUD_RESOURCE nodes tagged ``kind=container-image``. Package count
+    walks CONTAINS_PACKAGE (image → SBOM package); vuln count walks VULNERABLE_TO
+    (CVEs the scanner attributed directly to the image).
+    """
+    rows = await store.list_entities_by_type(
+        tenant_id=tenant, entity_type=NodeCategory.CLOUD_RESOURCE.value
+    )
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        if row.properties.get("kind", "") != "container-image":
+            continue
+        pkgs = await store.get_relationships_from(
+            tenant_id=tenant, src_entity_id=row.entity_id, edge_types=_CONTAINS_PKG
+        )
+        vulns = await store.get_relationships_from(
+            tenant_id=tenant, src_entity_id=row.entity_id, edge_types=_VULN_TO
+        )
+        items.append(
+            {
+                "id": row.external_id,
+                "packages": len(pkgs),
+                "vulnerabilities": len(vulns),
             }
         )
     total = len(items)

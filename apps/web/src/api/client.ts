@@ -1,5 +1,6 @@
 import type {
   CloudResource,
+  ContainerImage,
   Envelope,
   PostureSummary,
   SbomPackage,
@@ -88,4 +89,8 @@ export function getPosture(tenant: string, domain?: string): Promise<Envelope<Po
 
 export function getSbom(tenant: string): Promise<Envelope<SbomPackage[]>> {
   return getJson('/v1/inventory/sbom', tenant);
+}
+
+export function getContainerImages(tenant: string): Promise<Envelope<ContainerImage[]>> {
+  return getJson('/v1/inventory/container-images', tenant);
 }
