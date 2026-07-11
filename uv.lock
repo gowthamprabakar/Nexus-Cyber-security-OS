@@ -2390,6 +2390,7 @@ dependencies = [
 dev = [
     { name = "aiosqlite" },
     { name = "httpx" },
+    { name = "nexus-vulnerability" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -2402,6 +2403,7 @@ requires-dist = [
     { name = "nexus-audit-agent", editable = "packages/agents/audit" },
     { name = "nexus-charter", editable = "packages/charter" },
     { name = "nexus-meta-harness-agent", editable = "packages/agents/meta-harness" },
+    { name = "nexus-vulnerability", marker = "extra == 'dev'", editable = "packages/agents/vulnerability" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
