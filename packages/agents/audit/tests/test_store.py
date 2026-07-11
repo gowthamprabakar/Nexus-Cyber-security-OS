@@ -24,8 +24,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from audit.chain import verify_audit_chain
 from audit.schemas import AuditEvent
 from audit.store import AuditStore
+from charter.audit import GENESIS_HASH, _hash_entry
 from charter.memory.models import Base
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -271,3 +273,49 @@ async def test_count_by_action_returns_window_counts(store: AuditStore) -> None:
         tenant_id=_TENANT_A, since=base, until=base + timedelta(hours=6)
     )
     assert counts == {"episode_appended": 2, "entity_upserted": 1}
+
+
+# ---------------------------- tz round-trip / chain verify --------------
+
+
+def _chained(action: str, cid: str, ts: datetime, previous_hash: str) -> AuditEvent:
+    """A real chain entry: entry_hash computed the way the producer does."""
+    entry_hash = _hash_entry(
+        timestamp=ts.isoformat().replace("+00:00", "Z"),
+        agent="audit-agent",
+        run_id=cid,
+        action=action,
+        payload={},
+        previous_hash=previous_hash,
+    )
+    return AuditEvent(
+        tenant_id=_TENANT_A,
+        correlation_id=cid,
+        agent_id="audit-agent",
+        action=action,
+        payload={},
+        previous_hash=previous_hash,
+        entry_hash=entry_hash,
+        emitted_at=ts,
+        source="jsonl:fixture/chain",
+    )
+
+
+@pytest.mark.asyncio
+async def test_emitted_at_roundtrips_tz_aware_and_chain_verifies(store: AuditStore) -> None:
+    """Regression: SQLite drops tzinfo on read, so a valid chain queried back from
+    the store used to fail verification (the hash recompute lost the ``Z`` suffix).
+    ``_to_event`` now re-pins UTC, so the round-tripped chain verifies.
+    """
+    t1 = datetime(2026, 5, 1, tzinfo=UTC)
+    t2 = datetime(2026, 5, 1, 0, 1, tzinfo=UTC)
+    e1 = _chained("entity_upserted", "01J7M3X9Z1K8RPVQNH2T8DBHFA", t1, GENESIS_HASH)
+    e2 = _chained("relationship_added", "01J7M3X9Z1K8RPVQNH2T8DBHFB", t2, e1.entry_hash)
+    await store.ingest(tenant_id=_TENANT_A, events=(e1, e2))
+
+    events = (await store.query(tenant_id=_TENANT_A)).events
+    assert all(e.emitted_at.tzinfo is not None for e in events)  # round-trips tz-aware
+
+    report = verify_audit_chain(events, sequential=True)
+    assert report.valid is True
+    assert report.entries_checked == 2
