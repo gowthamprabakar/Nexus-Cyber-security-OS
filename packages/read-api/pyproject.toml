@@ -1,0 +1,35 @@
+[project]
+name = "nexus-read-api"
+version = "0.1.0"
+description = "Nexus Read API — FastAPI read-layer serving the product frontend (foundation slice)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "nexus-charter",
+    "nexus-meta-harness-agent",
+    "nexus-audit-agent",
+    "fastapi>=0.115.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+    "aiosqlite>=0.20.0",
+    # test-only: drives the real writer in the writer→endpoints integration test
+    "nexus-vulnerability",
+]
+
+[tool.uv.sources]
+nexus-charter = { workspace = true }
+nexus-meta-harness-agent = { workspace = true }
+nexus-audit-agent = { workspace = true }
+nexus-vulnerability = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/read_api"]
