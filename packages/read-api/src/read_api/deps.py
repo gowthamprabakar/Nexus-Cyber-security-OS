@@ -6,6 +6,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+from audit.store import AuditStore
 from charter.memory.semantic import SemanticStore
 from fastapi import Header
 from pydantic import BaseModel
@@ -50,23 +51,28 @@ def make_envelope(
 # SemanticStore dependency (overridable via app.dependency_overrides)
 # ---------------------------------------------------------------------------
 
+_session_factory_singleton: async_sessionmaker[AsyncSession] | None = None
 _store: SemanticStore | None = None
+_audit_store: AuditStore | None = None
 
 
-def _build_store() -> SemanticStore:
+def _session_factory() -> async_sessionmaker[AsyncSession]:
     # Fail fast: an unset DSN used to default to in-memory sqlite, which has no
     # schema and is per-connection — it would serve empty results forever while
-    # looking healthy. Tests never hit this path (they override get_store).
-    dsn = os.environ.get("NEXUS_DB_DSN")
-    if not dsn:
-        raise RuntimeError(
-            "NEXUS_DB_DSN is not set. The read API needs a DSN pointing at the "
-            "populated knowledge-graph database (e.g. postgresql+asyncpg://...)."
+    # looking healthy. Tests never hit this path (they override the store deps).
+    # One engine/factory backs both the graph store and the audit store.
+    global _session_factory_singleton
+    if _session_factory_singleton is None:
+        dsn = os.environ.get("NEXUS_DB_DSN")
+        if not dsn:
+            raise RuntimeError(
+                "NEXUS_DB_DSN is not set. The read API needs a DSN pointing at the "
+                "populated knowledge-graph database (e.g. postgresql+asyncpg://...)."
+            )
+        _session_factory_singleton = async_sessionmaker(
+            create_async_engine(dsn), expire_on_commit=False
         )
-    factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-        create_async_engine(dsn), expire_on_commit=False
-    )
-    return SemanticStore(factory)
+    return _session_factory_singleton
 
 
 def get_store() -> SemanticStore:
@@ -77,8 +83,21 @@ def get_store() -> SemanticStore:
     """
     global _store
     if _store is None:
-        _store = _build_store()
+        _store = SemanticStore(_session_factory())
     return _store
+
+
+def get_audit_store() -> AuditStore:
+    """Return the application AuditStore.
+
+    Audit events (OCSF 6003) live in the ``audit_events`` table — a separate
+    store from the entity graph, backed by the same DSN/session factory.
+    In tests: override via ``app.dependency_overrides[get_audit_store]``.
+    """
+    global _audit_store
+    if _audit_store is None:
+        _audit_store = AuditStore(_session_factory())
+    return _audit_store
 
 
 # ---------------------------------------------------------------------------

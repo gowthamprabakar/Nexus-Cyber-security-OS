@@ -60,6 +60,14 @@ export interface AvailableFix {
   max_severity: string;
 }
 
+export interface AuditEvent {
+  emitted_at: string;
+  agent_id: string;
+  action: string;
+  correlation_id: string;
+  source: string;
+}
+
 export interface VulnRemediation {
   tier: string;
   advice: string;

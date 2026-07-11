@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "nexus-charter",
     "nexus-meta-harness-agent",
+    "nexus-audit-agent",
     "fastapi>=0.115.0",
     "sqlalchemy[asyncio]>=2.0.30",
 ]
@@ -21,6 +22,7 @@ dev = [
 [tool.uv.sources]
 nexus-charter = { workspace = true }
 nexus-meta-harness-agent = { workspace = true }
+nexus-audit-agent = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

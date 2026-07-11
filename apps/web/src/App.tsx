@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TenantProvider } from './auth/TenantProvider';
+import { AuditPage } from './pages/AuditPage';
 import { AvailableFixesPage } from './pages/AvailableFixesPage';
 import { CloudResourcesPage } from './pages/CloudResourcesPage';
 import { ContainerImagesPage } from './pages/ContainerImagesPage';
@@ -16,7 +17,8 @@ type View =
   | 'sbom'
   | 'container-images'
   | 'vuln-catalog'
-  | 'available-fixes';
+  | 'available-fixes'
+  | 'audit';
 
 const NAV: { view: View; label: string }[] = [
   { view: 'overview', label: 'Overview' },
@@ -26,6 +28,7 @@ const NAV: { view: View; label: string }[] = [
   { view: 'container-images', label: 'Container Images' },
   { view: 'vuln-catalog', label: 'Catalog' },
   { view: 'available-fixes', label: 'Available Fixes' },
+  { view: 'audit', label: 'Audit Log' },
 ];
 
 export function App() {
@@ -57,6 +60,7 @@ export function App() {
           {view === 'container-images' && <ContainerImagesPage />}
           {view === 'vuln-catalog' && <VulnCatalogPage />}
           {view === 'available-fixes' && <AvailableFixesPage />}
+          {view === 'audit' && <AuditPage />}
         </main>
       </div>
     </TenantProvider>
