@@ -1,6 +1,6 @@
 // apps/web/src/nexus/ListPage.cloud-resources.test.tsx
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { TenantProvider } from '../auth/TenantProvider';
 import { ListPage } from './ListPage';
 import type { CloudResource, Envelope } from '../api/types';
@@ -71,13 +71,10 @@ describe('ListPage · cloud-resources', () => {
     // Public appears in header + data cell
     expect(screen.getAllByText('Public')[0]).toBeInTheDocument();
     expect(screen.getByText('Region')).toBeInTheDocument();
-    // The cloud-resources config has NO Severity column (the mock's phantom column is fixed).
-    // ListPage's filter bar and "By Severity" widget always render "Severity" text, so we
-    // cannot do a simple not.toBeInTheDocument(). Instead verify via the column list import.
-    // The real assertion: the LIST_CONFIG for cloud-resources must NOT include a 'Severity' label.
-    const { LIST_CONFIG } = await import('./listConfig');
-    const config = LIST_CONFIG['cloud-resources']!;
-    const colLabels = config.columns.map((c) => c.label);
-    expect(colLabels).not.toContain('Severity');
+    // The cloud-resources config has NO Severity column. Assert against the rendered DOM
+    // header row only (scoped via data-testid) to avoid the filter-bar "By Severity" text.
+    expect(
+      within(screen.getByTestId('col-headers')).queryByText('Severity')
+    ).not.toBeInTheDocument();
   });
 });

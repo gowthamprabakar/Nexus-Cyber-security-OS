@@ -125,7 +125,7 @@ export const LIST_CONFIG: Partial<Record<View, ListConfig>> = {
 
   'cloud-resources': {
     title: 'Cloud Resources',
-    attribution: 'Discovered by D.1 Vulnerability v0.1',
+    attribution: 'Inventoried by F.3/D.5 Cloud Posture',
     fetch: async (t) =>
       (await getCloudResources(t, { limit: 500 })).data.map((r) => ({
         resource: r.id,

@@ -941,6 +941,7 @@ export function ListPage({ view }: { view: View }) {
         }}
       >
         <div
+          data-testid="col-headers"
           style={{
             display: 'flex',
             padding: '0 16px',
@@ -1081,7 +1082,7 @@ export function ListPage({ view }: { view: View }) {
                   {!collapsed.has(g.key) &&
                     g.rows.map((row) => (
                       <DataRow
-                        key={`${String(row.cve)}|${String(row.resource)}|${String(row.component)}`}
+                        key={columns.map((c) => String(row[c.key])).join('|')}
                         columns={columns}
                         row={row}
                         indent
@@ -1092,7 +1093,7 @@ export function ListPage({ view }: { view: View }) {
               ))
             : rows.map((row) => (
                 <DataRow
-                  key={`${String(row.cve)}|${String(row.resource)}|${String(row.component)}`}
+                  key={columns.map((c) => String(row[c.key])).join('|')}
                   columns={columns}
                   row={row}
                   indent={false}
