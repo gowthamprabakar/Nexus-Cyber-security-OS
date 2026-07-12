@@ -37,7 +37,8 @@ describe('DetailPanel', () => {
       </TenantProvider>
     );
     expect(await screen.findByText('xz backdoor')).toBeInTheDocument();
-    expect(screen.getByText(/5\.6\.2/)).toBeInTheDocument();
+    // 5.6.2 legitimately appears in both the "Fixed Version" grid field and the remediation advice.
+    expect(screen.getAllByText(/5\.6\.2/)[0]).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
   });

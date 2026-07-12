@@ -1,7 +1,7 @@
 // apps/web/src/nexus/DetailPanel.tsx
 // Task 5: Real per-CVE detail drawer.
 // Owns the full backdrop + panel (role="dialog"), replacing the placeholder.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTenant } from '../auth/TenantProvider';
 import { getVulnerability } from '../api/client';
 import { useFetch } from './useFetch';
@@ -53,7 +53,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 // ── Overview body ──────────────────────────────────────────────────────────────
-function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: string }) {
+function OverviewBody({ detail }: { detail: VulnDetail }) {
   const sev = sevStyle(detail.severity);
   return (
     <>
@@ -99,12 +99,18 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
             {capFirst(detail.severity)}
           </span>
         </div>
-        {/* Vendor Severity */}
+        {/* Fixed Version — primary remediation at-a-glance fact (per port guide) */}
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-            Vendor Severity
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>Fixed Version</div>
+          <div
+            style={{
+              fontFamily: "'IBM Plex Mono',monospace",
+              fontSize: 12,
+              color: 'var(--accent,#4C8DFF)',
+            }}
+          >
+            {detail.fix_version || '—'}
           </div>
-          <div style={{ fontSize: 12, color: sev.fg }}>{capFirst(detail.severity)}</div>
         </div>
         {/* NVD Severity — mock's honest "Awaiting analysis" */}
         <div>
@@ -120,7 +126,6 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
             {detail.component || '—'}
           </div>
         </div>
-        {/* Fixed / Recommended Version — shown in Remediation section below */}
         {/* CVSS v3 — real */}
         <div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>CVSS v3</div>
@@ -128,20 +133,20 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
             {detail.cvss_v3_score != null ? String(detail.cvss_v3_score) : '—'}
           </div>
         </div>
-        {/* CWE — real */}
+        {/* CWE — real, optional-chained defensively */}
         <div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>CWE</div>
           <div
             style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: 'var(--text2)' }}
           >
-            {detail.cwe.length > 0 ? detail.cwe.join(', ') : '—'}
+            {detail.cwe?.length > 0 ? detail.cwe.join(', ') : '—'}
           </div>
         </div>
         {/* EPSS + KEV */}
         <div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>EPSS / KEV</div>
           <div style={{ fontSize: 12, color: 'var(--text2)', display: 'flex', gap: 6 }}>
-            <span>{detail.epss != null ? `${(detail.epss * 100).toFixed(1)}%` : '—'}</span>
+            <span>{detail.epss != null ? `${((detail.epss ?? 0) * 100).toFixed(1)}%` : '—'}</span>
             {detail.kev && (
               <span
                 style={{
@@ -161,8 +166,8 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
         </div>
       </div>
 
-      {/* Affected Resources */}
-      {detail.affected_resources.length > 0 && (
+      {/* Affected Resources — optional-chained defensively */}
+      {(detail.affected_resources?.length ?? 0) > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div
             style={{
@@ -183,7 +188,7 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
               overflow: 'hidden',
             }}
           >
-            {detail.affected_resources.map((r) => (
+            {detail.affected_resources?.map((r) => (
               <div
                 key={r}
                 style={{
@@ -212,7 +217,7 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
             marginBottom: 8,
           }}
         >
-          TIER {detail.remediation.tier.toUpperCase()} · RECOMMENDED STEPS
+          TIER {detail.remediation?.tier?.toUpperCase() ?? '?'} · RECOMMENDED STEPS
         </div>
         <div
           style={{
@@ -235,7 +240,7 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
           >
             ▸
           </span>
-          <span>{detail.remediation.advice}</span>
+          <span>{detail.remediation?.advice}</span>
         </div>
       </div>
 
@@ -278,12 +283,6 @@ function OverviewBody({ detail, rowStatus }: { detail: VulnDetail; rowStatus: st
           Launch Custom Remediation →
         </button>
       </div>
-
-      {/* Status (real from row) */}
-      <div style={{ marginBottom: 10, fontSize: 12.5, color: 'var(--text2)' }}>
-        <span style={{ fontSize: 11, color: 'var(--text3)', marginRight: 6 }}>Status:</span>
-        {rowStatus}
-      </div>
     </>
   );
 }
@@ -305,6 +304,15 @@ export function DetailPanel({
   const state = useFetch(fetchFn, tenant);
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+
+  // Fix 3: Escape key closes the drawer (ARIA keyboard pattern).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
 
   // Severity for header icon — defensive: fall back to row.severity when detail not loaded.
   const detailSev = state.status === 'ready' ? (state.data.data?.severity ?? null) : null;
@@ -509,6 +517,7 @@ export function DetailPanel({
           <div style={{ padding: '18px 22px', minWidth: 0 }}>
             {/* Tab bar */}
             <div
+              role="tablist"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -568,12 +577,9 @@ export function DetailPanel({
                     </button>
                   </div>
                 )}
-                {state.status === 'ready' &&
-                  state.data.data &&
-                  typeof state.data.data === 'object' &&
-                  'description' in state.data.data && (
-                    <OverviewBody detail={state.data.data as VulnDetail} rowStatus={rowStatus} />
-                  )}
+                {state.status === 'ready' && state.data.data && (
+                  <OverviewBody detail={state.data.data as VulnDetail} />
+                )}
               </>
             )}
             {activeTab === 'code' && (

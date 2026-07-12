@@ -85,7 +85,27 @@ describe('ListPage · vulnerabilities', () => {
     expect(screen.queryByText('CVE-2024-0002')).not.toBeInTheDocument();
   });
   it('opens the detail panel on row click', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(env(ROWS))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        url.includes('/vulnerabilities/')
+          ? Promise.resolve(
+              ok({
+                data: {
+                  cve_id: 'CVE-2024-3094',
+                  description: 'xz backdoor',
+                  fix_version: '5.6.2',
+                  severity: 'CRITICAL',
+                  cwe: [],
+                  affected_resources: [],
+                  remediation: { tier: 'advisory', advice: 'x' },
+                },
+                meta: {},
+              })
+            )
+          : Promise.resolve(ok(env(ROWS)))
+      )
+    );
     render1();
     fireEvent.click(await screen.findByText('CVE-2024-3094'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
