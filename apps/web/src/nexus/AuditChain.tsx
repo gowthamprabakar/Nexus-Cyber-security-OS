@@ -57,13 +57,13 @@ export function AuditChain() {
   }, [load]);
 
   const isValid = state.status === 'ready' && state.chain.valid;
-  const verifiedColor = 'rgb(139,147,255)';
-  const verifiedBg = 'rgba(139,147,255,0.12)';
-  const textMuted = 'rgba(255,255,255,0.45)';
-  const textSub = 'rgba(255,255,255,0.65)';
-  const surface = 'rgba(255,255,255,0.04)';
-  const border = 'rgba(255,255,255,0.1)';
-  const border2 = 'rgba(255,255,255,0.18)';
+  const verifiedColor = 'var(--verified)';
+  const verifiedBg = 'var(--verified-bg)';
+  const textMuted = 'var(--text3)';
+  const textSub = 'var(--text2)';
+  const surface = 'var(--surface)';
+  const border = 'var(--border)';
+  const border2 = 'var(--border2)';
 
   return (
     <div style={{ padding: '18px 22px 40px', maxWidth: '1080px' }}>
@@ -158,7 +158,7 @@ export function AuditChain() {
             height: '30px',
             padding: '0 12px',
             borderRadius: '7px',
-            border: `1px solid rgba(139,147,255,0.45)`,
+            border: `1px solid var(--border2)`,
             background: verifiedBg,
             color: verifiedColor,
             fontFamily: 'inherit',
@@ -238,7 +238,7 @@ export function AuditChain() {
                   width: '12px',
                   height: '12px',
                   borderRadius: '50%',
-                  background: '#0f1117',
+                  background: 'var(--bg)',
                   border: `2px solid ${verifiedColor}`,
                 }}
               />
@@ -265,7 +265,7 @@ export function AuditChain() {
                   <span
                     style={{
                       fontSize: '12px',
-                      color: 'rgba(255,255,255,0.9)',
+                      color: 'var(--text)',
                       fontWeight: 600,
                     }}
                   >
