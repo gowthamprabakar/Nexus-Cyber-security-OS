@@ -1,6 +1,6 @@
 // apps/web/src/nexus/ListPage.cloud-resources.test.tsx
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { TenantProvider } from '../auth/TenantProvider';
 import { ListPage } from './ListPage';
 import type { CloudResource, Envelope } from '../api/types';
@@ -54,6 +54,20 @@ describe('ListPage · cloud-resources', () => {
     expect(screen.getByText('Private')).toBeInTheDocument();
     // region renders
     expect(screen.getByText('us-east-1')).toBeInTheDocument();
+  });
+
+  it('clicking a row does NOT open a dialog (no cve → drawer is gated)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(env(ROWS))));
+    render(
+      <TenantProvider>
+        <ListPage view={'cloud-resources' as never} />
+      </TenantProvider>
+    );
+    // Wait for rows to render, then click the first data row.
+    const cell = await screen.findByText('arn:aws:s3:::my-bucket');
+    fireEvent.click(cell);
+    // No drawer must appear — cloud-resource rows have no `cve` field.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('renders the correct column headers and NO Severity column', async () => {

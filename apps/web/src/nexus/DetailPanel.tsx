@@ -20,7 +20,9 @@ function sevStyle(severity: string | undefined | null) {
 }
 
 // Capitalise first letter, lower-case rest (e.g. "CRITICAL" → "Critical").
-function capFirst(s: string) {
+// Null-safe: returns '—' for undefined/null/empty input.
+function capFirst(s: string | undefined | null) {
+  if (!s) return '—';
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 

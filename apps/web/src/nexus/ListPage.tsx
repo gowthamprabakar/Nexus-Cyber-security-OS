@@ -185,12 +185,13 @@ function DataRow({
   columns: Column[];
   row: Row;
   indent: boolean;
-  onOpen: () => void;
+  onOpen: (() => void) | null;
 }) {
   const [hover, setHover] = useState(false);
+  const clickable = onOpen !== null;
   return (
     <div
-      onClick={onOpen}
+      onClick={clickable ? onOpen : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -199,10 +200,10 @@ function DataRow({
         minHeight: 52,
         alignItems: 'center',
         borderBottom: '1px solid var(--border)',
-        cursor: 'pointer',
+        cursor: clickable ? 'pointer' : 'default',
         fontSize: 12.5,
         gap: 14,
-        background: hover ? 'var(--hover)' : undefined,
+        background: clickable && hover ? 'var(--hover)' : undefined,
       }}
     >
       {columns.map((c) => (
@@ -1086,7 +1087,7 @@ export function ListPage({ view }: { view: View }) {
                         columns={columns}
                         row={row}
                         indent
-                        onOpen={() => setSelected(row)}
+                        onOpen={row.cve ? () => setSelected(row) : null}
                       />
                     ))}
                 </div>
@@ -1097,7 +1098,7 @@ export function ListPage({ view }: { view: View }) {
                   columns={columns}
                   row={row}
                   indent={false}
-                  onOpen={() => setSelected(row)}
+                  onOpen={row.cve ? () => setSelected(row) : null}
                 />
               )))}
       </div>
