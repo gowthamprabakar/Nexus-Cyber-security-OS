@@ -790,7 +790,8 @@ export function ListPage({ view }: { view: View }) {
           <div onClick={() => setGroup('resource')} style={gbTab('resource')}>
             Resource
           </div>
-          <div onClick={noop} style={gbTab(null)} title="Not available yet">
+          {/* decorative no-op: gbTab('subscription') is never active because `group` is never set to it */}
+          <div onClick={noop} style={gbTab('subscription')} title="Not available yet">
             Subscription
           </div>
           <div onClick={() => setGroup('severity')} style={gbTab('severity')}>
