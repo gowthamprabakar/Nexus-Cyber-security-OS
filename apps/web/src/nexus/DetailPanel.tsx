@@ -26,6 +26,16 @@ function capFirst(s: string | undefined | null) {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+// §9 #3: dynamic Cure-readiness pill — derived from the real remediation tier + whether
+// a fix version exists, never a hardcoded "Tier 1 ready". Only advisory-tier + patch
+// availability are producible today; richer states (dry-run pending / executed) land when
+// the remediation engine ships.
+function curePill(detail: VulnDetail): { label: string; ready: boolean } {
+  const tier = capFirst(detail.remediation?.tier);
+  if (detail.fix_version) return { label: `Cure · ${tier} · patch available`, ready: true };
+  return { label: `${tier} · no patch — mitigation only`, ready: false };
+}
+
 // Inline gap note — plain, muted, no external import.
 function GapNote({ children }: { children: string }) {
   return (
@@ -518,6 +528,40 @@ export function DetailPanel({
             >
               Support
             </button>
+            <div style={{ flex: 1 }} />
+            {/* §9 #3: dynamic Cure-readiness pill — real tier + patch state, not hardcoded */}
+            {state.status === 'ready' &&
+              state.data.data &&
+              (() => {
+                const p = curePill(state.data.data as VulnDetail);
+                return (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      height: 26,
+                      padding: '0 10px',
+                      borderRadius: 999,
+                      background: p.ready ? 'var(--verified-bg)' : 'var(--surface2)',
+                      color: p.ready ? 'var(--verified)' : 'var(--text3)',
+                      fontSize: 11.5,
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: p.ready ? 'var(--verified)' : 'var(--text3)',
+                      }}
+                    />
+                    {p.label}
+                  </div>
+                );
+              })()}
           </div>
         </div>
 

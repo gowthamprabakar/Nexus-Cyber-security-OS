@@ -43,6 +43,31 @@ describe('DetailPanel', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('Cure-readiness pill reflects a real available patch (§9 #3)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(detail)));
+    render(
+      <TenantProvider>
+        <DetailPanel row={{ cve: 'CVE-2024-3094' }} onClose={() => {}} />
+      </TenantProvider>
+    );
+    await screen.findByText('xz backdoor');
+    // fix_version present → pill is dynamic, not the hardcoded "Tier 1 ready".
+    expect(screen.getByText(/patch available/i)).toBeInTheDocument();
+    expect(screen.queryByText(/tier 1 ready/i)).not.toBeInTheDocument();
+  });
+
+  it('Cure-readiness pill says mitigation-only when no fix exists (§9 #3)', async () => {
+    const noFix = { ...detail, data: { ...detail.data, fix_version: '' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(noFix)));
+    render(
+      <TenantProvider>
+        <DetailPanel row={{ cve: 'CVE-2024-3094' }} onClose={() => {}} />
+      </TenantProvider>
+    );
+    await screen.findByText('xz backdoor');
+    expect(screen.getByText(/mitigation only/i)).toBeInTheDocument();
+  });
+
   it('Remediation tab shows real advice text', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(detail)));
     render(
