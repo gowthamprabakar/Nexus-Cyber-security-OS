@@ -37,9 +37,23 @@ describe('DetailPanel', () => {
       </TenantProvider>
     );
     expect(await screen.findByText('xz backdoor')).toBeInTheDocument();
-    // 5.6.2 legitimately appears in both the "Fixed Version" grid field and the remediation advice.
+    // 5.6.2 appears in the Overview "Fixed Version" grid field.
     expect(screen.getAllByText(/5\.6\.2/)[0]).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('Remediation tab shows real advice text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(detail)));
+    render(
+      <TenantProvider>
+        <DetailPanel row={{ cve: 'CVE-2024-3094' }} onClose={() => {}} />
+      </TenantProvider>
+    );
+    // Wait for data to load (overview renders first)
+    await screen.findByText('xz backdoor');
+    // Click the Remediation tab
+    fireEvent.click(screen.getByRole('tab', { name: 'Remediation' }));
+    expect(screen.getByText('Upgrade xz to 5.6.2')).toBeInTheDocument();
   });
 });

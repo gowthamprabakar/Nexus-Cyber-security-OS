@@ -45,10 +45,11 @@ function GapNote({ children }: { children: string }) {
   );
 }
 
-type Tab = 'overview' | 'code' | 'investigation' | 'history' | 'comments';
+type Tab = 'overview' | 'code' | 'remediation' | 'investigation' | 'history' | 'comments';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'code', label: 'Code to Cloud' },
+  { id: 'remediation', label: 'Remediation' },
   { id: 'investigation', label: 'Investigation' },
   { id: 'history', label: 'History' },
   { id: 'comments', label: 'Comments' },
@@ -207,8 +208,15 @@ function OverviewBody({ detail }: { detail: VulnDetail }) {
           </div>
         </div>
       )}
+    </>
+  );
+}
 
-      {/* Remediation — real advice */}
+// ── Remediation body ───────────────────────────────────────────────────────────
+function RemediationBody({ detail }: { detail: VulnDetail }) {
+  return (
+    <>
+      {/* Real remediation advice */}
       <div style={{ marginBottom: 16 }}>
         <div
           style={{
@@ -586,6 +594,30 @@ export function DetailPanel({
             )}
             {activeTab === 'code' && (
               <GapNote>— Code to Cloud tab needs the attack-path producer (not built yet)</GapNote>
+            )}
+            {activeTab === 'remediation' && state.status === 'loading' && (
+              <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0' }}>Loading…</div>
+            )}
+            {activeTab === 'remediation' && state.status === 'error' && (
+              <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0' }}>
+                <span>{state.message}</span>{' '}
+                <button
+                  onClick={state.retry}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent)',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    padding: 0,
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {activeTab === 'remediation' && state.status === 'ready' && state.data.data && (
+              <RemediationBody detail={state.data.data as VulnDetail} />
             )}
             {activeTab === 'investigation' && (
               <GapNote>
