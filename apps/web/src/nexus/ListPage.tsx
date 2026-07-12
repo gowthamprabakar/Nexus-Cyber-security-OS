@@ -1101,28 +1101,8 @@ export function ListPage({ view }: { view: View }) {
               )))}
       </div>
 
-      {/* DETAIL DRAWER (Task 5 replaces DetailPanel; role="dialog" wrapper lives here) */}
-      {selected && (
-        <div
-          role="dialog"
-          aria-label="Finding detail"
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: 480,
-            maxWidth: '92vw',
-            background: 'var(--surface)',
-            borderLeft: '1px solid var(--border)',
-            boxShadow: '-16px 0 44px rgba(0,0,0,0.4)',
-            zIndex: 40,
-            overflowY: 'auto',
-          }}
-        >
-          <DetailPanel row={selected} onClose={() => setSelected(null)} />
-        </div>
-      )}
+      {/* DETAIL DRAWER — DetailPanel owns backdrop + role="dialog" (Task 5) */}
+      {selected && <DetailPanel row={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
