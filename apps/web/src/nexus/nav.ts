@@ -1,6 +1,7 @@
 export type View =
   | 'vulnerabilities'
   | 'vuln-catalog'
+  | 'kev-tracker'
   | 'patch'
   | 'sbom'
   | 'container-images'
@@ -30,6 +31,7 @@ export const VULN_NAV: NavSection[] = [
     items: [
       { label: 'Vulnerability Overview', view: 'overview', icon: 'board' },
       { label: 'Patch Management', view: 'patch', icon: 'clip' },
+      { label: 'KEV Tracker', view: 'kev-tracker', icon: 'bug' },
     ],
   },
   {

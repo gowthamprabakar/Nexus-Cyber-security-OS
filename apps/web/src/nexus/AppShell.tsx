@@ -42,6 +42,7 @@ function Ic({ k, size = 15 }: { k: string; size?: number }) {
 const LIST_VIEWS: View[] = [
   'vulnerabilities',
   'vuln-catalog',
+  'kev-tracker',
   'patch',
   'sbom',
   'container-images',

@@ -77,6 +77,29 @@ export const LIST_CONFIG: Partial<Record<View, ListConfig>> = {
     ],
   },
 
+  // §9 #4: the CISA Known-Exploited board — the catalog scoped to KEV, worst-first.
+  // CISA date-added / required-action-due columns await a D.7 KEV-metadata producer.
+  'kev-tracker': {
+    title: 'KEV Tracker',
+    attribution: 'From CISA Known Exploited Vulnerabilities catalog via D.7 Threat Intel',
+    defaultSort: 'epss-desc',
+    fetch: async (t) =>
+      (await getCatalog(t, { kev: true, limit: 500 })).data.map((r) => ({
+        cve: r.cve_id,
+        severity: titleCase(r.severity),
+        epss: r.epss,
+        kev: r.kev,
+        affected: r.affected_resources,
+      })),
+    columns: [
+      { label: 'CVE', key: 'cve', type: 'mono', fb: 1.6 },
+      { label: 'Severity', key: 'severity', type: 'sev', fb: 1 },
+      { label: 'EPSS', key: 'epss', type: 'epss', fb: 0.7 },
+      { label: 'KEV', key: 'kev', type: 'kev', fb: 0.7 },
+      { label: 'Affected', key: 'affected', type: 'mono', fb: 0.9 },
+    ],
+  },
+
   patch: {
     title: 'Patch Management',
     attribution: 'Discovered by D.1 Vulnerability v0.1',
