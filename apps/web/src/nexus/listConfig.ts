@@ -12,7 +12,7 @@ import type { View } from './nav';
 export type Column = {
   label: string;
   key: string;
-  type: 'text' | 'mono' | 'two' | 'sev' | 'status';
+  type: 'text' | 'mono' | 'two' | 'sev' | 'status' | 'epss' | 'kev';
   // Flex ratio approximating the mock's per-column proportions (default 1).
   fb?: number;
 };
@@ -47,6 +47,9 @@ export const LIST_CONFIG: Partial<Record<View, ListConfig>> = {
       { label: 'Component', key: 'component', type: 'two', fb: 1.5 },
       { label: 'Status', key: 'status', type: 'status', fb: 1 },
       { label: 'Severity', key: 'severity', type: 'sev', fb: 1 },
+      // §9 #1: EPSS + KEV are the persona's triage signals — real fields from D.7 enrichment.
+      { label: 'EPSS', key: 'epss', type: 'epss', fb: 0.7 },
+      { label: 'KEV', key: 'kev', type: 'kev', fb: 0.7 },
       { label: 'Fix', key: 'fix', type: 'mono', fb: 0.9 },
     ],
   },

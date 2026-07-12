@@ -96,6 +96,53 @@ function Cell({ column, row }: { column: Column; row: Row }) {
     );
   }
 
+  if (column.type === 'epss') {
+    // EPSS is a 0–1 probability from D.7; show as a whole percent, or "—" when absent.
+    const pct = value == null ? null : Math.round(Number(value) * 100);
+    return (
+      <span style={base}>
+        <span
+          style={{
+            fontFamily: "'IBM Plex Mono',monospace",
+            fontSize: 11.5,
+            color: pct == null ? 'var(--text3)' : 'var(--text2)',
+            display: 'block',
+          }}
+        >
+          {pct == null ? '—' : `${pct}%`}
+        </span>
+      </span>
+    );
+  }
+
+  if (column.type === 'kev') {
+    // CISA Known-Exploited flag from D.7 — a red badge when true, muted dash otherwise.
+    return (
+      <span style={base}>
+        {value ? (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 19,
+              padding: '0 7px',
+              borderRadius: 5,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: "'IBM Plex Mono',monospace",
+              background: 'var(--crit-bg)',
+              color: '#E5484D',
+            }}
+          >
+            KEV
+          </span>
+        ) : (
+          <span style={{ color: 'var(--text3)', fontSize: 12 }}>—</span>
+        )}
+      </span>
+    );
+  }
+
   if (column.type === 'status') {
     return (
       <span style={base}>

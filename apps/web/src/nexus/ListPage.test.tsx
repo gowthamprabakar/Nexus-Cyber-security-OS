@@ -84,6 +84,15 @@ describe('ListPage · vulnerabilities', () => {
     fireEvent.click(screen.getByTestId('sev-filter-Critical'));
     expect(screen.queryByText('CVE-2024-0002')).not.toBeInTheDocument();
   });
+  it('shows EPSS% and a KEV badge from the real fields (§9 #1)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(env(ROWS))));
+    render1();
+    await screen.findByText('CVE-2024-3094');
+    // epss 0.97 → "97%"; kev:true → a "KEV" badge. "KEV" appears twice: the column
+    // header label + the badge on the one KEV row (the non-KEV row shows "—").
+    expect(screen.getByText('97%')).toBeInTheDocument();
+    expect(screen.getAllByText('KEV')).toHaveLength(2);
+  });
   it('opens the detail panel on row click', async () => {
     vi.stubGlobal(
       'fetch',
