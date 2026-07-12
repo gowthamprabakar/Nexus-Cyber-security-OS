@@ -9,8 +9,11 @@ interface TenantContextValue {
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 
+// Configurable default tenant for local dev (VITE_TENANT); 'dev' otherwise.
+const DEFAULT_TENANT: string = import.meta.env.VITE_TENANT ?? 'dev';
+
 export function TenantProvider({
-  tenant = 'dev',
+  tenant = DEFAULT_TENANT,
   children,
 }: {
   tenant?: string;
