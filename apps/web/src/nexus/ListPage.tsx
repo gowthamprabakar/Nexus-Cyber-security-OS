@@ -26,20 +26,6 @@ const noop = () => {};
 
 type Row = Record<string, unknown>;
 
-// Severity word rendered pixel-identically to the mock, but split across two text nodes
-// so it is NOT an exact getByText('Critical') match. The canonical, filterable "Critical"
-// is the By-Severity summary widget (a single text node); the chip + dropdown are visual
-// echoes and must not collide with it. Visual output is unchanged ("Critical").
-function SevWord({ w }: { w: string }) {
-  if (!w) return null;
-  return (
-    <span>
-      {w.slice(0, -1)}
-      <span>{w.slice(-1)}</span>
-    </span>
-  );
-}
-
 const iconGraph = (
   <svg
     width="14"
@@ -104,7 +90,7 @@ function Cell({ column, row }: { column: Column; row: Row }) {
           }}
         >
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>{s.l}</span>
-          <SevWord w={text} />
+          {text}
         </span>
       </span>
     );
@@ -435,7 +421,9 @@ export function ListPage({ view }: { view: View }) {
         <span
           style={{ fontSize: 12, color: 'var(--text3)', fontFamily: "'IBM Plex Mono',monospace" }}
         >
-          {rows.length}
+          {sevFilter.size === 0
+            ? `${allRows.length} results`
+            : `${rows.length} of ${allRows.length}`}
         </span>
       </div>
 
@@ -738,9 +726,7 @@ export function ListPage({ view }: { view: View }) {
                     >
                       {meta.l}
                     </span>
-                    <span style={{ color: 'var(--text)' }}>
-                      <SevWord w={s} />
-                    </span>
+                    <span style={{ color: 'var(--text)' }}>{s}</span>
                   </div>
                 );
               })}
@@ -804,11 +790,7 @@ export function ListPage({ view }: { view: View }) {
           <div onClick={() => setGroup('resource')} style={gbTab('resource')}>
             Resource
           </div>
-          <div
-            onClick={() => setGroup('subscription')}
-            style={gbTab('subscription')}
-            title="Not available yet"
-          >
+          <div onClick={noop} style={gbTab(null)} title="Not available yet">
             Subscription
           </div>
           <div onClick={() => setGroup('severity')} style={gbTab('severity')}>
@@ -841,6 +823,7 @@ export function ListPage({ view }: { view: View }) {
             {SEV_ORDER.map((s) => (
               <div
                 key={s}
+                data-testid={`sev-filter-${s}`}
                 onClick={() => setOnlySev(s)}
                 style={{
                   display: 'flex',
@@ -1095,9 +1078,9 @@ export function ListPage({ view }: { view: View }) {
                     </span>
                   </div>
                   {!collapsed.has(g.key) &&
-                    g.rows.map((row, i) => (
+                    g.rows.map((row) => (
                       <DataRow
-                        key={i}
+                        key={`${String(row.cve)}|${String(row.resource)}|${String(row.component)}`}
                         columns={columns}
                         row={row}
                         indent
@@ -1106,9 +1089,9 @@ export function ListPage({ view }: { view: View }) {
                     ))}
                 </div>
               ))
-            : rows.map((row, i) => (
+            : rows.map((row) => (
                 <DataRow
-                  key={i}
+                  key={`${String(row.cve)}|${String(row.resource)}|${String(row.component)}`}
                   columns={columns}
                   row={row}
                   indent={false}

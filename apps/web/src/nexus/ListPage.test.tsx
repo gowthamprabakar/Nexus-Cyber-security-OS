@@ -50,7 +50,9 @@ describe('ListPage · vulnerabilities', () => {
     render1();
     expect(await screen.findByText('CVE-2024-3094')).toBeInTheDocument();
     expect(screen.getByText('xz')).toBeInTheDocument();
-    expect(screen.getByText('Critical')).toBeInTheDocument();
+    // SevWord was removed — 'Critical' now renders as plain text in both the chip and the
+    // By-Severity widget; assert at least one occurrence is present.
+    expect(screen.getAllByText('Critical')[0]).toBeInTheDocument();
   });
   it('shows loading then error+retry', async () => {
     const f = vi
@@ -77,7 +79,9 @@ describe('ListPage · vulnerabilities', () => {
     render1();
     await screen.findByText('CVE-2024-3094');
     fireEvent.click(screen.getByRole('button', { name: /severity/i }));
-    fireEvent.click(screen.getByText('Critical'));
+    // Made specific to the By-Severity widget row (testid) so the chip/menu render accessible
+    // plain text without the SevWord split-node hack that corrupted screen-reader output.
+    fireEvent.click(screen.getByTestId('sev-filter-Critical'));
     expect(screen.queryByText('CVE-2024-0002')).not.toBeInTheDocument();
   });
   it('opens the detail panel on row click', async () => {
