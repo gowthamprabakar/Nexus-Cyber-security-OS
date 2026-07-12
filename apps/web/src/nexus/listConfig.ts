@@ -21,6 +21,8 @@ export type ListConfig = {
   attribution: string;
   fetch: (tenant: string) => Promise<Record<string, unknown>[]>;
   columns: Column[];
+  // §9 #6: findings default to EPSS-descending so the exploitable backlog is triage-first.
+  defaultSort?: 'epss-desc';
 };
 
 const titleCase = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
@@ -29,6 +31,7 @@ export const LIST_CONFIG: Partial<Record<View, ListConfig>> = {
   vulnerabilities: {
     title: 'Vulnerability Findings',
     attribution: 'Discovered by D.1 Vulnerability v0.1 · + D.7 Threat Intel',
+    defaultSort: 'epss-desc',
     fetch: async (t) =>
       (await getVulnerabilities(t, { limit: 500 })).data.map((r) => ({
         cve: r.cve_id,

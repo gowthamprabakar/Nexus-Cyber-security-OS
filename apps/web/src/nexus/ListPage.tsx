@@ -295,7 +295,14 @@ export function ListPage({ view }: { view: View }) {
   const [sevMenuOpen, setSevMenuOpen] = useState(false);
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const allRows = state.status === 'ready' ? state.data : [];
+  const fetchedRows = state.status === 'ready' ? state.data : [];
+
+  // §9 #6: default EPSS-descending sort so the exploitable backlog is triage-first.
+  // Missing EPSS sorts last (treated as -1). Non-findings views keep API order.
+  const allRows = useMemo(() => {
+    if (config.defaultSort !== 'epss-desc') return fetchedRows;
+    return [...fetchedRows].sort((a, b) => Number(b.epss ?? -1) - Number(a.epss ?? -1));
+  }, [fetchedRows, config.defaultSort]);
 
   // REAL client-side severity filter on the loaded rows (empty = show all).
   const rows = useMemo(

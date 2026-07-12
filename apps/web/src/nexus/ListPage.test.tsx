@@ -93,6 +93,36 @@ describe('ListPage · vulnerabilities', () => {
     expect(screen.getByText('97%')).toBeInTheDocument();
     expect(screen.getAllByText('KEV')).toHaveLength(2);
   });
+  it('sorts findings by EPSS descending by default (§9 #6)', async () => {
+    const unsorted: VulnFinding[] = [
+      {
+        cve_id: 'CVE-LOW',
+        severity: 'HIGH',
+        kev: false,
+        epss: 0.1,
+        resource: 'r',
+        component: 'c',
+        fix_version: '',
+        status: 'open',
+      },
+      {
+        cve_id: 'CVE-HIGH',
+        severity: 'CRITICAL',
+        kev: true,
+        epss: 0.9,
+        resource: 'r',
+        component: 'c',
+        fix_version: '',
+        status: 'open',
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(env(unsorted))));
+    render1();
+    const high = await screen.findByText('CVE-HIGH');
+    const low = screen.getByText('CVE-LOW');
+    // 0.90 must render before 0.10 despite arriving second from the API.
+    expect(high.compareDocumentPosition(low) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
   it('opens the detail panel on row click', async () => {
     vi.stubGlobal(
       'fetch',
