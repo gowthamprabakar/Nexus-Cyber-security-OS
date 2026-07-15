@@ -3,6 +3,7 @@ import { TenantProvider } from '../auth/TenantProvider';
 import { VULN_NAV, type View } from './nav';
 import { ListPage } from './ListPage';
 import { AuditChain } from './AuditChain';
+import { Overview } from './Overview';
 import { GapState } from './GapState';
 import './theme.css';
 
@@ -52,11 +53,12 @@ const LIST_VIEWS: View[] = [
 function renderMain(view: View) {
   if (LIST_VIEWS.includes(view)) return <ListPage view={view} />;
   if (view === 'audit') return <AuditChain />;
-  if (view === 'overview' || view === 'inventory-overview')
+  if (view === 'overview') return <Overview />;
+  if (view === 'inventory-overview')
     return (
       <GapState
-        needs="the posture/board aggregator + attack-path + trend producers"
-        title="Overview"
+        needs="the inventory-overview aggregator + graph producers"
+        title="Inventory Overview"
       />
     );
   if (view === 'eol') return <GapState needs="an End-of-Life producer" title="End of Life" />;
