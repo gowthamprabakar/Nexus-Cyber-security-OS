@@ -1,4 +1,19 @@
-"""Knowledge graph writer (Neo4j async). Every node is customer-scoped.
+"""DORMANT — disconnected from the agent's tool registry on 2026-05-18 per the
+KG-loop-closure plan / ADR-009 amendment. Retained for the future scale-driven
+Phase-2 Neo4j swap (depth >= 4 + > 1M edges/tenant). Do not delete. The
+Phase-1 graph is Postgres `SemanticStore` (see `cloud_posture/tools/kg_writer.py`).
+
+------------------------------------------------------------------------------
+Historical docstring — preserved for context. Module remains functionally
+intact so the Phase-2 swap is "re-wire registry pointers", not "rebuild
+writer". See ADR-009's amendment section
+("Amendment 2026-05-18 — Cloud Posture rerouted to SemanticStore; Neo4j
+writer preserved dormant") for the decision record and the new agent-side
+rule: every agent writes to the graph ONLY through `MemoryService.semantic`
+— no direct database drivers, ever. This module is the **one and only**
+exception to that rule, retained against the documented Phase-2 trigger.
+
+Knowledge graph writer (Neo4j async). Every node is customer-scoped.
 
 Per ADR-005 the writer is async-by-default and consumes the neo4j async driver
 (`neo4j.AsyncDriver`). Per the per-tenant isolation requirement (ADR-004,
